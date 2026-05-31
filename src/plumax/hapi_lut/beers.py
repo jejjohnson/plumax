@@ -28,6 +28,7 @@ from __future__ import annotations
 import numpy as np
 import xarray as xr
 
+
 # Physical constants — cgs-compatible forms.
 BOLTZMANN_J_PER_K: float = 1.380649e-23  # [J/K]
 ATM_TO_PA: float = 101325.0  # [Pa/atm]
@@ -141,12 +142,24 @@ def plume_ratio_spectrum(
     where ``enhancement`` is the fitting parameter in the plume retrieval.
     """
     tau_bg = beers_law_from_lut(
-        ds, vmr=vmr_background, T_K=T_K, p_atm=p_atm, l_vert_cm=l_vert_cm,
-        sza_deg=sza_deg, vza_deg=vza_deg, var=var,
+        ds,
+        vmr=vmr_background,
+        T_K=T_K,
+        p_atm=p_atm,
+        l_vert_cm=l_vert_cm,
+        sza_deg=sza_deg,
+        vza_deg=vza_deg,
+        var=var,
     )
     tau_total = beers_law_from_lut(
-        ds, vmr=vmr_total, T_K=T_K, p_atm=p_atm, l_vert_cm=l_vert_cm,
-        sza_deg=sza_deg, vza_deg=vza_deg, var=var,
+        ds,
+        vmr=vmr_total,
+        T_K=T_K,
+        p_atm=p_atm,
+        l_vert_cm=l_vert_cm,
+        sza_deg=sza_deg,
+        vza_deg=vza_deg,
+        var=var,
     )
     ratio = tau_total / tau_bg
     return ratio.assign_attrs(

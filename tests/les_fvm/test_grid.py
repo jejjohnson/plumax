@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.les_fvm.grid import (
     PlumeGrid3D,
     coord_arrays_from_grid,
@@ -67,14 +68,14 @@ def test_make_grid_error_message_names_correct_axis():
     with pytest.raises(ValueError, match=r"y_max - y_min"):
         make_grid(
             domain_x=(0.0, 10.0, 4),
-            domain_y=(5.0, 5.0, 4),   # zero y-extent
+            domain_y=(5.0, 5.0, 4),  # zero y-extent
             domain_z=(0.0, 10.0, 4),
         )
     with pytest.raises(ValueError, match=r"z_max - z_min"):
         make_grid(
             domain_x=(0.0, 10.0, 4),
             domain_y=(0.0, 10.0, 4),
-            domain_z=(5.0, 5.0, 4),   # zero z-extent
+            domain_z=(5.0, 5.0, 4),  # zero z-extent
         )
 
 

@@ -142,8 +142,7 @@ def pg_eddy_diffusivity(
     """
     if wind_speed <= 0.0:
         raise ValueError(
-            "pg_eddy_diffusivity: wind_speed must be > 0 "
-            f"(got {wind_speed!r})"
+            f"pg_eddy_diffusivity: wind_speed must be > 0 (got {wind_speed!r})"
         )
     if reference_distance <= 0.0:
         raise ValueError(

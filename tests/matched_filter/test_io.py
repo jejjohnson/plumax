@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import xarray as xr
+
 from plumax.matched_filter.background import estimate_cov_empirical
 from plumax.matched_filter.core import apply_image
 from plumax.matched_filter.io import apply_image_xarray

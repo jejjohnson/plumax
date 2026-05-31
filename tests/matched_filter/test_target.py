@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.matched_filter.target import (
     linear_target_from_obs,
     nonlinear_target_from_obs,

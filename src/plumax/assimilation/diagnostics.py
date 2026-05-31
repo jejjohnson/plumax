@@ -22,7 +22,8 @@ Laplace approximations around the optimum.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -136,7 +137,8 @@ def posterior_covariance_proxy(
         # than raising — for diagnostics we'd rather get a noisy estimate than
         # crash the whole notebook on a stiff probe direction.
         return lx.linear_solve(
-            op, jnp.asarray(v),
+            op,
+            jnp.asarray(v),
             solver=lx.CG(rtol=cg_rtol, atol=cg_atol, max_steps=cg_max_steps),
             throw=False,
         ).value

@@ -33,8 +33,9 @@ by the cube-shaped operations (PSF, GSD, SRF).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -108,9 +109,9 @@ class RadianceObservationModel:
     @classmethod
     def from_lut(
         cls,
-        lut: "xr.Dataset",
+        lut: xr.Dataset,
         *,
-        srf: "SpectralResponseFunction",
+        srf: SpectralResponseFunction,
         T_K: float,
         p_atm: float,
         path_length_cm: float,
@@ -119,7 +120,7 @@ class RadianceObservationModel:
         psf: PointSpreadFunction | None = None,
         gsd: GroundSamplingDistance | None = None,
         var: str = "absorption_cross_section",
-    ) -> "RadianceObservationModel":
+    ) -> RadianceObservationModel:
         """Build the operator from a HAPI σ(ν,T,P) LUT and an SRF.
 
         Pre-collapses ``σ · N · ΔX · AMF`` into a single ``a(ν)`` vector so the

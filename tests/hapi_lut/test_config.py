@@ -47,7 +47,9 @@ def test_explicit_diluent_override_is_returned_verbatim():
 
 
 def test_gas_config_repr_is_informative():
-    cfg = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4500.0)
+    cfg = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4500.0
+    )
     assert "CH4" in repr(cfg)
     assert "M6" in repr(cfg)
     assert "I1" in repr(cfg)

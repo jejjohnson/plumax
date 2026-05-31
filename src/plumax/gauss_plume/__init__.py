@@ -43,9 +43,7 @@ def __getattr__(name: str):  # PEP 562 lazy module-level attribute
         if name == "inference":
             return module
         return getattr(module, name)
-    raise AttributeError(
-        f"module 'plumax.gauss_plume' has no attribute {name!r}"
-    )
+    raise AttributeError(f"module 'plumax.gauss_plume' has no attribute {name!r}")
 
 
 if TYPE_CHECKING:  # make the lazy names visible to type checkers / IDEs
@@ -57,18 +55,18 @@ if TYPE_CHECKING:  # make the lazy names visible to type checkers / IDEs
 
 
 __all__ = [
-    "dispersion",
-    "plume",
-    "inference",
     "BRIGGS_DISPERSION_PARAMS",
-    "STABILITY_CLASSES",
     "MIN_WIND_SPEED",
+    "STABILITY_CLASSES",
     "calculate_briggs_dispersion",
+    "dispersion",
+    "gaussian_plume_model",
     "get_dispersion_params",
-    "rotate_to_wind_frame",
+    "infer_emission_rate",
+    "inference",
+    "plume",
     "plume_concentration",
     "plume_concentration_vmap",
+    "rotate_to_wind_frame",
     "simulate_plume",
-    "gaussian_plume_model",
-    "infer_emission_rate",
 ]

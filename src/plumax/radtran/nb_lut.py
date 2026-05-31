@@ -69,7 +69,11 @@ class NBLookup:
             },
             coords={
                 "band": list(self.band_names),
-                "delta_column": ("delta_column", self.delta_column, {"units": "mol/m^2"}),
+                "delta_column": (
+                    "delta_column",
+                    self.delta_column,
+                    {"units": "mol/m^2"},
+                ),
             },
             attrs={
                 "long_name": "Band-integrated normalised brightness",
@@ -201,7 +205,7 @@ def lookup_nb(
 
     # Piecewise-linear interp per band (avoids nearest-neighbour stair-step
     # artefacts that the Eucalyptus `lookup_nB` shows on smooth plumes).
-    out_shape = (nb_lookup.n_bands,) + x.shape
+    out_shape = (nb_lookup.n_bands, *x.shape)
     out = np.empty(out_shape, dtype=float)
     for b in range(nb_lookup.n_bands):
         out[b] = np.interp(x_clipped, grid, nb_lookup.nB[b])

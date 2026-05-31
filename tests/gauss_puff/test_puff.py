@@ -6,6 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.gauss_puff.dispersion import PG_DISPERSION_PARAMS
 from plumax.gauss_puff.puff import (
     PuffState,
@@ -60,9 +61,15 @@ def test_puff_concentration_positive_and_max_at_center():
     y = jnp.zeros(3)
     z = jnp.full(3, 2.0)
     conc = puff_concentration(
-        x, y, z,
-        puff_x=0.0, puff_y=0.0, puff_z=2.0,
-        sigma_x=10.0, sigma_y=10.0, sigma_z=5.0,
+        x,
+        y,
+        z,
+        puff_x=0.0,
+        puff_y=0.0,
+        puff_z=2.0,
+        sigma_x=10.0,
+        sigma_y=10.0,
+        sigma_z=5.0,
         puff_mass=1.0,
     )
     assert jnp.all(conc > 0)
@@ -74,13 +81,21 @@ def test_puff_concentration_ground_reflection_doubles_at_ground():
     # giving exactly 2× the non-reflected value.
     zero = jnp.array(0.0)
     with_reflect = puff_concentration(
-        zero, zero, zero,
-        puff_x=0.0, puff_y=0.0, puff_z=0.0,
-        sigma_x=5.0, sigma_y=5.0, sigma_z=5.0,
+        zero,
+        zero,
+        zero,
+        puff_x=0.0,
+        puff_y=0.0,
+        puff_z=0.0,
+        sigma_x=5.0,
+        sigma_y=5.0,
+        sigma_z=5.0,
         puff_mass=1.0,
     )
     single_gaussian = 1.0 / ((2 * jnp.pi) ** 1.5 * 125.0)
-    np.testing.assert_allclose(float(with_reflect), 2.0 * float(single_gaussian), rtol=1e-5)
+    np.testing.assert_allclose(
+        float(with_reflect), 2.0 * float(single_gaussian), rtol=1e-5
+    )
 
 
 def test_puff_concentration_normalization_integral():
@@ -93,9 +108,15 @@ def test_puff_concentration_normalization_integral():
     dx = float(grid[1] - grid[0])
     X, Y, Z = jnp.meshgrid(grid, grid, grid + puff_z, indexing="ij")
     conc = puff_concentration(
-        X, Y, Z,
-        puff_x=0.0, puff_y=0.0, puff_z=puff_z,
-        sigma_x=sx, sigma_y=sy, sigma_z=sz,
+        X,
+        Y,
+        Z,
+        puff_x=0.0,
+        puff_y=0.0,
+        puff_z=puff_z,
+        sigma_x=sx,
+        sigma_y=sy,
+        sigma_z=sz,
         puff_mass=1.0,
     )
     integral = float(conc.sum()) * dx**3
@@ -116,8 +137,16 @@ def test_puff_concentration_vmap_matches_manual_sum():
     assert stacked.shape == (3, 2)  # (n_puffs, n_receptors)
     manual = jnp.stack(
         [
-            puff_concentration(*receptor, puff_x[i], puff_y[i], puff_z[i],
-                               sigmas[i], sigmas[i], sigmas[i], mass[i])
+            puff_concentration(
+                *receptor,
+                puff_x[i],
+                puff_y[i],
+                puff_z[i],
+                sigmas[i],
+                sigmas[i],
+                sigmas[i],
+                mass[i],
+            )
             for i in range(3)
         ]
     )
@@ -130,9 +159,7 @@ def test_puff_concentration_autodiff_through_mass():
     receptor = (jnp.asarray(10.0), jnp.asarray(0.0), jnp.asarray(2.0))
 
     def scalar_conc(mass):
-        return puff_concentration(
-            *receptor, 0.0, 0.0, 2.0, 5.0, 5.0, 5.0, mass
-        )
+        return puff_concentration(*receptor, 0.0, 0.0, 2.0, 5.0, 5.0, 5.0, mass)
 
     g = jax.grad(scalar_conc)(1.0)
     expected = scalar_conc(1.0)
@@ -142,8 +169,9 @@ def test_puff_concentration_autodiff_through_mass():
 # ── evolve_puffs under time-varying wind ─────────────────────────────────────
 
 
-def _constant_wind_schedule(speed: float = 5.0, direction: float = 270.0,
-                            t_max: float = 60.0, n: int = 7) -> WindSchedule:
+def _constant_wind_schedule(
+    speed: float = 5.0, direction: float = 270.0, t_max: float = 60.0, n: int = 7
+) -> WindSchedule:
     times = np.linspace(0.0, t_max, n)
     return WindSchedule.from_speed_direction(
         times, np.full(n, speed), np.full(n, direction)
@@ -167,7 +195,8 @@ def test_evolve_puffs_constant_wind():
     np.testing.assert_allclose(state.z, 2.0, atol=1e-6)
     # Travel distance equals |V|*(t - t_r).
     np.testing.assert_allclose(
-        state.travel_distance, 5.0 * (40.0 - np.asarray(release_times)),
+        state.travel_distance,
+        5.0 * (40.0 - np.asarray(release_times)),
         atol=0.5,
     )
     np.testing.assert_allclose(state.mass, 0.05, atol=1e-6)
@@ -177,7 +206,9 @@ def test_evolve_puffs_masks_unreleased():
     schedule = _constant_wind_schedule()
     release_times = jnp.array([0.0, 20.0, 40.0])
     state = evolve_puffs(
-        schedule, release_times, jnp.asarray(30.0),
+        schedule,
+        release_times,
+        jnp.asarray(30.0),
         source_location=(0.0, 0.0, 2.0),
         puff_mass=0.1,
     )
@@ -194,24 +225,27 @@ def test_evolve_puffs_time_varying_wind_advances_further_when_stronger():
     # > constant-5-m/s result.
     times = np.linspace(0.0, 60.0, 7)
     speeds = np.linspace(3.0, 7.0, 7)  # mean 5 m/s
-    sched_vary = WindSchedule.from_speed_direction(
-        times, speeds, np.full(7, 270.0)
-    )
+    sched_vary = WindSchedule.from_speed_direction(times, speeds, np.full(7, 270.0))
     sched_const = _constant_wind_schedule(speed=5.0, t_max=60.0, n=7)
     release_times = jnp.array([0.0])
     state_vary = evolve_puffs(
-        sched_vary, release_times, jnp.asarray(60.0),
+        sched_vary,
+        release_times,
+        jnp.asarray(60.0),
         source_location=(0.0, 0.0, 0.0),
         puff_mass=1.0,
     )
     state_const = evolve_puffs(
-        sched_const, release_times, jnp.asarray(60.0),
+        sched_const,
+        release_times,
+        jnp.asarray(60.0),
         source_location=(0.0, 0.0, 0.0),
         puff_mass=1.0,
     )
     # Both should reach x = ∫ u dt ≈ 300 m (identical means), check same-ish.
-    np.testing.assert_allclose(float(state_vary.x[0]),
-                                float(state_const.x[0]), rtol=0.05)
+    np.testing.assert_allclose(
+        float(state_vary.x[0]), float(state_const.x[0]), rtol=0.05
+    )
 
 
 # ── simulate_puff_field ──────────────────────────────────────────────────────
@@ -219,6 +253,7 @@ def test_evolve_puffs_time_varying_wind_advances_further_when_stronger():
 
 def test_simulate_puff_field_is_sum_of_contributions():
     from plumax.gauss_puff.dispersion import calculate_pg_dispersion
+
     receptor = (jnp.array([10.0, 50.0]), jnp.zeros(2), jnp.full(2, 2.0))
     state = PuffState(
         release_times=jnp.array([0.0, 1.0, 2.0]),
@@ -258,8 +293,7 @@ def test_simulate_puff_shape_and_attrs():
     assert ds.attrs["dispersion_scheme"] == "pg"
     assert ds.attrs["n_puffs"] >= 50  # ≈ 60 at 1 Hz over 60 s
     # Concentration should be zero at t=0 (no puffs released yet).
-    np.testing.assert_allclose(ds["concentration"].isel(time=0).values, 0.0,
-                                atol=1e-8)
+    np.testing.assert_allclose(ds["concentration"].isel(time=0).values, 0.0, atol=1e-8)
     # Concentration at some later time should be > 0 downwind of the source.
     late = ds["concentration"].isel(time=-1).values
     assert float(late.max()) > 0.0
@@ -274,7 +308,9 @@ def test_simulate_puff_rejects_shape_mismatches():
             wind_speed=np.full(4, 5.0, dtype=np.float32),
             wind_direction=np.full(7, 270.0, dtype=np.float32),
             stability_class="C",
-            domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+            domain_x=(0, 100, 5),
+            domain_y=(0, 100, 5),
+            domain_z=(0, 50, 5),
             time_array=time_array,
         )
 
@@ -288,7 +324,9 @@ def test_simulate_puff_rejects_bad_stability():
             wind_speed=np.full(7, 5.0, dtype=np.float32),
             wind_direction=np.full(7, 270.0, dtype=np.float32),
             stability_class="Z",
-            domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+            domain_x=(0, 100, 5),
+            domain_y=(0, 100, 5),
+            domain_z=(0, 50, 5),
             time_array=time_array,
         )
 
@@ -302,7 +340,9 @@ def test_simulate_puff_rejects_bad_scheme():
             wind_speed=np.full(7, 5.0, dtype=np.float32),
             wind_direction=np.full(7, 270.0, dtype=np.float32),
             stability_class="C",
-            domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+            domain_x=(0, 100, 5),
+            domain_y=(0, 100, 5),
+            domain_z=(0, 50, 5),
             time_array=time_array,
             scheme="unknown",
         )
@@ -316,7 +356,9 @@ def test_simulate_puff_briggs_scheme_runs():
         wind_speed=np.full(7, 5.0, dtype=np.float32),
         wind_direction=np.full(7, 270.0, dtype=np.float32),
         stability_class="D",
-        domain_x=(0, 200, 11), domain_y=(-50, 50, 5), domain_z=(0, 50, 5),
+        domain_x=(0, 200, 11),
+        domain_y=(-50, 50, 5),
+        domain_z=(0, 50, 5),
         time_array=time_array,
         scheme="briggs",
     )
@@ -333,7 +375,9 @@ def test_simulate_puff_array_emission_rate_matches_puff_count():
         wind_speed=np.full(5, 5.0, dtype=np.float32),
         wind_direction=np.full(5, 270.0, dtype=np.float32),
         stability_class="C",
-        domain_x=(0, 200, 11), domain_y=(-50, 50, 5), domain_z=(0, 50, 5),
+        domain_x=(0, 200, 11),
+        domain_y=(-50, 50, 5),
+        domain_z=(0, 50, 5),
         time_array=time_array,
         release_frequency=1.0,
     )
@@ -349,7 +393,9 @@ def test_simulate_puff_rejects_wrong_length_emission_series():
             wind_speed=np.full(5, 5.0, dtype=np.float32),
             wind_direction=np.full(5, 270.0, dtype=np.float32),
             stability_class="C",
-            domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+            domain_x=(0, 100, 5),
+            domain_y=(0, 100, 5),
+            domain_z=(0, 50, 5),
             time_array=time_array,
             release_frequency=1.0,
         )

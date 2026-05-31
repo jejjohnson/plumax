@@ -19,7 +19,12 @@ def _toy_lut_dataset() -> xr.Dataset:
         for i_P, p in enumerate(P):
             sigma[:, i_T, i_P] = 1e-23 * (t / 200.0) * p
     return xr.Dataset(
-        data_vars={"absorption_cross_section": (["wavenumber", "temperature", "pressure"], sigma)},
+        data_vars={
+            "absorption_cross_section": (
+                ["wavenumber", "temperature", "pressure"],
+                sigma,
+            )
+        },
         coords={
             "wavenumber": nu,
             "wavelength": ("wavenumber", 1e7 / nu),

@@ -58,9 +58,9 @@ class PlumeGrid3D(eqx.Module):
     """
 
     grid: CartesianGrid3D
-    x: Float[Array, "nx_interior"]
-    y: Float[Array, "ny_interior"]
-    z: Float[Array, "nz_interior"]
+    x: Float[Array, nx_interior]
+    y: Float[Array, ny_interior]
+    z: Float[Array, nz_interior]
 
     @property
     def dx(self) -> float:
@@ -137,8 +137,7 @@ def make_grid(
     ):
         if L <= 0.0:
             raise ValueError(
-                f"make_grid: {label}-extent must be positive "
-                f"(got {expr} = {L})"
+                f"make_grid: {label}-extent must be positive (got {expr} = {L})"
             )
 
     grid = CartesianGrid3D.from_interior(
@@ -152,15 +151,9 @@ def make_grid(
     # Interior cell centres — offset by half a cell from the lower edge,
     # matching the finitevolX convention of co-locating T-points at
     # cell centres and drop ghost cells at i = 0 and i = Nx - 1.
-    x = jnp.asarray(
-        x_min + (jnp.arange(nx_int, dtype=dtype) + 0.5) * (Lx / nx_int)
-    )
-    y = jnp.asarray(
-        y_min + (jnp.arange(ny_int, dtype=dtype) + 0.5) * (Ly / ny_int)
-    )
-    z = jnp.asarray(
-        z_min + (jnp.arange(nz_int, dtype=dtype) + 0.5) * (Lz / nz_int)
-    )
+    x = jnp.asarray(x_min + (jnp.arange(nx_int, dtype=dtype) + 0.5) * (Lx / nx_int))
+    y = jnp.asarray(y_min + (jnp.arange(ny_int, dtype=dtype) + 0.5) * (Ly / ny_int))
+    z = jnp.asarray(z_min + (jnp.arange(nz_int, dtype=dtype) + 0.5) * (Lz / nz_int))
     return PlumeGrid3D(grid=grid, x=x, y=y, z=z)
 
 
@@ -172,9 +165,7 @@ def coord_arrays_from_grid(
     Float[Array, "nz_interior ny_interior nx_interior"],
 ]:
     """Return broadcast 3-D ``(X, Y, Z)`` interior-coordinate arrays."""
-    X, Y, Z = jnp.meshgrid(
-        plume_grid.x, plume_grid.y, plume_grid.z, indexing="xy"
-    )
+    X, Y, Z = jnp.meshgrid(plume_grid.x, plume_grid.y, plume_grid.z, indexing="xy")
     # meshgrid(indexing="xy") returns (Ny, Nx, Nz) — reorder to (Nz, Ny, Nx)
     # to match field layout.
     X = jnp.transpose(X, (2, 0, 1))

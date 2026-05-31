@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.les_fvm._vertical_ops import (
     vertical_advection_tendency,
     vertical_diffusion_tendency,
@@ -100,9 +101,7 @@ def test_zero_ghost_helpers_do_not_touch_interior():
     interior = np.asarray(field)[1:-1, 1:-1, 1:-1]
 
     zeroed_h = zero_horizontal_ghosts(field)
-    np.testing.assert_allclose(
-        np.asarray(zeroed_h)[1:-1, 1:-1, 1:-1], interior
-    )
+    np.testing.assert_allclose(np.asarray(zeroed_h)[1:-1, 1:-1, 1:-1], interior)
     # Horizontal ghost rings are zero.
     assert float(jnp.abs(zeroed_h[:, 0, :]).max()) == 0.0
     assert float(jnp.abs(zeroed_h[:, -1, :]).max()) == 0.0
@@ -110,8 +109,6 @@ def test_zero_ghost_helpers_do_not_touch_interior():
     assert float(jnp.abs(zeroed_h[:, :, -1]).max()) == 0.0
 
     zeroed_v = zero_vertical_ghosts(field)
-    np.testing.assert_allclose(
-        np.asarray(zeroed_v)[1:-1, 1:-1, 1:-1], interior
-    )
+    np.testing.assert_allclose(np.asarray(zeroed_v)[1:-1, 1:-1, 1:-1], interior)
     assert float(jnp.abs(zeroed_v[0]).max()) == 0.0
     assert float(jnp.abs(zeroed_v[-1]).max()) == 0.0

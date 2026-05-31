@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from numpyro.infer import Predictive
+
 from plumax.gauss_puff import make_release_times
 from plumax.gauss_puff.inference import (
     gaussian_puff_model,
@@ -40,7 +41,9 @@ def test_gaussian_puff_model_rejects_missing_release_params():
     schedule = WindSchedule.from_speed_direction(
         jnp.linspace(0, 10, 3), jnp.full(3, 5.0), jnp.full(3, 270.0)
     )
-    with pytest.raises(ValueError, match=r"missing inputs: .*release_times.*release_interval"):
+    with pytest.raises(
+        ValueError, match=r"missing inputs: .*release_times.*release_interval"
+    ):
         gaussian_puff_model(
             observations=obs,
             receptor_coords=(jnp.zeros(2), jnp.zeros(2), jnp.ones(2)),
@@ -63,8 +66,7 @@ def test_gaussian_puff_model_predictive_runs_forward_with_full_inputs():
     samples = predictive(
         jax.random.PRNGKey(0),
         observations=None,
-        receptor_coords=(jnp.array([200.0, 400.0]),
-                         jnp.zeros(2), jnp.ones(2)),
+        receptor_coords=(jnp.array([200.0, 400.0]), jnp.zeros(2), jnp.ones(2)),
         observation_times=jnp.array([15.0, 25.0]),
         source_location=(0.0, 0.0, 2.0),
         schedule=schedule,
@@ -112,14 +114,15 @@ def test_infer_emission_rate_rejects_empty_observations():
             release_frequency=1.0,
             t_start=0.0,
             t_end=10.0,
-            num_warmup=1, num_samples=1,
+            num_warmup=1,
+            num_samples=1,
         )
 
 
 def test_infer_emission_rate_rejects_shape_mismatch():
     obs = np.array([1e-6, 2e-6, 3e-6])
     coords = (
-        np.array([200., 400., 600.]),
+        np.array([200.0, 400.0, 600.0]),
         np.zeros(3),
         np.ones(3),
     )
@@ -136,7 +139,8 @@ def test_infer_emission_rate_rejects_shape_mismatch():
             release_frequency=1.0,
             t_start=0.0,
             t_end=30.0,
-            num_warmup=1, num_samples=1,
+            num_warmup=1,
+            num_samples=1,
         )
 
 
@@ -170,8 +174,10 @@ def test_infer_emission_timeseries_validates_inputs():
             wind_speed=np.full(3, 5.0),
             wind_direction=np.full(3, 270.0),
             release_frequency=1.0,
-            t_start=0.0, t_end=10.0,
-            num_warmup=1, num_samples=1,
+            t_start=0.0,
+            t_end=10.0,
+            num_warmup=1,
+            num_samples=1,
         )
 
 
@@ -186,7 +192,9 @@ def test_simulate_puff_allows_zero_scalar_emission_rate():
         wind_speed=np.full(5, 5.0, dtype=np.float32),
         wind_direction=np.full(5, 270.0, dtype=np.float32),
         stability_class="C",
-        domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+        domain_x=(0, 100, 5),
+        domain_y=(0, 100, 5),
+        domain_z=(0, 50, 5),
         time_array=time_array,
         release_frequency=1.0,
     )
@@ -204,7 +212,9 @@ def test_simulate_puff_rejects_negative_scalar_emission_rate():
             wind_speed=np.full(5, 5.0, dtype=np.float32),
             wind_direction=np.full(5, 270.0, dtype=np.float32),
             stability_class="C",
-            domain_x=(0, 100, 5), domain_y=(0, 100, 5), domain_z=(0, 50, 5),
+            domain_x=(0, 100, 5),
+            domain_y=(0, 100, 5),
+            domain_z=(0, 50, 5),
             time_array=time_array,
             release_frequency=1.0,
         )
@@ -212,19 +222,23 @@ def test_simulate_puff_rejects_negative_scalar_emission_rate():
 
 def test_infer_emission_rate_rejects_bad_prior_mean():
     obs = np.array([1e-6, 2e-6])
-    coords = (np.array([200., 400.]), np.zeros(2), np.ones(2))
+    coords = (np.array([200.0, 400.0]), np.zeros(2), np.ones(2))
     times = np.array([10.0, 20.0])
     with pytest.raises(ValueError, match=r"`prior_mean` must be > 0"):
         infer_emission_rate(
-            observations=obs, observation_coords=coords,
+            observations=obs,
+            observation_coords=coords,
             observation_times=times,
             source_location=(0, 0, 2),
             wind_times=np.linspace(0, 30, 4),
             wind_speed=np.full(4, 5.0),
             wind_direction=np.full(4, 270.0),
-            release_frequency=1.0, t_start=0.0, t_end=30.0,
+            release_frequency=1.0,
+            t_start=0.0,
+            t_end=30.0,
             prior_mean=0.0,
-            num_warmup=1, num_samples=1,
+            num_warmup=1,
+            num_samples=1,
         )
 
 
@@ -232,6 +246,7 @@ def test_infer_emission_rate_rejects_bad_prior_mean():
 def test_infer_emission_rate_recovers_synthetic_Q():
     """NUTS should recover a synthetic emission rate from time-series data."""
     import numpyro
+
     numpyro.enable_x64(False)
 
     from plumax.gauss_puff.puff import simulate_puff
@@ -254,10 +269,10 @@ def test_infer_emission_rate_recovers_synthetic_Q():
     )
     # Sample at a downwind transect (y=0, z=1m), every 10s from t=60.
     # Use np.interp against model coords for synthetic obs.
-    transect_x = np.array([200., 300., 400., 500.], dtype=np.float32)
-    transect_y = np.zeros_like(transect_x)
-    transect_z = np.full_like(transect_x, 1.0)
-    obs_times = np.array([60., 80., 100., 120.], dtype=np.float32)
+    transect_x = np.array([200.0, 300.0, 400.0, 500.0], dtype=np.float32)
+    np.zeros_like(transect_x)
+    np.full_like(transect_x, 1.0)
+    obs_times = np.array([60.0, 80.0, 100.0, 120.0], dtype=np.float32)
 
     # For each (x, t), pull the grid value at that x, y=0, z=0 (closest).
     x_grid = ds["x"].values

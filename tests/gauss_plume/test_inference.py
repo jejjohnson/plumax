@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from numpyro.infer import Predictive
+
 from plumax.gauss_plume.dispersion import BRIGGS_DISPERSION_PARAMS
 from plumax.gauss_plume.inference import (
     _lognormal_from_moments,
@@ -104,49 +105,82 @@ def test_gaussian_plume_model_allows_prior_predictive_without_inputs():
 
 def test_infer_emission_rate_rejects_bad_inputs():
     obs = np.array([1e-6, 2e-6, 3e-6])
-    coords = (np.array([500.0, 600.0, 700.0]),
-              np.array([0.0, 0.0, 0.0]),
-              np.array([1.0, 1.0, 1.0]))
+    coords = (
+        np.array([500.0, 600.0, 700.0]),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, 1.0, 1.0]),
+    )
 
     with pytest.raises(ValueError, match=r"`wind_speed` must be > 0"):
         infer_emission_rate(
-            obs, coords, (0, 0, 2), wind_speed=0.0, wind_direction=270.0,
-            num_warmup=1, num_samples=1,
+            obs,
+            coords,
+            (0, 0, 2),
+            wind_speed=0.0,
+            wind_direction=270.0,
+            num_warmup=1,
+            num_samples=1,
         )
     with pytest.raises(ValueError, match=r"`stability_class` must be one of"):
         infer_emission_rate(
-            obs, coords, (0, 0, 2), wind_speed=5.0, wind_direction=270.0,
+            obs,
+            coords,
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
             stability_class="Z",
-            num_warmup=1, num_samples=1,
+            num_warmup=1,
+            num_samples=1,
         )
     with pytest.raises(ValueError, match=r"must contain ≥ 1 point"):
         infer_emission_rate(
-            np.array([]), (np.array([]), np.array([]), np.array([])),
-            (0, 0, 2), wind_speed=5.0, wind_direction=270.0,
-            num_warmup=1, num_samples=1,
+            np.array([]),
+            (np.array([]), np.array([]), np.array([])),
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            num_warmup=1,
+            num_samples=1,
         )
     with pytest.raises(ValueError, match=r"observation_coords.*must be \(x, y, z\)"):
         infer_emission_rate(
-            obs, (coords[0], coords[1]), (0, 0, 2),
-            wind_speed=5.0, wind_direction=270.0,
-            num_warmup=1, num_samples=1,
+            obs,
+            (coords[0], coords[1]),
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            num_warmup=1,
+            num_samples=1,
         )
     with pytest.raises(ValueError, match=r"`prior_mean` must be > 0"):
         infer_emission_rate(
-            obs, coords, (0, 0, 2), wind_speed=5.0, wind_direction=270.0,
-            prior_mean=0.0, num_warmup=1, num_samples=1,
+            obs,
+            coords,
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            prior_mean=0.0,
+            num_warmup=1,
+            num_samples=1,
         )
 
 
 def test_infer_shape_mismatch_rejected():
     obs = np.array([1e-6, 2e-6, 3e-6])
-    bad_coords = (np.array([500.0, 600.0]),
-                  np.array([0.0, 0.0, 0.0]),
-                  np.array([1.0, 1.0, 1.0]))
+    bad_coords = (
+        np.array([500.0, 600.0]),
+        np.array([0.0, 0.0, 0.0]),
+        np.array([1.0, 1.0, 1.0]),
+    )
     with pytest.raises(ValueError, match=r"axis 'x' has shape"):
         infer_emission_rate(
-            obs, bad_coords, (0, 0, 2), wind_speed=5.0, wind_direction=270.0,
-            num_warmup=1, num_samples=1,
+            obs,
+            bad_coords,
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            num_warmup=1,
+            num_samples=1,
         )
 
 

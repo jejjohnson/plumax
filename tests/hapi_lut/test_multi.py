@@ -26,13 +26,18 @@ def stub_hapi(monkeypatch):
     def db_begin(path):
         state["cache"] = Path(path)
 
-    def fetch(name, *args, **kwargs):  # noqa: ARG001
+    def fetch(name, *args, **kwargs):
         cache = state["cache"]
         (cache / f"{name}.data").write_text("stub\n")
         (cache / f"{name}.header").write_text("stub\n")
 
-    def absorptionCoefficient_Voigt(  # noqa: N802
-        *, SourceTables, WavenumberGrid, Environment, Diluent, HITRAN_units  # noqa: ARG001
+    def absorptionCoefficient_Voigt(
+        *,
+        SourceTables,
+        WavenumberGrid,
+        Environment,
+        Diluent,
+        HITRAN_units,
     ):
         nu = np.asarray(WavenumberGrid, dtype=float)
         T = Environment["T"]
@@ -70,11 +75,17 @@ def test_create_multi_gas_luts_writes_one_file_per_gas(stub_hapi, tiny_grid, tmp
         assert path.exists() and path.suffix == ".nc"
 
 
-def test_create_multi_gas_luts_skips_existing_without_force(stub_hapi, tiny_grid, tmp_path):
+def test_create_multi_gas_luts_skips_existing_without_force(
+    stub_hapi, tiny_grid, tmp_path
+):
     out = tmp_path / "out"
-    first = create_multi_gas_luts(["CH4"], grid_config=tiny_grid, cache_dir=tmp_path / "c", output_dir=out)
+    first = create_multi_gas_luts(
+        ["CH4"], grid_config=tiny_grid, cache_dir=tmp_path / "c", output_dir=out
+    )
     mtime0 = first["CH4"].stat().st_mtime_ns
-    second = create_multi_gas_luts(["CH4"], grid_config=tiny_grid, cache_dir=tmp_path / "c", output_dir=out)
+    second = create_multi_gas_luts(
+        ["CH4"], grid_config=tiny_grid, cache_dir=tmp_path / "c", output_dir=out
+    )
     assert second["CH4"].stat().st_mtime_ns == mtime0
 
 
@@ -103,7 +114,9 @@ def test_create_combined_lut_has_one_var_per_gas(stub_hapi, tiny_grid, tmp_path)
         np.testing.assert_allclose(ratio, 2.0, rtol=1e-5)
 
 
-def test_create_combined_lut_raises_when_ranges_disjoint(stub_hapi, tiny_grid, tmp_path):
+def test_create_combined_lut_raises_when_ranges_disjoint(
+    stub_hapi, tiny_grid, tmp_path
+):
     # O2 is 12500-14000 cm^-1 and N2O is 4000-5000 cm^-1 — no overlap.
     with pytest.raises(ValueError, match="no common spectral range"):
         create_combined_lut(

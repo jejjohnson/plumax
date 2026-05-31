@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.radtran.config import (
     InstrumentSpec,
     ObservationGeometry,
@@ -14,7 +15,9 @@ from plumax.radtran.config import (
 def test_observation_geometry_amf_plane_parallel():
     geom = ObservationGeometry(sza_deg=30.0, vza_deg=0.0)
     # 1/cos(30°) + 1/cos(0°) = 1.1547 + 1 = 2.1547
-    assert geom.air_mass_factor == pytest.approx(1.0 / np.cos(np.deg2rad(30.0)) + 1.0, rel=1e-6)
+    assert geom.air_mass_factor == pytest.approx(
+        1.0 / np.cos(np.deg2rad(30.0)) + 1.0, rel=1e-6
+    )
 
 
 def test_observation_geometry_amf_override_used_when_set():

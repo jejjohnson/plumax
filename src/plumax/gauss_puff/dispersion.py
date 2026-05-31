@@ -26,10 +26,10 @@ Public surface
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
-from jax import jit
 import jax.numpy as jnp
+from jax import jit
 
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,

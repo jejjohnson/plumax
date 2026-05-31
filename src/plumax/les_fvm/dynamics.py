@@ -82,7 +82,7 @@ class EulerianDispersionRHS(eqx.Module):
 
 def _interior_mask(shape: tuple[int, int, int], dtype) -> Float[Array, "Nz Ny Nx"]:
     """Indicator field that is 1 on interior cells and 0 on ghost cells."""
-    Nz, Ny, Nx = shape
+    _Nz, _Ny, _Nx = shape
     mask = jnp.zeros(shape, dtype=dtype)
     mask = mask.at[1:-1, 1:-1, 1:-1].set(1.0)
     return mask

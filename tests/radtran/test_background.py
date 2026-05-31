@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.radtran.background import (
     robust_lowrank_covariance,
     trimmed_mean_spectrum,

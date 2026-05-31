@@ -22,8 +22,9 @@ the pixel-wise matched filter approximates with ``B = ∞ I, R = Σ_pixel``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -60,7 +61,7 @@ class SolveResult:
 
 
 def run_lbfgs(
-    cost: "Cost",
+    cost: Cost,
     initial_state: jax.Array,
     *,
     rtol: float = 1e-6,
@@ -109,7 +110,9 @@ def run_gauss_newton(
         linear_solver = lx.AutoLinearSolver(well_posed=None)
     fn = lambda y, _args: residual_fn(y)
     solver = optx.GaussNewton(rtol=rtol, atol=atol, linear_solver=linear_solver)
-    sol = optx.least_squares(fn, solver, initial_state, max_steps=max_steps, throw=False)
+    sol = optx.least_squares(
+        fn, solver, initial_state, max_steps=max_steps, throw=False
+    )
     return SolveResult(
         state=np.asarray(sol.value),
         n_steps=int(sol.stats.get("num_steps", -1)),

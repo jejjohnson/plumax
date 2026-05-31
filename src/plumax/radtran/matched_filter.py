@@ -78,7 +78,9 @@ def matched_filter_pixel(
         Scalar retrieval in the same units as ``target``.
     """
     cov_inv_target, target_norm = _precompute_constants(target, cov_inv)
-    innovation = np.asarray(spectrum, dtype=float) - np.asarray(mean_spectrum, dtype=float)
+    innovation = np.asarray(spectrum, dtype=float) - np.asarray(
+        mean_spectrum, dtype=float
+    )
     return float(np.einsum("i, i ->", cov_inv_target, innovation) / target_norm)
 
 
@@ -123,9 +125,7 @@ def matched_filter_image(
     # Project along the band axis. Reshape cov_inv_target for broadcasting,
     # collapse leading band axis with sum; this matches the einops
     # "b, b ... -> ..." contraction without the einops dependency.
-    broadcastable = cov_inv_target.reshape(
-        (n_bands,) + (1,) * (innovation.ndim - 1)
-    )
+    broadcastable = cov_inv_target.reshape((n_bands,) + (1,) * (innovation.ndim - 1))
     projected = (broadcastable * innovation).sum(axis=0)
     return projected / target_norm
 

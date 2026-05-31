@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.gauss_puff.dispersion import (
     DISPERSION_SCHEMES,
     PG_DISPERSION_PARAMS,
@@ -48,7 +49,7 @@ def test_pg_dispersion_positive_and_x_equals_y():
 def test_pg_dispersion_monotone_increasing():
     distance = jnp.array([10.0, 100.0, 1000.0, 10000.0])
     for cls in STABILITY_CLASSES:
-        sx, sy, sz = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS[cls])
+        _sx, sy, sz = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS[cls])
         # σ_y monotone increasing in travel distance over this range
         assert jnp.all(jnp.diff(sy) > 0), f"σ_y not monotone for class {cls}"
         # σ_z also monotone in this range for classes A-F
@@ -70,8 +71,8 @@ def test_pg_unstable_spreads_more_than_stable():
     # At any given travel distance, class A (unstable) should give larger σ_y
     # than class F (very stable).
     distance = jnp.array(500.0)
-    sxA, syA, szA = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS["A"])
-    sxF, syF, szF = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS["F"])
+    _sxA, syA, szA = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS["A"])
+    _sxF, syF, szF = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS["F"])
     assert float(syA) > float(syF)
     assert float(szA) > float(szF)
 

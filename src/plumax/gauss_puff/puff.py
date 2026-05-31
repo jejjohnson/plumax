@@ -28,13 +28,14 @@ Public surface
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import equinox as eqx
-from jax import jit, vmap
 import jax.numpy as jnp
-from jaxtyping import Array, Float
 import numpy as np
+from jax import jit, vmap
+from jaxtyping import Array, Float
 
 from plumax.gauss_puff.dispersion import (
     STABILITY_CLASSES,
@@ -177,17 +178,15 @@ def puff_concentration(
     dz_direct = z - puff_z
     dz_reflected = z + puff_z
 
-    normalization = (
-        jnp.power(2.0 * jnp.pi, 1.5) * sigma_x * sigma_y * sigma_z
-    )
+    normalization = jnp.power(2.0 * jnp.pi, 1.5) * sigma_x * sigma_y * sigma_z
 
     exp_x = jnp.exp(-0.5 * jnp.square(dx / sigma_x))
     exp_y = jnp.exp(-0.5 * jnp.square(dy / sigma_y))
     exp_z_direct = jnp.exp(-0.5 * jnp.square(dz_direct / sigma_z))
     exp_z_reflected = jnp.exp(-0.5 * jnp.square(dz_reflected / sigma_z))
 
-    return (puff_mass / normalization) * exp_x * exp_y * (
-        exp_z_direct + exp_z_reflected
+    return (
+        (puff_mass / normalization) * exp_x * exp_y * (exp_z_direct + exp_z_reflected)
     )
 
 
@@ -290,11 +289,9 @@ def evolve_puffs(
 
 
 def simulate_puff_field(
-    receptor_coords: tuple[
-        Float[Array, "P"], Float[Array, "P"], Float[Array, "P"]
-    ],
+    receptor_coords: tuple[Float[Array, "P"], Float[Array, "P"], Float[Array, "P"]],
     puff_state: PuffState,
-    dispersion_params: Float[Array, "6"],
+    dispersion_params: Float[Array, 6],
     dispersion_fn: Callable,
 ) -> Float[Array, "P"]:
     """Sum the contributions of all puffs at each receptor.
@@ -324,9 +321,15 @@ def simulate_puff_field(
     )
 
     per_puff = puff_concentration_vmap(
-        x_r, y_r, z_r,
-        puff_state.x, puff_state.y, puff_state.z,
-        sigma_x, sigma_y, sigma_z,
+        x_r,
+        y_r,
+        z_r,
+        puff_state.x,
+        puff_state.y,
+        puff_state.z,
+        sigma_x,
+        sigma_y,
+        sigma_z,
         puff_state.mass,
     )  # (N_puffs, P)
     return jnp.sum(per_puff, axis=0)
@@ -348,7 +351,7 @@ def simulate_puff(
     release_frequency: float = 1.0,
     scheme: str = "pg",
     background_conc: float = 0.0,
-    turbulence: "OUTurbulence | None" = None,
+    turbulence: OUTurbulence | None = None,
     turbulence_seed: int | np.random.Generator | None = None,
 ) -> xr.Dataset:
     """Simulate a time-resolved Gaussian-puff dispersion field on a 3-D grid.
@@ -421,16 +424,13 @@ def simulate_puff(
         )
     if source_location[2] < 0.0:
         raise ValueError(
-            f"simulate_puff: source height must be ≥ 0 "
-            f"(got z={source_location[2]!r})"
+            f"simulate_puff: source height must be ≥ 0 (got z={source_location[2]!r})"
         )
     time_array = np.asarray(time_array, dtype=np.float32)
     wind_speed = np.asarray(wind_speed, dtype=np.float32)
     wind_direction = np.asarray(wind_direction, dtype=np.float32)
     if time_array.ndim != 1 or time_array.size < 2:
-        raise ValueError(
-            "simulate_puff: `time_array` must be 1-D with ≥ 2 entries"
-        )
+        raise ValueError("simulate_puff: `time_array` must be 1-D with ≥ 2 entries")
     if wind_speed.shape != time_array.shape:
         raise ValueError(
             f"simulate_puff: `wind_speed` shape {wind_speed.shape} must match "
@@ -496,8 +496,7 @@ def simulate_puff(
                 "simulate_puff: scalar `emission_rate` must be ≥ 0 "
                 f"(got {emission_rate!r})"
             )
-        puff_mass = jnp.full((n_puffs,), q_scalar * dt_release,
-                             dtype=jnp.float32)
+        puff_mass = jnp.full((n_puffs,), q_scalar * dt_release, dtype=jnp.float32)
     else:
         Q = np.asarray(emission_rate, dtype=np.float32)
         if Q.shape != (n_puffs,):
@@ -508,20 +507,18 @@ def simulate_puff(
                 f"got {Q.shape}"
             )
         if np.any(Q < 0.0):
-            raise ValueError(
-                "simulate_puff: `emission_rate` entries must be ≥ 0"
-            )
+            raise ValueError("simulate_puff: `emission_rate` entries must be ≥ 0")
         puff_mass = jnp.asarray(Q * dt_release, dtype=jnp.float32)
 
-    schedule = WindSchedule.from_speed_direction(
-        time_array, wind_speed, wind_direction
-    )
+    schedule = WindSchedule.from_speed_direction(time_array, wind_speed, wind_direction)
 
     if turbulence is not None:
         from plumax.gauss_puff.turbulence import sample_ou_offsets
 
         dx_np, dy_np = sample_ou_offsets(
-            turbulence, np.asarray(release_times), seed=turbulence_seed,
+            turbulence,
+            np.asarray(release_times),
+            seed=turbulence_seed,
         )
         position_disturbance = (
             jnp.asarray(dx_np, dtype=jnp.float32),

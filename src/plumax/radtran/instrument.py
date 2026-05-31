@@ -80,16 +80,22 @@ class PointSpreadFunction:
     def __post_init__(self) -> None:
         k = np.asarray(self.kernel, dtype=np.float64)
         if k.ndim != 2:
-            raise ValueError(f"PointSpreadFunction: kernel must be 2-D, got shape {k.shape}.")
+            raise ValueError(
+                f"PointSpreadFunction: kernel must be 2-D, got shape {k.shape}."
+            )
         if k.shape[0] != k.shape[1]:
-            raise ValueError(f"PointSpreadFunction: kernel must be square, got {k.shape}.")
+            raise ValueError(
+                f"PointSpreadFunction: kernel must be square, got {k.shape}."
+            )
         if k.shape[0] % 2 != 1 or k.shape[0] < 3:
             raise ValueError(
                 f"PointSpreadFunction: kernel side length must be odd ≥ 3 (got {k.shape[0]})."
             )
         s = float(k.sum())
         if s == 0.0:
-            raise ValueError("PointSpreadFunction: kernel sums to zero; cannot normalise.")
+            raise ValueError(
+                "PointSpreadFunction: kernel sums to zero; cannot normalise."
+            )
         # Frozen dataclass — bypass __setattr__ for derived fields.
         normalised = k / s
         object.__setattr__(self, "kernel", normalised)
@@ -97,9 +103,7 @@ class PointSpreadFunction:
         object.__setattr__(self, "_kernel_adj", jnp.asarray(normalised[::-1, ::-1]))
 
     @classmethod
-    def gaussian(
-        cls, fwhm_pixels: float, kernel_size: int = 9
-    ) -> "PointSpreadFunction":
+    def gaussian(cls, fwhm_pixels: float, kernel_size: int = 9) -> PointSpreadFunction:
         """Build an isotropic Gaussian PSF.
 
         ``FWHM = 2.355 σ``; the kernel is sampled on the discrete pixel grid
@@ -115,7 +119,7 @@ class PointSpreadFunction:
         return cls(kernel=k)
 
     @classmethod
-    def airy(cls, fwhm_pixels: float, kernel_size: int = 9) -> "PointSpreadFunction":
+    def airy(cls, fwhm_pixels: float, kernel_size: int = 9) -> PointSpreadFunction:
         """Build an Airy-disk-like PSF as a diffraction-ish surrogate."""
         from scipy.special import j1
 
@@ -229,7 +233,7 @@ class GroundSamplingDistance:
         image_width_px: int,
         altitude_m: float,
         pixel_size_hr_m: float,
-    ) -> "GroundSamplingDistance":
+    ) -> GroundSamplingDistance:
         """Build a GSD operator from camera + altitude + HR pixel size.
 
         Dimensional analysis:
@@ -244,7 +248,7 @@ class GroundSamplingDistance:
         gsd_m_per_px = (sensor_width_mm * altitude_m) / (
             focal_length_mm * image_width_px
         )
-        f = int(round(gsd_m_per_px / pixel_size_hr_m))
+        f = round(gsd_m_per_px / pixel_size_hr_m)
         return cls(downsample_factor=max(1, f))
 
     # ── shape helpers ────────────────────────────────────────────────────────

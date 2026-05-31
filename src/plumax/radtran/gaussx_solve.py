@@ -34,6 +34,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+
 if TYPE_CHECKING:  # lineax is re-exported via gaussx — avoid hard import.
     import gaussx as _gx
     import lineax as _lx
@@ -84,7 +85,7 @@ def build_lowrank_covariance_operator(
     trim_frac: float = 0.1,
     regularization: float = 1e-6,
     band_axis: int = 0,
-) -> tuple["LowRankUpdateOp", np.ndarray]:
+) -> tuple[LowRankUpdateOp, np.ndarray]:
     """Build a :class:`gaussx.LowRankUpdate` covariance operator from a scene.
 
     Parameters
@@ -164,7 +165,9 @@ def build_lowrank_covariance_operator(
     )
 
     cov = gx.LowRankUpdate(
-        base, U, d,
+        base,
+        U,
+        d,
         tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
     )
     return cov, mu
@@ -176,7 +179,7 @@ def build_lowrank_covariance_operator(
 def matched_filter_pixel_op(
     spectrum: np.ndarray,
     mean_spectrum: np.ndarray,
-    cov: "LowRankUpdateOp",
+    cov: LowRankUpdateOp,
     target: np.ndarray,
 ) -> float:
     """Scalar matched filter using a structured covariance operator.
@@ -194,7 +197,8 @@ def matched_filter_pixel_op(
             "that Σ is PD and the target is non-trivial."
         )
     innovation = np.asarray(spectrum, dtype=float) - np.asarray(
-        mean_spectrum, dtype=float,
+        mean_spectrum,
+        dtype=float,
     )
     return float(np.dot(cov_inv_target, innovation) / target_norm)
 
@@ -202,7 +206,7 @@ def matched_filter_pixel_op(
 def matched_filter_image_op(
     radiance: np.ndarray,
     mean_spectrum: np.ndarray,
-    cov: "LowRankUpdateOp",
+    cov: LowRankUpdateOp,
     target: np.ndarray,
     *,
     band_axis: int = 0,
@@ -259,7 +263,7 @@ def matched_filter_image_op(
 
 def matched_filter_snr_op(
     abundance: np.ndarray,
-    cov: "LowRankUpdateOp",
+    cov: LowRankUpdateOp,
     target: np.ndarray,
 ) -> np.ndarray:
     """Detection SNR when the covariance is a gaussx operator.

@@ -83,7 +83,9 @@ class SpectralResponseFunction:
         self.band_names = tuple(self.band_names)
 
         if self.wavelengths_hr_nm.ndim != 1:
-            raise ValueError("SpectralResponseFunction: `wavelengths_hr_nm` must be 1-D.")
+            raise ValueError(
+                "SpectralResponseFunction: `wavelengths_hr_nm` must be 1-D."
+            )
         if self.band_centers_nm.shape != self.band_widths_nm.shape:
             raise ValueError(
                 "SpectralResponseFunction: band_centers and band_widths shapes must match."

@@ -10,11 +10,14 @@ Covers:
 
 from __future__ import annotations
 
+import itertools
+
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 import pytest
+
 from plumax.matched_filter.background import (
     estimate_cov_empirical,
 )
@@ -33,7 +36,7 @@ jax.config.update("jax_enable_x64", True)
 def test_apply_image_unbiased_noiseless(hyperspectral_scene, rng):
     """With the true (μ, Σ, t) and no noise, the MF recovers α exactly."""
     _, amp_map, target = hyperspectral_scene
-    H, W, B = amp_map.shape + (target.size,)
+    _H, _W, B = (*amp_map.shape, target.size)
     mu = np.ones(B)
     cube = mu + amp_map[..., None] * target
     cube_jax = jnp.asarray(cube)
@@ -135,7 +138,7 @@ def test_detection_threshold_is_monotone():
     cov_op = lx.DiagonalLinearOperator(jnp.ones(B))
     fars = [1e-2, 1e-4, 1e-6, 1e-8]
     thrs = [float(detection_threshold(f, cov_op, target)) for f in fars]
-    assert all(earlier < later for earlier, later in zip(thrs, thrs[1:], strict=False))
+    assert all(earlier < later for earlier, later in itertools.pairwise(thrs))
 
 
 def test_detection_threshold_rejects_out_of_range():
@@ -168,13 +171,13 @@ def test_zero_target_raises(rng):
     target = jnp.zeros(B)
     pixel = jnp.asarray(rng.standard_normal(B))
     mean = jnp.zeros(B)
-    with pytest.raises(ValueError, match="target .* all zero"):
+    with pytest.raises(ValueError, match=r"target .* all zero"):
         apply_pixel(pixel, mean=mean, cov_op=cov_op, target=target)
-    with pytest.raises(ValueError, match="target .* all zero"):
+    with pytest.raises(ValueError, match=r"target .* all zero"):
         matched_filter_snr(1.0, cov_op, target)
-    with pytest.raises(ValueError, match="target .* all zero"):
+    with pytest.raises(ValueError, match=r"target .* all zero"):
         detection_threshold(1e-4, cov_op, target)
-    with pytest.raises(ValueError, match="target .* all zero"):
+    with pytest.raises(ValueError, match=r"target .* all zero"):
         validate_mf_inputs(cov_op, target)
 
 

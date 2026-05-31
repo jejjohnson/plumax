@@ -40,6 +40,9 @@ dependencies = [
     "jaxlib>=0.7,<0.9",
     "numpy",
     "xarray",
+    # netcdf4 backs the compressed-NetCDF LUT round-trip in hapi_lut; without a
+    # real engine xarray falls back to scipy, which rejects zlib/complevel.
+    "netcdf4",
     "scipy>=1.11",
     # diffrax + equinox drive the gauss_puff time-varying wind solves.
     "diffrax>=0.6",
@@ -76,7 +79,12 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx" }
+finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.41" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle" }
+# gaussx >= 0.0.14 moved to jaxlib >= 0.10; pin to the last rev compatible
+# with the numpyro-driven jax < 0.9 line (mirrors the research_notebook
+# `plume-simulation` environment).
+gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "fd9a2427" }
 
 [dependency-groups]
 dev = [
@@ -85,6 +93,9 @@ dev = [
     "pytest-xdist>=3.5",
     "pre-commit>=4.5.1",
     "numpyro>=0.16",
+    # pipekit-cycle is a *test-only* dep: the adapters satisfy its protocols
+    # structurally, and the tests assert that conformance via isinstance.
+    "pipekit-cycle",
 ]
 lint = [
     "ruff>=0.15.10",
@@ -114,7 +125,28 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["E402", "E721", "E731", "E741"]
+ignore = [
+    "E402",
+    "E721",
+    "E731",
+    "E741",
+    # `ruff format` already enforces the 88-col limit on code; the remaining
+    # E501s are dense docstring / comment lines carrying equations and physical
+    # units that shouldn't be hard-wrapped mid-formula.
+    "E501",
+    # jaxtyping shape annotations (Float[Array, "N 3"]) read as forward refs.
+    "F722",
+    "F821",
+    # Ambiguous-unicode rules: the models use Greek / math glyphs (σ, ν, Δ, ×)
+    # in docstrings, comments and strings on purpose.
+    "RUF001",
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Package __init__ modules re-export the public API surface.
+"**/__init__.py" = ["F401"]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -122,6 +154,22 @@ lines-after-imports = 2
 
 [tool.ty.environment]
 python-version = "3.12"
+
+# ty (preview) does not yet model JAX array semantics or jaxtyping shape
+# annotations: it infers `jnp` results as Python scalars (→ not-subscriptable),
+# reads jaxtyping dimension names as undefined references, can't see optional
+# extras such as `hapi`, and narrows `xarray`/`numpy` unions too aggressively.
+# The full pytest suite is the real correctness gate; these systematically
+# false-positive rules are downgraded until ty's JAX support matures.
+[tool.ty.rules]
+invalid-argument-type = "ignore"
+invalid-return-type = "ignore"
+not-iterable = "ignore"
+not-subscriptable = "ignore"
+unresolved-attribute = "ignore"
+unresolved-import = "ignore"
+unresolved-reference = "ignore"
+unsupported-operator = "ignore"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -20,7 +20,7 @@ import os
 
 os.environ.setdefault("JAX_ENABLE_X64", "1")
 
-import jax  # noqa: E402 — must come *after* the env var is set.
+import jax
 
 
 jax.config.update("jax_enable_x64", True)

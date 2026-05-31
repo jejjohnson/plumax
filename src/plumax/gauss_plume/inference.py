@@ -17,9 +17,9 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import NDArray
 import numpyro
 import numpyro.distributions as dist
+from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS, DiscreteHMCGibbs
 
 from plumax.gauss_plume.dispersion import (
@@ -136,18 +136,14 @@ def gaussian_plume_model(
     mu_log, sigma_log = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample(
-        "emission_rate", dist.LogNormal(mu_log, sigma_log)
-    )
+    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(mu_log, sigma_log))
 
     if infer_stability:
         stability_probs = jnp.ones(len(STABILITY_CLASSES)) / len(STABILITY_CLASSES)
         stability_idx = numpyro.sample(
             "stability_idx", dist.Categorical(probs=stability_probs)
         )
-        all_params = jnp.stack(
-            [BRIGGS_DISPERSION_PARAMS[c] for c in STABILITY_CLASSES]
-        )
+        all_params = jnp.stack([BRIGGS_DISPERSION_PARAMS[c] for c in STABILITY_CLASSES])
         dispersion_params = all_params[stability_idx]
     else:
         dispersion_params = get_dispersion_params(stability_class)
@@ -253,9 +249,7 @@ def infer_emission_rate(
         )
     obs = np.asarray(observations)
     if obs.size == 0:
-        raise ValueError(
-            "infer_emission_rate: `observations` must contain ≥ 1 point"
-        )
+        raise ValueError("infer_emission_rate: `observations` must contain ≥ 1 point")
     if len(observation_coords) != 3:
         raise ValueError(
             "infer_emission_rate: `observation_coords` must be (x, y, z); "

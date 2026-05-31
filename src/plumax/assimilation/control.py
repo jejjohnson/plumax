@@ -84,7 +84,7 @@ class WhiteningTransform:
     cholesky_op: lx.AbstractLinearOperator
 
     @classmethod
-    def from_background(cls, background: LinearOperator) -> "WhiteningTransform":
+    def from_background(cls, background: LinearOperator) -> WhiteningTransform:
         """Factor ``B = U Uᵀ`` via :func:`gaussx.cholesky`.
 
         gaussx returns a structured triangular operator (preserving Kronecker /

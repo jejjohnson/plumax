@@ -41,9 +41,7 @@ class GaussianSource(eqx.Module):
     emission_fn: Callable[[Float[Array, ""]], Float[Array, ""]]
     density: Float[Array, "nz ny nx"]
 
-    def __call__(
-        self, t: Float[Array, ""]
-    ) -> Float[Array, "Nz Ny Nx"]:
+    def __call__(self, t: Float[Array, ""]) -> Float[Array, "Nz Ny Nx"]:
         """Source tendency ``q(t) * density`` at interior T-points, zero-padded."""
         q = self.emission_fn(t)
         interior = q * self.density
@@ -85,9 +83,9 @@ def make_gaussian_source(
     x_min, x_max = float(plume_grid.x[0]), float(plume_grid.x[-1])
     y_min, y_max = float(plume_grid.y[0]), float(plume_grid.y[-1])
     z_min, z_max = float(plume_grid.z[0]), float(plume_grid.z[-1])
-    if not (x_min <= x_src <= x_max
-            and y_min <= y_src <= y_max
-            and z_min <= z_src <= z_max):
+    if not (
+        x_min <= x_src <= x_max and y_min <= y_src <= y_max and z_min <= z_src <= z_max
+    ):
         raise ValueError(
             "make_gaussian_source: source_location "
             f"{source_location!r} lies outside the interior domain "

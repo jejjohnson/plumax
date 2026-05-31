@@ -11,6 +11,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.assimilation.background import build_diagonal_background
 from plumax.assimilation.control import WhiteningTransform
 from plumax.assimilation.cost import (
@@ -26,7 +27,7 @@ jax.config.update("jax_enable_x64", True)
 def _make_cost_setup(obs_model_no_optics, *, ny=4, nx=4, vmr_truth=2e-7):
     """Synthesise (y, x_b, B) for a tiny twin experiment."""
     model = obs_model_no_optics
-    rng = np.random.default_rng(0)
+    np.random.default_rng(0)
     truth_field = jnp.full((ny, nx), float(vmr_truth))
     y = model.forward(truth_field, linear=False)
     x_b = jnp.zeros((ny, nx))

@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.les_fvm.advection import advection_tendency
 from plumax.les_fvm.grid import make_grid
 
@@ -36,9 +37,7 @@ def test_uniform_concentration_with_uniform_flow_has_zero_tendency_interior():
     t = advection_tendency(c, u, v, w, g, method="weno5")
     # WENO writes only to the [1:-1, 2:-2, 2:-2] horizontal interior; the
     # outer ring is zero by construction.  The core interior must be ~0.
-    np.testing.assert_allclose(
-        np.asarray(t)[1:-1, 2:-2, 2:-2], 0.0, atol=1e-5
-    )
+    np.testing.assert_allclose(np.asarray(t)[1:-1, 2:-2, 2:-2], 0.0, atol=1e-5)
 
 
 def test_advection_reduces_to_vertical_when_horizontal_uniform():

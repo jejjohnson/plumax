@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.matched_filter.background import (
     estimate_cov_empirical,
     estimate_cov_lowrank,
@@ -36,7 +37,7 @@ def test_estimate_mean_methods_agree_without_outliers(rng):
 def test_estimate_mean_robust_to_outliers(rng):
     """Heavy contamination: robust methods stay close, plain mean drifts."""
     cube = _noisy_cube(rng)
-    H, W, B = cube.shape
+    H, W, _B = cube.shape
     # 10% of pixels get a huge spike in band 0.
     mask = rng.random((H, W)) < 0.1
     cube[mask, 0] += 10.0

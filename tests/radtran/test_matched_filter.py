@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.radtran.matched_filter import (
     matched_filter_image,
     matched_filter_pixel,
@@ -92,9 +93,13 @@ def test_matched_filter_recovers_column_map(synthetic_lut):
     geom = dict(T_K=280.0, p_atm=1.0, path_length_cm=8.4e5, amf=2.0)
     # build_nb_lut doesn't take path_length_cm (ΔX is already a column).
     lut = build_nb_lut(
-        synthetic_lut, srf,
-        T_K=geom["T_K"], p_atm=geom["p_atm"], amf=geom["amf"],
-        max_delta_column=20.0, n_grid=1001,
+        synthetic_lut,
+        srf,
+        T_K=geom["T_K"],
+        p_atm=geom["p_atm"],
+        amf=geom["amf"],
+        max_delta_column=20.0,
+        n_grid=1001,
     )
 
     # Clean flat scene (normalised radiance = 1 everywhere).
@@ -107,7 +112,9 @@ def test_matched_filter_recovers_column_map(synthetic_lut):
 
     # Build a reference target at ΔVMR = 1e-6.
     delta_ref = 1e-6
-    t_hr = target_spectrum_normalized_linear(synthetic_lut, nu, delta_vmr=delta_ref, **geom)
+    t_hr = target_spectrum_normalized_linear(
+        synthetic_lut, nu, delta_vmr=delta_ref, **geom
+    )
     t_b = target_bands(t_hr, srf, 1e7 / nu)
 
     # Trivial "background" since the scene is flat: μ = 1, Σ = I.

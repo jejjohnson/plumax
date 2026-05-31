@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -66,11 +67,7 @@ def test_sigmas_clamp_negative_distance():
 def test_class_ordering_unstable_disperses_faster():
     # Class A (unstable) → larger σ_y/σ_z than class F (stable) at same x.
     x = jnp.array([500.0])
-    sigma_y_A, sigma_z_A = calculate_briggs_dispersion(
-        x, BRIGGS_DISPERSION_PARAMS["A"]
-    )
-    sigma_y_F, sigma_z_F = calculate_briggs_dispersion(
-        x, BRIGGS_DISPERSION_PARAMS["F"]
-    )
+    sigma_y_A, sigma_z_A = calculate_briggs_dispersion(x, BRIGGS_DISPERSION_PARAMS["A"])
+    sigma_y_F, sigma_z_F = calculate_briggs_dispersion(x, BRIGGS_DISPERSION_PARAMS["F"])
     assert np.asarray(sigma_y_A).item() > np.asarray(sigma_y_F).item()
     assert np.asarray(sigma_z_A).item() > np.asarray(sigma_z_F).item()

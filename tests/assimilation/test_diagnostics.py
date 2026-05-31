@@ -11,6 +11,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.assimilation.background import build_diagonal_background
 from plumax.assimilation.control import WhiteningTransform
 from plumax.assimilation.cost import build_cost_xi
@@ -46,13 +47,13 @@ def test_dfs_zero_in_no_information_limit(obs_model_no_optics):
     """
     model = obs_model_no_optics
     ny, nx = 3, 3
-    B = build_diagonal_background(1.0, n_pixels=ny * nx)   # well-scaled prior
+    B = build_diagonal_background(1.0, n_pixels=ny * nx)  # well-scaled prior
     W = WhiteningTransform.from_background(B)
     y = model.forward(jnp.zeros((ny, nx)), linear=False)
     cost = build_cost_xi(
         forward_fn=model.make_forward(linear=False),
         whitening=W,
-        obs_inv_variance=1e-12,                            # effectively no obs info
+        obs_inv_variance=1e-12,  # effectively no obs info
         background_state=jnp.zeros((ny, nx)),
         observation=y,
         state_shape=(ny, nx),
@@ -73,14 +74,14 @@ def test_dfs_approaches_state_size_in_high_information_limit(obs_model_no_optics
     """When obs dominate (prior very loose), Hess → H'ᵀR⁻¹H' and DFS → state_size."""
     model = obs_model_no_optics
     ny, nx = 3, 3
-    B = build_diagonal_background(1.0, n_pixels=ny * nx)   # well-scaled prior
+    B = build_diagonal_background(1.0, n_pixels=ny * nx)  # well-scaled prior
     W = WhiteningTransform.from_background(B)
     truth = jnp.full((ny, nx), 1e-7)
     y = model.forward(truth, linear=False)
     cost = build_cost_xi(
         forward_fn=model.make_forward(linear=False),
         whitening=W,
-        obs_inv_variance=1e12,                             # tight observations
+        obs_inv_variance=1e12,  # tight observations
         background_state=jnp.zeros((ny, nx)),
         observation=y,
         state_shape=(ny, nx),

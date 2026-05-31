@@ -18,8 +18,8 @@ Public surface
 
 from __future__ import annotations
 
-from jax import jit
 import jax.numpy as jnp
+from jax import jit
 
 
 STABILITY_CLASSES: tuple[str, ...] = ("A", "B", "C", "D", "E", "F")

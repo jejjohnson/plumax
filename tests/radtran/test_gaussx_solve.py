@@ -41,13 +41,18 @@ def test_operator_matches_dense_covariance_on_a_test_vector():
     """``cov · v`` should match ``Σ · v`` from the dense estimator."""
     scene = _synthetic_scene(n_bands=4, shape=(16, 16))
     cov, _ = build_lowrank_covariance_operator(
-        scene, rank=3, regularization=1e-6,
+        scene,
+        rank=3,
+        regularization=1e-6,
     )
     Sigma, _ = robust_lowrank_covariance(
-        scene, rank=3, regularization=1e-6,
+        scene,
+        rank=3,
+        regularization=1e-6,
     )
     v = np.arange(4, dtype=float)
     import jax.numpy as jnp
+
     mv = np.asarray(cov.mv(jnp.asarray(v)))
     np.testing.assert_allclose(mv, Sigma @ v, atol=1e-10)
 
@@ -56,7 +61,7 @@ def test_pixel_op_agrees_with_dense_pixel_path():
     """Operator-backed and dense matched filter agree pixel-for-pixel."""
     scene = _synthetic_scene(n_bands=5, shape=(16, 16))
     cov, mu = build_lowrank_covariance_operator(scene, rank=3)
-    Sigma, Sigma_inv = robust_lowrank_covariance(scene, rank=3)
+    _Sigma, Sigma_inv = robust_lowrank_covariance(scene, rank=3)
     # Build μ identically so the two paths use the same background.
     # (robust_lowrank_covariance also uses `trimmed_mean_spectrum` internally.)
     target = np.array([-0.05, -0.02, -0.1, -0.03, -0.08])
@@ -126,6 +131,7 @@ def test_rank_default_is_reasonable():
     # Operator has a rank-5 update plus λI → the product Σv should still be
     # full-rank expressible (λ > 0). Check with a non-zero vector.
     import jax.numpy as jnp
+
     v = jnp.ones(6)
     mv = np.asarray(cov.mv(v))
     assert np.all(np.isfinite(mv))

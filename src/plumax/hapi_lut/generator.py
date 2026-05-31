@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +24,7 @@ from plumax.hapi_lut.config import (
     GasConfig,
     LUTGridConfig,
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,8 @@ def fetch_hitran_data(
             ) from exc
         logger.warning(
             "fetch() raised %s — proceeding with cached %s.",
-            type(exc).__name__, data_path,
+            type(exc).__name__,
+            data_path,
         )
 
     if not (data_path.exists() and header_path.exists()):
@@ -181,7 +183,11 @@ def compute_absorption_lut(
             if progress:
                 logger.info(
                     "  [%d/%d] %s T=%.0fK P=%.2fatm",
-                    i_T * n_P + i_P + 1, total, gas_config.name, T, P,
+                    i_T * n_P + i_P + 1,
+                    total,
+                    gas_config.name,
+                    T,
+                    P,
                 )
             try:
                 _, coef = absorptionCoefficient_Voigt(
@@ -216,7 +222,7 @@ def build_lut_dataset(
     wavelength_nm: np.ndarray,
 ) -> xr.Dataset:
     """Wrap the raw LUT arrays in a CF-conformant ``xarray.Dataset``."""
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     ds = xr.Dataset(
         data_vars={
             "absorption_cross_section": (
@@ -239,22 +245,38 @@ def build_lut_dataset(
             "wavenumber": (
                 ["wavenumber"],
                 nu_grid,
-                {"units": "cm^-1", "long_name": "Wavenumber", "standard_name": "wavenumber"},
+                {
+                    "units": "cm^-1",
+                    "long_name": "Wavenumber",
+                    "standard_name": "wavenumber",
+                },
             ),
             "wavelength": (
                 ["wavenumber"],
                 wavelength_nm,
-                {"units": "nm", "long_name": "Wavelength", "standard_name": "radiation_wavelength"},
+                {
+                    "units": "nm",
+                    "long_name": "Wavelength",
+                    "standard_name": "radiation_wavelength",
+                },
             ),
             "temperature": (
                 ["temperature"],
                 np.asarray(grid_config.T_grid, dtype=float),
-                {"units": "K", "long_name": "Temperature", "standard_name": "air_temperature"},
+                {
+                    "units": "K",
+                    "long_name": "Temperature",
+                    "standard_name": "air_temperature",
+                },
             ),
             "pressure": (
                 ["pressure"],
                 np.asarray(grid_config.P_grid, dtype=float),
-                {"units": "atm", "long_name": "Pressure", "standard_name": "air_pressure"},
+                {
+                    "units": "atm",
+                    "long_name": "Pressure",
+                    "standard_name": "air_pressure",
+                },
             ),
         },
         attrs={
@@ -292,7 +314,9 @@ def save_lut(ds: xr.Dataset, output_dir: Path | str, gas_name: str) -> Path:
             }
         },
     )
-    logger.info("Saved %s LUT to %s (%.1f MB)", gas_name, path, path.stat().st_size / 1e6)
+    logger.info(
+        "Saved %s LUT to %s (%.1f MB)", gas_name, path, path.stat().st_size / 1e6
+    )
     return path
 
 

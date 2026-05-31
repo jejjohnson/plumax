@@ -45,15 +45,20 @@ def _make_hapi_stub(
     def db_begin(path):
         state["cache"] = Path(path)
 
-    def fetch(name, mol_id, iso_id, nu_min, nu_max):  # noqa: ARG001
+    def fetch(name, mol_id, iso_id, nu_min, nu_max):
         if fetch_raises is not None:
             raise fetch_raises("simulated HAPI fetch failure")
         cache = state["cache"]
         (cache / f"{name}.data").write_text("stub\n")
         (cache / f"{name}.header").write_text("stub\n")
 
-    def absorptionCoefficient_Voigt(  # noqa: N802
-        *, SourceTables, WavenumberGrid, Environment, Diluent, HITRAN_units  # noqa: ARG001
+    def absorptionCoefficient_Voigt(
+        *,
+        SourceTables,
+        WavenumberGrid,
+        Environment,
+        Diluent,
+        HITRAN_units,
     ):
         nu = np.asarray(WavenumberGrid, dtype=float)
         T = Environment["T"]
@@ -79,13 +84,17 @@ def stub_hapi(monkeypatch):
 
 
 def test_compute_absorption_lut_has_expected_shape_and_ordering(stub_hapi, tmp_path):
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     grid = LUTGridConfig(
         T_grid=np.array([200.0, 300.0]),
         P_grid=np.array([0.2, 1.0]),
         nu_step=0.1,
     )
-    nu, sigma, wl = compute_absorption_lut(gas, grid, cache_dir=tmp_path, progress=False)
+    nu, sigma, wl = compute_absorption_lut(
+        gas, grid, cache_dir=tmp_path, progress=False
+    )
     assert nu.shape == (10,)  # (4001 - 4000) / 0.1
     assert sigma.shape == (10, 2, 2)
     # σ monotone in T, p (stub: + 1e-26·T + 1e-25·p):
@@ -96,13 +105,17 @@ def test_compute_absorption_lut_has_expected_shape_and_ordering(stub_hapi, tmp_p
 
 
 def test_build_lut_dataset_round_trip_through_netcdf(stub_hapi, tmp_path):
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     grid = LUTGridConfig(
         T_grid=np.array([220.0, 280.0]),
         P_grid=np.array([0.5, 1.0]),
         nu_step=0.2,
     )
-    nu, sigma, wl = compute_absorption_lut(gas, grid, cache_dir=tmp_path, progress=False)
+    nu, sigma, wl = compute_absorption_lut(
+        gas, grid, cache_dir=tmp_path, progress=False
+    )
     ds = build_lut_dataset(gas, grid, nu, sigma, wl)
     path = save_lut(ds, tmp_path, "CH4")
     assert path.exists() and path.suffix == ".nc"
@@ -118,7 +131,9 @@ def test_build_lut_dataset_round_trip_through_netcdf(stub_hapi, tmp_path):
 
 
 def test_fetch_hitran_data_writes_cache_files(stub_hapi, tmp_path):
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     fetch_hitran_data(gas, cache_dir=tmp_path)
     assert (tmp_path / "CH4.data").exists()
     assert (tmp_path / "CH4.header").exists()
@@ -127,18 +142,24 @@ def test_fetch_hitran_data_writes_cache_files(stub_hapi, tmp_path):
 def test_fetch_hitran_data_raises_when_fetch_fails_and_no_cache(monkeypatch, tmp_path):
     fake = _make_hapi_stub(fetch_raises=RuntimeError)
     monkeypatch.setitem(sys.modules, "hapi", fake)
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     with pytest.raises(RuntimeError, match="HITRAN fetch failed for CH4"):
         fetch_hitran_data(gas, cache_dir=tmp_path)
 
 
-def test_fetch_hitran_data_tolerates_fetch_failure_if_cache_present(monkeypatch, tmp_path):
+def test_fetch_hitran_data_tolerates_fetch_failure_if_cache_present(
+    monkeypatch, tmp_path
+):
     # Pre-populate the cache and then make fetch() raise — should not abort.
     (tmp_path / "CH4.data").write_text("stub\n")
     (tmp_path / "CH4.header").write_text("stub\n")
     fake = _make_hapi_stub(fetch_raises=RuntimeError)
     monkeypatch.setitem(sys.modules, "hapi", fake)
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     out = fetch_hitran_data(gas, cache_dir=tmp_path)
     assert out == tmp_path
 
@@ -146,7 +167,9 @@ def test_fetch_hitran_data_tolerates_fetch_failure_if_cache_present(monkeypatch,
 def test_compute_absorption_lut_raises_when_voigt_call_fails(monkeypatch, tmp_path):
     fake = _make_hapi_stub(voigt_raises_on=(300.0, 1.0))
     monkeypatch.setitem(sys.modules, "hapi", fake)
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     grid = LUTGridConfig(
         T_grid=np.array([200.0, 300.0]),
         P_grid=np.array([1.0]),
@@ -159,7 +182,9 @@ def test_compute_absorption_lut_raises_when_voigt_call_fails(monkeypatch, tmp_pa
 def test_compute_absorption_lut_raises_on_non_finite_output(monkeypatch, tmp_path):
     fake = _make_hapi_stub(voigt_returns_nan_on=(300.0, 1.0))
     monkeypatch.setitem(sys.modules, "hapi", fake)
-    gas = GasConfig("CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
     grid = LUTGridConfig(
         T_grid=np.array([200.0, 300.0]),
         P_grid=np.array([1.0]),

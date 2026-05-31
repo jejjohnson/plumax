@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from jax import jit, vmap
 import jax.numpy as jnp
 import numpy as np
+from jax import jit, vmap
 
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
@@ -249,8 +249,7 @@ def simulate_plume(
         )
     if source_location[2] < 0.0:
         raise ValueError(
-            f"simulate_plume: source height must be ≥ 0 "
-            f"(got z={source_location[2]!r})"
+            f"simulate_plume: source height must be ≥ 0 (got z={source_location[2]!r})"
         )
     for name, domain in (
         ("domain_x", domain_x),

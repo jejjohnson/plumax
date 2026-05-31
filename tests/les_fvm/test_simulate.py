@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+
 from plumax.gauss_puff.wind import WindSchedule
 from plumax.les_fvm import (
     pg_eddy_diffusivity,
@@ -68,7 +69,9 @@ def test_simulate_mass_grows_with_time_under_constant_emission():
     ds = simulate_eulerian_dispersion(**_common_kwargs(t_end=30.0, save_interval=5.0))
     mass = (
         ds["concentration"].sum(dim=("x", "y", "z"))
-        * (400.0 / 16) * (200.0 / 8) * (80.0 / 8)
+        * (400.0 / 16)
+        * (200.0 / 8)
+        * (80.0 / 8)
     ).values
     # Mass is non-decreasing across the early saves (before much outflow).
     assert np.all(np.diff(mass[:4]) >= -1e-6)
@@ -149,13 +152,16 @@ def test_simulate_pg_accepts_calm_start_then_windy_schedule():
         domain_x=(0.0, 400.0, 16),
         domain_y=(0.0, 200.0, 8),
         domain_z=(0.0, 80.0, 8),
-        t_start=0.0, t_end=30.0, save_interval=15.0,
+        t_start=0.0,
+        t_end=30.0,
+        save_interval=15.0,
         emission_rate=0.05,
         source_location=(50.0, 100.0, 20.0),
         wind_schedule=schedule,
         eddy_diffusivity="pg",
         stability_class="C",
-        solver="tsit5", dt0=0.5,
+        solver="tsit5",
+        dt0=0.5,
     )
     assert float(ds["concentration"].max()) >= 0.0  # no NaNs + valid dataset
 
@@ -169,12 +175,15 @@ def test_simulate_save_interval_not_dividing_window_does_not_overshoot():
         domain_x=(0.0, 200.0, 8),
         domain_y=(0.0, 100.0, 4),
         domain_z=(0.0, 40.0, 4),
-        t_start=0.0, t_end=10.0, save_interval=6.0,
+        t_start=0.0,
+        t_end=10.0,
+        save_interval=6.0,
         emission_rate=0.01,
         source_location=(20.0, 50.0, 10.0),
         uniform_wind=(5.0, 0.0, 0.0),
         eddy_diffusivity=1.0,
-        solver="tsit5", dt0=0.5,
+        solver="tsit5",
+        dt0=0.5,
     )
     times = ds["time"].values
     assert times[0] == 0.0
@@ -210,14 +219,19 @@ def test_simulate_pg_calibration_uses_simulation_window_only():
         domain_x=(0.0, 400.0, 16),
         domain_y=(0.0, 200.0, 8),
         domain_z=(0.0, 80.0, 8),
-        t_start=0.0, t_end=10.0, save_interval=5.0,
+        t_start=0.0,
+        t_end=10.0,
+        save_interval=5.0,
         emission_rate=0.05,
         source_location=(50.0, 100.0, 20.0),
         eddy_diffusivity="pg",
         stability_class="C",
-        solver="tsit5", dt0=0.5,
+        solver="tsit5",
+        dt0=0.5,
     )
-    ds_short = simulate_eulerian_dispersion(**common_kwargs, wind_schedule=schedule_short)
+    ds_short = simulate_eulerian_dispersion(
+        **common_kwargs, wind_schedule=schedule_short
+    )
     ds_long = simulate_eulerian_dispersion(**common_kwargs, wind_schedule=schedule_long)
     np.testing.assert_allclose(
         ds_short["concentration"].values,
@@ -242,7 +256,9 @@ def test_simulate_pg_rejects_all_zero_schedule():
             domain_x=(0.0, 100.0, 8),
             domain_y=(0.0, 100.0, 8),
             domain_z=(0.0, 40.0, 4),
-            t_start=0.0, t_end=5.0, save_interval=1.0,
+            t_start=0.0,
+            t_end=5.0,
+            save_interval=1.0,
             emission_rate=0.01,
             source_location=(20.0, 50.0, 10.0),
             wind_schedule=schedule,
@@ -273,12 +289,15 @@ def test_simulate_accepts_explicit_wind_field():
         domain_x=(0.0, 400.0, 16),
         domain_y=(0.0, 200.0, 8),
         domain_z=(0.0, 80.0, 8),
-        t_start=0.0, t_end=10.0, save_interval=5.0,
+        t_start=0.0,
+        t_end=10.0,
+        save_interval=5.0,
         emission_rate=0.1,
         source_location=(50.0, 100.0, 20.0),
         wind_field=wf,
         eddy_diffusivity=eddy,
-        solver="tsit5", dt0=0.5,
+        solver="tsit5",
+        dt0=0.5,
     )
     assert float(ds["concentration"].max()) > 0.0
 
@@ -293,12 +312,15 @@ def test_simulate_with_time_varying_wind_schedule():
         domain_x=(0.0, 400.0, 16),
         domain_y=(0.0, 200.0, 8),
         domain_z=(0.0, 80.0, 8),
-        t_start=0.0, t_end=20.0, save_interval=10.0,
+        t_start=0.0,
+        t_end=20.0,
+        save_interval=10.0,
         emission_rate=0.05,
         source_location=(50.0, 100.0, 20.0),
         wind_schedule=schedule,
         eddy_diffusivity="pg",
         stability_class="C",
-        solver="tsit5", dt0=0.5,
+        solver="tsit5",
+        dt0=0.5,
     )
     assert float(ds["concentration"].max()) > 0.0

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.matched_filter.cluster import (
     adaptive_window_background,
     gmm_cluster_background,
@@ -23,7 +24,7 @@ def test_gmm_separates_two_populations(rng):
     assert len(result.means) == len(result.cov_operators) == 2
     # Match cluster IDs to truth by the higher-mean cluster being "water".
     means_mag = [m.mean() for m in result.means]
-    high, low = int(np.argmax(means_mag)), int(np.argmin(means_mag))
+    high, _low = int(np.argmax(means_mag)), int(np.argmin(means_mag))
     predicted = np.where(result.labels == high, 1, 0)
     accuracy = (predicted == truth).mean()
     assert accuracy > 0.9, f"GMM cluster recovery only {accuracy:.2f}"

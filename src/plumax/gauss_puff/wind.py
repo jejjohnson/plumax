@@ -34,6 +34,7 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+
 if TYPE_CHECKING:  # NumPy arrays are accepted as factory inputs only.
     import numpy as np
 
@@ -101,9 +102,7 @@ class WindSchedule(eqx.Module):
     def _interp_v(self) -> diffrax.LinearInterpolation:
         return diffrax.LinearInterpolation(ts=self.times, ys=self.v_wind)
 
-    def wind_at(
-        self, t: Float[Array, ""]
-    ) -> tuple[Float[Array, ""], Float[Array, ""]]:
+    def wind_at(self, t: Float[Array, ""]) -> tuple[Float[Array, ""], Float[Array, ""]]:
         """Interpolate the wind velocity components at time ``t``."""
         return self._interp_u().evaluate(t), self._interp_v().evaluate(t)
 
@@ -149,7 +148,7 @@ def cumulative_wind_integrals(
     interp_u = schedule._interp_u()
     interp_v = schedule._interp_v()
 
-    def rhs(t: Float[Array, ""], y: Float[Array, "3"], args) -> Float[Array, "3"]:
+    def rhs(t: Float[Array, ""], y: Float[Array, 3], args) -> Float[Array, 3]:
         u = interp_u.evaluate(t)
         v = interp_v.evaluate(t)
         speed = jnp.sqrt(u**2 + v**2)

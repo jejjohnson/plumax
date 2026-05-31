@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.matched_filter.streaming import (
     WelfordAccumulator,
     streaming_background,

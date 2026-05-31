@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.les_fvm.grid import make_grid
 from plumax.les_fvm.source import (
     GaussianSource,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import xarray as xr
+
 from plumax.assimilation.obs_operator import RadianceObservationModel
 from plumax.radtran.instrument import (
     GroundSamplingDistance,
@@ -39,14 +40,15 @@ def synthetic_lut() -> xr.Dataset:
         temp_fac = np.exp(-(300.0 - T) / 150.0)
         for i_P, p in enumerate(P_grid):
             for c, s, w in zip(centres, strengths_T, widths, strict=True):
-                sigma[:, i_T, i_P] += s * temp_fac * np.exp(
-                    -0.5 * ((nu - c) / (w * p)) ** 2
+                sigma[:, i_T, i_P] += (
+                    s * temp_fac * np.exp(-0.5 * ((nu - c) / (w * p)) ** 2)
                 )
 
     return xr.Dataset(
         data_vars={
             "absorption_cross_section": (
-                ["wavenumber", "temperature", "pressure"], sigma,
+                ["wavenumber", "temperature", "pressure"],
+                sigma,
             ),
         },
         coords={

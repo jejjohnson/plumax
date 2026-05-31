@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.gauss_puff.wind import WindSchedule
 from plumax.les_fvm.grid import make_grid
 from plumax.les_fvm.wind import (

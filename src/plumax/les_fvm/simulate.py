@@ -32,8 +32,16 @@ from plumax.les_fvm.wind import (
 
 SolverName = Literal["tsit5", "dopri5", "ssprk3", "heun"]
 AdvectionScheme = Literal[
-    "upwind1", "weno3", "weno5", "weno7", "weno9",
-    "minmod", "van_leer", "superbee", "mc", "naive",
+    "upwind1",
+    "weno3",
+    "weno5",
+    "weno7",
+    "weno9",
+    "minmod",
+    "van_leer",
+    "superbee",
+    "mc",
+    "naive",
 ]
 
 
@@ -56,28 +64,22 @@ def simulate_eulerian_dispersion(
     uniform_wind: tuple[float, float, float] | None = None,
     wind_field: PrescribedWindField | None = None,
     # SGS / eddy diffusivity
-    eddy_diffusivity: (
-        float | tuple[float, float] | str | EddyDiffusivity
-    ) = "pg",
+    eddy_diffusivity: (float | tuple[float, float] | str | EddyDiffusivity) = "pg",
     stability_class: str | None = None,
     pg_reference_distance: float = 200.0,
     # Numerics
     advection_scheme: AdvectionScheme = "weno5",
-    bc_x: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ) = ("dirichlet", "outflow"),
+    bc_x: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]) = (
+        "dirichlet",
+        "outflow",
+    ),
     bc_y: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
+        str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]
     ) = "periodic",
-    bc_z: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ) = ("neumann", "neumann"),
+    bc_z: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]) = (
+        "neumann",
+        "neumann",
+    ),
     solver: SolverName = "tsit5",
     dt0: float = 1.0,
     rtol: float = 1e-3,
@@ -227,10 +229,7 @@ def _resolve_wind_field(
     uniform_wind: tuple[float, float, float] | None,
     wind_field: PrescribedWindField | None,
 ) -> PrescribedWindField:
-    provided = sum(
-        arg is not None
-        for arg in (wind_schedule, uniform_wind, wind_field)
-    )
+    provided = sum(arg is not None for arg in (wind_schedule, uniform_wind, wind_field))
     if provided != 1:
         raise ValueError(
             "simulate_eulerian_dispersion: exactly one of "
@@ -241,9 +240,7 @@ def _resolve_wind_field(
     if wind_schedule is not None:
         return wind_field_from_schedule(plume_grid=plume_grid, schedule=wind_schedule)
     u_mean, v_mean, w_mean = uniform_wind
-    return uniform_wind_field(
-        plume_grid=plume_grid, u=u_mean, v=v_mean, w=w_mean
-    )
+    return uniform_wind_field(plume_grid=plume_grid, u=u_mean, v=v_mean, w=w_mean)
 
 
 def _resolve_eddy_diffusivity(
@@ -285,9 +282,7 @@ def _resolve_eddy_diffusivity(
     )
 
 
-def _mean_schedule_speed(
-    schedule: WindSchedule, t_start: float, t_end: float
-) -> float:
+def _mean_schedule_speed(schedule: WindSchedule, t_start: float, t_end: float) -> float:
     """Time-mean wind speed of a piecewise-linear schedule over ``[t_start, t_end]``.
 
     Integrates ``|V(t)|`` with np.interp on a dense uniform sample grid
@@ -296,12 +291,12 @@ def _mean_schedule_speed(
     """
     if t_end <= t_start:
         # Degenerate window — fall back to the instantaneous speed at t_start.
-        u_at = float(np.interp(
-            t_start, np.asarray(schedule.times), np.asarray(schedule.u_wind)
-        ))
-        v_at = float(np.interp(
-            t_start, np.asarray(schedule.times), np.asarray(schedule.v_wind)
-        ))
+        u_at = float(
+            np.interp(t_start, np.asarray(schedule.times), np.asarray(schedule.u_wind))
+        )
+        v_at = float(
+            np.interp(t_start, np.asarray(schedule.times), np.asarray(schedule.v_wind))
+        )
         return float(np.hypot(u_at, v_at))
     t_sample = np.linspace(t_start, t_end, 100)
     u_sample = np.interp(
@@ -325,9 +320,7 @@ def _build_save_times(
     interval, so we clip explicitly and dedupe the trailing value.
     """
     if save_interval <= 0.0:
-        raise ValueError(
-            f"save_interval must be > 0 (got {save_interval!r})"
-        )
+        raise ValueError(f"save_interval must be > 0 (got {save_interval!r})")
     if t_end < t_start:
         raise ValueError(
             f"t_end must be >= t_start (got t_start={t_start}, t_end={t_end})"
@@ -458,5 +451,3 @@ def _to_dataset(
         "units": "kg/m²",
     }
     return ds
-
-

@@ -74,7 +74,9 @@ class LUTGridConfig:
     """
 
     T_grid: np.ndarray = field(
-        default_factory=lambda: np.array([200, 220, 240, 260, 280, 300, 320], dtype=float)
+        default_factory=lambda: np.array(
+            [200, 220, 240, 260, 280, 300, 320], dtype=float
+        )
     )
     P_grid: np.ndarray = field(
         default_factory=lambda: np.array([0.1, 0.2, 0.4, 0.6, 0.8, 1.0], dtype=float)

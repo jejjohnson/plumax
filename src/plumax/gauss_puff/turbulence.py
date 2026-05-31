@@ -96,7 +96,7 @@ class OUTurbulence:
 
 def sample_ou_offsets(
     turbulence: OUTurbulence,
-    release_times: Float[np.ndarray, "N"] | np.ndarray,
+    release_times: Float[np.ndarray, N] | np.ndarray,
     seed: int | np.random.Generator | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Draw per-puff (Δx, Δy) offsets from a 2-D OU process at release times.
@@ -132,11 +132,7 @@ def sample_ou_offsets(
             "sample_ou_offsets: `release_times` must be monotone non-decreasing."
         )
 
-    rng = (
-        seed
-        if isinstance(seed, np.random.Generator)
-        else np.random.default_rng(seed)
-    )
+    rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
 
     sigma_f = float(turbulence.sigma_fluctuations)
     tau_c = float(turbulence.correlation_time)

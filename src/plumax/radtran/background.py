@@ -115,17 +115,13 @@ def robust_lowrank_covariance(
     flat = _flatten_pixels(radiance, band_axis)  # (n_pixels, n_bands)
     n_pixels, n_bands = flat.shape
     if n_pixels < 2:
-        raise ValueError(
-            f"robust_lowrank_covariance: need ≥ 2 pixels (got {n_pixels})"
-        )
+        raise ValueError(f"robust_lowrank_covariance: need ≥ 2 pixels (got {n_pixels})")
     if not (0.0 <= trim_frac < 0.5):
         raise ValueError(
             f"robust_lowrank_covariance: `trim_frac` must be in [0, 0.5) (got {trim_frac!r})"
         )
     if regularization <= 0.0:
-        raise ValueError(
-            "robust_lowrank_covariance: `regularization` must be > 0."
-        )
+        raise ValueError("robust_lowrank_covariance: `regularization` must be > 0.")
     if rank is None:
         rank = min(n_bands - 1, 16)
     rank = max(1, min(int(rank), n_bands))

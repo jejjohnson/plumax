@@ -24,8 +24,9 @@ posterior-covariance machinery downstream can pick whichever it needs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 import gaussx as gx
 import jax
@@ -67,7 +68,7 @@ def _flatten(arr):
 def build_cost_x(
     *,
     forward_fn: Callable[[jax.Array], jax.Array],
-    background_op: "lx.AbstractLinearOperator",
+    background_op: lx.AbstractLinearOperator,
     obs_inv_variance: float | jax.Array,
     background_state: jax.Array,
     observation: jax.Array,
@@ -118,7 +119,7 @@ def build_cost_x(
 def build_cost_xi(
     *,
     forward_fn: Callable[[jax.Array], jax.Array],
-    whitening: "WhiteningTransform | IdentityTransform",
+    whitening: WhiteningTransform | IdentityTransform,
     obs_inv_variance: float | jax.Array,
     background_state: jax.Array,
     observation: jax.Array,

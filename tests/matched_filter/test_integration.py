@@ -10,6 +10,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.matched_filter.background import (
     estimate_cov_shrunk,
     estimate_mean,

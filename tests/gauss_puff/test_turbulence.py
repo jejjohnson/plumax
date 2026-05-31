@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+
 from plumax.gauss_puff.turbulence import OUTurbulence, sample_ou_offsets
 
 
@@ -109,6 +110,7 @@ def test_simulate_puff_accepts_turbulence_and_changes_field():
     puffs around, it doesn't add or remove mass).
     """
     import numpy as _np
+
     from plumax.gauss_puff.puff import simulate_puff
 
     time_array = _np.linspace(0.0, 60.0, 7)  # 0-60 s in 10 s increments
@@ -146,7 +148,8 @@ def test_simulate_puff_accepts_turbulence_and_changes_field():
 
     # Fields should differ in shape (turbulence introduces meander).
     assert not _np.allclose(
-        ds_det["column_concentration"].values, ds_turb["column_concentration"].values,
+        ds_det["column_concentration"].values,
+        ds_turb["column_concentration"].values,
     )
 
     # Attrs record the turbulence params.

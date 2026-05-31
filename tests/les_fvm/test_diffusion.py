@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.les_fvm.diffusion import (
     EddyDiffusivity,
     diffusion_tendency,
@@ -60,9 +61,7 @@ def test_pg_eddy_diffusivity_rejects_zero_wind_speed():
 
 def test_pg_eddy_diffusivity_rejects_zero_reference_distance():
     with pytest.raises(ValueError, match=r"reference_distance must be > 0"):
-        pg_eddy_diffusivity(
-            stability_class="C", wind_speed=5.0, reference_distance=0.0
-        )
+        pg_eddy_diffusivity(stability_class="C", wind_speed=5.0, reference_distance=0.0)
 
 
 def test_make_eddy_diffusivity_from_scalar():

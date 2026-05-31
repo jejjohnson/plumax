@@ -74,8 +74,14 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "lookup_nb": ("nb_lut", "lookup_nb"),
     "inject_plume": ("nb_lut", "inject_plume"),
     # target-spectrum constructors
-    "target_spectrum_normalized_nonlinear": ("target", "target_spectrum_normalized_nonlinear"),
-    "target_spectrum_normalized_linear": ("target", "target_spectrum_normalized_linear"),
+    "target_spectrum_normalized_nonlinear": (
+        "target",
+        "target_spectrum_normalized_nonlinear",
+    ),
+    "target_spectrum_normalized_linear": (
+        "target",
+        "target_spectrum_normalized_linear",
+    ),
     "target_bands": ("target", "target_bands"),
     # background — pulls scipy on first use
     "trimmed_mean_spectrum": ("background", "trimmed_mean_spectrum"),
@@ -85,7 +91,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "matched_filter_image": ("matched_filter", "matched_filter_image"),
     "matched_filter_snr": ("matched_filter", "matched_filter_snr"),
     # gaussx-backed matched filter — pulls gaussx + jax on first use
-    "build_lowrank_covariance_operator": ("gaussx_solve", "build_lowrank_covariance_operator"),
+    "build_lowrank_covariance_operator": (
+        "gaussx_solve",
+        "build_lowrank_covariance_operator",
+    ),
     "matched_filter_pixel_op": ("gaussx_solve", "matched_filter_pixel_op"),
     "matched_filter_image_op": ("gaussx_solve", "matched_filter_image_op"),
     "matched_filter_snr_op": ("gaussx_solve", "matched_filter_snr_op"),
@@ -137,6 +146,10 @@ if TYPE_CHECKING:  # static type checkers: see the symbols as if eagerly importe
         matched_filter_pixel_op,
         matched_filter_snr_op,
     )
+    from plumax.radtran.instrument import (
+        GroundSamplingDistance,
+        PointSpreadFunction,
+    )
     from plumax.radtran.matched_filter import (
         matched_filter_image,
         matched_filter_pixel,
@@ -147,10 +160,6 @@ if TYPE_CHECKING:  # static type checkers: see the symbols as if eagerly importe
         build_nb_lut,
         inject_plume,
         lookup_nb,
-    )
-    from plumax.radtran.instrument import (
-        GroundSamplingDistance,
-        PointSpreadFunction,
     )
     from plumax.radtran.srf import SpectralResponseFunction
     from plumax.radtran.target import (

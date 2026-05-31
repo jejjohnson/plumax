@@ -44,7 +44,7 @@ else:
 
 def build_diagonal_background(
     variance: float | np.ndarray, n_pixels: int | None = None
-) -> "LinearOperator":
+) -> LinearOperator:
     """Build ``B = diag(σ²)`` as a :class:`lineax.DiagonalLinearOperator`.
 
     Parameters
@@ -91,7 +91,7 @@ def build_kronecker_background(
     variance: float,
     length_scale_y: float,
     length_scale_x: float,
-) -> "LinearOperator":
+) -> LinearOperator:
     """Build ``B = σ² · (ρ_y ⊗ ρ_x)`` using :class:`gaussx.Kronecker`.
 
     The Kronecker structure makes ``B⁻¹`` an ``O(ny³ + nx³)`` operation rather
@@ -128,7 +128,7 @@ def build_lowrank_background(
     samples: np.ndarray,
     rank: int,
     regularization: float = 1e-6,
-) -> "LinearOperator":
+) -> LinearOperator:
     """Estimate ``B`` from a stack of state samples and wrap as ``λI + U D Uᵀ``.
 
     Parameters

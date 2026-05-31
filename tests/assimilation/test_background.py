@@ -11,9 +11,9 @@ from __future__ import annotations
 import gaussx as gx
 import jax
 import jax.numpy as jnp
-import lineax as lx
 import numpy as np
 import pytest
+
 from plumax.assimilation.background import (
     build_diagonal_background,
     build_kronecker_background,
@@ -44,7 +44,11 @@ def test_diagonal_rejects_negative_variance():
 
 def test_kronecker_round_trip_via_cholesky():
     B = build_kronecker_background(
-        ny=3, nx=3, variance=0.04, length_scale_y=2.0, length_scale_x=2.0,
+        ny=3,
+        nx=3,
+        variance=0.04,
+        length_scale_y=2.0,
+        length_scale_x=2.0,
     )
     U = gx.cholesky(B)
     rng = np.random.default_rng(0)
@@ -60,7 +64,11 @@ def test_kronecker_solve_matches_dense():
     ny, nx = 2, 3
     var, ly, lx_scale = 0.01, 1.5, 2.0
     B = build_kronecker_background(
-        ny=ny, nx=nx, variance=var, length_scale_y=ly, length_scale_x=lx_scale,
+        ny=ny,
+        nx=nx,
+        variance=var,
+        length_scale_y=ly,
+        length_scale_x=lx_scale,
     )
     # Reconstruct dense B by applying to identity columns.
     n = ny * nx

@@ -120,7 +120,9 @@ def forward_nonlinear(
     radiance = L0 * transmittance
     dtau_dvmr = sigma * N_total * path_length_cm * amf
     jacobian = -radiance * dtau_dvmr
-    return ForwardResult(radiance=radiance, jacobian=jacobian, transmittance=transmittance)
+    return ForwardResult(
+        radiance=radiance, jacobian=jacobian, transmittance=transmittance
+    )
 
 
 def forward_nonlinear_normalized(
@@ -187,7 +189,9 @@ def forward_maclaurin(
     classical linear retrievals for thin absorbers.
     """
     if order not in (1, 2, 3):
-        raise ValueError(f"forward_maclaurin: `order` must be 1, 2 or 3 (got {order!r})")
+        raise ValueError(
+            f"forward_maclaurin: `order` must be 1, 2 or 3 (got {order!r})"
+        )
     sigma = _interp_sigma(ds, nu_obs, T_K, p_atm, var)
     N_total = number_density_cm3(p_atm, T_K)
     a = sigma * N_total * path_length_cm * amf
@@ -206,7 +210,9 @@ def forward_maclaurin(
     L0 = solar_irradiance * surface_reflectance / np.pi
     radiance = L0 * transmittance
     jacobian = L0 * dtrans_dvmr
-    return ForwardResult(radiance=radiance, jacobian=jacobian, transmittance=transmittance)
+    return ForwardResult(
+        radiance=radiance, jacobian=jacobian, transmittance=transmittance
+    )
 
 
 def forward_maclaurin_normalized(
@@ -274,7 +280,9 @@ def forward_taylor(
     L_b = L0 * np.exp(-tau_b)
     H = -L_b * dtau_dvmr
     radiance = L_b + H * (vmr - vmr_background)
-    transmittance = np.exp(-tau_b) + (-dtau_dvmr * np.exp(-tau_b)) * (vmr - vmr_background)
+    transmittance = np.exp(-tau_b) + (-dtau_dvmr * np.exp(-tau_b)) * (
+        vmr - vmr_background
+    )
     return ForwardResult(radiance=radiance, jacobian=H, transmittance=transmittance)
 
 

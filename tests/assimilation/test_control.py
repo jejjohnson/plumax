@@ -11,6 +11,7 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+
 from plumax.assimilation.background import (
     build_diagonal_background,
     build_kronecker_background,
@@ -43,7 +44,11 @@ def test_whitening_round_trip_diagonal():
 
 def test_whitening_round_trip_kronecker():
     B = build_kronecker_background(
-        ny=3, nx=3, variance=0.04, length_scale_y=2.0, length_scale_x=2.0,
+        ny=3,
+        nx=3,
+        variance=0.04,
+        length_scale_y=2.0,
+        length_scale_x=2.0,
     )
     T = WhiteningTransform.from_background(B)
     rng = np.random.default_rng(1)
@@ -56,7 +61,11 @@ def test_whitening_round_trip_kronecker():
 def test_whitening_recovers_B_via_UUt():
     """U Uᵀ should equal B as a matvec — the defining property of Cholesky."""
     B = build_kronecker_background(
-        ny=3, nx=3, variance=0.04, length_scale_y=1.5, length_scale_x=1.5,
+        ny=3,
+        nx=3,
+        variance=0.04,
+        length_scale_y=1.5,
+        length_scale_x=1.5,
     )
     T = WhiteningTransform.from_background(B)
     rng = np.random.default_rng(2)

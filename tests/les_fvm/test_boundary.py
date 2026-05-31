@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.les_fvm.boundary import (
     HorizontalBC,
     VerticalBC,
@@ -24,7 +25,7 @@ def _build_grid():
 
 def test_default_periodic_y_horizontal_bc_wraps_edges():
     g = _build_grid()
-    hbc, vbc = build_default_concentration_bc(
+    hbc, _vbc = build_default_concentration_bc(
         bc_x=("dirichlet", "outflow"),
         bc_y="periodic",
         bc_z=("neumann", "neumann"),
@@ -73,13 +74,9 @@ def test_vertical_neumann_nonzero_gradient_applies_offset():
     field = jnp.ones(g.shape) * 5.0
     out = vbc(field, dz=g.dz)
     # Bottom: outward sign is -1, so ghost = 5 + (-1) * 0.25 * dz = 5 - 0.25·dz.
-    np.testing.assert_allclose(
-        float(out[0, 3, 3]), 5.0 - 0.25 * g.dz, rtol=1e-6
-    )
+    np.testing.assert_allclose(float(out[0, 3, 3]), 5.0 - 0.25 * g.dz, rtol=1e-6)
     # Top: outward sign is +1, ghost = 5 + (+1) * (-0.1) * dz.
-    np.testing.assert_allclose(
-        float(out[-1, 3, 3]), 5.0 - 0.1 * g.dz, rtol=1e-6
-    )
+    np.testing.assert_allclose(float(out[-1, 3, 3]), 5.0 - 0.1 * g.dz, rtol=1e-6)
 
 
 def test_vertical_dirichlet_sets_correct_ghost():

@@ -21,6 +21,7 @@ from plumax.hapi_lut.generator import (
     save_lut,
 )
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -74,7 +75,9 @@ def create_multi_gas_luts(
         nu_grid, sigma_lut, wavelength_nm = compute_absorption_lut(
             gas_config, grid_config, cache_dir=cache
         )
-        ds = build_lut_dataset(gas_config, grid_config, nu_grid, sigma_lut, wavelength_nm)
+        ds = build_lut_dataset(
+            gas_config, grid_config, nu_grid, sigma_lut, wavelength_nm
+        )
         lut_files[gas_name] = save_lut(ds, out, gas_name)
 
     logger.info("Built %d of %d requested LUTs.", len(lut_files), len(gases))
@@ -120,7 +123,10 @@ def create_combined_lut(
 
     logger.info(
         "Building combined LUT for %s on %.1f-%.1f cm^-1 (%d pts).",
-        gases, nu_min, nu_max, nu_grid.size,
+        gases,
+        nu_min,
+        nu_max,
+        nu_grid.size,
     )
 
     data_vars: dict[str, tuple] = {}
@@ -152,8 +158,16 @@ def create_combined_lut(
         coords={
             "wavenumber": (["wavenumber"], nu_grid, {"units": "cm^-1"}),
             "wavelength": (["wavenumber"], wavelength_nm, {"units": "nm"}),
-            "temperature": (["temperature"], np.asarray(grid_config.T_grid, dtype=float), {"units": "K"}),
-            "pressure": (["pressure"], np.asarray(grid_config.P_grid, dtype=float), {"units": "atm"}),
+            "temperature": (
+                ["temperature"],
+                np.asarray(grid_config.T_grid, dtype=float),
+                {"units": "K"},
+            ),
+            "pressure": (
+                ["pressure"],
+                np.asarray(grid_config.P_grid, dtype=float),
+                {"units": "atm"},
+            ),
         },
         attrs={
             "title": "Combined Atmospheric Absorption LUT",
@@ -166,7 +180,9 @@ def create_combined_lut(
     path = out / filename
     ds.to_netcdf(
         path,
-        encoding={var: {"zlib": True, "complevel": 4, "dtype": "float32"} for var in data_vars},
+        encoding={
+            var: {"zlib": True, "complevel": 4, "dtype": "float32"} for var in data_vars
+        },
     )
     logger.info("Saved combined LUT to %s (%.1f MB)", path, path.stat().st_size / 1e6)
     return path

@@ -87,12 +87,18 @@ class VerticalBC(eqx.Module):
         into the half-cell ghost offset ``sign · gradient · dz``.
         """
         out = _apply_vertical_face(
-            field, face="bottom", kind=self.bottom_kind,
-            value=self.bottom_value, dz=dz,
+            field,
+            face="bottom",
+            kind=self.bottom_kind,
+            value=self.bottom_value,
+            dz=dz,
         )
         out = _apply_vertical_face(
-            out, face="top", kind=self.top_kind,
-            value=self.top_value, dz=dz,
+            out,
+            face="top",
+            kind=self.top_kind,
+            value=self.top_value,
+            dz=dz,
         )
         return out
 
@@ -150,21 +156,17 @@ def apply_boundary_conditions(
 
 
 def build_default_concentration_bc(
-    bc_x: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ) = ("dirichlet", "outflow"),
+    bc_x: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]) = (
+        "dirichlet",
+        "outflow",
+    ),
     bc_y: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
+        str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]
     ) = "periodic",
-    bc_z: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ) = ("neumann", "neumann"),
+    bc_z: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]) = (
+        "neumann",
+        "neumann",
+    ),
 ) -> tuple[HorizontalBC, VerticalBC]:
     """Build ``(HorizontalBC, VerticalBC)`` from user-facing BC specs.
 
@@ -206,11 +208,7 @@ def _as_kind_value(
 
 
 def _split_horizontal_spec(
-    spec: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ),
+    spec: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]),
     faces: tuple[str, str],
 ):
     """Unpack a horizontal BC spec into two face-specific atoms.
@@ -250,11 +248,7 @@ def _build_1d_bc(kind: str, value: float, face: str):
 
 
 def _split_vertical_spec(
-    spec: (
-        str
-        | tuple[str, str]
-        | tuple[tuple[str, float], tuple[str, float]]
-    ),
+    spec: (str | tuple[str, str] | tuple[tuple[str, float], tuple[str, float]]),
 ) -> tuple[VerticalBCKind, float, VerticalBCKind, float]:
     if isinstance(spec, str) and spec.lower() == "periodic":
         return "periodic", 0.0, "periodic", 0.0
@@ -269,8 +263,5 @@ def _split_vertical_spec(
                 )
         return bot_kind.lower(), bot_val, top_kind.lower(), top_val  # type: ignore[return-value]
     raise ValueError(
-        "vertical BC spec must be 'periodic' or a 2-tuple "
-        f"(bottom, top); got {spec!r}"
+        f"vertical BC spec must be 'periodic' or a 2-tuple (bottom, top); got {spec!r}"
     )
-
-

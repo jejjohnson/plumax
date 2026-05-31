@@ -34,15 +34,14 @@ def synthetic_lut() -> xr.Dataset:
             pres_fac = p
             for c, s, w in zip(centres, strengths_T, widths, strict=True):
                 sigma[:, i_T, i_P] += (
-                    s
-                    * temp_fac
-                    * np.exp(-0.5 * ((nu - c) / (w * pres_fac)) ** 2)
+                    s * temp_fac * np.exp(-0.5 * ((nu - c) / (w * pres_fac)) ** 2)
                 )
 
     ds = xr.Dataset(
         data_vars={
             "absorption_cross_section": (
-                ["wavenumber", "temperature", "pressure"], sigma,
+                ["wavenumber", "temperature", "pressure"],
+                sigma,
                 {"units": "cm^2 / molecule"},
             ),
         },

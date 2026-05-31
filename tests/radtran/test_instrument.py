@@ -21,6 +21,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.radtran.instrument import (
     GroundSamplingDistance,
     PointSpreadFunction,
@@ -79,7 +80,9 @@ class TestPointSpreadFunction:
     def test_jacobian_equals_apply(self):
         psf = PointSpreadFunction.gaussian(fwhm_pixels=1.5, kernel_size=5)
         x = jnp.asarray(np.random.default_rng(2).standard_normal((5, 5, 2)))
-        np.testing.assert_allclose(np.asarray(psf.jacobian(x)), np.asarray(psf.apply(x)))
+        np.testing.assert_allclose(
+            np.asarray(psf.jacobian(x)), np.asarray(psf.apply(x))
+        )
 
     def test_gradient_flows_through_apply(self):
         """jax.grad through apply == adjoint of `1`."""
@@ -117,10 +120,12 @@ class TestGroundSamplingDistance:
         gsd = GroundSamplingDistance(downsample_factor=2)
         x = jnp.asarray(
             np.array(
-                [[1.0, 1.0, 5.0, 5.0],
-                 [1.0, 1.0, 5.0, 5.0],
-                 [3.0, 3.0, 7.0, 7.0],
-                 [3.0, 3.0, 7.0, 7.0]]
+                [
+                    [1.0, 1.0, 5.0, 5.0],
+                    [1.0, 1.0, 5.0, 5.0],
+                    [3.0, 3.0, 7.0, 7.0],
+                    [3.0, 3.0, 7.0, 7.0],
+                ]
             )[..., None]
         )
         y = gsd.apply(x)

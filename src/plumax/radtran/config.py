@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+
 if TYPE_CHECKING:  # avoid circular import at module load
     from plumax.radtran.srf import SpectralResponseFunction
 
@@ -158,9 +159,7 @@ class InstrumentSpec:
                 f"must match number of bands {centers.size}"
             )
         if np.any(widths <= 0.0):
-            raise ValueError(
-                "InstrumentSpec: `band_widths_nm` entries must be > 0"
-            )
+            raise ValueError("InstrumentSpec: `band_widths_nm` entries must be > 0")
         if self.srf_type not in {"gaussian", "rectangular", "triangular"}:
             raise ValueError(
                 f"InstrumentSpec: `srf_type` must be one of "
@@ -173,9 +172,7 @@ class InstrumentSpec:
         """Number of bands."""
         return int(np.asarray(self.band_centers_nm).size)
 
-    def make_srf(
-        self, wavelengths_nm: np.ndarray
-    ) -> SpectralResponseFunction:
+    def make_srf(self, wavelengths_nm: np.ndarray) -> SpectralResponseFunction:
         """Construct a :class:`SpectralResponseFunction` over ``wavelengths_nm``.
 
         Imported locally to avoid a circular import at module load.

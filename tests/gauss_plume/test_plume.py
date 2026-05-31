@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+
 from plumax.gauss_plume.dispersion import BRIGGS_DISPERSION_PARAMS
 from plumax.gauss_plume.plume import (
     MIN_WIND_SPEED,
@@ -38,8 +39,12 @@ def test_rotation_northerly_wind():
 
 def test_rotation_translates_by_source():
     x_wind, y_wind = rotate_to_wind_frame(
-        jnp.array([100.0]), jnp.array([50.0]),
-        source_x=100.0, source_y=50.0, wind_u=5.0, wind_v=0.0,
+        jnp.array([100.0]),
+        jnp.array([50.0]),
+        source_x=100.0,
+        source_y=50.0,
+        wind_u=5.0,
+        wind_v=0.0,
     )
     np.testing.assert_allclose(np.asarray(x_wind), [0.0], atol=1e-4)
     np.testing.assert_allclose(np.asarray(y_wind), [0.0], atol=1e-4)
@@ -104,12 +109,8 @@ def test_concentration_decays_downwind():
 def test_concentration_linear_in_emission_rate():
     x, y, z = _sample_points()
     params = BRIGGS_DISPERSION_PARAMS["C"]
-    c1 = np.asarray(
-        plume_concentration(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params)
-    )
-    c2 = np.asarray(
-        plume_concentration(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.3, params)
-    )
+    c1 = np.asarray(plume_concentration(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params))
+    c2 = np.asarray(plume_concentration(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.3, params))
     np.testing.assert_allclose(c2, 3.0 * c1, rtol=1e-6)
 
 
@@ -120,18 +121,32 @@ def test_concentration_rotation_invariance():
 
     # Easterly wind, downwind receptor.
     c_east = plume_concentration(
-        jnp.array([500.0]), jnp.array([50.0]), jnp.array([2.0]),
-        0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params,
+        jnp.array([500.0]),
+        jnp.array([50.0]),
+        jnp.array([2.0]),
+        0.0,
+        0.0,
+        2.0,
+        5.0,
+        0.0,
+        0.1,
+        params,
     )
 
     # Same point, rotated 90° CCW: (500, 50) -> (-50, 500), wind (5, 0) -> (0, 5).
     c_north = plume_concentration(
-        jnp.array([-50.0]), jnp.array([500.0]), jnp.array([2.0]),
-        0.0, 0.0, 2.0, 0.0, 5.0, 0.1, params,
+        jnp.array([-50.0]),
+        jnp.array([500.0]),
+        jnp.array([2.0]),
+        0.0,
+        0.0,
+        2.0,
+        0.0,
+        5.0,
+        0.1,
+        params,
     )
-    np.testing.assert_allclose(
-        np.asarray(c_east), np.asarray(c_north), rtol=1e-5
-    )
+    np.testing.assert_allclose(np.asarray(c_east), np.asarray(c_north), rtol=1e-5)
 
 
 def test_wind_speed_clamp_at_calm_regime():
@@ -152,19 +167,14 @@ def test_wind_speed_clamp_at_calm_regime():
 def test_plume_concentration_vmap_matches_scalar():
     params = BRIGGS_DISPERSION_PARAMS["C"]
     x, y, z = _sample_points()
-    c_batch = plume_concentration_vmap(
-        x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params
-    )
-    c_ref = plume_concentration(
-        x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params
-    )
-    np.testing.assert_allclose(
-        np.asarray(c_batch), np.asarray(c_ref), rtol=1e-6
-    )
+    c_batch = plume_concentration_vmap(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params)
+    c_ref = plume_concentration(x, y, z, 0.0, 0.0, 2.0, 5.0, 0.0, 0.1, params)
+    np.testing.assert_allclose(np.asarray(c_batch), np.asarray(c_ref), rtol=1e-6)
 
 
 def test_concentration_gradient_wrt_emission_rate():
     import jax
+
     params = BRIGGS_DISPERSION_PARAMS["D"]
     x = jnp.array([500.0])
     y = jnp.array([0.0])

@@ -21,9 +21,9 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
-from numpy.typing import NDArray
 import numpyro
 import numpyro.distributions as dist
+from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
 from plumax.gauss_plume.inference import _lognormal_from_moments
@@ -99,10 +99,10 @@ def _require_forward_inputs(
 
 
 def _predict_observations(
-    emission_per_puff: jnp.ndarray,   # (N_puffs,) per-puff mass [kg]
-    release_times: jnp.ndarray,        # (N_puffs,)
-    receptor_coords: tuple,            # (x, y, z) each (N_obs,)
-    observation_times: jnp.ndarray,    # (N_obs,) per-observation evaluation time
+    emission_per_puff: jnp.ndarray,  # (N_puffs,) per-puff mass [kg]
+    release_times: jnp.ndarray,  # (N_puffs,)
+    receptor_coords: tuple,  # (x, y, z) each (N_obs,)
+    observation_times: jnp.ndarray,  # (N_obs,) per-observation evaluation time
     source_location: tuple,
     schedule: WindSchedule,
     dispersion_params: jnp.ndarray,
@@ -202,12 +202,8 @@ def gaussian_puff_model(
     mu_log, sigma_log = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample(
-        "emission_rate", dist.LogNormal(mu_log, sigma_log)
-    )
-    background = numpyro.sample(
-        "background", dist.HalfNormal(background_prior_std)
-    )
+    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(mu_log, sigma_log))
+    background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     # The forward model is evaluated whenever its inputs are present —
     # independently of whether `observations` were provided. This keeps
@@ -301,14 +297,10 @@ def gaussian_puff_rw_model(
     # to the LogNormal prior location.
     first = mu_log + sigma_log * innovations[0]
     increments = rw_step_std * innovations[1:]
-    log_q = jnp.concatenate(
-        [first[None], first + jnp.cumsum(increments)]
-    )
+    log_q = jnp.concatenate([first[None], first + jnp.cumsum(increments)])
     emission_series = numpyro.deterministic("emission_rate", jnp.exp(log_q))
 
-    background = numpyro.sample(
-        "background", dist.HalfNormal(background_prior_std)
-    )
+    background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     puff_mass = emission_series * release_interval
     predicted = _predict_observations(
@@ -354,9 +346,7 @@ def _validate_inference_inputs(
     """
     obs = np.asarray(observations)
     if obs.size == 0:
-        raise ValueError(
-            f"{func_name}: `observations` must contain ≥ 1 point"
-        )
+        raise ValueError(f"{func_name}: `observations` must contain ≥ 1 point")
     if len(observation_coords) != 3:
         raise ValueError(
             f"{func_name}: `observation_coords` must be (x, y, z); "
@@ -379,9 +369,7 @@ def _validate_inference_inputs(
     ws = np.asarray(wind_speed)
     wd = np.asarray(wind_direction)
     if wt.ndim != 1 or wt.size == 0:
-        raise ValueError(
-            f"{func_name}: `wind_times` must be 1-D with ≥ 1 entry"
-        )
+        raise ValueError(f"{func_name}: `wind_times` must be 1-D with ≥ 1 entry")
     if ws.shape != wt.shape:
         raise ValueError(
             f"{func_name}: `wind_speed` shape {ws.shape} must match "
@@ -398,8 +386,7 @@ def _validate_inference_inputs(
         )
     if not (release_frequency > 0.0):
         raise ValueError(
-            f"{func_name}: `release_frequency` must be > 0 "
-            f"(got {release_frequency!r})"
+            f"{func_name}: `release_frequency` must be > 0 (got {release_frequency!r})"
         )
     if not (t_end > t_start):
         raise ValueError(
@@ -407,13 +394,9 @@ def _validate_inference_inputs(
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
     if not (prior_mean > 0.0):
-        raise ValueError(
-            f"{func_name}: `prior_mean` must be > 0 (got {prior_mean!r})"
-        )
+        raise ValueError(f"{func_name}: `prior_mean` must be > 0 (got {prior_mean!r})")
     if not (prior_std > 0.0):
-        raise ValueError(
-            f"{func_name}: `prior_std` must be > 0 (got {prior_std!r})"
-        )
+        raise ValueError(f"{func_name}: `prior_std` must be > 0 (got {prior_std!r})")
     return obs, coords, times
 
 
@@ -486,9 +469,7 @@ def infer_emission_rate(
         prior_std,
     )
 
-    schedule = WindSchedule.from_speed_direction(
-        wind_times, wind_speed, wind_direction
-    )
+    schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)
     release_interval = frequency_to_release_interval(release_frequency)
 
@@ -582,9 +563,7 @@ def infer_emission_timeseries(
             f"(got {obs_noise_std!r})"
         )
 
-    schedule = WindSchedule.from_speed_direction(
-        wind_times, wind_speed, wind_direction
-    )
+    schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)
     release_interval = frequency_to_release_interval(release_frequency)
 
