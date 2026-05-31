@@ -15,6 +15,7 @@ from plumax.gauss_puff.puff import (
     make_release_times,
     puff_concentration,
     puff_concentration_vmap,
+    release_durations,
     release_interval_to_frequency,
     simulate_puff,
     simulate_puff_field,
@@ -46,6 +47,30 @@ def test_make_release_times_spacing_and_bounds():
     np.testing.assert_allclose(times, expected, atol=1e-6)
     # Exclusive of t_end.
     assert float(times[-1]) < 10.0
+
+
+def test_make_release_times_includes_final_partial_interval():
+    # Non-divisible windows must still place a release in the trailing partial
+    # interval (ceil, not floor) — but every release stays strictly < t_end.
+    # [0, 0.5) at 1 Hz → one puff at t=0.
+    one = make_release_times(0.0, 0.5, release_frequency=1.0)
+    np.testing.assert_allclose(np.asarray(one), [0.0], atol=1e-6)
+    # [0, 10.5) at 1 Hz → eleven puffs at t=0..10 (floor would give ten).
+    eleven = make_release_times(0.0, 10.5, release_frequency=1.0)
+    assert eleven.shape == (11,)
+    assert float(eleven[-1]) == pytest.approx(10.0)
+    assert float(eleven[-1]) < 10.5
+
+
+def test_release_durations_conserve_window():
+    # Durations sum to the full window and the final (partial) interval is the
+    # remainder, so Q · Σ durations = total emitted mass.
+    times = make_release_times(0.0, 10.5, release_frequency=1.0)
+    durations = release_durations(times, 10.5)
+    assert durations.shape == times.shape
+    assert float(np.sum(np.asarray(durations))) == pytest.approx(10.5, rel=1e-6)
+    np.testing.assert_allclose(np.asarray(durations)[:-1], 1.0, atol=1e-6)
+    assert float(durations[-1]) == pytest.approx(0.5, rel=1e-6)
 
 
 def test_make_release_times_requires_positive_window():
@@ -271,6 +296,41 @@ def test_simulate_puff_field_is_sum_of_contributions():
 
 
 # ── simulate_puff xarray wrapper ────────────────────────────────────────────
+
+
+def test_simulate_puff_conserves_emitted_mass_for_nondivisible_window():
+    # The emitted mass Q·Σdurations equals Q·(t_end − t_start) exactly, even
+    # when the window is not a multiple of the release interval: the trailing
+    # partial puff carries its shortened mass rather than being dropped (floor)
+    # or over-massed (full Δt). This is the quantity simulate_puff assigns as
+    # puff_mass, so it pins the mass-conservation behaviour at the source.
+    q = 0.1
+    t_end = 5.5  # 5.5 s window at 1 Hz → 6 puffs (ceil), last interval 0.5 s
+    times = make_release_times(0.0, t_end, release_frequency=1.0)
+    assert times.shape == (6,)  # floor would give 5 and drop 0.5 s of source
+    emitted = q * float(np.sum(np.asarray(release_durations(times, t_end))))
+    assert emitted == pytest.approx(q * t_end, rel=1e-6)
+
+
+def test_simulate_puff_nondivisible_window_runs_and_counts_puffs():
+    # End-to-end smoke: the non-divisible window builds the field with the
+    # ceil'd puff count and a positive late-time concentration.
+    n_t = 12
+    time_array = np.linspace(0.0, 5.5, n_t, dtype=np.float32)
+    ds = simulate_puff(
+        emission_rate=0.1,
+        source_location=(0.0, 0.0, 50.0),
+        wind_speed=np.full(n_t, 1.0, dtype=np.float32),
+        wind_direction=np.full(n_t, 270.0, dtype=np.float32),
+        stability_class="C",
+        domain_x=(-200.0, 200.0, 41),
+        domain_y=(-200.0, 200.0, 41),
+        domain_z=(0.0, 200.0, 21),
+        time_array=time_array,
+        release_frequency=1.0,
+    )
+    assert ds.attrs["n_puffs"] == 6  # ceil(5.5 / 1), not floor → would be 5
+    assert float(ds["concentration"].isel(time=-1).max()) > 0.0
 
 
 def test_simulate_puff_shape_and_attrs():

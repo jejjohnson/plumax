@@ -98,7 +98,17 @@ def make_release_times(
     -------
     release_times : jnp.ndarray, shape (N,)
         Times ``[t_start, t_start + Δt, t_start + 2Δt, ...]`` with
-        ``Δt = 1 / release_frequency``, truncated before ``t_end``.
+        ``Δt = 1 / release_frequency``, all strictly less than ``t_end``.
+
+    Notes
+    -----
+    The count is ``ceil((t_end − t_start) / Δt)``, so when the window is not an
+    exact multiple of ``Δt`` the **final, partial interval still gets a
+    release** (e.g. ``[0, 0.5)`` at 1 Hz yields one puff at ``t = 0``, and
+    ``[0, 10.5)`` yields eleven). That trailing puff represents a shorter slice
+    of the continuous source, so its emitted mass must be weighted by its actual
+    interval duration — see :func:`release_durations` and how ``simulate_puff``
+    assigns ``puff_mass``. All release times remain strictly ``< t_end``.
     """
     if not (t_end > t_start):
         raise ValueError(
@@ -106,8 +116,40 @@ def make_release_times(
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
     dt = frequency_to_release_interval(release_frequency)
-    n = int(np.floor((t_end - t_start) / dt))
+    n = int(np.ceil((t_end - t_start) / dt))
     return jnp.asarray(t_start + np.arange(n) * dt, dtype=jnp.float32)
+
+
+def release_durations(
+    release_times: jnp.ndarray,
+    t_end: float,
+) -> jnp.ndarray:
+    """Per-puff emission-interval durations [s] for a continuous source.
+
+    Each puff carries the mass emitted over its interval, i.e. up to the next
+    release (or ``t_end`` for the last puff). The durations therefore sum to
+    ``t_end − release_times[0]`` exactly: interior intervals equal the release
+    spacing ``Δt`` while the final, possibly partial interval is the remainder.
+    Multiply by the emission rate ``Q`` to get the per-puff mass.
+
+    Parameters
+    ----------
+    release_times : jnp.ndarray, shape (N,)
+        Monotone increasing release times [s], as from
+        :func:`make_release_times`.
+    t_end : float
+        End of the emission window [s]; must exceed the last release time.
+
+    Returns
+    -------
+    durations : jnp.ndarray, shape (N,)
+        Per-puff interval durations [s], all > 0.
+    """
+    rel = np.asarray(release_times, dtype=np.float64)
+    if rel.size == 0:
+        return jnp.zeros((0,), dtype=jnp.float32)
+    edges = np.append(rel, float(t_end))
+    return jnp.asarray(np.diff(edges), dtype=jnp.float32)
 
 
 # ── Puff state container ─────────────────────────────────────────────────────
@@ -488,6 +530,11 @@ def simulate_puff(
         float(time_array[0]), float(time_array[-1]), release_frequency
     )
     n_puffs = int(release_times.shape[0])
+    # Per-puff emission-interval durations: full Δt for interior puffs, the
+    # remainder for the final (possibly partial) interval. Weighting mass by
+    # these durations conserves the total emitted mass Q·(t_end − t_start) even
+    # when the window is not an exact multiple of the release interval.
+    durations = release_durations(release_times, float(time_array[-1]))
 
     if np.ndim(emission_rate) == 0:
         q_scalar = float(emission_rate)
@@ -496,7 +543,7 @@ def simulate_puff(
                 "simulate_puff: scalar `emission_rate` must be ≥ 0 "
                 f"(got {emission_rate!r})"
             )
-        puff_mass = jnp.full((n_puffs,), q_scalar * dt_release, dtype=jnp.float32)
+        puff_mass = jnp.asarray(q_scalar * durations, dtype=jnp.float32)
     else:
         Q = np.asarray(emission_rate, dtype=np.float32)
         if Q.shape != (n_puffs,):
@@ -508,7 +555,7 @@ def simulate_puff(
             )
         if np.any(Q < 0.0):
             raise ValueError("simulate_puff: `emission_rate` entries must be ≥ 0")
-        puff_mass = jnp.asarray(Q * dt_release, dtype=jnp.float32)
+        puff_mass = jnp.asarray(Q * np.asarray(durations), dtype=jnp.float32)
 
     schedule = WindSchedule.from_speed_direction(time_array, wind_speed, wind_direction)
 
