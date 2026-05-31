@@ -43,16 +43,25 @@ SRFType = Literal["gaussian", "rectangular", "triangular", "custom"]
 def _bin_widths(samples: np.ndarray) -> np.ndarray:
     """Trapezoidal quadrature weights for (possibly non-uniform) 1-D samples.
 
-    Each weight is half the distance to the neighbouring samples (the endpoints
-    get a single half-interval), i.e. the standard trapezoidal-rule weights.
-    The absolute value makes the result independent of sample ordering, so a
-    descending grid (e.g. wavelengths from ``1e7 / nu``) yields positive widths.
-    A single-sample grid falls back to unit weight.
+    Each interior sample gets half of each neighbouring interval and the
+    endpoints get a single half-interval — the standard trapezoidal-rule
+    weights. Works for ascending or descending grids (e.g. wavelengths from
+    ``1e7 / nu``); a single-sample grid falls back to unit weight.
     """
     s = np.asarray(samples, dtype=float)
     if s.size < 2:
         return np.ones_like(s)
-    return np.abs(np.gradient(s))
+    # Each interval contributes half its width to the sample on either side, so
+    # interior samples get half of both neighbouring intervals and the endpoints
+    # get a single half-interval — the exact trapezoidal-rule weights. (Unlike
+    # ``np.gradient``, which gives the endpoints a full interval and would
+    # over-weight an SRF with response at the grid edge by 2×.) ``abs`` makes
+    # the result independent of ascending/descending sample order.
+    half = np.abs(np.diff(s)) / 2.0
+    widths = np.zeros_like(s)
+    widths[:-1] += half
+    widths[1:] += half
+    return widths
 
 
 @dataclass

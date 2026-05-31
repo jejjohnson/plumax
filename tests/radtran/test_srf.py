@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from plumax.radtran.srf import SpectralResponseFunction
+from plumax.radtran.srf import SpectralResponseFunction, _bin_widths
 
 
 def _make_srf(srf_type: str = "gaussian") -> SpectralResponseFunction:
@@ -85,15 +85,24 @@ def _make_srf_on_grid(wl: np.ndarray, srf_type: str = "gaussian"):
     )
 
 
-def test_uniform_grid_matrix_unchanged_by_bin_weights():
-    # On a uniform wavelength grid the bin widths are constant and cancel in the
-    # row normalisation, so weighting must leave the matrix identical to a plain
-    # row-normalised profile (regression guard for the weighting change).
+def _trapz_band_reference(srf, spectrum):
+    """Independent reference: L_b = ∫ f_b(λ) L(λ) dλ / ∫ f_b(λ) dλ (trapezoid)."""
+    raw = srf._build_parametric_matrix()
+    wl = np.asarray(srf.wavelengths_hr_nm, dtype=float)
+    num = np.array([np.trapezoid(raw[b] * spectrum, x=wl) for b in range(raw.shape[0])])
+    den = np.array([np.trapezoid(raw[b], x=wl) for b in range(raw.shape[0])])
+    return num / den
+
+
+def test_uniform_grid_matches_trapezoidal_quadrature():
+    # On a uniform grid, band integration must equal a true trapezoidal
+    # quadrature (∫f·L / ∫f) — including the half-weighted endpoints.
     wl = np.linspace(1400.0, 2500.0, 1101)
     srf = _make_srf_on_grid(wl, "gaussian")
-    raw = srf._build_parametric_matrix()
-    expected = raw / raw.sum(axis=1, keepdims=True)
-    np.testing.assert_allclose(srf.matrix, expected, atol=1e-12)
+    spectrum = np.random.default_rng(7).random(srf.n_lambda)
+    np.testing.assert_allclose(
+        srf.apply(spectrum), _trapz_band_reference(srf, spectrum), rtol=1e-10
+    )
 
 
 def _nonuniform_wavelength_grid() -> np.ndarray:
@@ -117,13 +126,52 @@ def test_nonuniform_grid_matches_trapezoidal_quadrature():
     # not a plain sum that over-weights the densely-sampled side.
     wl = _nonuniform_wavelength_grid()
     srf = _make_srf_on_grid(wl, "gaussian")
-    rng = np.random.default_rng(3)
-    spectrum = rng.random(srf.n_lambda)
+    spectrum = np.random.default_rng(3).random(srf.n_lambda)
+    np.testing.assert_allclose(
+        srf.apply(spectrum), _trapz_band_reference(srf, spectrum), rtol=1e-10
+    )
 
-    raw = srf._build_parametric_matrix()
-    widths = np.abs(np.gradient(wl))
-    ref = (raw * widths[None, :]) @ spectrum / (raw * widths[None, :]).sum(axis=1)
-    np.testing.assert_allclose(srf.apply(spectrum), ref, rtol=1e-10)
+
+def test_bin_widths_are_trapezoidal_with_half_endpoints():
+    # Uniform grid: interior weights = spacing d, endpoints = d/2 (half), and
+    # the total equals the full integration span (n-1)*d, not n*d.
+    d = 2.5
+    s = np.arange(6) * d
+    w = _bin_widths(s)
+    assert w[0] == pytest.approx(d / 2.0)
+    assert w[-1] == pytest.approx(d / 2.0)
+    np.testing.assert_allclose(w[1:-1], d)
+    assert w.sum() == pytest.approx((s.size - 1) * d)
+
+
+def test_bin_widths_handle_descending_and_nonuniform():
+    s = np.array([10.0, 7.0, 1.0])  # descending, non-uniform
+    w = _bin_widths(s)
+    # Endpoints: half of their single adjacent interval (|3|/2, |6|/2).
+    assert w[0] == pytest.approx(1.5)
+    assert w[-1] == pytest.approx(3.0)
+    assert w[1] == pytest.approx(1.5 + 3.0)
+    assert np.all(w > 0)
+
+
+def test_bin_widths_endpoint_response_not_overweighted():
+    # A custom SRF whose only support is the first sample must integrate to that
+    # sample's value — the endpoint must not be double-weighted (the np.gradient
+    # bug would inflate it). Row normalisation makes the band a pure passthrough
+    # of the edge sample regardless of weight, so we assert via apply on a ramp.
+    wl = np.linspace(1500.0, 2500.0, 11)
+    mat = np.zeros((1, wl.size))
+    mat[0, 0] = 1.0  # response only at the grid edge
+    srf = SpectralResponseFunction(
+        wavelengths_hr_nm=wl,
+        band_centers_nm=np.array([1500.0]),
+        band_widths_nm=np.array([50.0]),
+        band_names=("edge",),
+        srf_type="custom",
+        custom_srfs=mat,
+    )
+    spectrum = np.linspace(1.0, 2.0, wl.size)
+    np.testing.assert_allclose(srf.apply(spectrum), spectrum[0], rtol=1e-12)
 
 
 def test_apply_rejects_wrong_last_axis():

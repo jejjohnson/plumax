@@ -106,9 +106,11 @@ def test_inject_plume_multiplicative(synthetic_lut, swir_srf):
     dirty = inject_plume(scene, plume, lut)
     # Untouched pixels remain at 1.
     np.testing.assert_allclose(dirty[:, 0, 0], 1.0, atol=1e-12)
-    # Plume pixel is dimmer in both bands.
-    assert dirty[0, 2, 2] < 1.0
+    # The toy LUT's absorption lines sit at ~2326/2381 nm, inside the B12
+    # (2190 nm) passband but far outside B11 (1610 nm) — so only B12 dims at the
+    # plume pixel. B11 has negligible SRF response there and stays ≈ 1.
     assert dirty[1, 2, 2] < 1.0
+    np.testing.assert_allclose(dirty[0, 2, 2], 1.0, atol=1e-9)
 
 
 def test_inject_plume_rejects_band_mismatch(synthetic_lut, swir_srf):
