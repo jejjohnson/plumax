@@ -79,7 +79,7 @@ The build order is roughly: **Prerequisites → Tier I → RTM stack (parallel) 
 Module-level status is tracked per tier. Quick overview:
 
 - **Tier I — Gaussian:** ✓ plume + puff forward models, ✓ MAP/MCMC inversion. Emulator + amortized predictor not yet started.
-- **Tier II — Lagrangian:** ☐ not started. No `gauss_flows`-style trajectory module yet.
+- **Tier II — Lagrangian:** 🚧 forward model + model-based inference in [`plumax.lagrangian`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/lagrangian/): Markov-1 Langevin particles, turbulence (homogeneous + Hanna), forward residence-time concentration, backward footprint, and closed-form Gaussian / lognormal source inversion with a Matérn-3/2 prior. Footprint emulator + amortized predictor (Steps 3–5) not started.
 - **Tier III — Eulerian FV:** 🚧 [`les_fvm`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/) advection/diffusion/dynamics implemented; [`assimilation`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/) cost/control/solve scaffolding present. 4D-Var loop not wired end-to-end.
 - **RTM stack:** 🚧 [`hapi_lut`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/) LUT generator + Beer–Lambert in place; [`radtran`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/) instrument/SRF/forward modules present; [`matched_filter`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/) detection pipeline in place. Optimal-estimation retrieval not wired; neural RTM not started.
 - **Tier IV — Coupled:** ☐ not started. Awaiting Tier I + RTM completion before assembling the coupled forward.

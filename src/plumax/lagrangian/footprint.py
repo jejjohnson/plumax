@@ -24,7 +24,12 @@ import jax.numpy as jnp
 import numpy as np
 
 from plumax.lagrangian.concentration import _cell_indices
-from plumax.lagrangian.particles import ParticleState, langevin_step, step_durations
+from plumax.lagrangian.particles import (
+    ParticleState,
+    langevin_step,
+    n_steps_for_horizon,
+    step_durations,
+)
 
 
 if TYPE_CHECKING:
@@ -104,7 +109,7 @@ def compute_footprint(
     state = ParticleState(position=pos0, velocity=vel0)
 
     xe, ye = jnp.asarray(x_edges), jnp.asarray(y_edges)
-    n_steps = max(int(np.ceil(t_back / dt)), 0)
+    n_steps = n_steps_for_horizon(t_back, dt)
     keys = jax.random.split(key, n_steps)
     # Per-step durations summing to exactly ``t_back``: the final step is
     # shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
