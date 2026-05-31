@@ -310,7 +310,7 @@ def _mean_schedule_speed(schedule: WindSchedule, t_start: float, t_end: float) -
 
 def _build_save_times(
     *, t_start: float, t_end: float, save_interval: float
-) -> Float[Array, "M"]:
+) -> Float[Array, M]:
     """Return save-time knots clipped to ``[t_start, t_end]``.
 
     ``jnp.arange(t_start, t_end + 0.5 * save_interval, save_interval)`` can
@@ -373,7 +373,7 @@ def _solve_jit(
     t_end: float,
     dt0: float,
     y0: Float[Array, "Nz Ny Nx"],
-    save_times: Float[Array, "M"],
+    save_times: Float[Array, M],
     solver,
     stepsize_controller,
     max_steps: int,
@@ -399,7 +399,7 @@ def _solve(
     t_end: float,
     dt0: float,
     y0: Float[Array, "Nz Ny Nx"],
-    save_times: Float[Array, "M"],
+    save_times: Float[Array, M],
     solver_name: SolverName,
     rtol: float,
     atol: float,

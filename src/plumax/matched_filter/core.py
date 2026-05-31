@@ -36,8 +36,8 @@ else:
 
 
 def _precompute_filter(
-    cov_op: LinearOperator, target: Float[Array, "B"]
-) -> tuple[Float[Array, "B"], Float[Array, ""]]:
+    cov_op: LinearOperator, target: Float[Array, B]
+) -> tuple[Float[Array, B], Float[Array, ""]]:
     """Return ``(w, tᵀw)`` with ``w = Σ⁻¹ t``.
 
     Caller precomputes these once; every pixel then costs a single dot
@@ -56,7 +56,7 @@ def _precompute_filter(
 
 
 def _check_target_energy(
-    target: Float[Array, "B"], target_norm_sq: Float[Array, ""]
+    target: Float[Array, B], target_norm_sq: Float[Array, ""]
 ) -> None:
     """Fail-fast validation — eager only; silently returns under jit tracing."""
     try:
@@ -81,7 +81,7 @@ def _check_target_energy(
         )
 
 
-def validate_mf_inputs(cov_op: LinearOperator, target: Float[Array, "B"]) -> None:
+def validate_mf_inputs(cov_op: LinearOperator, target: Float[Array, B]) -> None:
     """Public fail-fast check for ``(Σ, t)`` compatibility.
 
     Runs the same ``tᵀ Σ⁻¹ t > 0`` test that :func:`apply_pixel` and
@@ -102,10 +102,10 @@ def validate_mf_inputs(cov_op: LinearOperator, target: Float[Array, "B"]) -> Non
 
 
 def apply_pixel(
-    pixel: Float[Array, "B"],
-    mean: Float[Array, "B"],
+    pixel: Float[Array, B],
+    mean: Float[Array, B],
     cov_op: LinearOperator,
-    target: Float[Array, "B"],
+    target: Float[Array, B],
 ) -> Float[Array, ""]:
     """Matched-filter score for a single pixel spectrum.
 
@@ -135,9 +135,9 @@ def apply_pixel(
 
 def apply_image(
     cube: Float[Array, "H W B"],
-    mean: Float[Array, "B"],
+    mean: Float[Array, B],
     cov_op: LinearOperator,
-    target: Float[Array, "B"],
+    target: Float[Array, B],
 ) -> Float[Array, "H W"]:
     """Matched-filter score map for a hyperspectral cube.
 
@@ -169,7 +169,7 @@ def apply_image(
 def matched_filter_snr(
     amplitude: float,
     cov_op: LinearOperator,
-    target: Float[Array, "B"],
+    target: Float[Array, B],
 ) -> Float[Array, ""]:
     """Theoretical SNR of the matched filter at a given plume amplitude.
 
@@ -200,7 +200,7 @@ def matched_filter_snr(
 def detection_threshold(
     false_alarm_rate: float,
     cov_op: LinearOperator,
-    target: Float[Array, "B"],
+    target: Float[Array, B],
 ) -> Float[Array, ""]:
     """Gaussian detection threshold on the MF score for a given FAR.
 

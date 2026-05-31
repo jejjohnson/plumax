@@ -37,9 +37,9 @@ if TYPE_CHECKING:
 
 def apply_image_xarray(
     cube: xr.DataArray,
-    mean: np.ndarray | Float[Array, "B"],
+    mean: np.ndarray | Float[Array, B],
     cov_op: LinearOperator,
-    target: np.ndarray | Float[Array, "B"],
+    target: np.ndarray | Float[Array, B],
     *,
     band_dim: str = "band",
     dask: str = "parallelized",

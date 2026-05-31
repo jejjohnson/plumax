@@ -128,12 +128,12 @@ class PuffState(eqx.Module):
         Puff mass [kg]. Inactive puffs (not yet released) have mass 0.
     """
 
-    release_times: Float[Array, "N"]
-    x: Float[Array, "N"]
-    y: Float[Array, "N"]
-    z: Float[Array, "N"]
-    travel_distance: Float[Array, "N"]
-    mass: Float[Array, "N"]
+    release_times: Float[Array, N]
+    x: Float[Array, N]
+    y: Float[Array, N]
+    z: Float[Array, N]
+    travel_distance: Float[Array, N]
+    mass: Float[Array, N]
 
 
 # ── Single-puff concentration kernel ─────────────────────────────────────────
@@ -204,11 +204,11 @@ puff_concentration_vmap = vmap(
 @eqx.filter_jit
 def evolve_puffs(
     schedule: WindSchedule,
-    release_times: Float[Array, "N"],
+    release_times: Float[Array, N],
     current_time: Float[Array, ""],
     source_location: tuple[float, float, float],
-    puff_mass: Float[Array, "N"] | float,
-    position_disturbance: tuple[Float[Array, "N"], Float[Array, "N"]] | None = None,
+    puff_mass: Float[Array, N] | float,
+    position_disturbance: tuple[Float[Array, N], Float[Array, N]] | None = None,
 ) -> PuffState:
     """Advance a puff ensemble to ``current_time`` under a time-varying wind.
 
@@ -289,11 +289,11 @@ def evolve_puffs(
 
 
 def simulate_puff_field(
-    receptor_coords: tuple[Float[Array, "P"], Float[Array, "P"], Float[Array, "P"]],
+    receptor_coords: tuple[Float[Array, P], Float[Array, P], Float[Array, P]],
     puff_state: PuffState,
     dispersion_params: Float[Array, 6],
     dispersion_fn: Callable,
-) -> Float[Array, "P"]:
+) -> Float[Array, P]:
     """Sum the contributions of all puffs at each receptor.
 
     Parameters

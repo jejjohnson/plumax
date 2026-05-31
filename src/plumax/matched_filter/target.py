@@ -64,7 +64,7 @@ def _extract_pixel(
     cube: Float[Array, "H W B"],
     pattern: Pattern | Float[Array, "H W"],
     pixel: tuple[int, int] | None,
-) -> Float[Array, "B"]:
+) -> Float[Array, B]:
     """Pick one pixel spectrum out of a response cube.
 
     Resolution rules (explicit first):
@@ -106,7 +106,7 @@ def linear_target_from_obs(
     pattern: Pattern | Float[Array, "H W"] = "uniform",
     pixel: tuple[int, int] | None = None,
     linear_forward: bool = False,
-) -> Float[Array, "B"]:
+) -> Float[Array, B]:
     """Matched-filter target via the tangent-linear of the forward operator.
 
     Computes
@@ -158,7 +158,7 @@ def nonlinear_target_from_obs(
     amplitude: float = 1.0,
     pattern: Pattern | Float[Array, "H W"] = "uniform",
     pixel: tuple[int, int] | None = None,
-) -> Float[Array, "B"]:
+) -> Float[Array, B]:
     """Matched-filter target via a finite-amplitude difference.
 
     Computes ``t = H(x_b + α·δx) − H(x_b)`` without linearising Beer–Lambert.
