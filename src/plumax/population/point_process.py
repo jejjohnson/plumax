@@ -159,22 +159,43 @@ def fit_poisson_rate(
 def fit_inhomogeneous_intensity(
     covariates: np.ndarray,
     *,
+    quadrature_covariates: np.ndarray,
+    quadrature_weights: np.ndarray,
     num_warmup: int = 500,
     num_samples: int = 500,
     num_chains: int = 1,
     beta_prior_scale: float = 5.0,
     seed: int = 0,
 ) -> InhomogeneousIntensityPosterior:
-    """Log-linear inhomogeneous-intensity fit via NUTS.
+    """Log-linear inhomogeneous Poisson-process intensity fit via NUTS.
 
-    Fits ``log lambda_i = beta0 + covariates_i . beta`` as a Poisson
-    log-intensity over the detected events.  Each event is treated as a
-    unit Poisson count whose mean is the per-event intensity; this is the
-    tractable parametric stand-in for a continuous inhomogeneous Poisson
-    process before the LGCP upgrade.  NumPyro is imported lazily.
+    Fits ``log lambda(x) = beta0 + x . beta`` as the intensity of an
+    inhomogeneous Poisson process. The point-process log-likelihood has the
+    standard two terms — the log-intensity summed over detected events minus
+    the **integrated intensity** over the observation domain
+    ([daleyVereJones2008]):
+
+        log L(beta)  =  sum_i [beta0 + x_i . beta]  -  integral lambda(x) dx,
+
+    where the integral is approximated by quadrature over caller-supplied
+    background points,
+    ``integral lambda(x) dx ~= sum_q w_q * exp(beta0 + x_q . beta)``.
+
+    The exposure (integrated-intensity) term is what makes the rate
+    identifiable: without it the likelihood is maximised by ``lambda -> 1`` at
+    every observed covariate and the fit cannot estimate an event rate over a
+    region / time window. The quadrature weights carry the domain measure
+    (area * duration), so the recovered ``beta0`` is a true log-rate density.
+    NumPyro is imported lazily.
 
     Args:
-        covariates: Per-event covariate matrix ``(n_events, n_covariates)``.
+        covariates: Detected-event covariate matrix ``(n_events, n_covariates)``.
+        quadrature_covariates: Background / integration covariate points
+            ``(n_quad, n_covariates)`` spanning the observation domain over
+            which the intensity is integrated.
+        quadrature_weights: Per-point quadrature weights ``(n_quad,)`` — the
+            domain measure (e.g. area * duration per cell); must be strictly
+            positive.
         num_warmup: NUTS warmup iterations.
         num_samples: Posterior samples (per chain).
         num_chains: Number of NUTS chains.
@@ -186,11 +207,36 @@ def fit_inhomogeneous_intensity(
         The :class:`InhomogeneousIntensityPosterior`.
 
     Raises:
-        ValueError: If ``covariates`` is not 2-D or has zero rows.
+        ValueError: If ``covariates`` / ``quadrature_covariates`` are not 2-D
+            with a matching covariate dimension, if either has zero rows, or if
+            the quadrature weights are mis-shaped or non-positive.
     """
     cov = np.asarray(covariates, dtype=float)
     if cov.ndim != 2 or cov.shape[0] == 0:
         msg = f"covariates must be a (n_events, n_covariates) array, got shape {cov.shape}"
+        raise ValueError(msg)
+    quad = np.asarray(quadrature_covariates, dtype=float)
+    weights = np.asarray(quadrature_weights, dtype=float)
+    if quad.ndim != 2 or quad.shape[0] == 0:
+        msg = (
+            "quadrature_covariates must be a (n_quad, n_covariates) array, "
+            f"got shape {quad.shape}"
+        )
+        raise ValueError(msg)
+    if quad.shape[1] != cov.shape[1]:
+        msg = (
+            "quadrature_covariates and covariates must share the covariate "
+            f"dimension, got {quad.shape[1]} vs {cov.shape[1]}"
+        )
+        raise ValueError(msg)
+    if weights.shape != (quad.shape[0],):
+        msg = (
+            "quadrature_weights must have shape (n_quad,) matching "
+            f"quadrature_covariates, got {weights.shape} vs ({quad.shape[0]},)"
+        )
+        raise ValueError(msg)
+    if np.any(weights <= 0.0):
+        msg = "quadrature_weights must be strictly positive"
         raise ValueError(msg)
 
     import jax
@@ -200,16 +246,21 @@ def fit_inhomogeneous_intensity(
 
     n_cov = cov.shape[1]
     cov_j = jax.numpy.asarray(cov)
+    quad_j = jax.numpy.asarray(quad)
+    weights_j = jax.numpy.asarray(weights)
 
-    def model(x: Any) -> None:
+    def model(x: Any, xq: Any, wq: Any) -> None:
         beta0 = numpyro.sample("beta0", dist.Normal(0.0, beta_prior_scale))
         beta = numpyro.sample(
             "beta", dist.Normal(0.0, beta_prior_scale).expand([n_cov]).to_event(1)
         )
-        log_rate = beta0 + x @ beta
-        numpyro.sample(
-            "obs", dist.Poisson(jax.numpy.exp(log_rate)), obs=jax.numpy.ones(x.shape[0])
-        )
+        # Inhomogeneous-Poisson log-likelihood: sum_i log lambda(x_i) minus the
+        # integrated intensity int lambda(x) dx, the integral approximated by
+        # sum_q w_q lambda(x_q). Added via numpyro.factor because it is not a
+        # per-observation density.
+        log_lambda_events = beta0 + x @ beta
+        integrated = jax.numpy.sum(wq * jax.numpy.exp(beta0 + xq @ beta))
+        numpyro.factor("point_process", jax.numpy.sum(log_lambda_events) - integrated)
 
     kernel = NUTS(model)
     mcmc = MCMC(
@@ -219,7 +270,7 @@ def fit_inhomogeneous_intensity(
         num_chains=num_chains,
         progress_bar=False,
     )
-    mcmc.run(jax.random.PRNGKey(seed), x=cov_j)
+    mcmc.run(jax.random.PRNGKey(seed), x=cov_j, xq=quad_j, wq=weights_j)
     samples = mcmc.get_samples()
     return InhomogeneousIntensityPosterior(
         beta0_samples=np.asarray(samples["beta0"]),
