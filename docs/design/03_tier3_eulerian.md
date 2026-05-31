@@ -236,7 +236,8 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 | 2 | 4D-Var cost (prior + time-summed obs) over the FV transport | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`FourDVarProblem`) | ✓ |
 | 2 | Differentiable forward (emission → column-obs series) + exact adjoint via AD | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`EulerianForward4DVar`) | ✓ |
 | 2 | Column observation operator `H_t` | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`ColumnObservationOperator`) | ✓ |
-| 2 | Likelihoods + spatial priors | reuse `lagrangian.inversion` (Matérn-3/2, `R = R_retr + R_repr`) | ✓ |
+| 2 | Likelihood + temporal prior on the emission series (Matérn-3/2, `R = R_retr + R_repr`) | reuse `lagrangian.inversion.matern32_covariance` | ✓ |
+| 2 | Spatial source prior (per-cell `B`) | future — v1 control is a scalar emission rate at a known source | ☐ |
 | 2 | Control vector + whitening transform | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (Cholesky whitening of `B`) | ✓ |
 | 2 | 4D-Var solver (L-BFGS in whitened space) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`solve_4dvar`) | ✓ |
 | 2 | Incremental (Gauss-Newton inner) 4D-Var solver | [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) | 🚧 |

@@ -1,7 +1,7 @@
-"""Tier III — incremental 4D-Var inversion over the Eulerian transport model.
+"""Tier III — strong-constraint 4D-Var inversion over the Eulerian transport model.
 
 Recovers a time-resolved emission signal from a sequence of column observations
-by minimising the standard strong-constraint 4D-Var cost
+by directly minimising the strong-constraint 4D-Var cost
 ([design](https://github.com/jejjohnson/plumax/blob/main/docs/design/03_tier3_eulerian.md#tier3-cost)):
 
     J(S) = ½‖S − S_b‖²_B  +  ½ Σ_t ‖H_t c(S, t) − y_t‖²_{R_t}
@@ -10,13 +10,17 @@ where ``c(S, t)`` is the 3-D tracer field produced by the finite-volume solver
 :func:`~plumax.les_fvm.simulate_eulerian_dispersion` for emission signal ``S``,
 ``H_t`` is the column observation operator (vertical integral → optional spatial
 sampling), ``S_b`` / ``B`` the source prior, and ``R_t`` the observation-error
-covariance at overpass ``t``.
+covariance at overpass ``t``. (The IC / background term ``½‖c_0 − c_b(0)‖²`` of
+the full three-term design cost is future work — this v1 pins the initial field
+and inverts only the source.)
 
-The key enabler (design §adjoint): **JAX reverse-mode autodiff through the
-diffrax FV solve is the exact discrete adjoint** — there is no hand-written
-adjoint model. ``jax.value_and_grad`` of the cost gives the gradient that the
-optimiser consumes; ``jax.linearize`` gives the tangent-linear forward for the
-incremental inner solves.
+The solver here is the **direct strong-constraint** path: a single L-BFGS
+minimisation of the full nonlinear cost in whitened control space. The key
+enabler (design §adjoint) is that **JAX reverse-mode autodiff through the diffrax
+FV solve is the exact discrete adjoint** — there is no hand-written adjoint
+model; ``jax.value_and_grad`` of the cost supplies the gradient the optimiser
+consumes. The incremental / Gauss-Newton inner-loop variant (design
+§incremental) is a separate future addition.
 
 The control vector here is the **time-resolved scalar emission rate** ``S = q``
 at a known source location — the v1 scope. A per-cell space–time source field is
@@ -39,6 +43,7 @@ from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from plumax.les_fvm.boundary import build_default_concentration_bc
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
@@ -196,6 +201,18 @@ def build_forward(
     Returns:
         A configured :class:`EulerianForward4DVar`.
     """
+    # Validate the time grid up front: t0/t1, SaveAt(ts=...) and jnp.interp all
+    # assume ≥ 2 strictly-increasing save times. Catching it here gives a clear
+    # error instead of an opaque diffrax / interpolation failure later.
+    st = np.asarray(save_times, dtype=float)
+    if st.ndim != 1 or st.size < 2:
+        raise ValueError(
+            "build_forward: `save_times` must be a 1-D array with ≥ 2 entries "
+            f"(got shape {st.shape})."
+        )
+    if np.any(np.diff(st) <= 0.0):
+        raise ValueError("build_forward: `save_times` must be strictly increasing.")
+
     # Build the grid (and hence the state, save times and control vector) in the
     # canonical float dtype so they all agree: float64 when JAX x64 is enabled,
     # float32 otherwise. A mismatch makes the diffrax checkpoint buffer reject
@@ -336,7 +353,25 @@ def build_problem(
         )
     # Jitter keeps the Cholesky factor PD for smooth Matérn kernels.
     chol = jnp.linalg.cholesky(b + 1e-9 * jnp.eye(n_t))
-    r = jnp.broadcast_to(jnp.asarray(obs_variance, dtype=float), y.shape)
+
+    # Resolve obs_variance to R, the (n_t, n_obs) diagonal. A length-n_t 1-D
+    # input is treated as one variance *per overpass* (R_t), so reshape it to a
+    # column before broadcasting — otherwise numpy would align it with the
+    # trailing n_obs axis. A length-n_obs 1-D input stays per-receptor, and a
+    # scalar broadcasts to everything.
+    r_in = np.asarray(obs_variance, dtype=float)
+    n_obs = y.shape[1]
+    if r_in.ndim == 1 and r_in.shape[0] == n_t and n_t != n_obs:
+        r_in = r_in[:, None]
+    if np.any(r_in <= 0.0):
+        raise ValueError("build_problem: `obs_variance` entries must be > 0.")
+    try:
+        r = jnp.broadcast_to(jnp.asarray(r_in), y.shape)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"build_problem: `obs_variance` shape {np.shape(obs_variance)} is not "
+            f"broadcastable to observations {y.shape}."
+        ) from exc
     return FourDVarProblem(
         forward=forward,
         prior_mean=sb,

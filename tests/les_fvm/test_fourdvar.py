@@ -203,3 +203,83 @@ def test_problem_is_a_frozen_dataclass():
     assert isinstance(prob, FourDVarProblem)
     with pytest.raises((AttributeError, TypeError)):
         prob.prior_mean = jnp.zeros(5)  # frozen
+
+
+def test_build_forward_rejects_bad_save_times():
+    common = dict(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+    )
+    with pytest.raises(ValueError, match="save_times"):
+        build_forward(save_times=jnp.array([5.0]), **common)  # singleton
+    with pytest.raises(ValueError, match="strictly increasing"):
+        build_forward(save_times=jnp.array([0.0, 10.0, 5.0]), **common)  # non-monotone
+
+
+def test_build_problem_rejects_nonpositive_obs_variance():
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="obs_variance"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=0.0,
+        )
+    with pytest.raises(ValueError, match="obs_variance"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=-1.0,
+        )
+
+
+def test_build_problem_per_overpass_variance_vector():
+    # A length-n_t obs_variance is one variance per overpass (R_t): it must
+    # broadcast across receptors (the (n_t, 1) interpretation), not align with
+    # the trailing receptor axis.
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    n_t, n_obs = y.shape
+    assert n_t != n_obs  # the case where the two interpretations differ
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    per_overpass = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    prob = build_problem(
+        forward=fwd,
+        observations=y,
+        prior_mean=jnp.zeros(n_t),
+        prior_covariance=b,
+        obs_variance=per_overpass,
+    )
+    assert prob.obs_variance.shape == (n_t, n_obs)
+    # Row t holds R_t across all receptors.
+    for t in range(n_t):
+        np.testing.assert_allclose(
+            np.asarray(prob.obs_variance[t]), float(per_overpass[t])
+        )
+
+
+def test_build_problem_per_receptor_variance_vector():
+    # A length-n_obs obs_variance stays per-receptor (broadcast across time).
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    n_t, n_obs = y.shape
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    per_receptor = jnp.full(n_obs, 2.5)
+    prob = build_problem(
+        forward=fwd,
+        observations=y,
+        prior_mean=jnp.zeros(n_t),
+        prior_covariance=b,
+        obs_variance=per_receptor,
+    )
+    assert prob.obs_variance.shape == (n_t, n_obs)
+    np.testing.assert_allclose(np.asarray(prob.obs_variance), 2.5)
