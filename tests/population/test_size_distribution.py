@@ -59,9 +59,7 @@ def test_synthetic_recovery() -> None:
     n = 400
     log_q = rng.normal(mu_true, sigma_true, size=n)
     cat = _catalog_from_logQ(log_q, rel_std=np.full(n, 0.1))
-    post = fit_lognormal_size_distribution(
-        cat, num_warmup=600, num_samples=600, seed=1
-    )
+    post = fit_lognormal_size_distribution(cat, num_warmup=600, num_samples=600, seed=1)
     s = post.summary()
     # Posterior means land near the truth.
     assert post.mu_mean == pytest.approx(mu_true, abs=0.15)
