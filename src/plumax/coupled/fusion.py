@@ -40,9 +40,15 @@ from plumax.coupled.forward import CoupledForward
 class FusionPosterior:
     """Closed-form joint posterior over ``(Q, bias₁ … bias_M)``.
 
+    All numeric fields are kept as JAX arrays (the scalars as 0-d arrays) so the
+    whole posterior stays differentiable / jittable — the design advertises the
+    estimator for gradient-based workflows, and forcing ``float(...)`` here would
+    raise a concretization error under ``jax.grad`` / ``jax.jit``. Use
+    ``float(post.emission_rate)`` at the call site when a Python scalar is wanted.
+
     Attributes:
-        emission_rate: Posterior mean emission ``Q*`` [kg/s].
-        emission_std: Posterior standard deviation of ``Q``.
+        emission_rate: Posterior mean emission ``Q*`` [kg/s], 0-d array.
+        emission_std: Posterior standard deviation of ``Q``, 0-d array.
         biases: Posterior mean per-instrument biases, shape ``(n_inst,)``.
         bias_std: Posterior standard deviations of the biases, shape
             ``(n_inst,)``.
@@ -53,8 +59,8 @@ class FusionPosterior:
         instrument_names: Names aligned with the bias entries.
     """
 
-    emission_rate: float
-    emission_std: float
+    emission_rate: jax.Array
+    emission_std: jax.Array
     biases: jax.Array
     bias_std: jax.Array
     mean: jax.Array
@@ -178,8 +184,8 @@ def fuse_observations(
     std = jnp.sqrt(jnp.clip(jnp.diag(posterior_cov), 0.0, None))
     names = tuple(inst.name for inst in forward.instruments)
     return FusionPosterior(
-        emission_rate=float(theta[0]),
-        emission_std=float(std[0]),
+        emission_rate=theta[0],
+        emission_std=std[0],
         biases=theta[1:],
         bias_std=std[1:],
         mean=theta,

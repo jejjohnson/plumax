@@ -280,3 +280,35 @@ def test_default_prior_rejects_nonpositive_std():
             emission_prior_std=0.0,
             bias_prior_std=1.0,
         )
+
+
+def test_fusion_is_jittable_and_differentiable():
+    # The design advertises a pure-JAX estimator: fuse_observations must run
+    # under jax.jit and jax.grad without forcing concretization of the posterior
+    # scalars (regression for the float(theta[0]) P2).
+    import jax
+
+    fwd = _two_instrument_forward()
+    y = fwd.predict(2.5)
+    mean, cov = default_prior(
+        n_instruments=2,
+        emission_prior_mean=1.0,
+        emission_prior_std=10.0,
+        bias_prior_std=1e-8,
+    )
+
+    @jax.jit
+    def q_hat(obs0, obs1):
+        post = fuse_observations(
+            fwd, [obs0, obs1], prior_mean=mean, prior_covariance=cov
+        )
+        return post.emission_rate
+
+    out = q_hat(y[0], y[1])
+    assert out.shape == ()  # 0-d JAX array, not a Python float
+    assert float(out) == pytest.approx(2.5, rel=1e-3)
+
+    # Differentiable w.r.t. the observations (∂Q*/∂y exists and is finite).
+    g0, g1 = jax.grad(lambda a, b: q_hat(a, b), argnums=(0, 1))(y[0], y[1])
+    assert np.all(np.isfinite(np.asarray(g0)))
+    assert np.all(np.isfinite(np.asarray(g1)))

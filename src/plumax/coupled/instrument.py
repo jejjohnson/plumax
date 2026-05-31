@@ -33,6 +33,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax.lagrangian.inversion import _is_traced
+
 
 @dataclass(frozen=True)
 class Instrument:
@@ -107,7 +109,12 @@ class Instrument:
             )
             + jnp.broadcast_to(jnp.asarray(self.alignment_variance, dtype=float), (n,))
         )
-        if bool(jnp.any(r <= 0.0)):
+        # Eager positivity check, skipped under jit / grad / vmap — the fusion
+        # forward calls this from inside a traced cost, where ``r`` is a tracer
+        # (every jnp op inside a trace is, even on concrete inputs) and a
+        # host-bool conversion would raise. Guard on ``r`` itself, using the
+        # shared ``_is_traced`` helper to match the inversion modules.
+        if not _is_traced(r) and bool(jnp.any(r <= 0.0)):
             raise ValueError(
                 f"Instrument {self.name!r}: total observation variance must be > 0 "
                 "(check retrieval / representation / alignment variances)."
