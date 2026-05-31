@@ -1,15 +1,26 @@
 [project]
-name = "mypackage"
-version = "0.1.5"
-description = "My short description for my project."
+name = "plumax"
+version = "0.1.0"
+description = "Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX)."
 authors = [
     {name="J. Emmanuel Johnson", email="jemanjohnson34@gmail.com"},
 ]
 license = { file = "LICENSE" }
 readme = "README.md"
-keywords = []
+keywords = [
+    "methane",
+    "plume",
+    "dispersion",
+    "atmospheric-transport",
+    "data-assimilation",
+    "radiative-transfer",
+    "matched-filter",
+    "jax",
+    "bayesian-inference",
+]
 requires-python = ">=3.12"
 classifiers = [
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
     "Topic :: Scientific/Engineering",
     "Topic :: Software Development :: Libraries",
     "Programming Language :: Python :: 3.12",
@@ -17,18 +28,63 @@ classifiers = [
     "Natural Language :: English",
     "License :: OSI Approved :: MIT License",
     "Intended Audience :: Science/Research",
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 3 - Alpha",
 ]
-dependencies = []
+# Core runtime deps — only what the forward models need. The NumPyro-based
+# Bayesian inference modules are imported lazily; consumers who only want the
+# xarray forward models do not pay for them. The jax/jaxlib upper bound mirrors
+# the research_notebook `plume-simulation` feature (numpyro < 0.21 still imports
+# `xla_pmap_p`, removed on the JAX 0.9 line).
+dependencies = [
+    "jax>=0.7,<0.9",
+    "jaxlib>=0.7,<0.9",
+    "numpy",
+    "xarray",
+    "scipy>=1.11",
+    # diffrax + equinox drive the gauss_puff time-varying wind solves.
+    "diffrax>=0.6",
+    "equinox>=0.11",
+    # finitevolx powers the Arakawa C-grid FVM operators used by les_fvm.
+    "finitevolx>=0.0.41",
+    # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
+    # Woodbury solve) used by the radtran matched-filter retrieval.
+    "gaussx",
+    # optimistix powers the variational retrieval module (assimilation):
+    # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
+    "optimistix>=0.0.10",
+    # scikit-learn powers the matched-filter background estimators (off the
+    # gradient path; the matched filter itself is pure JAX).
+    "scikit-learn>=1.3",
+    # pipekit supplies the carrier-agnostic Operator primitives and the
+    # pipekit_cycle ForwardModel / ObservationOperator protocols that the
+    # plumax operator + adapter layer plug into.
+    "pipekit",
+]
+
+[project.optional-dependencies]
+# The `inference` submodules are the only consumers of numpyro.
+inference = ["numpyro>=0.16"]
+# The hapi_lut sub-package imports HAPI lazily — install this extra to build LUTs.
+hapi = ["hitran-api"]
+# Pulled in by the example notebooks (plots).
+notebooks = ["matplotlib", "ipython"]
 
 [project.urls]
-Repository = "https://github.com/jejjohnson/mypackage"
+Repository = "https://github.com/jejjohnson/plumax"
+Documentation = "https://jejjohnson.github.io/plumax"
+
+# Unpublished sibling packages resolve from git; everything else from PyPI.
+[tool.uv.sources]
+pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx" }
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
+    "pytest-xdist>=3.5",
     "pre-commit>=4.5.1",
+    "numpyro>=0.16",
 ]
 lint = [
     "ruff>=0.15.10",
@@ -50,7 +106,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mypackage"]
+packages = ["src/plumax"]
 
 [tool.ruff]
 target-version = "py312"
@@ -69,10 +125,17 @@ python-version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=src/mypackage --cov-report=term-missing --cov-report=xml:coverage.xml"
+addopts = "--cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml"
+markers = [
+    "slow: marks tests as slow (e.g. MCMC sampling); run with -m 'not slow' to skip",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
 
 [tool.coverage.run]
-source = ["src/mypackage"]
+source = ["src/plumax"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
