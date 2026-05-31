@@ -72,10 +72,6 @@ jax.tree_util.register_dataclass(
 )
 
 
-# A mean-wind field: t [s] -> (u, v, w) [m/s], spatially uniform in this v1.
-WindField = "Callable[[jax.Array], jax.Array]"
-
-
 def _sigma_w_sq(turbulence: TurbulenceModel, z: jax.Array) -> jax.Array:
     sigma, _ = turbulence.at(z)
     return sigma[..., 2] ** 2
