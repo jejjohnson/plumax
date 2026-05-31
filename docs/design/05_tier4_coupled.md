@@ -258,6 +258,7 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 | 1 | Multi-instrument fusion harness (closed-form `(Q, bias)` posterior) | [`coupled/fusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/fusion.py) (`fuse_observations`) | ✓ |
 | 1 | Cross-instrument bias model | first-class state in `coupled.fusion` (per-instrument additive bias) | ✓ |
 | 1 | Coupled forward (Tier II + AK + multi-inst) | `plumax.coupled` (Tier II transport) | ☐ |
+| 1 | RTM observation operator (column → ΔVMR → band radiance) | [`coupled/rtm.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py) (`RadianceObservationOperator`, `radiance_response`) | 🚧 |
 | 1 | Coupled forward (Tier III + RTM + multi-inst) | `plumax.coupled` (Tier III + RTM) | ☐ |
 | 1 | Quality-flag aggregator | `plumax.coupled.quality` | ☐ |
 | 1 | $Q(t)$ stochastic-process model (OU / GP) | `plume_simulation.coupled.q_dynamics` | ☐ |

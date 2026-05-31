@@ -17,6 +17,11 @@ rate, with the per-instrument bias as a first-class state element:
 - ``fusion`` — the closed-form joint posterior over ``(Q, bias_inst)``
   (``fuse_observations``), exploiting that linearity (the design's
   linear-conditional-Gaussian limit).
+- ``rtm`` — an *additive* RTM-based observation operator
+  (``RadianceObservationOperator`` / ``radiance_response``) that maps the plume
+  column enhancement → gas ``ΔVMR`` → band-integrated normalised radiance via
+  the :mod:`plumax.radtran` Beer–Lambert + SRF stack, as the build-order step
+  toward L1-radiance fusion. The scalar-AK path above is unchanged.
 
 Later build-order steps (Tier II/III transport + RTM, the ``Q(t)`` stochastic
 process, trans-dimensional source count, coupled emulator, operational
@@ -26,7 +31,7 @@ are designed to stay the same as those blocks are swapped in.
 
 from __future__ import annotations
 
-from plumax.coupled import forward, fusion, instrument
+from plumax.coupled import forward, fusion, instrument, rtm
 from plumax.coupled.forward import (
     CoupledForward,
     PlumeSource,
@@ -36,6 +41,11 @@ from plumax.coupled.forward import (
 )
 from plumax.coupled.fusion import FusionPosterior, default_prior, fuse_observations
 from plumax.coupled.instrument import Instrument
+from plumax.coupled.rtm import (
+    RadianceObservationOperator,
+    column_mass_to_delta_vmr,
+    radiance_response,
+)
 
 
 __all__ = [
@@ -43,7 +53,9 @@ __all__ = [
     "FusionPosterior",
     "Instrument",
     "PlumeSource",
+    "RadianceObservationOperator",
     "build_coupled_forward",
+    "column_mass_to_delta_vmr",
     "column_response",
     "default_prior",
     "forward",
@@ -51,4 +63,6 @@ __all__ = [
     "fusion",
     "instrument",
     "predict_observation",
+    "radiance_response",
+    "rtm",
 ]
