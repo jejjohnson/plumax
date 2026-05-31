@@ -23,6 +23,7 @@ import numpy as np
 
 from plumax.lagrangian.particles import (
     ParticleState,
+    n_steps_for_horizon,
     step_durations,
     uniform_wind,
     wind_from_speed_direction,
@@ -202,7 +203,7 @@ def _accumulate_residence(
     """Integrate the ensemble and accumulate per-cell residence time [s]."""
     from plumax.lagrangian.particles import langevin_step
 
-    n_steps = max(int(np.ceil(t_end / dt)), 0)
+    n_steps = n_steps_for_horizon(t_end, dt)
     keys = jax.random.split(key, n_steps)
     # Step start times and per-step durations. When ``t_end`` is not an exact
     # multiple of ``dt`` the final step is shortened to the remainder so the

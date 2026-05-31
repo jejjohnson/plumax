@@ -193,8 +193,8 @@ When fusing across instruments, each observation tensor carries its own AK and f
 | 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |
 | 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ |
 | 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ |
-| 2 | Likelihoods + spatial priors | `plumax.lagrangian.likelihoods` | ☐ |
-| 2 | Linear inversion (Gaussian / lognormal) | reuse [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) with $\tilde{\mathbf{F}}$ injected | ☐ |
+| 2 | Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr) | `plumax.lagrangian.inversion` | ✓ |
+| 2 | Linear inversion (Gaussian / lognormal closed form) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`) | ✓ |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |
 | 2 | Posterior export → Tier V | `plume_simulation.lagrangian.posterior_export` | ☐ |

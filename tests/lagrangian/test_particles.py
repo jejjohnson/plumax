@@ -11,11 +11,38 @@ from plumax.lagrangian.particles import (
     ParticleState,
     integrate_particles,
     langevin_step,
+    n_steps_for_horizon,
     step_durations,
     uniform_wind,
     wind_from_speed_direction,
 )
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
+
+
+@pytest.mark.parametrize(
+    "horizon,dt,expected",
+    [
+        (10.0, 1.0, 10),  # exact
+        (10.1, 1.0, 11),  # genuine partial step
+        (0.5, 1.0, 1),  # sub-step horizon
+        (0.0, 1.0, 0),  # empty
+        (2.1, 0.15, 14),  # float round-up trap: 2.1/0.15 = 14.000…02, not 15
+        (1.0, 0.1, 10),  # 1.0/0.1 = 9.999… in float, must snap to 10
+    ],
+)
+def test_n_steps_for_horizon_is_float_robust(horizon, dt, expected):
+    assert n_steps_for_horizon(horizon, dt) == expected
+
+
+def test_n_steps_no_zero_length_final_step_on_rounded_multiple():
+    # The P3 case: 2.1 is an exact multiple of 0.15 (×14) but the float quotient
+    # rounds just above 14, so a naive ceil would add a 15th, zero-length step.
+    n = n_steps_for_horizon(2.1, 0.15)
+    dts = np.asarray(step_durations(2.1, 0.15, n))
+    assert dts.size == 14
+    assert np.all(dts > 0.0)  # no degenerate zero-length step
+    np.testing.assert_allclose(dts, 0.15, atol=1e-9)
+    assert dts.sum() == pytest.approx(2.1)
 
 
 @pytest.mark.parametrize(

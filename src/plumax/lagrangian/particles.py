@@ -136,14 +136,34 @@ def langevin_step(
     return ParticleState(position=pos_new, velocity=vel_new)
 
 
+def n_steps_for_horizon(horizon: float, dt: float, *, rtol: float = 1e-9) -> int:
+    """Number of fixed-``dt`` steps covering ``horizon`` (ceil, float-robust).
+
+    Plain ``ceil(horizon / dt)`` adds a spurious extra step when the quotient is
+    mathematically an integer but floating-point rounds it just above (e.g.
+    ``2.1 / 0.15 → 14.000…02``). Snapping the quotient to the nearest integer
+    when it is within ``rtol`` avoids that degenerate final zero-length step.
+    Returns 0 for a non-positive horizon.
+    """
+    if horizon <= 0.0:
+        return 0
+    quotient = horizon / dt
+    nearest = round(quotient)
+    if abs(quotient - nearest) <= rtol * max(1.0, abs(nearest)):
+        return max(int(nearest), 1)
+    return int(np.ceil(quotient))
+
+
 def step_durations(horizon: float, dt: float, n_steps: int) -> jax.Array:
     """Per-step durations summing to ``horizon``; the final step takes the rest.
 
     All steps are ``dt`` except the last, which is the remainder
     ``horizon - (n_steps - 1) * dt`` (equal to ``dt`` when ``horizon`` is an
-    exact multiple). Returns an empty array when ``n_steps == 0``. Used by the
-    integrator / residence / footprint paths so a non-divisible horizon advances
-    over exactly ``horizon`` rather than ``n_steps * dt``.
+    exact multiple). Returns an empty array when ``n_steps == 0``. Pair with
+    :func:`n_steps_for_horizon` so the final duration is always ``> 0`` (no
+    degenerate zero-length step from float round-up). Used by the integrator /
+    residence / footprint paths so a non-divisible horizon advances over exactly
+    ``horizon`` rather than ``n_steps * dt``.
     """
     if n_steps == 0:
         return jnp.zeros((0,))
@@ -182,7 +202,7 @@ def integrate_particles(
         ``(final_state, trajectory)`` where ``trajectory`` is ``None`` unless
         ``save_trajectory`` is set.
     """
-    n_steps = max(int(np.ceil((t1 - t0) / dt)), 0)
+    n_steps = n_steps_for_horizon(t1 - t0, dt)
     keys = jax.random.split(key, n_steps)
     # Step start times and per-step durations. When ``t1 - t0`` is not an exact
     # multiple of ``dt`` the final step is shortened to the remainder so the
