@@ -88,7 +88,7 @@ class HomogeneousTurbulence:
         of ``z`` along a trailing axis of size 3.
         """
         z = jnp.asarray(z)
-        ones = jnp.ones(z.shape + (3,))
+        ones = jnp.ones((*z.shape, 3))
         return ones * self.sigma, ones * self.tau
 
 
