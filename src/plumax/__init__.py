@@ -28,7 +28,15 @@ sibling sub-packages in future ports.
 
 from __future__ import annotations
 
-from plumax import coupled, gauss_plume, gauss_puff, hapi_lut, les_fvm, radtran
+from plumax import (
+    coupled,
+    gauss_plume,
+    gauss_puff,
+    hapi_lut,
+    les_fvm,
+    population,
+    radtran,
+)
 
 
 __version__ = "0.1.0"  # x-release-please-version
@@ -39,5 +47,6 @@ __all__ = [
     "gauss_puff",
     "hapi_lut",
     "les_fvm",
+    "population",
     "radtran",
 ]
