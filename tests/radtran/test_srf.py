@@ -75,6 +75,57 @@ def test_jacobian_equals_apply_for_linear_operator():
     np.testing.assert_allclose(srf.apply(v), srf.jacobian(v), atol=1e-12)
 
 
+def _make_srf_on_grid(wl: np.ndarray, srf_type: str = "gaussian"):
+    return SpectralResponseFunction(
+        wavelengths_hr_nm=wl,
+        band_centers_nm=np.array([1610.0, 2190.0]),
+        band_widths_nm=np.array([90.0, 180.0]),
+        band_names=("B11", "B12"),
+        srf_type=srf_type,
+    )
+
+
+def test_uniform_grid_matrix_unchanged_by_bin_weights():
+    # On a uniform wavelength grid the bin widths are constant and cancel in the
+    # row normalisation, so weighting must leave the matrix identical to a plain
+    # row-normalised profile (regression guard for the weighting change).
+    wl = np.linspace(1400.0, 2500.0, 1101)
+    srf = _make_srf_on_grid(wl, "gaussian")
+    raw = srf._build_parametric_matrix()
+    expected = raw / raw.sum(axis=1, keepdims=True)
+    np.testing.assert_allclose(srf.matrix, expected, atol=1e-12)
+
+
+def _nonuniform_wavelength_grid() -> np.ndarray:
+    # A wavelength grid derived from a uniform wavenumber grid (1e7 / nu) is
+    # non-uniform; the constructor requires strictly-increasing samples, so we
+    # sort it ascending (the spacing stays non-uniform — finer at long λ).
+    nu = np.linspace(4000.0, 7150.0, 1400)  # cm^-1, uniform
+    return np.sort(1e7 / nu)  # nm, ascending, non-uniform spacing
+
+
+def test_nonuniform_grid_flat_input_still_flat():
+    wl = _nonuniform_wavelength_grid()
+    srf = _make_srf_on_grid(wl, "gaussian")
+    np.testing.assert_allclose(srf.matrix.sum(axis=1), 1.0, atol=1e-12)
+    out = srf.apply(np.full(srf.n_lambda, 0.3))
+    np.testing.assert_allclose(out, 0.3, atol=1e-12)
+
+
+def test_nonuniform_grid_matches_trapezoidal_quadrature():
+    # Band integral must equal a reference width-weighted (trapezoidal) average,
+    # not a plain sum that over-weights the densely-sampled side.
+    wl = _nonuniform_wavelength_grid()
+    srf = _make_srf_on_grid(wl, "gaussian")
+    rng = np.random.default_rng(3)
+    spectrum = rng.random(srf.n_lambda)
+
+    raw = srf._build_parametric_matrix()
+    widths = np.abs(np.gradient(wl))
+    ref = (raw * widths[None, :]) @ spectrum / (raw * widths[None, :]).sum(axis=1)
+    np.testing.assert_allclose(srf.apply(spectrum), ref, rtol=1e-10)
+
+
 def test_apply_rejects_wrong_last_axis():
     srf = _make_srf("gaussian")
     with pytest.raises(ValueError, match="last axis size"):

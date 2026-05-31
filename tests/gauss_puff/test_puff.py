@@ -348,6 +348,30 @@ def test_simulate_puff_rejects_bad_scheme():
         )
 
 
+def test_simulate_puff_background_column_uses_trapezoid():
+    # Zero emission + a uniform background must integrate to exactly
+    # background * (z_max - z_min) in every frame — trapezoidal vertical
+    # integration, not ``sum * dz`` (which would inflate by n_z / (n_z - 1)).
+    background = 1e-8
+    z0, z1, n_z = 0.0, 60.0, 7
+    n_t = 4
+    time_array = np.linspace(0, 30, n_t, dtype=np.float32)
+    ds = simulate_puff(
+        emission_rate=0.0,  # no plume mass → field is pure background
+        source_location=(0.0, 0.0, 2.0),
+        wind_speed=np.full(n_t, 5.0, dtype=np.float32),
+        wind_direction=np.full(n_t, 270.0, dtype=np.float32),
+        stability_class="C",
+        domain_x=(0, 200, 11),
+        domain_y=(-50, 50, 5),
+        domain_z=(z0, z1, n_z),
+        time_array=time_array,
+        background_conc=background,
+    )
+    col = ds["column_concentration"].values
+    np.testing.assert_allclose(col, background * (z1 - z0), rtol=1e-6)
+
+
 def test_simulate_puff_briggs_scheme_runs():
     time_array = np.linspace(0, 30, 7, dtype=np.float32)
     ds = simulate_puff(

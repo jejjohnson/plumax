@@ -40,6 +40,21 @@ import numpy as np
 SRFType = Literal["gaussian", "rectangular", "triangular", "custom"]
 
 
+def _bin_widths(samples: np.ndarray) -> np.ndarray:
+    """Trapezoidal quadrature weights for (possibly non-uniform) 1-D samples.
+
+    Each weight is half the distance to the neighbouring samples (the endpoints
+    get a single half-interval), i.e. the standard trapezoidal-rule weights.
+    The absolute value makes the result independent of sample ordering, so a
+    descending grid (e.g. wavelengths from ``1e7 / nu``) yields positive widths.
+    A single-sample grid falls back to unit weight.
+    """
+    s = np.asarray(samples, dtype=float)
+    if s.size < 2:
+        return np.ones_like(s)
+    return np.abs(np.gradient(s))
+
+
 @dataclass
 class SpectralResponseFunction:
     """Band-integration operator for a multispectral / hyperspectral instrument.
@@ -115,6 +130,16 @@ class SpectralResponseFunction:
                 f"SpectralResponseFunction: unknown srf_type {self.srf_type!r}. "
                 "Use 'gaussian', 'rectangular', 'triangular', or 'custom'."
             )
+
+        # Weight each high-res sample by its wavelength-bin width before
+        # normalising, so band integration is a proper (trapezoidal) quadrature
+        # rather than a plain sum. This matters when ``wavelengths_hr_nm`` is
+        # non-uniform — e.g. derived from a uniform wavenumber grid via
+        # ``1e7 / nu`` — otherwise the densely-sampled side of each band is
+        # over-weighted. On a uniform grid the widths are constant and cancel in
+        # the row normalisation below, leaving the matrix unchanged.
+        widths = _bin_widths(np.asarray(self.wavelengths_hr_nm, dtype=float))
+        mat = mat * widths[None, :]
 
         # L1-normalise each band so a flat input gives a flat output.
         row_sums = mat.sum(axis=1, keepdims=True)

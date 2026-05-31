@@ -301,8 +301,10 @@ def simulate_plume(
     concentration = np.asarray(conc_flat).reshape((n_x, n_y, n_z))
     concentration = concentration + background_conc
 
-    dz = float(z[1] - z[0])
-    column = concentration.sum(axis=2) * dz
+    # Trapezoidal vertical integration: the z grid from ``np.linspace`` includes
+    # both endpoints, so a plain ``sum * dz`` over-counts a vertically uniform
+    # component (e.g. a background) by one grid interval (n_z / (n_z - 1)).
+    column = np.trapezoid(concentration, x=z, axis=2)
 
     ds = xr.Dataset(
         data_vars={

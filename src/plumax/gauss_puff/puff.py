@@ -547,8 +547,10 @@ def simulate_puff(
 
     concentration = concentration + background_conc
 
-    dz = float(z_grid[1] - z_grid[0])
-    column = concentration.sum(axis=3) * dz
+    # Trapezoidal vertical integration over the (endpoint-inclusive) z grid;
+    # a plain ``sum * dz`` over-counts a vertically uniform component (such as
+    # the background) by one grid interval. See gauss_plume.simulate_plume.
+    column = np.trapezoid(concentration, x=z_grid, axis=3)
 
     ds = xr.Dataset(
         data_vars={

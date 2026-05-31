@@ -308,3 +308,25 @@ def test_simulate_plume_wind_direction_convention():
     # And should be ~zero for x < -10 (upwind of source).
     upwind_mask = ds["x"].values < -10.0
     assert col[upwind_mask, :].max() < 1e-20
+
+
+def test_simulate_plume_background_column_uses_trapezoid():
+    # A pure background (no plume reachable in the sampled box) integrates to
+    # exactly background * (z_max - z_min) — the trapezoidal rule does not
+    # over-count the endpoint-inclusive z grid the way ``sum * dz`` would
+    # (which would inflate it by n_z / (n_z - 1)).
+    background = 1e-8
+    z0, z1, n_z = 0.0, 200.0, 11
+    ds = simulate_plume(
+        emission_rate=0.1,
+        source_location=(0.0, 0.0, 2.0),
+        wind_speed=5.0,
+        wind_direction=270.0,
+        stability_class="D",
+        domain_x=(-2000.0, -1000.0, 10),  # entirely upwind → plume is zero here
+        domain_y=(-500.0, 500.0, 11),
+        domain_z=(z0, z1, n_z),
+        background_conc=background,
+    )
+    col = ds["column_concentration"].values
+    np.testing.assert_allclose(col, background * (z1 - z0), rtol=1e-6)
