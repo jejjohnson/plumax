@@ -2,7 +2,9 @@
 
 **Forward model:** stochastic particle trajectories driven by wind + turbulence. The bridge between the analytical Tier I (no real wind variability) and the full PDE Tier III (no statistical efficiency). This is what FLEXPART ([stohl2005flexpart]) and STILT do operationally — see also HYSPLIT ([stein2015hysplit]).
 
-This tier is **not yet started in `plume_simulation`** — module layout proposed below.
+**Status:** the forward model (Step 1) is implemented in
+[`plumax.lagrangian`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/lagrangian);
+the inference, emulator and predictor steps (2–5) are proposed below.
 
 ---
 
@@ -185,12 +187,13 @@ When fusing across instruments, each observation tensor carries its own AK and f
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | Particle integrator (Markov-1) | `plume_simulation.lagrangian.particles` | ☐ |
-| 1 | C-grid-aware wind interpolator | `plume_simulation.lagrangian.wind_interp` | ☐ |
-| 1 | Backward footprint | `plume_simulation.lagrangian.footprint` | ☐ |
-| 1 | Turbulence parameterisation ($\sigma_{ij}, \tau_L$) | `plume_simulation.lagrangian.turbulence` | ☐ |
+| 1 | Particle integrator (Markov-1) | `plumax.lagrangian.particles` | ✓ |
+| 1 | Turbulence parameterisation ($\sigma_{ij}, \tau_L$) | `plumax.lagrangian.turbulence` | ✓ |
+| 1 | Forward concentration (residence-time binning) | `plumax.lagrangian.concentration` | ✓ |
+| 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |
+| 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ |
 | 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ |
-| 2 | Likelihoods + spatial priors | `plume_simulation.lagrangian.likelihoods` | ☐ |
+| 2 | Likelihoods + spatial priors | `plumax.lagrangian.likelihoods` | ☐ |
 | 2 | Linear inversion (Gaussian / lognormal) | reuse [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) with $\tilde{\mathbf{F}}$ injected | ☐ |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |

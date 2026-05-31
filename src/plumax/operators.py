@@ -34,6 +34,7 @@ from pipekit import Operator
 
 from plumax.gauss_plume import simulate_plume
 from plumax.gauss_puff import simulate_puff
+from plumax.lagrangian import simulate_lagrangian
 from plumax.les_fvm import simulate_eulerian_dispersion
 
 
@@ -186,4 +187,88 @@ class EulerianDispersion(Operator):
         return {"config_keys": sorted(self.config)}
 
 
-__all__ = ["EulerianDispersion", "GaussianPlume", "GaussianPuff"]
+class LagrangianDispersion(Operator):
+    """Markov-1 Lagrangian dispersion forward model as a pipekit operator.
+
+    Static grid, turbulence and integration configuration are captured at
+    construction; the dynamic parameters (``emission_rate``, ``source_location``
+    and either ``wind`` or ``wind_speed`` / ``wind_direction``) flow through
+    ``_apply``. The turbulence model is a non-primitive object, so
+    ``forbid_in_yaml = True`` and :meth:`get_config` is a debug repr.
+
+    Args:
+        turbulence: A turbulence model (e.g.
+            :class:`~plumax.lagrangian.HomogeneousTurbulence`).
+        domain_x / domain_y / domain_z: ``(start, stop, n_cells)`` per axis.
+        n_particles: Ensemble size.
+        t_end: Integration horizon [s].
+        dt: Time step [s].
+        pbl_height: Optional reflecting PBL lid [m].
+        background_conc: Additive background concentration [kg/m³].
+        seed: PRNG seed.
+    """
+
+    __config_mixin_auto__ = False
+    forbid_in_yaml = True
+
+    def __init__(
+        self,
+        turbulence: Any,
+        domain_x: tuple[float, float, int],
+        domain_y: tuple[float, float, int],
+        domain_z: tuple[float, float, int],
+        n_particles: int = 5000,
+        t_end: float = 600.0,
+        dt: float = 1.0,
+        pbl_height: float | None = None,
+        background_conc: float = 0.0,
+        seed: int = 0,
+    ) -> None:
+        self.turbulence = turbulence
+        self.domain_x = domain_x
+        self.domain_y = domain_y
+        self.domain_z = domain_z
+        self.n_particles = n_particles
+        self.t_end = t_end
+        self.dt = dt
+        self.pbl_height = pbl_height
+        self.background_conc = background_conc
+        self.seed = seed
+
+    def _apply(self, params: Mapping[str, Any]) -> xr.Dataset:
+        return simulate_lagrangian(
+            emission_rate=params["emission_rate"],
+            source_location=params["source_location"],
+            turbulence=self.turbulence,
+            domain_x=self.domain_x,
+            domain_y=self.domain_y,
+            domain_z=self.domain_z,
+            n_particles=self.n_particles,
+            t_end=self.t_end,
+            dt=self.dt,
+            wind=params.get("wind"),
+            wind_speed=params.get("wind_speed"),
+            wind_direction=params.get("wind_direction"),
+            pbl_height=self.pbl_height,
+            background_conc=self.background_conc,
+            seed=self.seed,
+        )
+
+    def get_config(self) -> dict[str, Any]:
+        return {
+            "stability_class": None,
+            "domain_x": self.domain_x,
+            "domain_y": self.domain_y,
+            "domain_z": self.domain_z,
+            "n_particles": self.n_particles,
+            "t_end": self.t_end,
+            "dt": self.dt,
+        }
+
+
+__all__ = [
+    "EulerianDispersion",
+    "GaussianPlume",
+    "GaussianPuff",
+    "LagrangianDispersion",
+]
