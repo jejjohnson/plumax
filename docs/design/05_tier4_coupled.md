@@ -253,12 +253,13 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | Coupled forward (Tier I + AK + multi-inst) | `plume_simulation.coupled.gaussian_ak` | ☐ |
-| 1 | Coupled forward (Tier II + AK + multi-inst) | `plume_simulation.coupled.lagrangian_ak` | ☐ |
-| 1 | Coupled forward (Tier III + RTM + multi-inst) | `plume_simulation.coupled.fv_rtm` | ☐ |
-| 1 | Multi-instrument fusion harness | `plume_simulation.coupled.fusion` | ☐ |
-| 1 | Cross-instrument bias model | `plume_simulation.coupled.bias` | ☐ |
-| 1 | Quality-flag aggregator | `plume_simulation.coupled.quality` | ☐ |
+| 1 | Coupled forward (Tier I + AK + multi-inst) | [`coupled/forward.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/forward.py) (`CoupledForward`, `PlumeSource`) | ✓ |
+| 1 | Per-instrument observation spec (receptors, AK, `R = R_retr+R_repr+R_align`) | [`coupled/instrument.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/instrument.py) (`Instrument`) | ✓ |
+| 1 | Multi-instrument fusion harness (closed-form `(Q, bias)` posterior) | [`coupled/fusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/fusion.py) (`fuse_observations`) | ✓ |
+| 1 | Cross-instrument bias model | first-class state in `coupled.fusion` (per-instrument additive bias) | ✓ |
+| 1 | Coupled forward (Tier II + AK + multi-inst) | `plumax.coupled` (Tier II transport) | ☐ |
+| 1 | Coupled forward (Tier III + RTM + multi-inst) | `plumax.coupled` (Tier III + RTM) | ☐ |
+| 1 | Quality-flag aggregator | `plumax.coupled.quality` | ☐ |
 | 1 | $Q(t)$ stochastic-process model (OU / GP) | `plume_simulation.coupled.q_dynamics` | ☐ |
 | 1 | Trans-dimensional source-count handling | `plume_simulation.coupled.k_sources` | ☐ |
 | 2 | End-to-end inversion | reuse [`assimilation/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/) with composed `forward` | ☐ |
