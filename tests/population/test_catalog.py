@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -77,37 +79,52 @@ def test_log_moments_rejects_nonpositive_mean() -> None:
 
 
 def test_event_from_gaussian_posterior() -> None:
-    post = GaussianPosterior(
-        emission_rate=jnp.asarray([4.0]),
-        covariance=jnp.asarray([[0.25]]),
-    )
+    # GaussianPosterior is a grid-vector source-field posterior; the adapter
+    # reduces it to the field total Q = 1ᵀmean with std = sqrt(1ᵀ Σ 1).
+    mean = jnp.asarray([2.0, 1.5])
+    cov = jnp.asarray([[0.04, 0.0], [0.0, 0.09]])
+    post = GaussianPosterior(mean=mean, covariance=cov)
     ev = event_from_posterior(
         post, x=1.0, y=2.0, time=3.0, tier="II", instrument="GHGSat"
     )
-    assert ev.emission_rate == pytest.approx(4.0)
-    assert ev.emission_std == pytest.approx(0.5)
+    assert ev.emission_rate == pytest.approx(3.5)
+    assert ev.emission_std == pytest.approx(np.sqrt(0.04 + 0.09))
     assert ev.instrument == "GHGSat"
     assert ev.tier == "II"
 
 
 def test_event_from_lognormal_posterior() -> None:
-    rng = np.random.default_rng(0)
-    samples = jnp.asarray(rng.normal(3.0, 0.7, size=(2000, 1)))
-    post = LognormalPosterior(emission_rate=jnp.asarray([3.0]), samples=samples)
+    # LognormalPosterior carries mean (grid) + log_covariance; the adapter
+    # totals the field and propagates std via the delta method.
+    mean = jnp.asarray([3.0, 1.0])
+    log_cov = jnp.asarray([[0.04, 0.0], [0.0, 0.09]])
+    post = LognormalPosterior(
+        mean=mean,
+        log_increment=jnp.zeros(2),
+        log_covariance=log_cov,
+    )
     ev = event_from_posterior(post, x=0.0, y=0.0, time=0.0, tier="II")
-    assert ev.emission_rate == pytest.approx(3.0)
-    assert ev.emission_std == pytest.approx(0.7, abs=0.05)
+    assert ev.emission_rate == pytest.approx(4.0)
+    # Var = q_i^2 (exp(σ_ii) - 1) summed (off-diagonals zero here).
+    expected_var = 9.0 * np.expm1(0.04) + 1.0 * np.expm1(0.09)
+    assert ev.emission_std == pytest.approx(np.sqrt(expected_var))
+
+
+def test_event_from_unknown_posterior_raises() -> None:
+    class _Bogus:
+        pass
+
+    with pytest.raises(TypeError, match="must expose"):
+        event_from_posterior(_Bogus(), x=0.0, y=0.0, time=0.0, tier="II")
 
 
 def _build_fusion_posterior(rate: float, std: float) -> FusionPosterior:
     """Construct a real ``FusionPosterior`` robustly across field layouts.
 
-    The adapter only reads ``emission_rate`` / ``emission_std``; this helper
-    fills any other required dataclass fields with placeholder arrays so the
-    test exercises the genuine type.
+    The adapter reads ``emission_rate`` / ``emission_std`` directly; this
+    helper fills any other required dataclass fields with placeholders so
+    the test exercises the genuine type.
     """
-    import dataclasses
-
     kwargs: dict[str, object] = {}
     for f in dataclasses.fields(FusionPosterior):
         if f.name == "emission_rate":
@@ -117,8 +134,10 @@ def _build_fusion_posterior(rate: float, std: float) -> FusionPosterior:
         elif (
             f.default is not dataclasses.MISSING
             or f.default_factory is not dataclasses.MISSING
-        ):  # type: ignore[misc]
+        ):
             continue
+        elif f.name == "instrument_names":
+            kwargs[f.name] = ()
         else:
             kwargs[f.name] = jnp.asarray(0.0)
     return FusionPosterior(**kwargs)  # type: ignore[arg-type]

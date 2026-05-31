@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from scipy import stats
 
+
 if TYPE_CHECKING:
     from plumax.population.catalog import EmissionCatalog
 

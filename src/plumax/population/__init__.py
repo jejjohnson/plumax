@@ -30,6 +30,7 @@ from plumax.population.point_process import (
     fit_poisson_rate,
 )
 
+
 if TYPE_CHECKING:
     from plumax.population.point_process import (
         InhomogeneousIntensityPosterior,

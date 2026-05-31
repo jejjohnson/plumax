@@ -1,10 +1,7 @@
 """Cross-tier posterior catalog — the Tier V load-bearing interface.
 
-Tiers II-IV each produce per-event posteriors over the instantaneous
-emission rate ``Q`` that all expose a uniform ``emission_rate`` /
-``emission_std`` interface (see
-:mod:`plumax.lagrangian.inversion` and :mod:`plumax.coupled.fusion`).
-This module materialises those posteriors as a tier-agnostic
+Tiers II-IV each produce per-event posteriors over the emission rate
+``Q``.  This module materialises those posteriors as a tier-agnostic
 :class:`EmissionCatalog` of :class:`EmissionEvent` records that the
 population fits (V.A size distribution, V.B point process) consume.
 
@@ -13,6 +10,27 @@ The catalog is deliberately thin: it carries the per-event posterior mean
 source location and detection time, plus provenance (``tier``,
 ``instrument``).  It does *not* re-derive any transport physics — that is
 inherited from the per-event posteriors.
+
+The adapter reads a scalar ``(Q_mean, Q_std)`` from each tier's posterior
+type, normalising their heterogeneous field layouts:
+
+* :class:`plumax.coupled.fusion.FusionPosterior` (Tier IV) already exposes
+  scalar ``emission_rate`` / ``emission_std``; they are read directly.
+* :class:`plumax.lagrangian.inversion.GaussianPosterior` (Tier II) is a
+  *grid-vector* source-field posterior (``mean`` ``(n_grid,)``,
+  ``covariance`` ``(n_grid, n_grid)``).  The event-scale ``Q`` is the
+  total over the field: ``Q = 1ᵀ mean`` with
+  ``Q_std = sqrt(1ᵀ Σ 1)``.
+* :class:`plumax.lagrangian.inversion.LognormalPosterior` (Tier II) is the
+  sign-constrained grid-vector posterior (``mean`` ``(n_grid,)``,
+  ``log_covariance``).  The total ``Q = 1ᵀ mean`` and its std is
+  propagated from the log-covariance via the delta method:
+  ``Var[Q] ≈ (mean ⊙ ...) ... `` — concretely
+  ``Var[q_i, q_j] ≈ q_i q_j (exp(Σ_log[i, j]) − 1)`` so
+  ``Q_std = sqrt(qᵀ (exp(Σ_log) − 1) q)``.
+
+For a single-source overpass these reductions are exact / near-exact; for
+genuine multi-source overpasses, build one event per source upstream.
 
 Note:
     The full TMTPP cross-tier contract (importance-weighted mark
@@ -31,6 +49,7 @@ import numpy as np
 
 from plumax.lagrangian.inversion import _is_traced
 
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -45,13 +64,13 @@ __all__ = [
 
 
 class PerEventPosterior(Protocol):
-    """Structural type for any Tier II-IV per-event posterior.
+    """Structural type for a scalar per-event ``Q`` posterior summary.
 
-    Every per-event posterior consumed by Tier V exposes a scalar
-    posterior mean and standard deviation of the emission rate ``Q``.
-    :class:`plumax.lagrangian.inversion.GaussianPosterior`,
-    :class:`plumax.lagrangian.inversion.LognormalPosterior` and
-    :class:`plumax.coupled.fusion.FusionPosterior` all satisfy this.
+    The canonical scalar interface is a posterior mean and standard
+    deviation of the emission rate ``Q``.
+    :class:`plumax.coupled.fusion.FusionPosterior` satisfies this directly;
+    the grid-vector Tier II posteriors are reduced to it by
+    :func:`event_from_posterior`.
     """
 
     @property
@@ -103,6 +122,58 @@ class EmissionEvent:
             raise ValueError(msg)
 
 
+def _scalar_q_summary(posterior: object) -> tuple[jax.Array, jax.Array]:
+    """Extract a scalar ``(Q_mean, Q_std)`` from any Tier II-IV posterior.
+
+    Dispatches on the attributes the posterior actually exposes:
+
+    * ``emission_rate`` + ``emission_std`` → read directly (FusionPosterior).
+    * ``mean`` + ``log_covariance`` → total over the lognormal grid field
+      with delta-method std propagation.
+    * ``mean`` + ``covariance`` → total over the Gaussian grid field with
+      ``sqrt(1ᵀ Σ 1)``.
+
+    Args:
+        posterior: The per-event posterior.
+
+    Returns:
+        ``(Q_mean, Q_std)`` as 0-d JAX arrays.
+
+    Raises:
+        TypeError: If the posterior exposes none of the known layouts.
+    """
+    rate_attr = getattr(posterior, "emission_rate", None)
+    std_attr = getattr(posterior, "emission_std", None)
+    if rate_attr is not None and std_attr is not None:
+        rate = jnp.asarray(rate_attr).reshape(-1)
+        std = jnp.asarray(std_attr).reshape(-1)
+        return rate[0], std[0]
+
+    mean_attr = getattr(posterior, "mean", None)
+    if mean_attr is not None:
+        mean = jnp.asarray(mean_attr).reshape(-1)
+        q_total = jnp.sum(mean)
+        log_cov = getattr(posterior, "log_covariance", None)
+        if log_cov is not None:
+            # Delta method: Cov[q_i, q_j] ≈ q_i q_j (exp(Σ_log[i, j]) − 1).
+            sigma_log = jnp.asarray(log_cov)
+            q = mean
+            cov_q = jnp.outer(q, q) * jnp.expm1(sigma_log)
+            var_total = jnp.sum(cov_q)
+            return q_total, jnp.sqrt(jnp.clip(var_total, 0.0, None))
+        cov = getattr(posterior, "covariance", None)
+        if cov is not None:
+            var_total = jnp.sum(jnp.asarray(cov))
+            return q_total, jnp.sqrt(jnp.clip(var_total, 0.0, None))
+
+    msg = (
+        "event_from_posterior: posterior must expose either "
+        "(emission_rate, emission_std) or (mean, covariance/log_covariance); "
+        f"got {type(posterior).__name__}."
+    )
+    raise TypeError(msg)
+
+
 def event_from_posterior(
     posterior: PerEventPosterior,
     *,
@@ -114,18 +185,16 @@ def event_from_posterior(
 ) -> EmissionEvent:
     """Build an :class:`EmissionEvent` from any Tier II-IV posterior.
 
-    The posterior is duck-typed: only its ``emission_rate`` and
-    ``emission_std`` attributes are read, so the same adapter works for
-    :class:`~plumax.lagrangian.inversion.GaussianPosterior`,
-    :class:`~plumax.lagrangian.inversion.LognormalPosterior` and
-    :class:`~plumax.coupled.fusion.FusionPosterior`.  Vector-valued
-    posteriors (``n_src > 1``) are reduced to a scalar by taking the
-    first source; build one event per source upstream for multi-source
-    overpasses.
+    The posterior is duck-typed: a scalar ``(Q_mean, Q_std)`` is extracted
+    by :func:`_scalar_q_summary`, so the same adapter works for
+    :class:`~plumax.coupled.fusion.FusionPosterior` (read directly) and the
+    grid-vector :class:`~plumax.lagrangian.inversion.GaussianPosterior` /
+    :class:`~plumax.lagrangian.inversion.LognormalPosterior` (reduced to the
+    field total).  For genuine multi-source overpasses, build one event per
+    source upstream.
 
     Args:
-        posterior: A per-event posterior exposing ``emission_rate`` and
-            ``emission_std``.
+        posterior: A per-event posterior.
         x: Source east-west location [m].
         y: Source north-south location [m].
         time: Detection / overpass time [s].
@@ -135,8 +204,7 @@ def event_from_posterior(
     Returns:
         The corresponding :class:`EmissionEvent`.
     """
-    rate = jnp.asarray(posterior.emission_rate).reshape(-1)[0]
-    std = jnp.asarray(posterior.emission_std).reshape(-1)[0]
+    rate, std = _scalar_q_summary(posterior)
     return EmissionEvent(
         emission_rate=float(rate),
         emission_std=float(std),

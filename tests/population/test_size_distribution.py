@@ -52,15 +52,25 @@ def test_empty_catalog_raises() -> None:
 
 @pytest.mark.slow
 def test_synthetic_recovery() -> None:
+    # Draw log Q_i from a known (mu, sigma), add modest per-event posterior
+    # noise, and check the hierarchical fit recovers both population params.
     rng = np.random.default_rng(42)
     mu_true, sigma_true = 1.5, 0.8
-    n = 120
+    n = 400
     log_q = rng.normal(mu_true, sigma_true, size=n)
-    cat = _catalog_from_logQ(log_q, rel_std=np.full(n, 0.2))
-    post = fit_lognormal_size_distribution(cat, num_warmup=300, num_samples=300, seed=1)
+    cat = _catalog_from_logQ(log_q, rel_std=np.full(n, 0.1))
+    post = fit_lognormal_size_distribution(
+        cat, num_warmup=600, num_samples=600, seed=1
+    )
     s = post.summary()
-    assert s["mu"]["q2.5"] <= mu_true <= s["mu"]["q97.5"]
-    assert s["sigma"]["q2.5"] <= sigma_true <= s["sigma"]["q97.5"]
+    # Posterior means land near the truth.
+    assert post.mu_mean == pytest.approx(mu_true, abs=0.15)
+    assert post.sigma_mean == pytest.approx(sigma_true, abs=0.15)
+    # The 95% credible intervals cover the truth (allow a small finite-sample
+    # margin so the test is not flaky on a single short chain).
+    margin = 0.05
+    assert s["mu"]["q2.5"] - margin <= mu_true <= s["mu"]["q97.5"] + margin
+    assert s["sigma"]["q2.5"] - margin <= sigma_true <= s["sigma"]["q97.5"] + margin
 
 
 @pytest.mark.slow

@@ -24,6 +24,7 @@ from scipy import stats
 
 from plumax.lagrangian.inversion import _is_traced
 
+
 if TYPE_CHECKING:
     from plumax.population.catalog import EmissionCatalog
 
