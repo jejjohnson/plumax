@@ -317,11 +317,127 @@ def radiance_response(
     return operator.predict(column_mass)
 
 
+@dataclass(frozen=True)
+class LinearisedRadianceOperator:
+    """Tangent-linear radiance operator — the linearised counterpart of the RTM.
+
+    The full :class:`RadianceObservationOperator` is exponential in the column
+    (``L_norm = exp(-Δτ)``), so it has no closed-form inversion. Linearising the
+    normalised Beer–Lambert forward about the background (``ΔVMR = 0``, where
+    ``L_norm = 1``) gives the affine response
+
+        L_norm(ΔVMR)  ≈  1 + J₀ · ΔVMR,        J₀ = d(L_norm)/d(ΔVMR)|₀,
+
+    and since ``ΔVMR = slope · column_mass`` is itself linear (the constant slope
+    of :func:`column_mass_to_delta_vmr`) and the Tier I column is linear in the
+    emission rate ``Q``, the whole radiance forward becomes **linear in ``Q``**.
+    That makes this the radiance analogue of the scalar averaging kernel: a
+    per-channel linear gain ``J₀ · slope`` on the column mass, usable as a
+    drop-in linear observation response (and, with one channel, in the
+    closed-form fusion path the scalar AK uses).
+
+    This is the well-known *linearised / optimal-estimation* radiance model
+    (first-order Beer–Lambert), complementary to the exact nonlinear operator;
+    it is accurate for small enhancements and exact in the optically-thin limit.
+
+    Build with :func:`linearise` from a :class:`RadianceObservationOperator` so
+    the two share the LUT, geometry and SRF configuration.
+
+    Attributes:
+        baseline: Background normalised radiance ``L_norm(0)``, shape
+            ``(n_channels,)`` (all ones for the normalised forward; kept explicit
+            so the affine offset is auditable / overridable).
+        gain: Per-channel linear response to column mass ``d(L_norm)/d(mass)`` =
+            ``J₀ · slope``, shape ``(n_channels,)`` [per kg/m²].
+    """
+
+    baseline: jax.Array
+    gain: jax.Array
+
+    @property
+    def n_channels(self) -> int:
+        """Number of output channels per receptor."""
+        return int(jnp.asarray(self.gain).shape[0])
+
+    def predict_single(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
+        """Linearised normalised radiance ``baseline + gain · mass`` for one receptor."""
+        m = jnp.asarray(column_mass_kg_m2, dtype=float)
+        return self.baseline + self.gain * m
+
+    def predict(self, column_enhancement: jax.Array) -> jax.Array:
+        """Per-receptor linearised radiance, shape ``(n_obs, n_channels)``.
+
+        Fully differentiable / vectorised JAX (unlike the nonlinear operator's
+        NumPy LUT path): ``baseline[None, :] + mass[:, None] · gain[None, :]``.
+        """
+        m = jnp.asarray(column_enhancement, dtype=float)
+        if m.ndim != 1:
+            raise ValueError(
+                "LinearisedRadianceOperator.predict: `column_enhancement` must "
+                f"be 1-D (n_obs,); got shape {m.shape}."
+            )
+        return self.baseline[None, :] + m[:, None] * self.gain[None, :]
+
+
+def linearise(operator: RadianceObservationOperator) -> LinearisedRadianceOperator:
+    """Build the :class:`LinearisedRadianceOperator` tangent to ``operator`` at 0.
+
+    Evaluates the background radiance ``L_norm(0)`` and the analytic Jacobian
+    ``J₀ = d(L_norm)/d(ΔVMR)|₀`` (both band-integrated through the operator's
+    SRF), and folds in the constant ``d(ΔVMR)/d(mass)`` slope of
+    :func:`column_mass_to_delta_vmr` to give the per-channel gain in column-mass
+    units. The result is exact to first order in the enhancement.
+
+    Args:
+        operator: The configured nonlinear RTM observation operator.
+
+    Returns:
+        The matching :class:`LinearisedRadianceOperator`.
+    """
+    baseline = jnp.asarray(operator.predict_single(0.0), dtype=float)
+    jac_dvmr = jnp.asarray(operator.linearize_single(0.0), dtype=float)
+    # d(ΔVMR)/d(mass): the conversion is linear, so its slope is ΔVMR at unit mass.
+    slope = float(operator.delta_vmr(1.0))
+    return LinearisedRadianceOperator(baseline=baseline, gain=jac_dvmr * slope)
+
+
+def radiance_response_linear(
+    source: PlumeSource,
+    instrument: Instrument,
+    operator: LinearisedRadianceOperator,
+    emission_rate: jax.Array | float,
+) -> jax.Array:
+    """Per-receptor linearised radiances for one instrument (differentiable).
+
+    The tangent-linear parallel of :func:`radiance_response`: it scales the
+    Tier I unit-``Q`` column response by ``Q`` and maps each receptor through the
+    :class:`LinearisedRadianceOperator`. Unlike :func:`radiance_response` this is
+    **linear in ``Q``** and stays in pure JAX end-to-end, so it is
+    ``jax.grad`` / ``jax.jit``-friendly and (single-channel) feeds the
+    closed-form :func:`plumax.coupled.fuse_observations` path.
+
+    Args:
+        source: Static source + met configuration.
+        instrument: Observing instrument (receptors + AK).
+        operator: The linearised radiance operator (from :func:`linearise`).
+        emission_rate: Emission rate ``Q`` [kg/s].
+
+    Returns:
+        Per-receptor linearised normalised radiance, shape ``(n_obs, n_channels)``.
+    """
+    response = column_response(source, instrument)
+    column_mass = jnp.asarray(emission_rate, dtype=float) * response
+    return operator.predict(column_mass)
+
+
 __all__ = [
     "AVOGADRO_PER_MOL",
     "CH4_MOLAR_MASS_KG_PER_MOL",
     "CM2_PER_M2",
+    "LinearisedRadianceOperator",
     "RadianceObservationOperator",
     "column_mass_to_delta_vmr",
+    "linearise",
     "radiance_response",
+    "radiance_response_linear",
 ]

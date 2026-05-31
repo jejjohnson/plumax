@@ -16,10 +16,13 @@ import xarray as xr
 
 from plumax.coupled import (
     Instrument,
+    LinearisedRadianceOperator,
     PlumeSource,
     RadianceObservationOperator,
     column_mass_to_delta_vmr,
+    linearise,
     radiance_response,
+    radiance_response_linear,
 )
 from plumax.radtran.forward import forward_nonlinear_normalized
 from plumax.radtran.srf import SpectralResponseFunction
@@ -240,3 +243,102 @@ def test_twin_consistency_single_receptor(synthetic_lut, nu_obs):
     )
     np.testing.assert_allclose(op.predict_single(mass), ref.radiance, rtol=1e-12)
     np.testing.assert_allclose(op.linearize_single(mass), ref.jacobian, rtol=1e-12)
+
+
+# ── linearised (tangent-linear) radiance operator ─────────────────────────────
+
+
+def test_linearise_baseline_and_gain_shapes(synthetic_lut, nu_obs):
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+    assert isinstance(lin, LinearisedRadianceOperator)
+    assert lin.n_channels == nu_obs.size
+    # Background radiance is the normalised unit (exp(0) = 1) on every channel.
+    np.testing.assert_allclose(np.asarray(lin.baseline), 1.0, atol=1e-12)
+    # Absorbing channels have negative gain (more mass → less radiance).
+    assert float(jnp.min(lin.gain)) < 0.0
+
+
+def test_linearised_matches_nonlinear_to_first_order(synthetic_lut, nu_obs):
+    # For a small enhancement the linearised radiance ≈ the exact Beer–Lambert
+    # forward; the tangent is exact at 0 and first-order accurate near it.
+    op = _operator(synthetic_lut, nu_obs)
+    lin = linearise(op)
+    small = 1e-4  # small column mass [kg/m²]
+    exact = np.asarray(op.predict_single(small))
+    approx = np.asarray(lin.predict_single(small))
+    np.testing.assert_allclose(approx, exact, rtol=0, atol=5e-4)
+    # Exact at zero enhancement.
+    np.testing.assert_allclose(
+        np.asarray(lin.predict_single(0.0)),
+        np.asarray(op.predict_single(0.0)),
+        atol=1e-12,
+    )
+
+
+def test_linearised_is_linear_in_column_mass(synthetic_lut, nu_obs):
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+    # predict(m) = baseline + gain·m exactly — assert against the analytic gain
+    # rather than differencing the (≈1) baseline, which would lose all precision
+    # to catastrophic cancellation on the tiny absorption signal.
+    m = 2e-3
+    np.testing.assert_allclose(
+        np.asarray(lin.predict_single(m)),
+        np.asarray(lin.baseline) + m * np.asarray(lin.gain),
+        rtol=1e-12,
+    )
+
+
+def test_linearised_predict_vectorised(synthetic_lut, nu_obs):
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+    cols = jnp.array([0.0, 1e-3, 2e-3])
+    out = lin.predict(cols)
+    assert out.shape == (3, nu_obs.size)
+    # Row 0 (zero mass) is the baseline.
+    np.testing.assert_allclose(np.asarray(out[0]), np.asarray(lin.baseline), atol=1e-12)
+
+
+def test_linearised_is_jittable_and_differentiable(synthetic_lut, nu_obs):
+    # The linearised operator is pure JAX (no NumPy LUT path), so it composes
+    # under jit / grad — the property that lets it feed gradient-based and
+    # closed-form inversions.
+    import jax
+
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+
+    @jax.jit
+    def total(mass):
+        return jnp.sum(lin.predict(mass))
+
+    cols = jnp.array([1e-3, 2e-3])
+    val = total(cols)
+    assert np.isfinite(float(val))
+    g = jax.grad(total)(cols)
+    assert g.shape == (2,)
+    assert np.all(np.isfinite(np.asarray(g)))
+
+
+def test_radiance_response_linear_is_linear_in_Q(synthetic_lut, nu_obs):
+    # radiance_response_linear is linear in the emission rate Q (unlike the
+    # nonlinear radiance_response), enabling closed-form / gradient inversion.
+    src = PlumeSource(
+        location=(0.0, 0.0, 10.0),
+        wind_speed=5.0,
+        wind_direction=270.0,
+        stability_class="D",
+        column_z=jnp.linspace(0.0, 200.0, 21),
+    )
+    inst = Instrument(
+        "RTMLIN",
+        np.column_stack([np.linspace(200.0, 1500.0, 6), np.zeros(6)]),
+    )
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+    base = radiance_response_linear(src, inst, lin, emission_rate=0.0)
+    r1 = radiance_response_linear(src, inst, lin, emission_rate=1.0)
+    r2 = radiance_response_linear(src, inst, lin, emission_rate=2.0)
+    assert r1.shape == (6, nu_obs.size)
+    # (response(Q) − response(0)) scales linearly with Q. Off-line channels are
+    # ~0 ± roundoff, so floor the absolute tolerance to the signal magnitude
+    # rather than demanding pure relative agreement on numerical dust.
+    d1 = np.asarray(r1) - np.asarray(base)
+    d2 = np.asarray(r2) - np.asarray(base)
+    np.testing.assert_allclose(d2, 2.0 * d1, rtol=1e-6, atol=1e-9 * np.abs(d1).max())
