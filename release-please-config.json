@@ -17,12 +17,13 @@
   "packages": {
     ".": {
       "release-type": "python",
-      "package-name": "mypackage",
+      "package-name": "plumax",
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "extra-files": [
-        "pyproject.toml"
+        "pyproject.toml",
+        "src/plumax/__init__.py"
       ]
     }
   }

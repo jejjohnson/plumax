@@ -1,8 +1,8 @@
-site_name: mypackage
-site_description: My short description for my project.
+site_name: plumax
+site_description: Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).
 site_author: J. Emmanuel Johnson
-repo_url: https://github.com/jejjohnson/pypackage_template
-repo_name: jejjohnson/pypackage_template
+repo_url: https://github.com/jejjohnson/plumax
+repo_name: jejjohnson/plumax
 
 theme:
   name: material
@@ -14,14 +14,14 @@ theme:
     - content.code.annotate
   palette:
     - scheme: default
-      primary: indigo
-      accent: indigo
+      primary: teal
+      accent: teal
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - scheme: slate
-      primary: indigo
-      accent: indigo
+      primary: teal
+      accent: teal
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
@@ -42,10 +42,22 @@ plugins:
 
 nav:
   - Home: index.md
-  - Examples:
-      - Demo: notebooks/example_demo.py
+  - Design:
+      - Roadmap & Architecture: design/index.md
+      - Prerequisites: design/00_prerequisites.md
+      - Tier I — Gaussian family: design/01_tier1_gaussian.md
+      - Tier II — Lagrangian: design/02_tier2_lagrangian.md
+      - Tier III — Eulerian FV: design/03_tier3_eulerian.md
+      - RTM stack: design/04_rtm_stack.md
+      - Tier IV — Coupled E2E: design/05_tier4_coupled.md
+      - Tier V — Population:
+          - Overview: design/06_tier5_population.md
+          - V.A — Instantaneous: design/06a_instantaneous.md
+          - V.B — Point process: design/06b_point_process.md
+          - V.C — Persistency: design/06c_persistency.md
+          - V.D — Total emission: design/06d_total_emission.md
   - API Reference: api/reference.md
-  - Changelog: CHANGELOG.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - admonition
@@ -57,8 +69,11 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
+  - pymdownx.snippets:
+      base_path: ["."]
   - attr_list
   - md_in_html
+  - tables
   - toc:
       permalink: true
 
