@@ -105,7 +105,8 @@ def test_inhomogeneous_intensity_recovers_slope() -> None:
     # quadrature grid IS the simulation grid (weights = cell width), so the
     # integrated-intensity term is exact up to discretisation.
     rng = np.random.default_rng(0)
-    beta0_true, beta_true = -1.0, 1.5
+    # β0 = 1.0 gives ~70 events on this grid — enough to recover the slope.
+    beta0_true, beta_true = 1.0, 1.5
     grid = np.linspace(-2.0, 2.0, 400)
     dx = float(grid[1] - grid[0])
     lam = np.exp(beta0_true + beta_true * grid)  # intensity per unit x
@@ -123,5 +124,8 @@ def test_inhomogeneous_intensity_recovers_slope() -> None:
     )
     assert post.beta_mean.shape == (1,)
     assert np.isfinite(post.beta0_mean)
-    # Slope recovered within a generous tolerance (finite catalog + MC).
+    # Slope AND intercept recovered within a generous tolerance (finite
+    # catalog + MC) — the intercept check confirms the exposure term makes the
+    # rate density identifiable, not just the slope.
     assert abs(float(post.beta_mean[0]) - beta_true) < 0.5
+    assert abs(float(post.beta0_mean) - beta0_true) < 0.5
