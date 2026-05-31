@@ -7,11 +7,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from plumax.lagrangian.concentration import (
-    _step_durations,
-    bin_positions,
-    simulate_lagrangian,
-)
+from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
 
 
@@ -24,23 +20,6 @@ DOMAIN = dict(
 
 def _turb():
     return HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0)
-
-
-@pytest.mark.parametrize(
-    "horizon,dt,n",
-    [(10.0, 1.0, 10), (10.1, 1.0, 11), (10.5, 2.0, 6), (0.5, 1.0, 1)],
-)
-def test_step_durations_sum_to_horizon(horizon, dt, n):
-    dts = np.asarray(_step_durations(horizon, dt, n))
-    assert dts.size == n
-    assert dts.sum() == pytest.approx(horizon)
-    # All but the last are the full dt; the last is the (≤ dt) remainder.
-    np.testing.assert_allclose(dts[:-1], dt)
-    assert 0.0 < dts[-1] <= dt + 1e-9
-
-
-def test_step_durations_empty_when_zero_steps():
-    assert np.asarray(_step_durations(0.0, 1.0, 0)).size == 0
 
 
 def test_total_residence_tracks_horizon_for_partial_step():

@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Protocol
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 if TYPE_CHECKING:
@@ -135,6 +136,22 @@ def langevin_step(
     return ParticleState(position=pos_new, velocity=vel_new)
 
 
+def step_durations(horizon: float, dt: float, n_steps: int) -> jax.Array:
+    """Per-step durations summing to ``horizon``; the final step takes the rest.
+
+    All steps are ``dt`` except the last, which is the remainder
+    ``horizon - (n_steps - 1) * dt`` (equal to ``dt`` when ``horizon`` is an
+    exact multiple). Returns an empty array when ``n_steps == 0``. Used by the
+    integrator / residence / footprint paths so a non-divisible horizon advances
+    over exactly ``horizon`` rather than ``n_steps * dt``.
+    """
+    if n_steps == 0:
+        return jnp.zeros((0,))
+    dts = np.full(n_steps, dt, dtype=float)
+    dts[-1] = horizon - dt * (n_steps - 1)
+    return jnp.asarray(dts)
+
+
 def integrate_particles(
     state: ParticleState,
     wind: Callable[[jax.Array], jax.Array],
@@ -165,20 +182,24 @@ def integrate_particles(
         ``(final_state, trajectory)`` where ``trajectory`` is ``None`` unless
         ``save_trajectory`` is set.
     """
-    n_steps = max(int(jnp.ceil((t1 - t0) / dt)), 0)
+    n_steps = max(int(np.ceil((t1 - t0) / dt)), 0)
     keys = jax.random.split(key, n_steps)
+    # Step start times and per-step durations. When ``t1 - t0`` is not an exact
+    # multiple of ``dt`` the final step is shortened to the remainder so the
+    # ensemble is advanced to exactly ``t1`` (not ``t0 + n_steps * dt``).
     times = t0 + dt * jnp.arange(n_steps)
+    dts = step_durations(t1 - t0, dt, n_steps)
 
     def body(
-        carry: ParticleState, inputs: tuple[jax.Array, jax.Array]
+        carry: ParticleState, inputs: tuple[jax.Array, jax.Array, jax.Array]
     ) -> tuple[ParticleState, jax.Array]:
-        t, k = inputs
+        t, k, dt_i = inputs
         nxt = langevin_step(
-            carry, jnp.asarray(wind(t)), turbulence, dt, k, pbl_height=pbl_height
+            carry, jnp.asarray(wind(t)), turbulence, dt_i, k, pbl_height=pbl_height
         )
         return nxt, nxt.position
 
-    final, positions = jax.lax.scan(body, state, (times, keys))
+    final, positions = jax.lax.scan(body, state, (times, keys, dts))
     if not save_trajectory:
         return final, None
     trajectory = jnp.concatenate([state.position[None], positions], axis=0)

@@ -5,15 +5,52 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.lagrangian.particles import (
     ParticleState,
     integrate_particles,
     langevin_step,
+    step_durations,
     uniform_wind,
     wind_from_speed_direction,
 )
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
+
+
+@pytest.mark.parametrize(
+    "horizon,dt,n",
+    [(10.0, 1.0, 10), (10.1, 1.0, 11), (10.5, 2.0, 6), (0.5, 1.0, 1)],
+)
+def test_step_durations_sum_to_horizon(horizon, dt, n):
+    dts = np.asarray(step_durations(horizon, dt, n))
+    assert dts.size == n
+    assert dts.sum() == pytest.approx(horizon)
+    # All but the last are the full dt; the last is the (≤ dt) remainder.
+    np.testing.assert_allclose(dts[:-1], dt)
+    assert 0.0 < dts[-1] <= dt + 1e-9
+
+
+def test_step_durations_empty_when_zero_steps():
+    assert np.asarray(step_durations(0.0, 1.0, 0)).size == 0
+
+
+def test_integrate_particles_stops_at_t1_for_nondivisible_horizon():
+    # Deterministic wind: with t1 - t0 not a multiple of dt, the ensemble must
+    # advance to exactly t1 (x = u * (t1 - t0)), not overshoot to t0 + n*dt.
+    turb = HomogeneousTurbulence(0.0, 0.0, 0.0, 100.0, 100.0, 100.0)
+    state = ParticleState(
+        position=jnp.array([[0.0, 0.0, 100.0]]),
+        velocity=jnp.zeros((1, 3)),
+    )
+    wind = uniform_wind(5.0, 0.0, 0.0)
+    final, _ = integrate_particles(
+        state, wind, turb, t0=0.0, t1=1.5, dt=1.0, key=jax.random.PRNGKey(0)
+    )
+    # x = u * 1.5 = 7.5 (overshoot to t=2 would give 10.0).
+    np.testing.assert_allclose(
+        np.asarray(final.position[0]), [7.5, 0.0, 100.0], atol=1e-6
+    )
 
 
 def _calm_turbulence():

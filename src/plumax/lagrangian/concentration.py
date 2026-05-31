@@ -23,6 +23,7 @@ import numpy as np
 
 from plumax.lagrangian.particles import (
     ParticleState,
+    step_durations,
     uniform_wind,
     wind_from_speed_direction,
 )
@@ -208,7 +209,7 @@ def _accumulate_residence(
     # ensemble is advanced — and residence is accrued — over exactly ``t_end``,
     # not ``n_steps * dt`` (which would bias the field high).
     times = dt * jnp.arange(n_steps)
-    dts = _step_durations(t_end, dt, n_steps)
+    dts = step_durations(t_end, dt, n_steps)
     nx = x_edges.shape[0] - 1
     ny = y_edges.shape[0] - 1
     nz = z_edges.shape[0] - 1
@@ -225,20 +226,6 @@ def _accumulate_residence(
     hist0 = jnp.zeros((nx, ny, nz))
     (_, residence), _ = jax.lax.scan(body, (state, hist0), (times, keys, dts))
     return residence
-
-
-def _step_durations(horizon: float, dt: float, n_steps: int) -> jax.Array:
-    """Per-step durations summing to ``horizon``; the final step takes the rest.
-
-    All steps are ``dt`` except the last, which is the remainder
-    ``horizon - (n_steps - 1) * dt`` (equal to ``dt`` when ``horizon`` is an
-    exact multiple). Returns an empty array when ``n_steps == 0``.
-    """
-    if n_steps == 0:
-        return jnp.zeros((0,))
-    dts = np.full(n_steps, dt, dtype=float)
-    dts[-1] = horizon - dt * (n_steps - 1)
-    return jnp.asarray(dts)
 
 
 __all__ = [

@@ -23,8 +23,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from plumax.lagrangian.concentration import _cell_indices, _step_durations
-from plumax.lagrangian.particles import ParticleState, langevin_step
+from plumax.lagrangian.concentration import _cell_indices
+from plumax.lagrangian.particles import ParticleState, langevin_step, step_durations
 
 
 if TYPE_CHECKING:
@@ -111,7 +111,7 @@ def compute_footprint(
     # the footprint integrates over the requested horizon rather than
     # ``n_steps * dt`` (which would over-count surface residence).
     times = dt * jnp.arange(n_steps)
-    dts = _step_durations(t_back, dt, n_steps)
+    dts = step_durations(t_back, dt, n_steps)
     nx, ny = len(x_c), len(y_c)
 
     def body(carry, inputs):
