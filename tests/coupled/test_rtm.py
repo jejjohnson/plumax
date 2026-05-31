@@ -181,6 +181,36 @@ def test_srf_band_integration_shape(synthetic_lut, nu_obs):
     assert op.linearize_single(2e-3).shape == (1,)
 
 
+def test_srf_band_integration_aligns_spectrum_to_wavelength_grid(synthetic_lut, nu_obs):
+    # Regression: the spectrum is on nu_obs (decreasing wavelength) while the
+    # SRF grid is increasing wavelength. The band radiance must match a manual
+    # wavelength-aligned integral; a reversed contraction (the bug) would differ
+    # for an ASYMMETRIC SRF, so use an edge-weighted (non-symmetric) band.
+    wl = np.sort(1e7 / nu_obs)  # ascending nm
+    # Triangular SRF centred near the short-wavelength edge → asymmetric over the
+    # observed window, so sample order matters.
+    centre = float(wl[0] + 0.25 * (wl[-1] - wl[0]))
+    srf = SpectralResponseFunction(
+        wavelengths_hr_nm=wl,
+        band_centers_nm=np.array([centre]),
+        band_widths_nm=np.array([0.5 * (wl[-1] - wl[0])]),
+        band_names=("edge",),
+        srf_type="triangular",
+    )
+    op = _operator(synthetic_lut, nu_obs, srf=srf)
+    band = op.predict_single(3e-3)
+
+    # Manual reference: HR spectrum interpolated onto the SRF wavelength grid,
+    # then SRF-applied — i.e. the correct (forward) ordering.
+    dvmr = float(op.delta_vmr(3e-3))
+    spec = np.asarray(op._forward_hr(dvmr).radiance)
+    wl_obs = 1e7 / np.asarray(nu_obs, dtype=float)
+    order = np.argsort(wl_obs)
+    spec_on_grid = np.interp(wl, wl_obs[order], spec[order])
+    ref = srf.apply(spec_on_grid)
+    np.testing.assert_allclose(band, ref, rtol=1e-12)
+
+
 # ── (4) composition with the coupled forward → per-receptor radiances ──────────
 
 

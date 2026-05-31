@@ -219,10 +219,26 @@ class RadianceObservationOperator:
         )
 
     def _band_integrate(self, spectrum_hr: np.ndarray) -> np.ndarray:
-        """Apply the SRF if present, else return the HR spectrum unchanged."""
+        """Apply the SRF if present, else return the HR spectrum unchanged.
+
+        The spectrum is sampled on ``nu_obs`` (increasing wavenumber ⇒
+        *decreasing* wavelength), but the SRF weights are aligned to its
+        strictly-increasing ``wavelengths_hr_nm`` grid. Contracting the two
+        directly would apply each band weight to the wrong (reversed) sample.
+        Interpolate the spectrum onto the SRF wavelength axis first — this fixes
+        the ordering and tolerates a differing HR grid.
+        """
+        spec = np.asarray(spectrum_hr, dtype=float)
         if self.srf is None:
-            return np.asarray(spectrum_hr, dtype=float)
-        return self.srf.apply(np.asarray(spectrum_hr, dtype=float))
+            return spec
+        wl_obs = 1e7 / np.asarray(self.nu_obs, dtype=float)  # nm, decreasing
+        order = np.argsort(wl_obs)  # → ascending wavelength for np.interp
+        spec_on_srf = np.interp(
+            np.asarray(self.srf.wavelengths_hr_nm, dtype=float),
+            wl_obs[order],
+            spec[order],
+        )
+        return self.srf.apply(spec_on_srf)
 
     def predict_single(self, column_mass_kg_m2: float) -> np.ndarray:
         """Band-integrated normalised radiance for one receptor.
