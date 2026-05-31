@@ -7,7 +7,11 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
+from plumax.lagrangian.concentration import (
+    _step_durations,
+    bin_positions,
+    simulate_lagrangian,
+)
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
 
 
@@ -20,6 +24,55 @@ DOMAIN = dict(
 
 def _turb():
     return HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0)
+
+
+@pytest.mark.parametrize(
+    "horizon,dt,n",
+    [(10.0, 1.0, 10), (10.1, 1.0, 11), (10.5, 2.0, 6), (0.5, 1.0, 1)],
+)
+def test_step_durations_sum_to_horizon(horizon, dt, n):
+    dts = np.asarray(_step_durations(horizon, dt, n))
+    assert dts.size == n
+    assert dts.sum() == pytest.approx(horizon)
+    # All but the last are the full dt; the last is the (≤ dt) remainder.
+    np.testing.assert_allclose(dts[:-1], dt)
+    assert 0.0 < dts[-1] <= dt + 1e-9
+
+
+def test_step_durations_empty_when_zero_steps():
+    assert np.asarray(_step_durations(0.0, 1.0, 0)).size == 0
+
+
+def test_total_residence_tracks_horizon_for_partial_step():
+    # With all particles confined to the domain, the total residence time
+    # Σ conc · V_cell / Q equals the integration horizon. A non-divisible
+    # horizon (t_end=10.5, dt=1) must give 10.5 s, not the 11 s a ceil'd
+    # full-dt accumulation would produce.
+    big_domain = dict(
+        domain_x=(-500.0, 500.0, 20),
+        domain_y=(-500.0, 500.0, 20),
+        domain_z=(0.0, 400.0, 16),
+    )
+    # Calm, isotropic turbulence + zero wind keeps the cloud near the source
+    # and inside the box over the short horizon.
+    turb = HomogeneousTurbulence.isotropic(sigma=0.5, tau=30.0)
+    common = dict(
+        emission_rate=1.0,
+        source_location=(0.0, 0.0, 200.0),
+        turbulence=turb,
+        wind=lambda t: jnp.zeros(3),
+        n_particles=3000,
+        dt=1.0,
+        seed=0,
+        **big_domain,
+    )
+    dx = 1000.0 / 20
+    dy = 1000.0 / 20
+    dz = 400.0 / 16
+    cell_v = dx * dy * dz
+    ds = simulate_lagrangian(t_end=10.5, **common)
+    total_residence = float(ds["concentration"].sum()) * cell_v  # /Q, Q=1
+    assert total_residence == pytest.approx(10.5, rel=1e-3)
 
 
 def test_bin_positions_counts():

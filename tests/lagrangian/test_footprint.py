@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.lagrangian.footprint import compute_footprint
 from plumax.lagrangian.particles import wind_from_speed_direction
@@ -11,6 +13,33 @@ from plumax.lagrangian.turbulence import HomogeneousTurbulence
 
 def _turb():
     return HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0)
+
+
+def test_footprint_integrates_requested_horizon_for_partial_step():
+    # Σ footprint · (ρ · A_cell · mix_height) = total surface residence time,
+    # which equals t_back when every particle stays below the mixing height and
+    # inside the domain. A non-divisible horizon (t_back=60.5, dt=1) must give
+    # 60.5 s, not the 61 s a ceil'd full-dt accumulation would.
+    rho, t_back = 1.2, 60.5
+    pbl_height, pbl_fraction = 2000.0, 0.5
+    mix_height = pbl_fraction * pbl_height
+    dx, dy = 1000.0 / 40, 1000.0 / 40
+    fp, _, _ = compute_footprint(
+        (0.0, 0.0, 20.0),
+        HomogeneousTurbulence.isotropic(sigma=0.5, tau=30.0),
+        domain_x=(-500.0, 500.0, 40),
+        domain_y=(-500.0, 500.0, 40),
+        wind=lambda t: jnp.zeros(3),  # calm → cloud stays near the receptor
+        n_particles=3000,
+        t_back=t_back,
+        dt=1.0,
+        pbl_height=pbl_height,
+        pbl_fraction=pbl_fraction,
+        air_density=rho,
+        seed=0,
+    )
+    total_residence = float(fp.sum()) * rho * (dx * dy) * mix_height
+    assert total_residence == pytest.approx(t_back, rel=1e-3)
 
 
 def test_footprint_shape_and_nonnegative():

@@ -23,7 +23,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from plumax.lagrangian.concentration import _cell_indices
+from plumax.lagrangian.concentration import _cell_indices, _step_durations
 from plumax.lagrangian.particles import ParticleState, langevin_step
 
 
@@ -106,18 +106,25 @@ def compute_footprint(
     xe, ye = jnp.asarray(x_edges), jnp.asarray(y_edges)
     n_steps = max(int(np.ceil(t_back / dt)), 0)
     keys = jax.random.split(key, n_steps)
+    # Per-step durations summing to exactly ``t_back``: the final step is
+    # shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
+    # the footprint integrates over the requested horizon rather than
+    # ``n_steps * dt`` (which would over-count surface residence).
     times = dt * jnp.arange(n_steps)
+    dts = _step_durations(t_back, dt, n_steps)
     nx, ny = len(x_c), len(y_c)
 
     def body(carry, inputs):
         st, hist = carry
-        t, k = inputs
-        st = langevin_step(st, back_wind(t), turbulence, dt, k, pbl_height=pbl_height)
+        t, k, dt_i = inputs
+        st = langevin_step(st, back_wind(t), turbulence, dt_i, k, pbl_height=pbl_height)
         below = st.position[:, 2] < mix_height
-        hist = hist + _bin_surface(st.position, xe, ye, below) * dt
+        hist = hist + _bin_surface(st.position, xe, ye, below) * dt_i
         return (st, hist), None
 
-    (_, residence), _ = jax.lax.scan(body, (state, jnp.zeros((nx, ny))), (times, keys))
+    (_, residence), _ = jax.lax.scan(
+        body, (state, jnp.zeros((nx, ny))), (times, keys, dts)
+    )
 
     footprint = np.asarray(residence) / (
         n_particles * air_density * cell_area * mix_height
