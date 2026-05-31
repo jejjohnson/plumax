@@ -39,5 +39,6 @@ __all__ = [
     "gauss_puff",
     "hapi_lut",
     "les_fvm",
+    "population",
     "radtran",
 ]

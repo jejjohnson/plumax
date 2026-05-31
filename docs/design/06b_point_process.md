@@ -188,6 +188,8 @@ Both have library support; the choice is driven by the scientific question, not 
 | POD time-of-day binning (v1 time-varying POD) | `methane_pod.pod_functions.tod_binned` | ☐ |
 | POD continuous $P_d(Q, t)$ (v2) | `methane_pod.pod_functions.continuous_t` | ☐ |
 | Hierarchical POD calibration prior | `methane_pod.pod_functions.calibration_prior` | ☐ |
+| Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
+| Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
 | TMTPP likelihood — point regime | [`methane_pod.fitting.pod_powerlaw_model`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py) | ✓ |
 | TMTPP likelihood — full importance-corrected regime | `methane_pod.fitting.tmtpp_iw` | ☐ — consumes [`population.adapter.importance`](06a_instantaneous.md#va-modules) |
 | Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `methane_pod.fitting.integrate` | ☐ |

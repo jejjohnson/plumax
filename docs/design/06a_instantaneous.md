@@ -185,6 +185,8 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 | Per-event posterior (Tier I) | [`gauss_plume.inference`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ — needs to emit `per_event_prior_logpdf` |
 | Per-event posterior (Tier II/III) | [`assimilation.solve`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) | 🚧 |
 | Per-event posterior export adapter | tier-specific `posterior_export` modules | ☐ |
+| Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | 🚧 — duck-typed adapter over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`; full-sample + prior-recall payload pending |
+| Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | 🚧 — hierarchical lognormal NUTS fit with per-event uncertainty propagation; importance correction pending |
 | Per-event payload summariser | `plume_simulation.population.adapter.summariser` | ☐ |
 | Per-event prior recall | `plume_simulation.population.adapter.prior_recall` | ☐ |
 | Importance-weight calculator | `plume_simulation.population.adapter.importance` | ☐ |
