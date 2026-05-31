@@ -38,7 +38,7 @@ def test_footprint_lies_upwind_of_receptor():
     # surface influence of a receptor is upwind (smaller x).
     wind = wind_from_speed_direction(5.0, 270.0)
     receptor_x = 400.0
-    fp, x, y = compute_footprint(
+    fp, x, _ = compute_footprint(
         (receptor_x, 0.0, 20.0),
         _turb(),
         domain_x=(-50.0, 500.0, 55),
