@@ -117,3 +117,6 @@ venv.bak/
 
 # Plans (tracked via GitHub issues, not committed)
 .plans/
+
+# Claude Code agent worktrees (transient, auto-cleaned)
+.claude/worktrees/
