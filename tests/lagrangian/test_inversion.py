@@ -268,3 +268,64 @@ def test_inversion_is_jittable():
 
     out = mean_of(yj)
     assert out.shape == (n_grid,)
+
+
+def test_lognormal_inversion_is_jittable_over_prior_mean():
+    # The eager q_a > 0 check must be skipped under tracing — jitting with
+    # prior_mean as a traced array argument must not raise
+    # TracerBoolConversionError (regression for the Codex/Copilot P2).
+    import jax
+
+    coords, f, _ = _toy_problem()
+    n_obs, n_grid = f.shape
+    b_log = matern32_covariance(coords, variance=0.25, length_scale=300.0)
+    r = observation_covariance(np.full(n_obs, 1e-3))
+    fj = jnp.asarray(f)
+
+    @jax.jit
+    def mean_of(qa):
+        y = fj @ qa
+        return lognormal_inversion(
+            fj, y, prior_mean=qa, prior_log_cov=b_log, obs_variance=r
+        ).mean
+
+    out = mean_of(jnp.full(n_grid, 1.2))
+    assert out.shape == (n_grid,)
+    assert np.all(np.asarray(out) > 0.0)
+
+
+def test_lognormal_inversion_is_vmappable_over_prior_mean():
+    import jax
+
+    coords, f, _ = _toy_problem()
+    n_obs, n_grid = f.shape
+    b_log = matern32_covariance(coords, variance=0.25, length_scale=300.0)
+    r = observation_covariance(np.full(n_obs, 1e-3))
+    fj = jnp.asarray(f)
+
+    def mean_of(qa):
+        return lognormal_inversion(
+            fj, fj @ qa, prior_mean=qa, prior_log_cov=b_log, obs_variance=r
+        ).mean
+
+    qas = jnp.stack([jnp.full(n_grid, 1.0), jnp.full(n_grid, 1.5)])
+    out = jax.vmap(mean_of)(qas)
+    assert out.shape == (2, n_grid)
+
+
+def test_matern32_differentiable_through_length_scale():
+    # The prior must support gradient-based hyperparameter tuning: grad over
+    # length_scale must not trip the eager positivity check.
+    import jax
+
+    coords = jnp.linspace(0.0, 1000.0, 8)
+
+    def trace_of_cov(length_scale):
+        return jnp.trace(
+            matern32_covariance(coords, variance=1.0, length_scale=length_scale)
+        )
+
+    g = jax.grad(trace_of_cov)(250.0)
+    # trace = n·σ² is independent of ℓ, so its gradient is exactly 0 — the point
+    # is that grad evaluates at all (no TracerBoolConversionError).
+    assert np.isfinite(float(g))

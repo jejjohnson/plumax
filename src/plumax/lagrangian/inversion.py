@@ -40,6 +40,17 @@ import jax
 import jax.numpy as jnp
 
 
+def _is_traced(*values: object) -> bool:
+    """Return ``True`` if any value is a JAX tracer (i.e. we're inside a transform).
+
+    Used to skip the eager value-validation ``if`` checks under ``jit`` / ``grad``
+    / ``vmap``, where converting a traced scalar to a Python ``bool`` would raise
+    ``TracerBoolConversionError``. Validation still runs for concrete inputs, so
+    ordinary callers keep the helpful error messages.
+    """
+    return any(isinstance(v, jax.core.Tracer) for v in values)
+
+
 @dataclass(frozen=True)
 class GaussianPosterior:
     """Closed-form Gaussian posterior over the source vector.
@@ -88,10 +99,14 @@ def matern32_covariance(
     Returns:
         The ``(n_grid, n_grid)`` covariance matrix, symmetric positive-definite.
     """
-    if variance <= 0.0:
-        raise ValueError("matern32_covariance: `variance` must be > 0.")
-    if length_scale <= 0.0:
-        raise ValueError("matern32_covariance: `length_scale` must be > 0.")
+    # Validate eagerly for concrete inputs; skip under jit/grad/vmap (the doc
+    # advertises gradient-based tuning of variance / length_scale, where these
+    # would be tracers and a Python ``<=`` test would raise).
+    if not _is_traced(variance, length_scale):
+        if variance <= 0.0:
+            raise ValueError("matern32_covariance: `variance` must be > 0.")
+        if length_scale <= 0.0:
+            raise ValueError("matern32_covariance: `length_scale` must be > 0.")
     coords = jnp.asarray(coordinates, dtype=float)
     if coords.ndim == 1:
         coords = coords[:, None]
@@ -256,7 +271,10 @@ def lognormal_inversion(
     b_log = jnp.asarray(prior_log_cov, dtype=float)
     r = jnp.asarray(obs_variance, dtype=float)
     _check_inversion_shapes(f, y, qa, b_log, r)
-    if bool(jnp.any(qa <= 0.0)):
+    # Eager positivity check; skipped under jit/vmap over `prior_mean` (where a
+    # host-bool conversion would raise). The lognormal form q = q_a·exp(δ)
+    # implicitly assumes q_a > 0; a non-positive concrete q_a is a usage error.
+    if not _is_traced(prior_mean) and bool(jnp.any(qa <= 0.0)):
         raise ValueError("lognormal_inversion: `prior_mean` (q_a) must be > 0.")
 
     jac_tilde = f * qa[None, :]  # F̃ = F diag(q_a), (n_obs, n_grid)
