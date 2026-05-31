@@ -52,7 +52,7 @@ import numpy as np
 
 from plumax.coupled.forward import PlumeSource, column_response
 from plumax.lagrangian.inversion import _is_traced
-from plumax.radtran.config import number_density_cm3
+from plumax.radtran.config import ATM_TO_PA, BOLTZMANN_J_PER_K, CM3_PER_M3
 from plumax.radtran.forward import forward_nonlinear_normalized
 
 
@@ -139,9 +139,15 @@ def column_mass_to_delta_vmr(
     m = jnp.asarray(column_mass_kg_m2, dtype=float)
     # Gas column number density [molecules/cm²].
     n_gas_cm2 = m * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
-    # Air column number density [molecules/cm²]; number_density_cm3 is a NumPy
-    # scalar helper so wrap it back into the JAX graph.
-    n_air_cm2 = number_density_cm3(p_atm, T_K) * path_length_cm
+    # Air number density [molecules/cm³] — the ideal-gas relation inlined with
+    # ``jnp`` (rather than the NumPy ``radtran.config.number_density_cm3``) so a
+    # traced ``p_atm`` / ``T_K`` flows through differentiably, honouring the
+    # pure-JAX contract; identical formula and constants.
+    p_atm_j = jnp.asarray(p_atm, dtype=float)
+    T_K_j = jnp.asarray(T_K, dtype=float)
+    n_air_cm3 = (p_atm_j * ATM_TO_PA) / (BOLTZMANN_J_PER_K * T_K_j) / CM3_PER_M3
+    # Air column number density [molecules/cm²].
+    n_air_cm2 = n_air_cm3 * jnp.asarray(path_length_cm, dtype=float)
     return n_gas_cm2 / n_air_cm2
 
 
@@ -233,11 +239,23 @@ class RadianceObservationOperator:
             return spec
         wl_obs = 1e7 / np.asarray(self.nu_obs, dtype=float)  # nm, decreasing
         order = np.argsort(wl_obs)  # → ascending wavelength for np.interp
-        spec_on_srf = np.interp(
-            np.asarray(self.srf.wavelengths_hr_nm, dtype=float),
-            wl_obs[order],
-            spec[order],
-        )
+        wl_obs_sorted = wl_obs[order]
+        srf_wl = np.asarray(self.srf.wavelengths_hr_nm, dtype=float)
+        # Reject (rather than silently extrapolate) an SRF grid that reaches
+        # outside the modelled ``nu_obs`` window: ``np.interp`` would repeat the
+        # edge spectrum value there, letting out-of-band SRF weight contribute the
+        # edge absorption / Jacobian instead of a true response. Require the band
+        # to be spectrally supported by the computed high-resolution spectrum.
+        tol = 1e-6 * (wl_obs_sorted[-1] - wl_obs_sorted[0])
+        if srf_wl[0] < wl_obs_sorted[0] - tol or srf_wl[-1] > wl_obs_sorted[-1] + tol:
+            raise ValueError(
+                "RadianceObservationOperator: the SRF wavelength grid "
+                f"[{srf_wl[0]:.4g}, {srf_wl[-1]:.4g}] nm extends beyond the "
+                f"modelled nu_obs window [{wl_obs_sorted[0]:.4g}, "
+                f"{wl_obs_sorted[-1]:.4g}] nm; extend `nu_obs` to cover the band "
+                "or restrict the SRF grid (no out-of-band extrapolation)."
+            )
+        spec_on_srf = np.interp(srf_wl, wl_obs_sorted, spec[order])
         return self.srf.apply(spec_on_srf)
 
     def predict_single(self, column_mass_kg_m2: float) -> np.ndarray:

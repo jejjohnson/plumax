@@ -123,6 +123,27 @@ def test_column_mass_to_delta_vmr_validates_geometry():
         column_mass_to_delta_vmr(1e-3, p_atm=-1.0, T_K=290.0, path_length_cm=8.4e5)
 
 
+def test_column_mass_to_delta_vmr_differentiable_in_geometry():
+    # The conversion is advertised as pure-JAX: jit/grad over the (traced)
+    # geometry must work — the ideal-gas density is inlined with jnp rather than
+    # routed through the NumPy radtran.config helper.
+    import jax
+
+    @jax.jit
+    def dvmr_of_p(p):
+        return column_mass_to_delta_vmr(1e-3, p_atm=p, T_K=290.0, path_length_cm=8.4e5)
+
+    val = dvmr_of_p(1.0)
+    assert np.isfinite(float(val))
+    # ΔVMR ∝ 1/p_air, so the pressure derivative is finite and negative.
+    g = jax.grad(dvmr_of_p)(1.0)
+    assert np.isfinite(float(g))
+    assert float(g) < 0.0
+    # Matches the concrete value.
+    ref = column_mass_to_delta_vmr(1e-3, p_atm=1.0, T_K=290.0, path_length_cm=8.4e5)
+    np.testing.assert_allclose(float(val), float(ref), rtol=1e-12)
+
+
 # ── (1) zero enhancement → normalised radiance ≈ 1 ─────────────────────────────
 
 
@@ -209,6 +230,25 @@ def test_srf_band_integration_aligns_spectrum_to_wavelength_grid(synthetic_lut, 
     spec_on_grid = np.interp(wl, wl_obs[order], spec[order])
     ref = srf.apply(spec_on_grid)
     np.testing.assert_allclose(band, ref, rtol=1e-12)
+
+
+def test_srf_grid_wider_than_nu_obs_is_rejected(synthetic_lut, nu_obs):
+    # An SRF grid reaching outside the modelled nu_obs window would make
+    # np.interp repeat the edge spectrum (extrapolation), biasing the band —
+    # so it must be rejected rather than silently extrapolated.
+    wl = np.sort(1e7 / nu_obs)
+    pad = 0.2 * (wl[-1] - wl[0])
+    wide = np.linspace(wl[0] - pad, wl[-1] + pad, wl.size)  # extends both edges
+    srf = SpectralResponseFunction(
+        wavelengths_hr_nm=wide,
+        band_centers_nm=np.array([float(np.mean(wide))]),
+        band_widths_nm=np.array([0.5 * (wide[-1] - wide[0])]),
+        band_names=("wide",),
+        srf_type="gaussian",
+    )
+    op = _operator(synthetic_lut, nu_obs, srf=srf)
+    with pytest.raises(ValueError, match="extends beyond the modelled nu_obs"):
+        op.predict_single(1e-3)
 
 
 # ── (4) composition with the coupled forward → per-receptor radiances ──────────
