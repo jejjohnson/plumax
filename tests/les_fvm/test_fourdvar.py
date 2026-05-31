@@ -267,6 +267,47 @@ def test_build_problem_per_overpass_variance_vector():
         )
 
 
+def test_build_problem_rejects_ambiguous_square_variance_vector():
+    # When n_t == n_obs a bare 1-D obs_variance is ambiguous (per-overpass vs
+    # per-receptor); build_problem must reject it and demand an explicit shape.
+    fwd = _forward()
+    # Receptor subset sized to n_t makes the observation grid square (n_t, n_t).
+    n_t = fwd.save_times.shape[0]
+    receptors = jnp.array([[0, i] for i in range(n_t)])
+    fwd_sq = build_forward(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=fwd.save_times,
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+        receptor_index=receptors,
+    )
+    y = fwd_sq.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    assert y.shape == (n_t, n_t)
+    b = matern32_covariance(fwd_sq.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="ambiguous"):
+        build_problem(
+            forward=fwd_sq,
+            observations=y,
+            prior_mean=jnp.zeros(n_t),
+            prior_covariance=b,
+            obs_variance=jnp.arange(1.0, n_t + 1.0),
+        )
+    # An explicit (n_t, 1) column is accepted as per-overpass R_t.
+    col = jnp.arange(1.0, n_t + 1.0)[:, None]
+    prob = build_problem(
+        forward=fwd_sq,
+        observations=y,
+        prior_mean=jnp.zeros(n_t),
+        prior_covariance=b,
+        obs_variance=col,
+    )
+    for t in range(n_t):
+        np.testing.assert_allclose(np.asarray(prob.obs_variance[t]), float(t + 1))
+
+
 def test_build_problem_per_receptor_variance_vector():
     # A length-n_obs obs_variance stays per-receptor (broadcast across time).
     fwd = _forward()

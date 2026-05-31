@@ -358,10 +358,19 @@ def build_problem(
     # input is treated as one variance *per overpass* (R_t), so reshape it to a
     # column before broadcasting — otherwise numpy would align it with the
     # trailing n_obs axis. A length-n_obs 1-D input stays per-receptor, and a
-    # scalar broadcasts to everything.
+    # scalar broadcasts to everything. When n_t == n_obs a bare 1-D vector is
+    # genuinely ambiguous between the two, so reject it and require an explicit
+    # 2-D shape rather than silently picking one and changing the objective.
     r_in = np.asarray(obs_variance, dtype=float)
     n_obs = y.shape[1]
-    if r_in.ndim == 1 and r_in.shape[0] == n_t and n_t != n_obs:
+    if r_in.ndim == 1 and n_t == n_obs and r_in.shape[0] == n_t:
+        raise ValueError(
+            f"build_problem: `obs_variance` of length {n_t} is ambiguous when "
+            f"n_t == n_obs == {n_t} (per-overpass vs per-receptor). Pass an "
+            f"explicit ({n_t}, 1) column for per-overpass R_t, a (1, {n_obs}) "
+            f"row for per-receptor, or a full ({n_t}, {n_obs}) array."
+        )
+    if r_in.ndim == 1 and r_in.shape[0] == n_t:
         r_in = r_in[:, None]
     if np.any(r_in <= 0.0):
         raise ValueError("build_problem: `obs_variance` entries must be > 0.")
