@@ -63,5 +63,5 @@ ds["column_concentration"].plot()
 
 - [Roadmap & Architecture](design/index.md)
 - [API Reference](api/reference.md)
-- [Changelog](CHANGELOG.md)
+- [Changelog](changelog.md)
 - [GitHub](https://github.com/jejjohnson/plumax)

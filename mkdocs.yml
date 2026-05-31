@@ -57,7 +57,7 @@ nav:
           - V.C — Persistency: design/06c_persistency.md
           - V.D — Total emission: design/06d_total_emission.md
   - API Reference: api/reference.md
-  - Changelog: CHANGELOG.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - admonition
@@ -69,6 +69,8 @@ markdown_extensions:
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
+  - pymdownx.snippets:
+      base_path: ["."]
   - attr_list
   - md_in_html
   - tables

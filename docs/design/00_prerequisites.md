@@ -114,7 +114,7 @@ Symmetric to the met reader. Parses raw satellite products into the shared `Obse
 
 - **Inputs:** TROPOMI ([s5p_tropomi], NetCDF), GHGSat ([ghgsat,jervis2021ghgsat], HDF5), EMIT ([emit], NetCDF), Tanager ([carbon_mapper], TIFF + sidecar JSON), Sentinel-2 ([sentinel2]) / Landsat ([landsat89], TIFF). One sub-loader per instrument, dispatched by file extension + product header.
 - **Output:** `Observations` PyTree (radiance or column XCH₄ + lat/lon footprint + time + per-pixel uncertainty + quality mask + AK).
-- **Status:** ☐ not started — the satellite catalog at [`satellites.md`](../satellites.md) describes the *targets*; the ingest layer is the missing implementation.
+- **Status:** ☐ not started — the satellite catalog describes the *targets*; the ingest layer is the missing implementation.
 
 ### Averaging-kernel operator {#prereqs-ak-operator}
 

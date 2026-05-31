@@ -163,10 +163,10 @@ When fusing across instruments, each observation tensor carries its own AK and f
 ### Conditional flow architecture
 
 - Posterior over $\log \mathbf{q}(\mathbf{x})$ is a *spatial field* — natural fit for a conditional flow over images.
-- :::{caution} `gauss_flows` is currently 1D-only
-  Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.
-  :::
 - Context conditioning via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox) — same pattern as Tier I.
+
+!!! caution "`gauss_flows` is currently 1D-only"
+    Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.
 
 ---
 
