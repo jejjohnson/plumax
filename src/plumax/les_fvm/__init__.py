@@ -30,6 +30,7 @@ from plumax.les_fvm import (
     boundary,
     diffusion,
     dynamics,
+    fourdvar,
     grid,
     simulate,
     source,
@@ -48,6 +49,15 @@ from plumax.les_fvm.diffusion import (
     pg_eddy_diffusivity,
 )
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
+from plumax.les_fvm.fourdvar import (
+    ColumnObservationOperator,
+    EulerianForward4DVar,
+    FourDVarProblem,
+    FourDVarResult,
+    build_forward,
+    build_problem,
+    solve_4dvar,
+)
 from plumax.les_fvm.grid import (
     PlumeGrid3D,
     make_grid,
@@ -66,8 +76,12 @@ from plumax.les_fvm.wind import (
 
 
 __all__ = [
+    "ColumnObservationOperator",
     "EddyDiffusivity",
     "EulerianDispersionRHS",
+    "EulerianForward4DVar",
+    "FourDVarProblem",
+    "FourDVarResult",
     "GaussianSource",
     "HorizontalBC",
     "PlumeGrid3D",
@@ -78,15 +92,19 @@ __all__ = [
     "apply_boundary_conditions",
     "boundary",
     "build_default_concentration_bc",
+    "build_forward",
+    "build_problem",
     "diffusion",
     "diffusion_tendency",
     "dynamics",
+    "fourdvar",
     "grid",
     "make_gaussian_source",
     "make_grid",
     "pg_eddy_diffusivity",
     "simulate",
     "simulate_eulerian_dispersion",
+    "solve_4dvar",
     "source",
     "uniform_wind_field",
     "wind",
