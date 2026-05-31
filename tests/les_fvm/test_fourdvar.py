@@ -18,8 +18,11 @@ from plumax.les_fvm.fourdvar import (
     EulerianForward4DVar,
     FourDVarProblem,
     FourDVarResult,
+    PosteriorCovariance,
     build_forward,
     build_problem,
+    laplace_sample,
+    posterior_covariance,
     solve_4dvar,
 )
 
@@ -324,3 +327,105 @@ def test_build_problem_per_receptor_variance_vector():
     )
     assert prob.obs_variance.shape == (n_t, n_obs)
     np.testing.assert_allclose(np.asarray(prob.obs_variance), 2.5)
+
+
+# ── posterior covariance (Gauss-Newton Laplace) ──────────────────────────────
+
+
+def test_posterior_covariance_symmetric_psd_shape():
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true)
+    res = solve_4dvar(prob, max_steps=40)
+    post = posterior_covariance(prob, res.whitened)
+    assert isinstance(post, PosteriorCovariance)
+    n_t = fwd.save_times.shape[0]
+    assert post.whitened_covariance.shape == (n_t, n_t)
+    assert post.source_covariance.shape == (n_t, n_t)
+    for cov in (post.whitened_covariance, post.source_covariance):
+        c = np.asarray(cov)
+        # Symmetric and positive semidefinite (all eigenvalues ≥ 0).
+        np.testing.assert_allclose(c, c.T, atol=1e-10)
+        eig = np.linalg.eigvalsh(0.5 * (c + c.T))
+        assert eig.min() > -1e-8
+
+
+def test_posterior_source_std_positive_finite():
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true)
+    res = solve_4dvar(prob, max_steps=40)
+    post = posterior_covariance(prob, res.whitened)
+    std = np.asarray(post.source_std)
+    assert std.shape == (fwd.save_times.shape[0],)
+    assert np.all(np.isfinite(std))
+    assert np.all(std > 0.0)
+
+
+def test_observing_data_does_not_increase_whitened_variance():
+    # The whitened prior is the identity, so the GN-Hessian update can only
+    # shrink (never inflate) the marginal whitened posterior variances.
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true)
+    res = solve_4dvar(prob, max_steps=40)
+    post = posterior_covariance(prob, res.whitened)
+    whitened_var = np.diagonal(np.asarray(post.whitened_covariance))
+    assert np.all(whitened_var <= 1.0 + 1e-6)
+
+
+def test_laplace_sample_shape_and_mean():
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true)
+    res = solve_4dvar(prob, max_steps=40)
+    n_t = fwd.save_times.shape[0]
+    samples = laplace_sample(prob, res.whitened, jax.random.PRNGKey(0), n_samples=4000)
+    assert samples.shape == (4000, n_t)
+    assert np.all(np.isfinite(np.asarray(samples)))
+    # The sample mean of N(S*, P_S) draws concentrates on the MAP source.
+    sample_mean = np.asarray(samples).mean(axis=0)
+    np.testing.assert_allclose(sample_mean, np.asarray(res.source), atol=0.05)
+
+
+def test_laplace_sample_rejects_nonpositive_n_samples():
+    fwd = _forward()
+    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    res = solve_4dvar(prob, max_steps=20)
+    with pytest.raises(ValueError, match="n_samples"):
+        laplace_sample(prob, res.whitened, jax.random.PRNGKey(0), n_samples=0)
+
+
+def test_posterior_covariance_matches_dense_inverse():
+    # gaussx is on the path: its inverse of the GN-Hessian must agree with a
+    # dense jnp.linalg.inv reference (P_χ = H_GN⁻¹, P_S = L P_χ Lᵀ).
+    from plumax.les_fvm.fourdvar import _gauss_newton_hessian
+
+    fwd = _forward(n_t=4)
+    q_true = jnp.array([0.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true, obs_floor=1e-6)
+    res = solve_4dvar(prob, max_steps=30)
+    post = posterior_covariance(prob, res.whitened)
+    h_gn, _ = _gauss_newton_hessian(prob, res.whitened)
+    p_chi_ref = np.linalg.inv(np.asarray(h_gn))
+    np.testing.assert_allclose(
+        np.asarray(post.whitened_covariance), p_chi_ref, rtol=1e-4, atol=1e-6
+    )
+    chol = np.asarray(prob.prior_chol)
+    p_source_ref = chol @ p_chi_ref @ chol.T
+    np.testing.assert_allclose(
+        np.asarray(post.source_covariance), p_source_ref, rtol=1e-4, atol=1e-6
+    )
+
+
+def test_solve_4dvar_attaches_posterior():
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    prob = _problem(fwd, q_true)
+    res = solve_4dvar(prob, max_steps=40, compute_posterior=True)
+    assert isinstance(res.posterior, PosteriorCovariance)
+    n_t = fwd.save_times.shape[0]
+    assert res.posterior.source_covariance.shape == (n_t, n_t)
+    # Default path leaves it unset.
+    res_none = solve_4dvar(prob, max_steps=5)
+    assert res_none.posterior is None

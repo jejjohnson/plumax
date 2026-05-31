@@ -41,10 +41,13 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import gaussx as gx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import numpy as np
 
+from plumax.lagrangian.inversion import _is_traced
 from plumax.les_fvm.boundary import build_default_concentration_bc
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
@@ -399,12 +402,15 @@ class FourDVarResult:
         whitened: Optimal whitened control ``χ*``, shape ``(n_t,)``.
         cost: Final cost value ``J(χ*)``.
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
+        posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
+            when :func:`solve_4dvar` is called with ``compute_posterior=True``.
     """
 
     source: jax.Array
     whitened: jax.Array
     cost: float
     n_steps: int
+    posterior: PosteriorCovariance | None = None
 
 
 def solve_4dvar(
@@ -415,6 +421,7 @@ def solve_4dvar(
     atol: float = 1e-8,
     max_steps: int = 100,
     solver: optx.AbstractMinimiser | None = None,
+    compute_posterior: bool = False,
 ) -> FourDVarResult:
     """Minimise the 4D-Var cost with L-BFGS in whitened space.
 
@@ -429,6 +436,8 @@ def solve_4dvar(
         rtol / atol: Optimiser tolerances.
         max_steps: Maximum optimiser iterations.
         solver: Optional optimistix minimiser (defaults to ``optx.LBFGS``).
+        compute_posterior: When ``True``, also evaluate the Gauss-Newton Laplace
+            :func:`posterior_covariance` at the MAP and attach it to the result.
 
     Returns:
         The :class:`FourDVarResult` with the MAP source and diagnostics.
@@ -455,12 +464,140 @@ def solve_4dvar(
         throw=False,
     )
     chi_star = sol.value
+    posterior = posterior_covariance(problem, chi_star) if compute_posterior else None
     return FourDVarResult(
         source=problem.source_from_whitened(chi_star),
         whitened=chi_star,
         cost=float(problem.cost(chi_star)),
         n_steps=int(sol.stats.get("num_steps", -1)),
+        posterior=posterior,
     )
+
+
+# ── posterior covariance (Gauss-Newton Laplace approximation) ─────────────────
+
+
+@dataclass(frozen=True)
+class PosteriorCovariance:
+    """Laplace (Gauss-Newton) posterior covariance of a 4D-Var solution.
+
+    A Gaussian approximation ``N(S*, P_S)`` to the posterior, built from the
+    Gauss-Newton Hessian of the whitened-space cost at the MAP ``χ*``
+    (design §posterior-covariance). The whitened-space Hessian is
+
+        H_GN = I + J̃ᵀ R⁻¹ J̃,   J̃ = ∂(predicted_obs)/∂χ,
+
+    so the whitened posterior covariance is ``P_χ = H_GN⁻¹`` and — because
+    ``S = S_b + L χ`` — the source-space covariance is ``P_S = L P_χ Lᵀ``.
+
+    Attributes:
+        whitened_covariance: ``P_χ``, shape ``(n_t, n_t)``.
+        source_covariance: ``P_S``, shape ``(n_t, n_t)``.
+    """
+
+    whitened_covariance: jax.Array  # P_χ, (n_t, n_t)
+    source_covariance: jax.Array  # P_S, (n_t, n_t)
+
+    @property
+    def source_std(self) -> jax.Array:
+        """Marginal source-space posterior standard deviations ``√diag(P_S)``."""
+        return jnp.sqrt(jnp.diagonal(self.source_covariance))
+
+
+def _gauss_newton_hessian(
+    problem: FourDVarProblem, whitened_map: jax.Array
+) -> tuple[jax.Array, jax.Array]:
+    """Assemble ``(H_GN, J̃)`` at the MAP whitened control ``χ*``.
+
+    The Jacobian ``J̃ = ∂(predicted_obs)/∂χ`` of the flattened whitened-space
+    observation prediction is taken with :func:`jax.jacrev`. Forward-mode
+    (``jacfwd``) would be better-shaped here — ``n_state = n_t`` is small while
+    the observation vector is large — but the diffrax FV solve exposes a
+    reverse-mode adjoint (``custom_vjp``) and rejects forward-mode JVPs, so
+    reverse-mode is the only differentiation path through the transport model.
+    The Gauss-Newton Hessian is then ``H_GN = I + J̃ᵀ diag(1/R) J̃``.
+    """
+
+    def predict_whitened(chi: jax.Array) -> jax.Array:
+        return problem.forward.predict(problem.source_from_whitened(chi)).reshape(-1)
+
+    jac = jax.jacrev(predict_whitened)(whitened_map)  # (n_obs_flat, n_state)
+    r_inv = (1.0 / problem.obs_variance).reshape(-1)  # (n_obs_flat,)
+    n_state = whitened_map.shape[0]
+    h_gn = jnp.eye(n_state) + jac.T @ (r_inv[:, None] * jac)
+    return h_gn, jac
+
+
+def posterior_covariance(
+    problem: FourDVarProblem, whitened_map: jax.Array
+) -> PosteriorCovariance:
+    """Gauss-Newton Laplace posterior covariance around a 4D-Var MAP.
+
+    Builds the Gauss-Newton Hessian ``H_GN = I + J̃ᵀ R⁻¹ J̃`` of the whitened
+    cost at ``whitened_map`` and inverts it with :mod:`gaussx` (the Hessian is
+    wrapped as a symmetric positive-semidefinite
+    :class:`lineax.MatrixLinearOperator` and inverted via :func:`gaussx.inv`).
+    The whitened posterior covariance is ``P_χ = H_GN⁻¹`` and the source-space
+    covariance is ``P_S = L P_χ Lᵀ`` for the prior Cholesky factor ``L``.
+
+    Args:
+        problem: The assembled 4D-Var problem.
+        whitened_map: The MAP whitened control ``χ*`` (e.g.
+            :attr:`FourDVarResult.whitened`), shape ``(n_t,)``.
+
+    Returns:
+        The :class:`PosteriorCovariance` holding ``P_χ`` and ``P_S``.
+    """
+    chi = jnp.asarray(whitened_map, dtype=float)
+    h_gn, _ = _gauss_newton_hessian(problem, chi)
+    hessian_op = lx.MatrixLinearOperator(
+        h_gn, tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+    )
+    p_chi = gx.inv(hessian_op).as_matrix()
+    # Symmetrise to clean up asymmetric round-off before the congruence map.
+    p_chi = 0.5 * (p_chi + p_chi.T)
+    chol = problem.prior_chol  # L with B = L Lᵀ
+    p_source = chol @ p_chi @ chol.T
+    return PosteriorCovariance(
+        whitened_covariance=p_chi,
+        source_covariance=0.5 * (p_source + p_source.T),
+    )
+
+
+def laplace_sample(
+    problem: FourDVarProblem,
+    whitened_map: jax.Array,
+    key: jax.Array,
+    n_samples: int,
+) -> jax.Array:
+    """Draw source-space samples from the Laplace posterior ``N(S*, P_S)``.
+
+    Sampling happens in whitened space — ``χ ~ N(χ*, P_χ)`` via a Cholesky
+    factor of ``P_χ`` — and each draw is mapped through
+    :meth:`FourDVarProblem.source_from_whitened`, which is exactly the affine
+    map that turns ``N(χ*, P_χ)`` into ``N(S*, P_S)``.
+
+    Args:
+        problem: The assembled 4D-Var problem.
+        whitened_map: The MAP whitened control ``χ*``, shape ``(n_t,)``.
+        key: A ``jax.random`` PRNG key.
+        n_samples: Number of posterior draws to return.
+
+    Returns:
+        Source-space samples, shape ``(n_samples, n_t)``.
+    """
+    if not _is_traced(n_samples) and int(n_samples) <= 0:
+        raise ValueError("laplace_sample: `n_samples` must be a positive integer.")
+    chi_star = jnp.asarray(whitened_map, dtype=float)
+    post = posterior_covariance(problem, chi_star)
+    n_t = chi_star.shape[0]
+    # Jitter keeps the whitened-covariance Cholesky PD against round-off.
+    chol_chi = jnp.linalg.cholesky(
+        post.whitened_covariance + 1e-12 * jnp.eye(n_t, dtype=chi_star.dtype)
+    )
+    noise = jax.random.normal(key, (int(n_samples), n_t), dtype=chi_star.dtype)
+    chi_samples = chi_star[None, :] + noise @ chol_chi.T
+    return jax.vmap(problem.source_from_whitened)(chi_samples)
 
 
 __all__ = [
@@ -468,7 +605,10 @@ __all__ = [
     "EulerianForward4DVar",
     "FourDVarProblem",
     "FourDVarResult",
+    "PosteriorCovariance",
     "build_forward",
     "build_problem",
+    "laplace_sample",
+    "posterior_covariance",
     "solve_4dvar",
 ]

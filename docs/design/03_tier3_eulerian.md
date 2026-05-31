@@ -243,7 +243,7 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 | 2 | Incremental (Gauss-Newton inner) 4D-Var solver | [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) | 🚧 |
 | 2 | Background ($S_b$, $c_b$, BC scaling) | [`assimilation/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/background.py) | 🚧 |
 | 2 | Diagnostics | [`assimilation/diagnostics.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/diagnostics.py) | 🚧 |
-| 2 | Posterior covariance (Hessian / Laplace / En4D-Var) | `plume_simulation.assimilation.posterior` | ☐ |
+| 2 | Posterior covariance (Hessian / Laplace / En4D-Var) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`posterior_covariance`, `laplace_sample`) | 🚧 |
 | 2 | Posterior export → Tier V | `plume_simulation.assimilation.posterior_export` | ☐ |
 | 3 | Emulator (UNet / GNN / FNO) | `plume_simulation.les_fvm.emulator` | ☐ |
 | 3 | Emulator-adjoint calibration harness | `plume_simulation.les_fvm.emulator_adjoint_test` | ☐ |
