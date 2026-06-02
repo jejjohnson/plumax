@@ -1,0 +1,1706 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).">
+      
+      
+        <meta name="author" content="J. Emmanuel Johnson">
+      
+      
+      
+        <link rel="prev" href="../06a_instantaneous/">
+      
+      
+        <link rel="next" href="../06c_persistency/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>V.B — Point process - plumax</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tier-vb-point-process-model-tmtpp" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="plumax" class="md-header__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            plumax
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              V.B — Point process
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../api/reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="plumax" class="md-nav__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    plumax
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap & Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00_prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01_tier1_gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier I — Gaussian family
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02_tier2_lagrangian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03_tier3_eulerian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier III — Eulerian FV
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04_rtm_stack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05_tier4_coupled/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier V — Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tier V — Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06_tier5_population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06a_instantaneous/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.A — Instantaneous
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vb-three-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three components
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The three components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-temporal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal — \(\lambda(t)\) (events / second)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-marks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Marks — \(f(Q)\) (probability density on kg/s)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection thinning — \(P_d(Q; \text{satellite})\) (probability)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection thinning — \(P_d(Q; \text{satellite})\) (probability)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-pod-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POD calibration uncertainty — hierarchical prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TMTPP likelihood — canonical form
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TMTPP likelihood — canonical form">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-practical-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical evaluation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-point-regime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Point-regime simplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-numerical-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical stability of the integrated thinned-rate term
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-plug-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it plugs into plumax
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-population-vs-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Population vs. per-source — the v1 commitment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06c_persistency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.C — Persistency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06d_total_emission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.D — Total emission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#vb-three-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three components
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The three components">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-temporal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal — \(\lambda(t)\) (events / second)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-marks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Marks — \(f(Q)\) (probability density on kg/s)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection thinning — \(P_d(Q; \text{satellite})\) (probability)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection thinning — \(P_d(Q; \text{satellite})\) (probability)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-pod-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        POD calibration uncertainty — hierarchical prior
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TMTPP likelihood — canonical form
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TMTPP likelihood — canonical form">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#vb-practical-eval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical evaluation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-point-regime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Point-regime simplification
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vb-numerical-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Numerical stability of the integrated thinned-rate term
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-plug-in" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where it plugs into plumax
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-population-vs-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Population vs. per-source — the v1 commitment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vb-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tier-vb-point-process-model-tmtpp">Tier V.B — Point process model (TMTPP)<a class="headerlink" href="#tier-vb-point-process-model-tmtpp" title="Permanent link">&para;</a></h1>
+<p><strong>Generative model:</strong> events arrive in time according to an intensity <span class="arithmatex">\(\lambda(t)\)</span>, each carries a mark <span class="arithmatex">\(Q \sim f(Q)\)</span>, and each is observed with probability <span class="arithmatex">\(P_d(Q; \text{satellite})\)</span>. The "thinned marked temporal point process" (TMTPP) is the mathematical object on which everything else at Tier V is built — see [daley2003,daleyVereJones2008] for foundations.</p>
+<p>The full mathematical derivation lives in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/01_mttpp_theory.md"><code>methane_pod/notebooks/01_mttpp_theory</code></a>. This page gives the architectural view: the components, their interfaces, and where they plug into the rest of <code>plumax</code>.</p>
+<div class="admonition tip">
+<p class="admonition-title">Units convention</p>
+<p>Everything in SI internally — <span class="arithmatex">\(Q\)</span> in kg/s, time in seconds. Catalog ingestion (<a href="../06a_instantaneous/">06a</a>) normalises to SI; rendering layers convert to operational units (t/h, kg/h) on display.</p>
+</div>
+<hr />
+<h2 id="vb-three-components">The three components<a class="headerlink" href="#vb-three-components" title="Permanent link">&para;</a></h2>
+<h3 id="vb-temporal">Temporal — <span class="arithmatex">\(\lambda(t)\)</span> (events / second)<a class="headerlink" href="#vb-temporal" title="Permanent link">&para;</a></h3>
+<p>The intensity function tells you how rapidly events arrive at time <span class="arithmatex">\(t\)</span>. Examples from the catalogue in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/02_intensity_zoo.md"><code>02_intensity_zoo.md</code></a>:</p>
+<div class="arithmatex">\[
+\lambda(t) \;=\; \lambda_0 \qquad \text{(homogeneous Poisson; baseline)}
+\]</div>
+<div class="arithmatex">\[
+\lambda(t) \;=\; \lambda_0 + A \sin\!\left(\frac{2\pi t}{T_\text{day}} + \varphi\right) \qquad \text{(solar-heated tank cycles)}
+\]</div>
+<div class="arithmatex">\[
+\lambda(t) \;=\; \lambda_0 \cdot \mathbb{1}[t &gt; t_\text{open}] \qquad \text{(valve fails open at known time)}
+\]</div>
+<div class="arithmatex">\[
+\lambda(t) \;=\; \lambda_0\, \exp(-t/\tau) \qquad \text{(pressure-relief blowdown)}
+\]</div>
+<div class="arithmatex">\[
+\lambda(t) \;=\; \mu + \sum_{t_i &lt; t} \alpha\, \exp\!\bigl(-\beta(t - t_i)\bigr) \qquad \text{(Hawkes; self-exciting, event-driven clustering)}
+\]</div>
+<div class="arithmatex">\[
+\log \lambda(t) \;\sim\; \mathcal{GP}(\mu, K) \qquad \text{(log-Gaussian Cox process; environmentally-driven clustering)}
+\]</div>
+<p>13 deterministic / Hawkes kernels currently implemented in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/intensity.py"><code>methane_pod.intensity</code></a>; LGCP is the v1.5 next kernel — it's the natural model when clustering is environmental rather than self-exciting.</p>
+<p>Each kernel is an <code>equinox.Module</code> exposing the same <code>__call__(t) → λ</code> and <code>sample_priors()</code> interface. Adding a new kernel is a one-file PR.</p>
+<h3 id="vb-marks">Marks — <span class="arithmatex">\(f(Q)\)</span> (probability density on kg/s)<a class="headerlink" href="#vb-marks" title="Permanent link">&para;</a></h3>
+<p>The mark distribution gives the size of an event conditional on it happening.</p>
+<p><em>Mark families — form and operational fit.</em></p>
+<table>
+<thead>
+<tr>
+<th>Family</th>
+<th>Form</th>
+<th>When to use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lognormal</strong></td>
+<td><span class="arithmatex">\(Q \sim \operatorname{LN}(\mu, \sigma^{2})\)</span></td>
+<td>single-class facility populations</td>
+</tr>
+<tr>
+<td><strong>Pure power-law</strong></td>
+<td><span class="arithmatex">\(f(Q) \propto Q^{-\alpha}\)</span> for <span class="arithmatex">\(Q &gt; Q_\text{min}\)</span></td>
+<td>baseline only; over-emphasises the tail</td>
+</tr>
+<tr>
+<td><strong>Lognormal-Pareto</strong></td>
+<td><span class="arithmatex">\(\operatorname{LN}(\mu, \sigma^{2})\)</span> body, <span class="arithmatex">\(\operatorname{Pareto}(\alpha, Q_\text{break})\)</span> tail</td>
+<td><strong>v1 default</strong> — Cusworth 2021 / Sherwin 2024 operational standard</td>
+</tr>
+<tr>
+<td><strong>Mixture-of-lognormals</strong></td>
+<td><span class="arithmatex">\(\sum_k \pi_k \cdot \operatorname{LN}(\mu_k, \sigma_k^{2})\)</span></td>
+<td>multi-class facility populations (wells + tanks + pipelines)</td>
+</tr>
+</tbody>
+</table>
+<p><span class="arithmatex">\(Q_\text{min}\)</span> (power-law) and <span class="arithmatex">\(Q_\text{break}\)</span> (lognormal-Pareto) are themselves parameters.</p>
+<div class="admonition tip">
+<p class="admonition-title">v1 default for <span class="arithmatex">\(Q_\text{break}\)</span></p>
+<p><span class="arithmatex">\(Q_\text{break} \sim \operatorname{LogNormal}(\log Q_{\text{break,published}}, 0.5^{2})\)</span> — informative prior from instrument-class detection floor, not a hard constraint. Joint inference is cleaner but adds an identifiability concern with <span class="arithmatex">\(\alpha\)</span>.</p>
+</div>
+<p>The mark distribution is what Tier V actually wants to recover — it's the population-scale answer to "how big are the leaks at this kind of facility?"</p>
+<h3 id="vb-pod">Detection thinning — <span class="arithmatex">\(P_d(Q; \text{satellite})\)</span> (probability)<a class="headerlink" href="#vb-pod" title="Permanent link">&para;</a></h3>
+<p>Not every event is observed. Each satellite has a probability of detection that depends on the leak size, viewing geometry, surface, and atmospheric state.</p>
+<p>The operational form in the methane literature is the <strong>Hill function</strong> (Cusworth 2021, Sherwin 2024):</p>
+<div class="arithmatex">\[
+P_d(Q) \;=\; \frac{1}{1 + (Q_{50}/Q)^{k}}
+\]</div>
+<p>where <span class="arithmatex">\(Q_{50}\)</span> is the leak size at which detection probability is 0.5 and <span class="arithmatex">\(k\)</span> controls the steepness.</p>
+<div class="admonition caution">
+<p class="admonition-title">Hill ≠ logistic-on-log-Q</p>
+<p><strong>This is <em>not</em> the same as a logistic on <span class="arithmatex">\(\log Q\)</span></strong> — Hill is rational in <span class="arithmatex">\(Q\)</span>, logistic is sigmoidal in <span class="arithmatex">\(\log Q\)</span>. Doc previously listed "logistic"; the operational convention is Hill. (<code>methane_pod.pod_functions</code> currently implements both; the population fitter should default to Hill.)</p>
+</div>
+<h4 id="vb-pod-calibration">POD calibration uncertainty — hierarchical prior<a class="headerlink" href="#vb-pod-calibration" title="Permanent link">&para;</a></h4>
+<p>Per-instrument controlled-release campaigns (Sherwin et al. 2024) deliver a <strong>posterior</strong> on <span class="arithmatex">\((Q_{50}, k)\)</span>, not a point. v1 default: hierarchical prior carrying calibration-campaign uncertainty:</p>
+<div class="arithmatex">\[
+Q_{50,\text{inst}} \sim \operatorname{LogNormal}(\log Q_{50,\text{pub}}, \sigma^{2}_{Q_{50},\text{pub}}), \qquad
+k_\text{inst} \sim \operatorname{LogNormal}(\log k_\text{pub}, \sigma^{2}_{k,\text{pub}})
+\]</div>
+<p>This is the middle ground between (a) hard-coding published values (biased when those are uncertain) and (b) full joint inference (cleanest but identifiability concern with <span class="arithmatex">\(\lambda\)</span>). v2 promotes to joint inference when basin data warrants.</p>
+<p>10 POD models currently in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/pod_functions.py"><code>methane_pod.pod_functions</code></a>, described visually in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/05_pod_gallery.ipynb"><code>05_pod_gallery</code></a>. Variants:</p>
+<ul>
+<li><strong>Hill</strong> — operational standard.</li>
+<li><strong>Varying-coefficient Hill</strong> — <span class="arithmatex">\(Q_{50} = g(\text{albedo}, \text{SZA}, \text{scene class})\)</span>.</li>
+<li><strong>Spectral-aware</strong> — explicitly carries the SWIR retrieval noise floor as a function of column XCH₄.</li>
+<li><strong>Full GLM</strong> — generalised linear model with multiple scene covariates.</li>
+</ul>
+<hr />
+<h2 id="vb-likelihood">TMTPP likelihood — canonical form<a class="headerlink" href="#vb-likelihood" title="Permanent link">&para;</a></h2>
+<p>For a set of detected events with per-event posteriors <span class="arithmatex">\(\{p(Q \mid \text{observation}_i)\}_{i=1}^{n}\)</span> and detection times <span class="arithmatex">\(\{t_i\}\)</span> over a window <span class="arithmatex">\([0, T]\)</span>:</p>
+<div class="arithmatex">\[
+\log L(\lambda, f, P_d \mid \text{data}) \;=\;
+\sum_{i} \!\Bigl[ \log \lambda(t_i) \;+\; \log\!\!\int P_d(Q)\, L_i(Q)\, f(Q)\, \mathrm{d}Q \Bigr]
+\;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
+\]</div>
+<p>The first sum scores each detected event under: (a) the temporal intensity at the detection time, and (b) the integrated mark contribution that combines the per-event likelihood with the population mark distribution and the satellite POD. The second integral is the <strong>expected number of events that would have been detected</strong> under the model — subtracts the right amount so the posterior is consistent.</p>
+<h3 id="vb-practical-eval">Practical evaluation<a class="headerlink" href="#vb-practical-eval" title="Permanent link">&para;</a></h3>
+<p>The mark integral <span class="arithmatex">\(\int P_d(Q)\, L_i(Q)\, f(Q)\, \mathrm{d}Q\)</span> is computed via the importance-weighted Monte Carlo estimator from <a href="../06a_instantaneous/#va-mark-likelihood">06a § Mark likelihood</a>:</p>
+<div class="arithmatex">\[
+\int P_d(Q)\, L_i(Q)\, f(Q)\, \mathrm{d}Q \;\approx\; \frac{1}{S}\, \sum_{s} P_d(Q_i^{(s)}) \cdot \frac{f(Q_i^{(s)})}{\pi_\text{per-event}(Q_i^{(s)})}
+\]</div>
+<p>with samples <span class="arithmatex">\(Q_i^{(s)} \sim p(Q \mid \text{observation}_i)\)</span> and <span class="arithmatex">\(\pi_\text{per-event}(Q)\)</span> the per-event prior used at Tier I–IV. The <span class="arithmatex">\(1 / \pi_\text{per-event}\)</span> factor is the importance weight; without it the population fit double-counts the per-event prior.</p>
+<h3 id="vb-point-regime">Point-regime simplification<a class="headerlink" href="#vb-point-regime" title="Permanent link">&para;</a></h3>
+<p>When per-event posteriors are tightly concentrated (<span class="arithmatex">\(\operatorname{CV} &lt; 20\%\)</span>) and <span class="arithmatex">\(f\)</span> is smooth on that scale, the importance-weighted MC reduces to the <strong>Point regime</strong> of 06a:</p>
+<div class="arithmatex">\[
+\log L_\text{point} \;=\; \sum_{i} \!\Bigl[ \log \lambda(t_i) + \log f(Q_i) + \log P_d(Q_i) \Bigr]
+\;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
+\]</div>
+<p>This is the form currently implemented in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py"><code>methane_pod.fitting.pod_powerlaw_model</code></a>. It's the <strong>simplification</strong>, not the canonical form — explicit regime selection per <a href="../06a_instantaneous/#va-regime-rule">06a § Regime selection rule</a> decides when it's safe to use.</p>
+<h3 id="vb-numerical-stability">Numerical stability of the integrated thinned-rate term<a class="headerlink" href="#vb-numerical-stability" title="Permanent link">&para;</a></h3>
+<p>The integral <span class="arithmatex">\(\int P_d(Q)\, f(Q)\, \mathrm{d}Q\)</span> over heavy-tailed <span class="arithmatex">\(f\)</span> (power-law tail, Pareto) and saturating <span class="arithmatex">\(P_d\)</span> (Hill) <strong>must not</strong> be evaluated by naive quadrature in linear <span class="arithmatex">\(Q\)</span> — the heavy tail underflows.</p>
+<div class="admonition important">
+<p class="admonition-title">Standard fix — log-space Gauss-Hermite quadrature</p>
+<p>Hill × LogNormal becomes a tractable polynomial-times-sigmoid in log-space; ≤ 16 nodes give 4-decimal accuracy. For Pareto tails, switch to importance sampling with a Pareto proposal.</p>
+<p><strong>Bug class:</strong> any <span class="arithmatex">\(\alpha &gt; 2\)</span> power-law silently underestimates the thinned-rate integral with linear quadrature, biasing <span class="arithmatex">\(\lambda\)</span> low. Add as a hard regression test.</p>
+</div>
+<hr />
+<h2 id="vb-plug-in">Where it plugs into <code>plumax</code><a class="headerlink" href="#vb-plug-in" title="Permanent link">&para;</a></h2>
+<p><em>TMTPP inputs.</em></p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\((t_i, \text{instrument\_id}_i, \text{per-event payload})\)</span> per detection</td>
+<td><a href="../06a_instantaneous/"><code>06a_instantaneous.md</code></a> — Tier V.A adapter</td>
+</tr>
+<tr>
+<td>Per-event <span class="arithmatex">\(L_i(Q)\)</span> (samples + <span class="arithmatex">\(\pi_\text{per-event,logpdf}\)</span>)</td>
+<td>Tiers I–IV inversion + posterior export</td>
+</tr>
+<tr>
+<td>Per-instrument POD calibration <span class="arithmatex">\((Q_{50,\text{pub}}, \sigma_{Q_{50},\text{pub}}, k_\text{pub}, \sigma_{k,\text{pub}})\)</span></td>
+<td>Sherwin 2024 / Cusworth 2021 / Kamdar IMEO controlled-release campaigns; alternatively joint inference with the population</td>
+</tr>
+<tr>
+<td>Per-instrument overpass coverage (for the integrated rate)</td>
+<td><a href="../06a_instantaneous/#va-detection-floor"><code>06a § Non-detection events</code></a> — catalog ingest</td>
+</tr>
+</tbody>
+</table>
+<p><em>TMTPP outputs.</em></p>
+<table>
+<thead>
+<tr>
+<th>Output</th>
+<th>Consumer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Posterior <span class="arithmatex">\(\lambda(t)\)</span></td>
+<td><a href="../06c_persistency/"><code>06c_persistency.md</code></a> — wait times, dispatch windows</td>
+</tr>
+<tr>
+<td>Posterior <span class="arithmatex">\(f(Q)\)</span></td>
+<td><a href="../06d_total_emission/"><code>06d_total_emission.md</code></a> — total mass under POD-thinning correction</td>
+</tr>
+<tr>
+<td>Per-instrument POD posterior <span class="arithmatex">\((Q_{50}, k)_\text{inst}\)</span></td>
+<td>instrument-design and cross-mission calibration questions; multi-satellite fusion (06d)</td>
+</tr>
+<tr>
+<td>Joint <span class="arithmatex">\((\lambda, f, P_d)\)</span> posterior</td>
+<td>sensitivity studies, satellite-tasking optimisation</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vb-population-vs-source">Population vs. per-source — the v1 commitment<a class="headerlink" href="#vb-population-vs-source" title="Permanent link">&para;</a></h2>
+<p>The TMTPP fits <em>aggregate</em> the population. Two distinct framings:</p>
+<ul>
+<li><strong>Across-population</strong> (v1 default for inventory accounting): fit one <span class="arithmatex">\((\lambda, f, P_d)\)</span> over all sources of a class within a basin/region. <span class="arithmatex">\(Q\)</span> means "size of an event drawn from this class".</li>
+<li><strong>Per-source longitudinal</strong> (v1 for persistency forecasting on a known facility): fit one <span class="arithmatex">\((\lambda_\text{facility}(t), f_\text{facility}(Q), P_d)\)</span> per facility, with hierarchical shrinkage to the population. <span class="arithmatex">\(Q\)</span> means "size of an event from this specific facility".</li>
+</ul>
+<p>Both have library support; the choice is driven by the scientific question, not by the methodology. Inventory totals (06d) use across-population; dispatch decisions for a known leak history (06c) use per-source.</p>
+<hr />
+<h2 id="vb-modules">Module layout<a class="headerlink" href="#vb-modules" title="Permanent link">&para;</a></h2>
+<p><em>Tier V.B module layout — concern, target module, status.</em></p>
+<table>
+<thead>
+<tr>
+<th>Concern</th>
+<th>Module</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Intensity registry — deterministic + Hawkes</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/intensity.py"><code>methane_pod.intensity</code></a></td>
+<td>✓ (13 kernels)</td>
+</tr>
+<tr>
+<td>Intensity registry — log-Gaussian Cox process</td>
+<td><code>methane_pod.intensity.lgcp</code></td>
+<td>☐ — v1.5</td>
+</tr>
+<tr>
+<td>Mark registry</td>
+<td><code>methane_pod.marks</code> (currently inline in <code>fitting</code>)</td>
+<td>🚧 — power-law only; lognormal, lognormal-Pareto, mixture-of-lognormals pending</td>
+</tr>
+<tr>
+<td>POD models <span class="arithmatex">\(P_d(\cdot)\)</span> (Hill + variants)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/pod_functions.py"><code>methane_pod.pod_functions</code></a></td>
+<td>✓ (10 models)</td>
+</tr>
+<tr>
+<td>POD time-of-day binning (v1 time-varying POD)</td>
+<td><code>methane_pod.pod_functions.tod_binned</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>POD continuous <span class="arithmatex">\(P_d(Q, t)\)</span> (v2)</td>
+<td><code>methane_pod.pod_functions.continuous_t</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>Hierarchical POD calibration prior</td>
+<td><code>methane_pod.pod_functions.calibration_prior</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>Homogeneous Poisson rate (closed-form Gamma-Poisson)</td>
+<td><code>plumax.population.point_process.fit_poisson_rate</code></td>
+<td>🚧 — pure-NumPy conjugate posterior on λ landed</td>
+</tr>
+<tr>
+<td>Inhomogeneous log-linear intensity (NUTS)</td>
+<td><code>plumax.population.point_process.fit_inhomogeneous_intensity</code></td>
+<td>🚧 — <code>log λ = β₀ + β·covariates</code> fit landed; LGCP still v1.5</td>
+</tr>
+<tr>
+<td>TMTPP likelihood — point regime</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py"><code>methane_pod.fitting.pod_powerlaw_model</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>TMTPP likelihood — full importance-corrected regime</td>
+<td><code>methane_pod.fitting.tmtpp_iw</code></td>
+<td>☐ — consumes <a href="../06a_instantaneous/#va-modules"><code>population.adapter.importance</code></a></td>
+</tr>
+<tr>
+<td>Numerical integration helpers (log-space Gauss-Hermite, Pareto IS)</td>
+<td><code>methane_pod.fitting.integrate</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>Hawkes / self-exciting kernel</td>
+<td><code>methane_pod.intensity.hawkes</code></td>
+<td>☐ — beyond the existing kernels</td>
+</tr>
+<tr>
+<td>Spatial extension (Cox process)</td>
+<td><code>methane_pod.spatial</code></td>
+<td>☐ — v2; ties to Tier III's <span class="arithmatex">\(S(\mathbf{x},t)\)</span></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="vb-validation">Validation strategy<a class="headerlink" href="#vb-validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Likelihood gradient.</strong> <code>jax.grad</code> matches finite differences within tolerance. Cheap unit test.</li>
+<li><strong>Synthetic recovery — Point regime.</strong> Already in <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/06_stationary_numpyro_mcmc.ipynb"><code>06_stationary_numpyro_mcmc</code></a> for power-law mark.</li>
+<li><strong>Synthetic recovery — Full regime with importance correction.</strong> Generate per-event posteriors with a known <span class="arithmatex">\(\pi_\text{per-event}\)</span>, fit population, recover <span class="arithmatex">\((\lambda^{*}, f^{*}, P_d^{*})\)</span> within reported posterior. Mirrors the importance-correction round trip from <a href="../06a_instantaneous/#va-validation">06a § Validation</a>.</li>
+<li><strong>SBC — point.</strong> Across 1000 simulated populations, per-parameter rank statistics uniform.</li>
+<li><strong>SBC — soft observation.</strong> Same SBC but with the soft-observation layer (per-event posteriors as input). Validates the cross-tier inference end-to-end.</li>
+<li><strong>Identifiability stress test.</strong> Generate data where <span class="arithmatex">\(\lambda\)</span> is high but <span class="arithmatex">\(P_d\)</span> is low (vs. the opposite). Quantitative target: posterior correlation <span class="arithmatex">\(\operatorname{corr}(\lambda_0, Q_{50}) &gt; 0.5\)</span> when confounded; <span class="arithmatex">\(&lt; 0.2\)</span> when well-separated. Confirms the model knows what it can't disentangle.</li>
+<li><strong>Log-space integration test.</strong> Compare log-space Gauss–Hermite to Pareto importance sampling for <span class="arithmatex">\(\int \mathrm{Hill}(Q) \cdot \mathrm{LN\text{-}Pareto}(Q)\, \mathrm{d}Q\)</span> across <span class="arithmatex">\(\alpha \in [1.5, 4]\)</span>. Linear quadrature should fail loudly past <span class="arithmatex">\(\alpha &gt; 2\)</span>. Catches the silent thinned-rate underflow bug.</li>
+<li><strong>Hierarchical POD coverage.</strong> With known controlled-release calibration injected as <span class="arithmatex">\((Q_{50,\text{pub}}, \sigma_{Q_{50},\text{pub}})\)</span>, the hierarchical POD prior should produce <span class="arithmatex">\(Q_{50}\)</span> posteriors that contain the true value at 95% CI ~95% of the time across simulated basins.</li>
+</ul>
+<hr />
+<h2 id="vb-open-questions">Open questions<a class="headerlink" href="#vb-open-questions" title="Permanent link">&para;</a></h2>
+<div class="admonition attention">
+<p class="admonition-title">Cox vs. Hawkes for clustering</p>
+<p>Both are v1.5 candidates. Pick by basin diagnostic: event-driven clustering (compressor cycles) → Hawkes; environmentally-driven (weather-window persistence) → LGCP.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Mark / temporal coupling</p>
+<p>TMTPP currently assumes marks are i.i.d. given the temporal process. Tier IV's <span class="arithmatex">\(Q(t)\)</span> stochastic process per source is the right object to lift here — a per-source <span class="arithmatex">\(Q(t)\)</span> becomes a per-source contribution to the spatial population intensity. Promote when Tier IV <span class="arithmatex">\(Q(t)\)</span> lands.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Per-instrument POD prior depth</p>
+<p>Hierarchical with calibration uncertainty (v1 default) vs. full joint inference (v2). When does the basin data warrant promotion? Probably when the calibration-campaign sample size is too small for the instrument-condition (e.g. high-AOD scenes for EMIT).</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Continuous time-varying POD</p>
+<p>v1 uses time-of-day bins. When do diurnal cloud / glint patterns warrant continuous <span class="arithmatex">\(P_d(Q, t)\)</span>? Likely needed for sun-glint-sensitive instruments over coastal scenes.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title"><span class="arithmatex">\(Q_\text{break}\)</span> / <span class="arithmatex">\(Q_\text{min}\)</span> joint inference</p>
+<p>Currently informative prior from detection floor. Open: when basin data warrants joint inference with the power-law <span class="arithmatex">\(\alpha\)</span>, does identifiability hold? Likely fine when the catalog spans ≥ 1.5 decades in <span class="arithmatex">\(Q\)</span>.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Numerical integration choice</p>
+<p>Log-space Gauss–Hermite is the v1 default. Open: when does adaptive quadrature pay off (highly-variable <span class="arithmatex">\(f\)</span> shapes)?</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>

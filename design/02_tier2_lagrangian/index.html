@@ -1,0 +1,1879 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).">
+      
+      
+        <meta name="author" content="J. Emmanuel Johnson">
+      
+      
+      
+        <link rel="prev" href="../01_tier1_gaussian/">
+      
+      
+        <link rel="next" href="../03_tier3_eulerian/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>Tier II — Lagrangian - plumax</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tier-ii-lagrangian-particle-transport" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="plumax" class="md-header__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            plumax
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tier II — Lagrangian
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../api/reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="plumax" class="md-nav__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    plumax
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap & Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00_prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01_tier1_gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier I — Gaussian family
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier2-langevin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stochastic dynamics — Markov-1 Langevin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sub-grid-wind-interpolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sub-grid wind interpolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#time-stepping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-stepping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Footprint definition (formal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#forward-model-with-observation-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward model with observation operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likelihood model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior on \(\mathbf{q}\) — spatially correlated, sign-constrained
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-gaussian-closed-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaussian–Gaussian closed form (linear-in-log)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-beyond-moderate-grids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling beyond moderate grids
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-grid-commitment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output grid commitment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-instrument-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument observations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-flow-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional flow architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout (proposed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03_tier3_eulerian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier III — Eulerian FV
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04_rtm_stack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05_tier4_coupled/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier V — Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tier V — Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06_tier5_population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06a_instantaneous/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.A — Instantaneous
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06b_point_process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06c_persistency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.C — Persistency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06d_total_emission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.D — Total emission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier2-langevin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stochastic dynamics — Markov-1 Langevin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sub-grid-wind-interpolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sub-grid wind interpolation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#time-stepping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time-stepping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-footprint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Footprint definition (formal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#forward-model-with-observation-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Forward model with observation operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-likelihood" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Likelihood model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior on \(\mathbf{q}\) — spatially correlated, sign-constrained
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier2-gaussian-closed-form" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gaussian–Gaussian closed form (linear-in-log)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scaling-beyond-moderate-grids" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scaling beyond moderate grids
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-grid-commitment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output grid commitment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multi-instrument-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument observations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#conditional-flow-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conditional flow architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout (proposed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier2-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tier-ii-lagrangian-particle-transport">Tier II — Lagrangian particle transport<a class="headerlink" href="#tier-ii-lagrangian-particle-transport" title="Permanent link">&para;</a></h1>
+<p><strong>Forward model:</strong> stochastic particle trajectories driven by wind + turbulence. The bridge between the analytical Tier I (no real wind variability) and the full PDE Tier III (no statistical efficiency). This is what FLEXPART ([stohl2005flexpart]) and STILT do operationally — see also HYSPLIT ([stein2015hysplit]).</p>
+<p><strong>Status:</strong> the forward model (Step 1) is implemented in
+<a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/lagrangian"><code>plumax.lagrangian</code></a>;
+the inference, emulator and predictor steps (2–5) are proposed below.</p>
+<hr />
+<h2 id="tier2-simple-model">(1) Simple model<a class="headerlink" href="#tier2-simple-model" title="Permanent link">&para;</a></h2>
+<h3 id="tier2-langevin">Stochastic dynamics — Markov-1 Langevin<a class="headerlink" href="#tier2-langevin" title="Permanent link">&para;</a></h3>
+<p>Operational LPDMs (FLEXPART, STILT, HYSPLIT) use <strong>Markov-1</strong>: a Langevin equation on particle <em>velocity</em>, then position from velocity. We commit to Markov-1 because it's required for near-source super-emitter work and for non-stationary turbulence:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\mathrm{d}\mathbf{v} &amp;= \mathbf{a}(\mathbf{x}, \mathbf{v}, t)\, \mathrm{d}t \;+\; \mathbf{b}(\mathbf{x}, t)\, \mathrm{d}\mathbf{W}, \qquad \mathrm{d}\mathbf{W} \sim \mathcal{N}(\mathbf{0}, \mathrm{d}t \cdot \mathbf{I}_3) \\
+\mathrm{d}\mathbf{x} &amp;= \bigl(\mathbf{u}(\mathbf{x},t) + \mathbf{v}\bigr)\, \mathrm{d}t
+\end{aligned}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\mathbf{u}(\mathbf{x},t)\)</span> — mean wind from the <a href="../00_prerequisites/#prereqs-met">met field</a> (WRF / ERA5 / HRRR).</li>
+<li><span class="arithmatex">\(\mathbf{v}\)</span> — turbulent velocity perturbation, the actual stochastic state.</li>
+<li><span class="arithmatex">\(\mathbf{a}, \mathbf{b}\)</span> — drift and diffusion coefficients constructed from the Reynolds-stress tensor <span class="arithmatex">\(\sigma_{ij}(\mathbf{x},t)\)</span> and Lagrangian timescale <span class="arithmatex">\(\tau_L(\mathbf{x},t)\)</span>. Reference: [thomson1987], [wilson1996] (well-mixed condition).</li>
+<li><span class="arithmatex">\(\sigma_{ij}, \tau_L\)</span> come from MO similarity ([monin1954]) parameterised by <span class="arithmatex">\((u_*, L_\text{Obukhov}, z_0)\)</span> plus WRF TKE — see <a href="../00_prerequisites/#prereqs-mo-similarity">MO prereqs</a>.</li>
+</ul>
+<div class="admonition important">
+<p class="admonition-title">Markov-0 is not the model</p>
+<p>Markov-0 (random-displacement on position only) is <strong>not</strong> the model; it shows up as the well-mixed limit at long <span class="arithmatex">\(\Delta t\)</span>. Don't bake Markov-0 into the API as a "fast option" — implement the well-mixed limit explicitly when needed.</p>
+</div>
+<h3 id="sub-grid-wind-interpolation">Sub-grid wind interpolation<a class="headerlink" href="#sub-grid-wind-interpolation" title="Permanent link">&para;</a></h3>
+<p>WRF velocities are gridded at hourly snapshots; particles are continuous in space and time. Naïve bilinear interpolation of <span class="arithmatex">\(\mathbf{u}\)</span> is <strong>not divergence-free</strong>, which causes mass-conservation drift over long integrations. Use a <strong>C-grid-aware interpolator</strong> that reconstructs <span class="arithmatex">\(\mathbf{u}\)</span> consistently with the WRF staggered grid (operational STILT pattern). Document the chosen scheme on the integrator API; assume divergence preservation is load-bearing.</p>
+<h3 id="time-stepping">Time-stepping<a class="headerlink" href="#time-stepping" title="Permanent link">&para;</a></h3>
+<p>Default to <strong>Euler–Maruyama</strong> with adaptive step bounded by</p>
+<div class="arithmatex">\[
+\Delta t \;&lt;\; \min\!\left(\tau_L,\; \frac{\Delta x}{|\mathbf{u}|},\; \frac{\Delta x^{2}}{\sigma^{2}}\right).
+\]</div>
+<p>Higher-order Milstein only if convergence diagnostics flag bias. <span class="arithmatex">\(\Delta t\)</span> is an open parameter — see <a href="#tier2-open-questions">open questions</a> for the operational target.</p>
+<h3 id="run-modes">Run modes<a class="headerlink" href="#run-modes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Forward mode:</strong> release <span class="arithmatex">\(N\)</span> particles from the source, track concentration by binning particle density on the analysis grid.</li>
+<li><strong>Backward mode (footprint):</strong> release receptors backward in time → <strong>source–receptor sensitivity matrix</strong> <span class="arithmatex">\(\mathbf{F}\)</span>. The FLEXPART/STILT paradigm and the workhorse of regional-scale inversions ([stohl2005flexpart]).</li>
+</ul>
+<h3 id="tier2-footprint">Footprint definition (formal)<a class="headerlink" href="#tier2-footprint" title="Permanent link">&para;</a></h3>
+<p>For a receptor <span class="arithmatex">\(r\)</span> and a candidate source cell <span class="arithmatex">\(s\)</span>:</p>
+<div class="arithmatex">\[
+F(r, s) \;=\; \int_{t_\text{obs} - T}^{t_\text{obs}} \frac{1}{V_s\, \rho_\text{air}(s,t)} \;\mathbb{1}\!\left[\, z_\text{part}(t) &lt; f_\text{PBL}\, L(s, t)\, \right]\, \mathrm{d}t
+\]</div>
+<p>— integrated over particle residence time below a fraction <span class="arithmatex">\(f_\text{PBL} \approx 0.5\)</span> of the local PBL height <span class="arithmatex">\(L(s,t)\)</span>. Units: <span class="arithmatex">\(\text{s} \cdot \text{m}^{2} \cdot \text{kg}^{-1}\)</span> (mixing-ratio per kg/m²/s of surface flux). The footprint is a <strong>probability density</strong> over candidate source cells, not an indicator: properly normalised by particle volume and air density. Numerical scaling matters because the values are tiny — work in log-space when storing.</p>
+<p>For an overpass with <span class="arithmatex">\(n_\text{obs}\)</span> columns and <span class="arithmatex">\(n_\text{grid}\)</span> candidate source cells, <span class="arithmatex">\(\mathbf{F}\)</span> is shape <span class="arithmatex">\((n_\text{obs}, n_\text{grid})\)</span> and typically 90%+ sparse.</p>
+<hr />
+<h2 id="tier2-inference">(2) Model-based inference<a class="headerlink" href="#tier2-inference" title="Permanent link">&para;</a></h2>
+<h3 id="forward-model-with-observation-operator">Forward model with observation operator<a class="headerlink" href="#forward-model-with-observation-operator" title="Permanent link">&para;</a></h3>
+<p>The full forward used by inference is <strong>not</strong> <span class="arithmatex">\(\mathbf{y} = \mathbf{F}\mathbf{q} + \boldsymbol{\varepsilon}\)</span>. It's:</p>
+<div class="arithmatex">\[
+\mathbf{y} \;=\; \mathbf{A}\, \mathrm{col}_z(\mathbf{F}\mathbf{q}) \;+\; \mathbf{c}_\text{bg} \;+\; \boldsymbol{\varepsilon}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\mathbf{F}\mathbf{q}\)</span> gives a 3D concentration field from the source vector.</li>
+<li><span class="arithmatex">\(\mathrm{col}_z\)</span> collapses to an XCH₄ column.</li>
+<li><span class="arithmatex">\(\mathbf{A}\)</span> applies the satellite <a href="../00_prerequisites/#prereqs-ak-operator">averaging kernel</a>; see (eq-ak-operator).</li>
+<li><span class="arithmatex">\(\mathbf{c}_\text{bg}\)</span> is the regional background — mandatory, not optional. Same critique as Tier I: predicted enhancement vs. absolute-column observation must be reconciled day-1.</li>
+</ul>
+<h3 id="tier2-likelihood">Likelihood model<a class="headerlink" href="#tier2-likelihood" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{R}), \qquad \mathbf{R} \;=\; \mathbf{R}_\text{retr} + \mathbf{R}_\text{repr}
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\mathbf{R}_\text{retr}\)</span> — heteroscedastic per-pixel from the L2 retrieval-error map.</li>
+<li><span class="arithmatex">\(\mathbf{R}_\text{repr}\)</span> — <strong>representation error</strong>: model-vs-observation footprint mismatch. Typically 1–5 ppb diagonal addition; rises with terrain complexity and at coarse-instrument boundaries. Don't omit — naive <span class="arithmatex">\(\mathbf{R} = \mathbf{R}_\text{retr}\)</span> overweights observations and produces overconfident posteriors.</li>
+<li>Block-diagonal across overpasses; cross-overpass correlation only if observation times are within met decorrelation scale (~hours).</li>
+</ul>
+<h3 id="tier2-prior">Prior on <span class="arithmatex">\(\mathbf{q}\)</span> — spatially correlated, sign-constrained<a class="headerlink" href="#tier2-prior" title="Permanent link">&para;</a></h3>
+<p>The prior is the regularizer; it's <em>the</em> methodological choice in regional inversions.</p>
+<p><em>Spatial-prior choices for the source vector <span class="arithmatex">\(\mathbf{q}\)</span>.</em></p>
+<table>
+<thead>
+<tr>
+<th>Choice</th>
+<th>Form</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mean <span class="arithmatex">\(\mathbf{q}_a\)</span></td>
+<td>from <a href="../00_prerequisites/#prereqs-emission-inventory">emission inventory</a> ([crippa2023edgar,scarpelli2022gfei,maasakkers2023ghgi])</td>
+<td>prior median per cell</td>
+</tr>
+<tr>
+<td>Covariance <span class="arithmatex">\(\mathbf{B}\)</span></td>
+<td>Matérn-3/2 with correlation length <span class="arithmatex">\(\ell \in [5, 50]\)</span> km</td>
+<td>smooth posterior; <span class="arithmatex">\(\ell\)</span> tuned by posterior diagnostics or hierarchical</td>
+</tr>
+<tr>
+<td>Positivity</td>
+<td><span class="arithmatex">\(\log \mathbf{q} \sim \mathcal{N}(\log \mathbf{q}_a, \mathbf{B}_{\log})\)</span> (lognormal)</td>
+<td>non-negative emissions; conjugate variant: NNLS / projected-gradient on Gaussian <span class="arithmatex">\(\mathbf{q}\)</span></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition important">
+<p class="admonition-title">Diagonal <span class="arithmatex">\(\mathbf{B}\)</span> is wrong</p>
+<p>Diagonal <span class="arithmatex">\(\mathbf{B}\)</span> produces wildly noisy spatial posteriors. Always carry spatial correlation.</p>
+<p><strong>Why:</strong> an inversion with diagonal prior covariance has no smoothing scale, so unresolved structure goes into single-cell spikes.
+<strong>How to apply:</strong> use a Matérn-3/2 (or any spatial kernel with a real correlation length); calibrate <span class="arithmatex">\(\ell\)</span> by posterior diagnostics.</p>
+</div>
+<h3 id="tier2-gaussian-closed-form">Gaussian–Gaussian closed form (linear-in-log)<a class="headerlink" href="#tier2-gaussian-closed-form" title="Permanent link">&para;</a></h3>
+<p>When the lognormal is linearised around <span class="arithmatex">\(\log \mathbf{q}_a\)</span> (fine for moderate enhancements over the prior), the posterior is closed form:</p>
+<div class="arithmatex">\[
+\mathbf{q}^* \;=\; \mathbf{q}_a \cdot \exp\!\left(\mathbf{B}_{\log} \tilde{\mathbf{F}}^{\top} (\tilde{\mathbf{F}} \mathbf{B}_{\log} \tilde{\mathbf{F}}^{\top} + \mathbf{R})^{-1} (\mathbf{y} - \tilde{\mathbf{F}} \mathbf{q}_a)\right)
+\]</div>
+<div class="arithmatex">\[
+\mathbf{P}^* \;=\; \mathbf{B}_{\log} \;-\; \mathbf{B}_{\log} \tilde{\mathbf{F}}^{\top} (\tilde{\mathbf{F}} \mathbf{B}_{\log} \tilde{\mathbf{F}}^{\top} + \mathbf{R})^{-1} \tilde{\mathbf{F}} \mathbf{B}_{\log}
+\]</div>
+<p>with <span class="arithmatex">\(\tilde{\mathbf{F}} = \operatorname{diag}(\mathbf{q}_a)\, \mathbf{F}\)</span> (the linearised Jacobian). Identical structure to the equations <a href="https://github.com/jejjohnson/gaussx"><code>gaussx</code></a> is built around.</p>
+<h3 id="scaling-beyond-moderate-grids">Scaling beyond moderate grids<a class="headerlink" href="#scaling-beyond-moderate-grids" title="Permanent link">&para;</a></h3>
+<ul>
+<li>"≲10k cells × ≲1k obs" is the dense-solver limit. Beyond that:</li>
+<li><strong>Krylov + structure-aware solves</strong> via <code>gaussx</code> (Kronecker-Matérn, low-rank <span class="arithmatex">\(\mathbf{F}\)</span>). Pushes direct solves to ~100k cells with sufficient sparsity.</li>
+<li><strong>Ensemble Kalman Inversion (EKI):</strong> ensemble of forward trajectories → ensemble-based <span class="arithmatex">\(\partial \mathbf{c} / \partial \mathbf{Q}\)</span>. Plug into <a href="https://github.com/jejjohnson/filterax"><code>filterax</code></a>; couple with <code>vardaX</code> for the variational version.</li>
+<li><strong>MCMC over <span class="arithmatex">\(\log \mathbf{q}(\mathbf{x})\)</span>:</strong> expensive but exact. Use only when EKI is suspected biased.</li>
+</ul>
+<hr />
+<h2 id="tier2-emulator">(3) Model emulator<a class="headerlink" href="#tier2-emulator" title="Permanent link">&para;</a></h2>
+<p>The Lagrangian model becomes expensive at large <span class="arithmatex">\(N\)</span> particles or when running ensembles for met-uncertainty propagation.</p>
+<ul>
+<li><strong>Footprint emulator:</strong> <span class="arithmatex">\((\text{met snapshot}, \text{receptor location}, \text{source-candidate grid}) \to \mathbf{F}(\text{receptor}, \cdot)\)</span>. Receptor location is <strong>part of the input</strong> (not just source location). CNN if the met grid is regular; FNO if you want to be resolution-agnostic.</li>
+<li><strong>Trajectory emulator:</strong> replace the SDE integration with a neural ODE or normalising flow. Less common but potentially useful for backward integration.</li>
+<li><strong>Training distribution.</strong> Sample met conditions from the <strong>actual distribution at facility locations of interest</strong>, not a uniform climatology bin. A coarse <span class="arithmatex">\((\text{hour-of-day}, \text{season}, \text{stability})\)</span> grid covers &lt;10% of the operational regime probability mass; train on the conditional distribution <span class="arithmatex">\(p(\text{met} \mid \text{facility}_\text{lat,lon}, t_\text{overpass})\)</span> instead.</li>
+</ul>
+<hr />
+<h2 id="tier2-emu-inference">(4) Emulator-based inference<a class="headerlink" href="#tier2-emu-inference" title="Permanent link">&para;</a></h2>
+<p>Replace <span class="arithmatex">\(\mathbf{F}\)</span> with the emulated footprint in the linear inversion. Enables:</p>
+<ul>
+<li>Real-time source estimation during satellite overpass (no SDE integration in the loop).</li>
+<li>Ensemble-based UQ at scale — sample met conditions, emulator gives footprint per sample, propagate to source posterior.</li>
+<li><strong>Validation:</strong> posterior from emulator-inversion ≈ posterior from full-Lagrangian inversion on the same observations. Diverging posteriors flag emulator bias before it becomes a downstream problem.</li>
+</ul>
+<hr />
+<h2 id="tier2-amortized">(5) Amortized inference (predictor)<a class="headerlink" href="#tier2-amortized" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+f_\theta : (\mathbf{y}_\text{multiscale}, \text{met}_\text{context}, \text{instrument\_id}) \;\longmapsto\; p(\log \mathbf{q}(\mathbf{x}) \mid \mathbf{y}, \text{met})
+\]</div>
+<h3 id="output-grid-commitment">Output grid commitment<a class="headerlink" href="#output-grid-commitment" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(\mathbf{q}(\mathbf{x})\)</span> is on the inversion grid (~1–10 km, basin-scoped). Predictor outputs a fixed-size 2D field per basin tile. <strong>Per-instrument predictors</strong>, dispatched by <code>instrument_id</code>, because TROPOMI ([s5p_tropomi], ~5 km), EMIT ([emit], ~60 m), Tanager ([carbon_mapper], ~30 m) need different summary networks.</p>
+<h3 id="multi-instrument-observations">Multi-instrument observations<a class="headerlink" href="#multi-instrument-observations" title="Permanent link">&para;</a></h3>
+<p>When fusing across instruments, each observation tensor carries its own AK and footprint at native resolution. The predictor consumes a list of <span class="arithmatex">\((\mathbf{y}, \mathbf{A}, \text{footprint}, \sigma_\text{retr}, \text{mask})\)</span> per instrument and aggregates internally — don't pre-regrid to a common resolution (loses information).</p>
+<h3 id="conditional-flow-architecture">Conditional flow architecture<a class="headerlink" href="#conditional-flow-architecture" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Posterior over <span class="arithmatex">\(\log \mathbf{q}(\mathbf{x})\)</span> is a <em>spatial field</em> — natural fit for a conditional flow over images.</li>
+<li>Context conditioning via FiLM / hypernet primitives in <a href="https://github.com/jejjohnson/pyrox"><code>pyrox.nn</code></a> — same pattern as Tier I.</li>
+</ul>
+<div class="admonition caution">
+<p class="admonition-title"><code>gauss_flows</code> is currently 1D-only</p>
+<p>Either extend <code>gauss_flows</code> to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.</p>
+</div>
+<hr />
+<h2 id="tier2-improve">(6) Improve<a class="headerlink" href="#tier2-improve" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Multi-layer met fields.</strong> Move from 2D footprints to 3D trajectories through stacked WRF layers — necessary when emissions span the inversion layer or when the source PBL is poorly mixed.</li>
+<li><strong>Chemical loss during transport.</strong> <span class="arithmatex">\(\mathrm{d}c/\mathrm{d}t = -k_\text{OH}\, c\)</span> along trajectories. For CH₄ over &lt;1 day, loss is negligible (~0.5%/day); for CO it's significant.</li>
+<li><strong>Met uncertainty propagation.</strong> Run the trajectory ensemble across <span class="arithmatex">\(N_\text{met}\)</span> WRF / ERA5 ensemble realisations → uncertainty in <span class="arithmatex">\(\mathbf{F}\)</span> propagated through to source posterior. Hooks into the <code>MetField.ensemble_dim</code> from the <a href="../00_prerequisites/#prereqs-metfield-schema">prereqs schema</a>.</li>
+<li><strong>Hierarchical <span class="arithmatex">\(\mathbf{B}\)</span> correlation length.</strong> Promote <span class="arithmatex">\(\ell\)</span> in the Matérn prior to a hyperparameter with its own posterior — let the data choose the regularisation scale.</li>
+</ul>
+<hr />
+<h2 id="tier2-modules">Module layout (proposed)<a class="headerlink" href="#tier2-modules" title="Permanent link">&para;</a></h2>
+<p><em>Tier II proposed module layout — step, concern, target module, status.</em></p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Concern</th>
+<th>Module</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Particle integrator (Markov-1)</td>
+<td><code>plumax.lagrangian.particles</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Turbulence parameterisation (<span class="arithmatex">\(\sigma_{ij}, \tau_L\)</span>)</td>
+<td><code>plumax.lagrangian.turbulence</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Forward concentration (residence-time binning)</td>
+<td><code>plumax.lagrangian.concentration</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Backward footprint</td>
+<td><code>plumax.lagrangian.footprint</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>C-grid-aware wind interpolator</td>
+<td><code>plumax.lagrangian.wind_interp</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Column + AK pipeline</td>
+<td>reuse <code>gauss_plume.observation</code> from Tier I</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr)</td>
+<td><code>plumax.lagrangian.inversion</code></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Linear inversion (Gaussian / lognormal closed form)</td>
+<td><code>plumax.lagrangian.inversion</code> (<code>linear_gaussian_inversion</code> / <code>lognormal_inversion</code>)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Krylov / structure-aware solver</td>
+<td>dispatch to <a href="https://github.com/jejjohnson/gaussx"><code>gaussx</code></a></td>
+<td>dependency</td>
+</tr>
+<tr>
+<td>2</td>
+<td>EKI</td>
+<td><a href="https://github.com/jejjohnson/filterax"><code>filterax</code></a> (external)</td>
+<td>dependency</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Posterior export → Tier V</td>
+<td><code>plume_simulation.lagrangian.posterior_export</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Footprint emulator</td>
+<td><code>plume_simulation.lagrangian.emulator</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Field predictor (per instrument)</td>
+<td><code>plume_simulation.lagrangian.predictor</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Met-ensemble runner</td>
+<td><code>plume_simulation.lagrangian.met_ensemble</code></td>
+<td>☐</td>
+</tr>
+</tbody>
+</table>
+<p>The whole subpackage doesn't exist yet; this is the proposed shape.</p>
+<hr />
+<h2 id="tier2-validation">Validation strategy<a class="headerlink" href="#tier2-validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Particle integration — zero-turbulence limit.</strong> With <span class="arithmatex">\(\mathbf{b} \to \mathbf{0}\)</span>, trajectories must follow streamlines exactly. Compare to streamline integration of the same wind field.</li>
+<li><strong>Mass conservation.</strong> In the no-deposition, closed-domain limit, total particle-seconds in the domain must be conserved to floating-point precision over the integration window. Standard LPDM regression test.</li>
+<li><strong>Adjoint–finite-difference.</strong> Verify backward ≡ adjoint of forward: perturb <span class="arithmatex">\(q_i\)</span> in the forward, measure <span class="arithmatex">\(\Delta c_j\)</span>, compare to <span class="arithmatex">\(F[j, i]\)</span> from the backward run. Should agree within Monte Carlo error. Cheap test, catches indexing / sign / time-direction bugs that are otherwise nightmare to track down.</li>
+<li><strong>Particle-count convergence.</strong> <span class="arithmatex">\(N \to 2N\)</span> should give converging posterior moments; unconverged means <span class="arithmatex">\(N\)</span> is too low. Sets the operational floor and replaces the open-question guess (10⁵ forward / 10³ backward) with measurement.</li>
+<li><strong>Footprint vs. forward agreement.</strong> For a single-source <span class="arithmatex">\(\mathbf{q} = \mathbf{e}_i\)</span>, the column <span class="arithmatex">\(\mathbf{F}\mathbf{e}_i\)</span> (forward) and the receptor row <span class="arithmatex">\(\mathbf{F}[i, :]\)</span> (backward) should agree. Catches indexing/orientation bugs distinct from the adjoint test.</li>
+<li><strong>Linear inversion against Tier I.</strong> In the limit of a single source, near-stationary winds, and known turbulence, the Lagrangian inversion should recover Tier I's MAP estimate within posterior <span class="arithmatex">\(\sigma\)</span>.</li>
+<li><strong>Real-data Permian benchmark.</strong> Invert TROPOMI + EMIT observations over the Permian for a published time window and compare to Lu et al. / Maasakkers et al. inverse-modelling estimates (see [maasakkers2023ghgi,jacob2022quantifying]). Without this, the inversion is a synthetic exercise.</li>
+<li><strong>Emulator residual.</strong> <span class="arithmatex">\(\lVert \mathbf{F}_\text{emu} - \mathbf{F}_\text{true} \rVert_F / \lVert \mathbf{F}_\text{true} \rVert_F &lt; 5\%\)</span> on a held-out met-condition set drawn from the <em>operational</em> distribution (not the training-bin distribution).</li>
+</ul>
+<hr />
+<h2 id="tier2-open-questions">Open questions<a class="headerlink" href="#tier2-open-questions" title="Permanent link">&para;</a></h2>
+<div class="admonition attention">
+<p class="admonition-title">Time discretisation <span class="arithmatex">\(\Delta t\)</span></p>
+<p>Operational floor for SDE convergence in non-stationary PBL turbulence? Initial guess: <span class="arithmatex">\(\Delta t = \min(\tau_L / 5,\, 60\,\text{s})\)</span>. Needs benchmarking against Markov-1 well-mixed-condition tests.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Positivity strategy</p>
+<p>Lognormal prior on <span class="arithmatex">\(\mathbf{q}\)</span> (smooth, conjugate when linearised) vs. NNLS on Gaussian <span class="arithmatex">\(\mathbf{q}\)</span> (cheap, but biased near zero) vs. reflected-Gaussian MCMC (exact, slow). v1: lognormal; revisit if posterior contracts hard at zero on real data.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Representativeness error magnitude</p>
+<p><span class="arithmatex">\(\mathbf{R}_\text{repr}\)</span> diagonal: 1 ppb (well-resolved) to 5 ppb (coarse satellite over rough terrain). Open: hierarchical fit to data, or pre-tabulated by (instrument, terrain class)?</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Number of particles — measured, not guessed</p>
+<p>Replace the <span class="arithmatex">\(N=10^5\)</span> / <span class="arithmatex">\(N=10^3\)</span> guess with the convergence test above. Operational target: posterior moments stable within 5% as <span class="arithmatex">\(N \to 2N\)</span>.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Random seed handling</p>
+<p>Treat the forward as a noisy oracle (averaged over seeds) or fix one seed and treat result as deterministic? <strong>Leaning:</strong> fix-seed for inference (deterministic gradients); average-seed only for final-report posterior summarisation.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Footprint storage / compression</p>
+<p>Sparse CSR storage handles the 90%+ zeros, but cross-receptor footprints share spatial structure — low-rank factorisation (<span class="arithmatex">\(\mathbf{F} \approx \mathbf{U} \mathbf{V}^{\top}\)</span> with <span class="arithmatex">\(r \ll n_\text{obs}\)</span>) might compress further. Open: empirical rank vs. accuracy trade-off on real data.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Backward vs. forward — refined</p>
+<p>Two distinct reasons backward dominates inversion: (a) <span class="arithmatex">\(n_\text{source}\)</span> is unknown a priori (the original "you're inferring it"), and (b) backward gives a sparse <span class="arithmatex">\(\mathbf{F}^{\top}\)</span> <em>per receptor</em> that's trivially parallelisable and storage-friendly. The cost ratio <span class="arithmatex">\(O(n_\text{obs} N)\)</span> vs. <span class="arithmatex">\(O(n_\text{source} N)\)</span> is secondary.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Coarse-instrument representation</p>
+<p>TROPOMI 5 km vs inversion grid 1 km — observation operator must include footprint-weighted spatial averaging. Open: handle as a deterministic averaging operator on <span class="arithmatex">\(\mathrm{col}_z(\mathbf{F}\mathbf{q})\)</span>, or as a stochastic representation kernel inside <span class="arithmatex">\(\mathbf{R}_\text{repr}\)</span>?</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Spatial correlation length <span class="arithmatex">\(\ell\)</span> in <span class="arithmatex">\(\mathbf{B}\)</span></p>
+<p>Default 10 km, but real basins have stronger correlation along pipeline corridors. Open: anisotropic Matérn with corridor-aligned anisotropy, or hierarchical <span class="arithmatex">\(\ell\)</span>?</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
