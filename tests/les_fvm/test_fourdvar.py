@@ -7,6 +7,8 @@ the whitening transform, and end-to-end twin recovery — not large-scale physic
 
 from __future__ import annotations
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -175,6 +177,136 @@ def test_solve_from_explicit_initial_source():
     assert np.all(np.isfinite(np.asarray(res.source)))
 
 
+def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
+    # Regression for #30: `throw=False` hides the optimiser outcome, so the
+    # result must expose it. A single step cannot meet optx's strict success
+    # criterion, so `converged` is False — yet the MAP is still finite (a good
+    # partial recovery, not a divergence), so no spurious warning is raised.
+    fwd = _forward()
+    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        res = solve_4dvar(prob, max_steps=1)
+    assert res.converged is False
+    assert np.all(np.isfinite(np.asarray(res.source)))
+
+
+def test_build_forward_guards_stepto_controller():
+    # StepTo is a fixed (non-adaptive) controller, so the guard must inspect its
+    # widest prescribed interval rather than skip it as if it were adaptive.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="stable step"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=2.0,
+            solver_kwargs={
+                "stepsize_controller": diffrax.StepTo(ts=jnp.asarray([0.0, 40.0]))
+            },
+        )
+
+
+def test_build_forward_rejects_negative_diffusivity():
+    # Negative (anti-diffusion) K is unconditionally unstable; the fixed-step
+    # 4D-Var guard must reject it rather than take |K|.
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="non-negative"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=(-1.0, 1.0),
+        )
+
+
+def test_build_forward_rejects_negative_diffusivity_with_adaptive_controller():
+    # K validation is unconditional: a negative diffusivity is rejected even
+    # when an adaptive controller would otherwise skip the fixed-step guard.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="non-negative"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=(-1.0, 1.0),
+            solver_kwargs={
+                "stepsize_controller": diffrax.PIDController(rtol=1e-3, atol=1e-6)
+            },
+        )
+
+
+def test_build_forward_rejects_nonfinite_uniform_wind():
+    # A NaN uniform-wind component makes the CFL bound NaN and bypasses the
+    # guard; reject it at wind-field construction (before any branch).
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="finite"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(float("nan"), 0.0, 0.0),
+            eddy_diffusivity=2.0,
+        )
+
+
+def test_build_forward_stepto_runs_with_stable_intervals():
+    # A stable StepTo config must actually run: dt0 is forced to None per
+    # diffrax's StepTo contract, so predict() succeeds instead of failing on the
+    # default dt0=1.0.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    fwd = build_forward(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=save_times,
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+        solver_kwargs={
+            "stepsize_controller": diffrax.StepTo(ts=jnp.arange(0.0, 41.0, 1.0))
+        },
+    )
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    assert np.all(np.isfinite(np.asarray(y)))
+
+
+def test_build_forward_skips_guard_for_implicit_solver():
+    # An implicit solver is stable at large fixed steps, so the explicit CFL
+    # guard must not reject it — build_forward should succeed even at a huge dt0.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    fwd = build_forward(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=save_times,
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+        solver_kwargs={"solver": diffrax.Kvaerno5(), "dt0": 1000.0},
+    )
+    assert isinstance(fwd, EulerianForward4DVar)
+
+
 # ── validation ───────────────────────────────────────────────────────────────
 
 
@@ -309,6 +441,37 @@ def test_build_problem_rejects_ambiguous_square_variance_vector():
     )
     for t in range(n_t):
         np.testing.assert_allclose(np.asarray(prob.obs_variance[t]), float(t + 1))
+
+
+def test_build_problem_rejects_nonfinite_obs_variance():
+    # NaN passes the `<= 0` check, so obs_variance finiteness must be enforced
+    # explicitly — otherwise the cost and posterior silently become NaN.
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="finite"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=float("nan"),
+        )
+
+
+def test_build_problem_rejects_nonfinite_observations():
+    # A NaN observation would leave `source` finite but the cost/posterior NaN.
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])).at[0, 0].set(jnp.nan)
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="finite"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=1.0,
+        )
 
 
 def test_build_problem_per_receptor_variance_vector():

@@ -85,6 +85,7 @@ def simulate_eulerian_dispersion(
     rtol: float = 1e-3,
     atol: float = 1e-8,
     max_steps: int = 100_000,
+    max_wind_speed: float | None = None,
     # Initial condition
     initial_concentration: Float[Array, "Nz Ny Nx"] | None = None,
     seed: int = 0,
@@ -131,6 +132,12 @@ def simulate_eulerian_dispersion(
         Adaptive-step controller tolerances (ignored for fixed-step solvers).
     max_steps : int
         Upper bound on diffrax internal steps.
+    max_wind_speed : float, optional
+        Conservative upper bound on each wind component ``|u|, |v|, |w|``
+        [m/s], used only by the fixed-step stability guard. Supply it for a
+        callable wind whose peak the guard cannot otherwise sample reliably;
+        when ``None`` the peak is estimated from the field (dense time grid +
+        any ``WindSchedule`` knots in the window).
     initial_concentration : ndarray, optional
         Interior-shaped ``(nz, ny, nx)`` initial tracer field.  Defaults
         to zero.
@@ -176,6 +183,16 @@ def simulate_eulerian_dispersion(
         t_start=t_start,
         t_end=t_end,
     )
+    # Validate inputs independently of the solver: a negative / non-finite K is
+    # unstable (or guard-defeating) on the adaptive path too, and a malformed
+    # `max_wind_speed` would silently disable the fixed-step guard.
+    _max_diffusivity(eddy)
+    if max_wind_speed is not None and (
+        not np.isfinite(max_wind_speed) or max_wind_speed < 0.0
+    ):
+        raise ValueError(
+            f"max_wind_speed must be finite and non-negative (got {max_wind_speed!r})."
+        )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=bc_x, bc_y=bc_y, bc_z=bc_z
@@ -197,6 +214,13 @@ def simulate_eulerian_dispersion(
     save_times = _build_save_times(
         t_start=t_start, t_end=t_end, save_interval=save_interval
     )
+    # In-window WindSchedule knots — a piecewise-linear schedule attains its
+    # speed extrema at knots, so feed them to the fixed-step stability guard so
+    # a fast knot between the dense samples is not missed.
+    knot_times: tuple[float, ...] = ()
+    if wind_schedule is not None:
+        knots = np.asarray(wind_schedule.times, dtype=float)
+        knot_times = tuple(float(t) for t in knots if t_start <= t <= t_end)
     solution = _solve(
         rhs=rhs,
         t_start=t_start,
@@ -208,6 +232,8 @@ def simulate_eulerian_dispersion(
         rtol=rtol,
         atol=atol,
         max_steps=max_steps,
+        extra_sample_times=knot_times,
+        max_wind_speed=max_wind_speed,
     )
     return _to_dataset(
         plume_grid=plume_grid,
@@ -352,6 +378,173 @@ def _build_initial_concentration(
     return jnp.pad(c0, ((1, 1), (1, 1), (1, 1)), mode="constant")
 
 
+def stable_step_bound(
+    *,
+    dx: float,
+    dy: float,
+    dz: float,
+    max_u: float,
+    max_v: float,
+    max_w: float,
+    k_h: float,
+    k_z: float,
+    cfl_safety: float = 1.0,
+) -> float:
+    """Maximum stable step for an explicit fixed-step transport solve.
+
+    Advection and diffusion are advanced in the *same* explicit step, so
+    their tendencies add and the conservative forward-Euler / Heun limit is
+    set by the summed rate::
+
+        adv_rate  = |u|/dx + |v|/dy + |w|/dz
+        diff_rate = 2·(K_h/dx² + K_h/dy² + K_z/dz²)
+        bound     = cfl_safety / (adv_rate + diff_rate)
+
+    Using ``min(1/adv_rate, 1/diff_rate)`` instead would permit up to a 2×
+    step when the two rates are comparable. The bound is ``inf`` only when
+    the field is both motionless and diffusion-free.
+
+    Parameters
+    ----------
+    dx, dy, dz : float
+        Grid spacing [m].
+    max_u, max_v, max_w : float
+        Component-wise maximum wind speed |u|, |v|, |w| over the run [m/s].
+    k_h, k_z : float
+        Maximum horizontal / vertical eddy diffusivity [m²/s].
+    cfl_safety : float, default 1.0
+        Multiplier on the raw stability bound.  ``1.0`` is the forward-Euler
+        sum-CFL / FTCS-diffusion limit; the RK schemes used here are at
+        least as stable, so this is a conservative guard.
+
+    Returns
+    -------
+    float
+        The maximum stable ``dt0`` [s].
+
+    Notes
+    -----
+    This is a first-order (upwind / forward-Euler) sum-CFL estimate — a
+    conservative safety net that catches gross step-size errors (the
+    ``dt0``-orders-of-magnitude-too-large failure mode). It is **not** a
+    rigorous stability certificate for the higher-order or low-dissipation
+    reconstructions (e.g. the default ``weno5``, or ``naive``): those
+    semidiscrete operators have different stability regions, and an explicit
+    RK step can amplify their weakly-damped modes even below this bound. Keep
+    ``dt0`` comfortably under the reported value when using such schemes.
+    """
+    adv_rate = max_u / dx + max_v / dy + max_w / dz
+    diff_rate = 2.0 * (k_h / dx**2 + k_h / dy**2 + k_z / dz**2)
+    # Advection + diffusion act in the same explicit step, so the stable-step
+    # limit is set by the summed rate — 1/(adv_rate + diff_rate) — not by the
+    # looser min(1/adv_rate, 1/diff_rate).
+    total_rate = adv_rate + diff_rate
+    return float("inf") if total_rate <= 0.0 else cfl_safety / total_rate
+
+
+def _max_wind_components(
+    wf: PrescribedWindField, sample_times: tuple[float, ...]
+) -> tuple[float, float, float]:
+    """Component-wise max |u|, |v|, |w| over the interior at ``sample_times``.
+
+    Raises on a non-finite sample: ``max(prev, nan)`` keeps ``prev`` (a NaN wind
+    would read as calm and let the guard approve a step the RHS then corrupts),
+    so reject it explicitly — the same treatment as the diffusivity check.
+    """
+    max_u = max_v = max_w = 0.0
+    for t in sample_times:
+        u, v, w = wf(jnp.asarray(t, dtype=jnp.float32))
+        for name, comp in (("u", u), ("v", v), ("w", w)):
+            if not bool(jnp.all(jnp.isfinite(comp))):
+                raise ValueError(
+                    f"wind field has a non-finite {name} component at "
+                    f"t={float(t):g}; the CFL guard cannot bound a NaN/inf wind."
+                )
+        max_u = max(max_u, float(jnp.max(jnp.abs(u))))
+        max_v = max(max_v, float(jnp.max(jnp.abs(v))))
+        max_w = max(max_w, float(jnp.max(jnp.abs(w))))
+    return max_u, max_v, max_w
+
+
+def _max_diffusivity(eddy: EddyDiffusivity) -> tuple[float, float]:
+    """Return ``(max K_h, max K_z)``, rejecting negative or non-finite ``K``.
+
+    A negative ``K`` is anti-diffusion: its modes grow every explicit step, so
+    no positive ``dt0`` is stable, and taking ``|K|`` would let the guard
+    approve a step the real (negative-``K``) tendency then blows up on. A
+    NaN/inf ``K`` makes every ``dt0 > bound`` comparison false, silently
+    disabling the guard while the tendency corrupts the solve. Reject both.
+    """
+    k_h_arr = jnp.asarray(eddy.as_arrays()[0])
+    k_z_arr = jnp.asarray(eddy.as_arrays()[1])
+    if not bool(jnp.all(jnp.isfinite(k_h_arr)) & jnp.all(jnp.isfinite(k_z_arr))):
+        raise ValueError("eddy diffusivity must be finite; got a NaN/inf K.")
+    k_min = min(float(jnp.min(k_h_arr)), float(jnp.min(k_z_arr)))
+    if k_min < 0.0:
+        raise ValueError(
+            "eddy diffusivity must be non-negative; a negative K is "
+            f"anti-diffusion and is unconditionally unstable (min K = {k_min:g})."
+        )
+    return float(jnp.max(k_h_arr)), float(jnp.max(k_z_arr))
+
+
+def _check_fixed_step_stability(
+    *,
+    plume_grid: PlumeGrid3D,
+    wf: PrescribedWindField,
+    eddy: EddyDiffusivity,
+    dt0: float,
+    t_start: float,
+    t_end: float,
+    solver_name: str,
+    extra_sample_times: tuple[float, ...] = (),
+    max_wind_speed: float | None = None,
+) -> None:
+    """Raise if ``dt0`` exceeds the stable step for a fixed-step solver.
+
+    The field is always sampled on a dense time grid over ``[t_start, t_end]``
+    unioned with ``extra_sample_times`` (e.g. the in-window ``WindSchedule``
+    knots, where a piecewise-linear schedule attains its extrema) — both to
+    estimate the peak speed that drives the advective CFL term and to reject a
+    non-finite wind. When ``max_wind_speed`` is given it overrides the sampled
+    maxima as a conservative per-component bound — the robust choice for a
+    callable whose peak sits between samples — while the sampling still runs so
+    the finiteness check is never bypassed.
+    """
+    base = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
+    # Union (dedup) the dense grid with the supplied extra times.
+    sample_times = tuple(
+        dict.fromkeys(base + tuple(float(t) for t in extra_sample_times))
+    )
+    # Always sample: this validates finiteness (raises on a NaN/inf wind) even
+    # when an override supplies the maxima.
+    sampled_u, sampled_v, sampled_w = _max_wind_components(wf, sample_times)
+    if max_wind_speed is not None:
+        peak = float(max_wind_speed)
+        max_u = max_v = max_w = peak
+    else:
+        max_u, max_v, max_w = sampled_u, sampled_v, sampled_w
+    k_h, k_z = _max_diffusivity(eddy)
+    bound = stable_step_bound(
+        dx=plume_grid.dx,
+        dy=plume_grid.dy,
+        dz=plume_grid.dz,
+        max_u=max_u,
+        max_v=max_v,
+        max_w=max_w,
+        k_h=k_h,
+        k_z=k_z,
+    )
+    if dt0 > bound:
+        raise ValueError(
+            f"simulate_eulerian_dispersion: dt0={dt0:g} s exceeds the stable "
+            f"step ~{bound:g} s for fixed-step solver {solver_name!r} "
+            f"(advective CFL / explicit-diffusion limit on this grid+wind+K). "
+            f"Reduce dt0, soften K / coarsen the grid, or use an adaptive "
+            f"solver ('tsit5'/'dopri5')."
+        )
+
+
 def _pick_solver(name: SolverName):
     if name == "tsit5":
         return diffrax.Tsit5(), True
@@ -404,11 +597,27 @@ def _solve(
     rtol: float,
     atol: float,
     max_steps: int,
+    extra_sample_times: tuple[float, ...] = (),
+    max_wind_speed: float | None = None,
 ):
     solver, adaptive = _pick_solver(solver_name)
     if adaptive:
         stepsize_controller = diffrax.PIDController(rtol=rtol, atol=atol)
     else:
+        # Fixed-step solvers integrate at exactly dt0 with no error control,
+        # so guard the CFL / explicit-diffusion stability limit up front —
+        # otherwise an over-large dt0 silently blows up mid-solve.
+        _check_fixed_step_stability(
+            plume_grid=rhs.plume_grid,
+            wf=rhs.wind_field,
+            eddy=rhs.eddy_diffusivity,
+            dt0=dt0,
+            t_start=t_start,
+            t_end=t_end,
+            solver_name=solver_name,
+            extra_sample_times=extra_sample_times,
+            max_wind_speed=max_wind_speed,
+        )
         stepsize_controller = diffrax.ConstantStepSize()
     return _solve_jit(
         rhs=rhs,

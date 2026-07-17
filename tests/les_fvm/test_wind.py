@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from plumax.gauss_puff.wind import WindSchedule
-from plumax.les_fvm.grid import make_grid
+from plumax.les_fvm.grid import coord_arrays_from_grid, make_grid
 from plumax.les_fvm.wind import (
     PrescribedWindField,
     uniform_wind_field,
@@ -67,6 +67,32 @@ def test_wind_field_from_callable_sees_coordinate_arrays():
         np.testing.assert_allclose(u_int[k].mean(), 0.1 * z_val, rtol=1e-4)
     np.testing.assert_allclose(np.asarray(v), 0.0)
     np.testing.assert_allclose(np.asarray(w), 0.0)
+
+
+def test_wind_field_from_callable_samples_components_at_stagger_points():
+    # Regression for #28: on a C-grid, u must be sampled at U-points
+    # (x + dx/2), v at V-points (y + dy/2), and w at T-points — not all
+    # three at the T-point, which would displace u/v by half a cell.
+    g = _build_grid()
+
+    def linear_flow(t, X, Y, Z):
+        del t, Z
+        # u varies in x, v varies in y, w varies in x (unshifted check).
+        return X, Y, X
+
+    wf = wind_field_from_callable(g, linear_flow)
+    u, v, w = wf(jnp.asarray(0.0))
+    u_int = np.asarray(u)[1:-1, 1:-1, 1:-1]
+    v_int = np.asarray(v)[1:-1, 1:-1, 1:-1]
+    w_int = np.asarray(w)[1:-1, 1:-1, 1:-1]
+
+    X, Y, _ = coord_arrays_from_grid(g)
+    X = np.asarray(X)
+    Y = np.asarray(Y)
+    # u half a cell east of the T-point, v half a cell north, w unshifted.
+    np.testing.assert_allclose(u_int, X + 0.5 * g.dx, rtol=1e-5)
+    np.testing.assert_allclose(v_int, Y + 0.5 * g.dy, rtol=1e-5)
+    np.testing.assert_allclose(w_int, X, rtol=1e-5)
 
 
 def test_prescribed_wind_field_returns_pytree():

@@ -63,12 +63,13 @@ class VerticalBC(eqx.Module):
         Ground-boundary behaviour.
     bottom_value : float, default 0.0
         For ``dirichlet``: the boundary value.
-        For ``neumann``: the *outward-normal* gradient ``∂C/∂n`` — i.e.
-        the gradient along ``-z`` at the bottom face (a positive value
-        means ``C`` increases as you move downward out of the domain).
-        Ignored for ``outflow`` / ``periodic``.
-    top_kind, top_value : same, but Neumann ``value`` is the outward-normal
-        gradient along ``+z``.
+        For ``neumann``: the coordinate gradient ``∂C/∂z`` along ``+z``
+        at the face — a positive value means ``C`` increases with height.
+        The ghost cell is set so the finite-difference ``∂C/∂z`` across
+        the face equals ``value``. Ignored for ``outflow`` / ``periodic``.
+    top_kind, top_value : same, with the Neumann ``value`` again the
+        coordinate gradient ``∂C/∂z`` along ``+z`` (same convention on
+        both faces; see the sign note in :func:`_apply_vertical_face`).
     """
 
     bottom_kind: VerticalBCKind = eqx.field(static=True)
@@ -83,8 +84,8 @@ class VerticalBC(eqx.Module):
     ) -> Float[Array, "Nz Ny Nx"]:
         """Return ``field`` with top and bottom ghost slices updated.
 
-        ``dz`` is required to translate a Neumann outward-normal gradient
-        into the half-cell ghost offset ``sign · gradient · dz``.
+        ``dz`` is required to translate a Neumann coordinate gradient
+        ``∂C/∂z`` into the half-cell ghost offset ``sign · gradient · dz``.
         """
         out = _apply_vertical_face(
             field,
@@ -112,9 +113,14 @@ def _apply_vertical_face(
 ) -> Float[Array, "Nz Ny Nx"]:
     """Update one vertical ghost slice using the requested BC flavour.
 
-    Conventions match :class:`finitevolx.Neumann1D`: the ``value`` for
-    a Neumann BC is the *outward-normal* gradient, i.e. along ``-z`` at
-    the bottom face and along ``+z`` at the top face.
+    Neumann convention: ``value`` is the coordinate gradient ``∂C/∂z``
+    along ``+z``, applied identically on both faces — the ghost cell is
+    set so the finite-difference ``∂C/∂z`` across the face equals
+    ``value``. The ``outward_sign`` factor (``-1`` at the bottom, ``+1``
+    at the top) is what makes the *same* ``value`` mean ``∂C/∂z`` at
+    both faces despite the ghost sitting below the interior at the
+    bottom and above it at the top; this matches the ghost sign of
+    :class:`finitevolx.Neumann1D`.
     """
     if face == "bottom":
         interior_slice = field[1, :, :]
@@ -130,8 +136,9 @@ def _apply_vertical_face(
     if kind == "dirichlet":
         ghost = 2.0 * value - interior_slice
     elif kind == "neumann":
-        # Ghost value so that the finite-difference outward-normal gradient
-        # across the wall equals ``value``. Matches finitevolX.Neumann1D.
+        # Ghost value so that the finite-difference coordinate gradient
+        # ``∂C/∂z`` (along +z) across the face equals ``value``. The
+        # outward_sign flip keeps that meaning identical on both faces.
         ghost = interior_slice + outward_sign * value * dz
     elif kind == "outflow":
         ghost = interior_slice

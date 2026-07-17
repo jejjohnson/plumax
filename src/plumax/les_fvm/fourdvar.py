@@ -37,6 +37,7 @@ the Matérn-3/2 temporal prior from :mod:`plumax.lagrangian.inversion` supplies
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -136,6 +137,11 @@ class EulerianForward4DVar:
             "max_steps": 100_000,
             **self.solver_kwargs,
         }
+        # diffrax's StepTo controller prescribes its own step points and requires
+        # dt0=None; the default dt0=1.0 above would otherwise make the solve
+        # fail, so drop it whenever a StepTo controller is in effect.
+        if isinstance(kw["stepsize_controller"], diffrax.StepTo):
+            kw["dt0"] = None
         sol = diffrax.diffeqsolve(
             diffrax.ODETerm(rhs),
             kw["solver"],
@@ -229,6 +235,55 @@ def build_forward(
         w=uniform_wind[2],
     )
     eddy = make_eddy_diffusivity(eddy_diffusivity)
+
+    import diffrax
+
+    from plumax.les_fvm.simulate import _max_diffusivity, stable_step_bound
+
+    # Reject an invalid diffusivity regardless of the solver / controller: a
+    # negative (anti-diffusion) or non-finite K is unstable or guard-defeating
+    # even on the adaptive path, so validate it before any branch.
+    _k_h, _k_z = _max_diffusivity(eddy)
+
+    # Stability guard for the fixed-step 4D-Var solve. The default path is
+    # Heun + ConstantStepSize + dt0=1 (see `concentration_history`); an
+    # over-large step silently blows up *inside* the optimisation loop, where
+    # it is hardest to diagnose. The explicit CFL bound only applies to an
+    # explicit solver taking a fixed step, so the guard runs only when: (a) the
+    # controller is fixed — ConstantStepSize (largest step = dt0) or StepTo
+    # (largest step = widest prescribed interval) — and (b) the solver is
+    # explicit. Adaptive controllers are error-controlled and implicit solvers
+    # are stable at these steps, so both are skipped.
+    _kw = dict(solver_kwargs or {})
+    _solver = _kw.get("solver", diffrax.Heun())
+    _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
+    _max_step: float | None = None
+    if isinstance(_controller, diffrax.ConstantStepSize):
+        _max_step = float(_kw.get("dt0", 1.0))
+    elif isinstance(_controller, diffrax.StepTo):
+        _ts = np.asarray(_controller.ts, dtype=float)
+        _max_step = float(np.max(np.diff(_ts))) if _ts.size >= 2 else 0.0
+    if _max_step is not None and not isinstance(
+        _solver, diffrax.AbstractImplicitSolver
+    ):
+        _bound = stable_step_bound(
+            dx=plume_grid.dx,
+            dy=plume_grid.dy,
+            dz=plume_grid.dz,
+            max_u=abs(float(uniform_wind[0])),
+            max_v=abs(float(uniform_wind[1])),
+            max_w=abs(float(uniform_wind[2])),
+            k_h=_k_h,
+            k_z=_k_z,
+        )
+        if _max_step > _bound:
+            raise ValueError(
+                f"build_forward: fixed step {_max_step:g} s exceeds the stable "
+                f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
+                f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
+                f"'ts'), soften K, or pass an adaptive stepsize_controller."
+            )
+
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=("dirichlet", "outflow"), bc_y="periodic", bc_z=("neumann", "neumann")
     )
@@ -354,6 +409,18 @@ def build_problem(
         raise ValueError(
             f"build_problem: `observations` must be (n_t={n_t}, n_obs), got {y.shape}."
         )
+    # Reject non-finite inputs: a NaN would flow through the cost / posterior as
+    # a finite-`source` solve with a NaN objective and covariance (the source-
+    # only divergence check in `solve_4dvar` cannot catch that).
+    for _name, _arr in (
+        ("prior_mean", sb),
+        ("prior_covariance", b),
+        ("observations", y),
+    ):
+        if not bool(jnp.all(jnp.isfinite(_arr))):
+            raise ValueError(
+                f"build_problem: `{_name}` must be finite (contains NaN/inf)."
+            )
     # Jitter keeps the Cholesky factor PD for smooth Matérn kernels.
     chol = jnp.linalg.cholesky(b + 1e-9 * jnp.eye(n_t))
 
@@ -375,8 +442,12 @@ def build_problem(
         )
     if r_in.ndim == 1 and r_in.shape[0] == n_t:
         r_in = r_in[:, None]
-    if np.any(r_in <= 0.0):
-        raise ValueError("build_problem: `obs_variance` entries must be > 0.")
+    if not np.all(np.isfinite(r_in)) or np.any(r_in <= 0.0):
+        # NaN passes ``<= 0`` (every comparison is False), so check finiteness
+        # explicitly — a NaN R would give a NaN cost and posterior.
+        raise ValueError(
+            "build_problem: `obs_variance` entries must be finite and > 0."
+        )
     try:
         r = jnp.broadcast_to(jnp.asarray(r_in), y.shape)
     except (ValueError, TypeError) as exc:
@@ -404,6 +475,14 @@ class FourDVarResult:
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
             when :func:`solve_4dvar` is called with ``compute_posterior=True``.
+        converged: optx's strict success flag (``sol.result == successful``).
+            Appended after ``posterior`` to preserve the positional constructor
+            contract. L-BFGS on these stiff problems frequently exhausts
+            ``max_steps`` while still returning a good, finite MAP, so
+            ``converged is False`` with a finite ``source`` is common and not by
+            itself alarming. The genuine failure to watch for is a non-finite
+            ``source`` (a diverged solve), which :func:`solve_4dvar` warns about
+            loudly.
     """
 
     source: jax.Array
@@ -411,6 +490,7 @@ class FourDVarResult:
     cost: float
     n_steps: int
     posterior: PosteriorCovariance | None = None
+    converged: bool = True
 
 
 def solve_4dvar(
@@ -463,13 +543,40 @@ def solve_4dvar(
         max_steps=max_steps,
         throw=False,
     )
+    # `throw=False` suppresses the failure exception, so surface the outcome
+    # instead of trusting `sol.value` blindly. `converged` is optx's strict
+    # success flag; L-BFGS on these stiff transport problems frequently
+    # exhausts `max_steps` while still returning a good, finite MAP, so a bare
+    # `converged is False` is common and not alarming on its own. The genuine
+    # hazard the caller must be warned about loudly is a *diverged* solve whose
+    # MAP is non-finite and would silently poison `posterior_covariance`.
+    converged = bool(sol.result == optx.RESULTS.successful)
     chi_star = sol.value
-    posterior = posterior_covariance(problem, chi_star) if compute_posterior else None
+    source = problem.source_from_whitened(chi_star)
+    finite = bool(jnp.all(jnp.isfinite(source)))
+    if not finite:
+        warnings.warn(
+            f"solve_4dvar: the optimiser returned a non-finite source "
+            f"(result={sol.result}); the solve diverged. The posterior is "
+            f"skipped (it would be NaN). Check the prior conditioning, "
+            f"`obs_variance`, and `initial_source`.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    # Skip the posterior on a non-finite MAP: evaluating the Gauss-Newton
+    # Jacobian + inverse at a NaN control would raise or attach a NaN covariance
+    # — the exact downstream poisoning the finiteness check exists to prevent.
+    posterior = (
+        posterior_covariance(problem, chi_star)
+        if compute_posterior and finite
+        else None
+    )
     return FourDVarResult(
-        source=problem.source_from_whitened(chi_star),
+        source=source,
         whitened=chi_star,
         cost=float(problem.cost(chi_star)),
         n_steps=int(sol.stats.get("num_steps", -1)),
+        converged=converged,
         posterior=posterior,
     )
 
