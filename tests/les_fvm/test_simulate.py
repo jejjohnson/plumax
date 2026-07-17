@@ -371,6 +371,34 @@ def test_stability_guard_honors_max_wind_speed_override():
         )
 
 
+def test_negative_diffusivity_rejected_even_for_adaptive_solver():
+    # Anti-diffusion is invalid regardless of solver; validation is unconditional
+    # (not gated behind the fixed-step guard), so an adaptive run also rejects it.
+    with pytest.raises(ValueError, match="non-negative"):
+        simulate_eulerian_dispersion(
+            **_common_kwargs(solver="tsit5", eddy_diffusivity=(-1.0, 1.0))
+        )
+
+
+def test_nonfinite_diffusivity_rejected():
+    # A NaN K makes every dt0 > bound comparison false, silently disabling the
+    # guard — so a non-finite diffusivity must be rejected outright.
+    with pytest.raises(ValueError, match="finite"):
+        simulate_eulerian_dispersion(
+            **_common_kwargs(
+                solver="heun", dt0=0.5, eddy_diffusivity=(float("nan"), 1.0)
+            )
+        )
+
+
+def test_invalid_max_wind_speed_rejected():
+    # A negative or non-finite override would zero/NaN the bound and disable the
+    # guard; it must be rejected at the entry point (before any solve).
+    for bad in (-1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="max_wind_speed"):
+            simulate_eulerian_dispersion(**_common_kwargs(max_wind_speed=bad))
+
+
 def test_stability_guard_includes_schedule_knots():
     # A narrow high-speed knot at t=0.9 sits between the guard's dense samples
     # and is bracketed by calm knots at 0.8 and 1.0, so the uniform grid alone

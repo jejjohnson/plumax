@@ -231,19 +231,26 @@ def build_forward(
     )
     eddy = make_eddy_diffusivity(eddy_diffusivity)
 
-    # Stability guard for the fixed-step 4D-Var solve. The default path is
-    # Heun + ConstantStepSize + dt0=1 (see `concentration_history`); an
-    # over-large step silently blows up *inside* the optimisation loop, where
-    # it is hardest to diagnose. Check it once here on the static config
-    # (uniform wind + constant K). The largest step the solve will take is dt0
-    # for ConstantStepSize and the widest prescribed interval for StepTo — both
-    # fixed controllers; adaptive controllers (PIDController, …) are
-    # error-controlled, so the guard is skipped for them.
     import diffrax
 
     from plumax.les_fvm.simulate import _max_diffusivity, stable_step_bound
 
+    # Reject an invalid diffusivity regardless of the solver / controller: a
+    # negative (anti-diffusion) or non-finite K is unstable or guard-defeating
+    # even on the adaptive path, so validate it before any branch.
+    _k_h, _k_z = _max_diffusivity(eddy)
+
+    # Stability guard for the fixed-step 4D-Var solve. The default path is
+    # Heun + ConstantStepSize + dt0=1 (see `concentration_history`); an
+    # over-large step silently blows up *inside* the optimisation loop, where
+    # it is hardest to diagnose. The explicit CFL bound only applies to an
+    # explicit solver taking a fixed step, so the guard runs only when: (a) the
+    # controller is fixed — ConstantStepSize (largest step = dt0) or StepTo
+    # (largest step = widest prescribed interval) — and (b) the solver is
+    # explicit. Adaptive controllers are error-controlled and implicit solvers
+    # are stable at these steps, so both are skipped.
     _kw = dict(solver_kwargs or {})
+    _solver = _kw.get("solver", diffrax.Heun())
     _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
     _max_step: float | None = None
     if isinstance(_controller, diffrax.ConstantStepSize):
@@ -251,8 +258,9 @@ def build_forward(
     elif isinstance(_controller, diffrax.StepTo):
         _ts = np.asarray(_controller.ts, dtype=float)
         _max_step = float(np.max(np.diff(_ts))) if _ts.size >= 2 else 0.0
-    if _max_step is not None:
-        _k_h, _k_z = _max_diffusivity(eddy)
+    if _max_step is not None and not isinstance(
+        _solver, diffrax.AbstractImplicitSolver
+    ):
         _bound = stable_step_bound(
             dx=plume_grid.dx,
             dy=plume_grid.dy,
@@ -268,7 +276,7 @@ def build_forward(
                 f"build_forward: fixed step {_max_step:g} s exceeds the stable "
                 f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
                 f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
-                f"'ts'), soften K, or pass an adaptive stepsize_controller."
+                f"'ts'), soften K, or pass an adaptive/implicit solver."
             )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(

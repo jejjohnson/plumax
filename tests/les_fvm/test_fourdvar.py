@@ -228,6 +228,46 @@ def test_build_forward_rejects_negative_diffusivity():
         )
 
 
+def test_build_forward_rejects_negative_diffusivity_with_adaptive_controller():
+    # K validation is unconditional: a negative diffusivity is rejected even
+    # when an adaptive controller would otherwise skip the fixed-step guard.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="non-negative"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=(-1.0, 1.0),
+            solver_kwargs={
+                "stepsize_controller": diffrax.PIDController(rtol=1e-3, atol=1e-6)
+            },
+        )
+
+
+def test_build_forward_skips_guard_for_implicit_solver():
+    # An implicit solver is stable at large fixed steps, so the explicit CFL
+    # guard must not reject it — build_forward should succeed even at a huge dt0.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    fwd = build_forward(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=save_times,
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+        solver_kwargs={"solver": diffrax.Kvaerno5(), "dt0": 1000.0},
+    )
+    assert isinstance(fwd, EulerianForward4DVar)
+
+
 # ── validation ───────────────────────────────────────────────────────────────
 
 

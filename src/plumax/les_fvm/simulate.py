@@ -183,6 +183,16 @@ def simulate_eulerian_dispersion(
         t_start=t_start,
         t_end=t_end,
     )
+    # Validate inputs independently of the solver: a negative / non-finite K is
+    # unstable (or guard-defeating) on the adaptive path too, and a malformed
+    # `max_wind_speed` would silently disable the fixed-step guard.
+    _max_diffusivity(eddy)
+    if max_wind_speed is not None and (
+        not np.isfinite(max_wind_speed) or max_wind_speed < 0.0
+    ):
+        raise ValueError(
+            f"max_wind_speed must be finite and non-negative (got {max_wind_speed!r})."
+        )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=bc_x, bc_y=bc_y, bc_z=bc_z
@@ -411,6 +421,17 @@ def stable_step_bound(
     -------
     float
         The maximum stable ``dt0`` [s].
+
+    Notes
+    -----
+    This is a first-order (upwind / forward-Euler) sum-CFL estimate — a
+    conservative safety net that catches gross step-size errors (the
+    ``dt0``-orders-of-magnitude-too-large failure mode). It is **not** a
+    rigorous stability certificate for the higher-order or low-dissipation
+    reconstructions (e.g. the default ``weno5``, or ``naive``): those
+    semidiscrete operators have different stability regions, and an explicit
+    RK step can amplify their weakly-damped modes even below this bound. Keep
+    ``dt0`` comfortably under the reported value when using such schemes.
     """
     adv_rate = max_u / dx + max_v / dy + max_w / dz
     diff_rate = 2.0 * (k_h / dx**2 + k_h / dy**2 + k_z / dz**2)
@@ -435,14 +456,18 @@ def _max_wind_components(
 
 
 def _max_diffusivity(eddy: EddyDiffusivity) -> tuple[float, float]:
-    """Return ``(max K_h, max K_z)``, rejecting any negative diffusivity.
+    """Return ``(max K_h, max K_z)``, rejecting negative or non-finite ``K``.
 
     A negative ``K`` is anti-diffusion: its modes grow every explicit step, so
-    no positive ``dt0`` is stable. Taking ``|K|`` would let the guard approve a
-    step the real (negative-``K``) tendency then blows up on, so reject it.
+    no positive ``dt0`` is stable, and taking ``|K|`` would let the guard
+    approve a step the real (negative-``K``) tendency then blows up on. A
+    NaN/inf ``K`` makes every ``dt0 > bound`` comparison false, silently
+    disabling the guard while the tendency corrupts the solve. Reject both.
     """
     k_h_arr = jnp.asarray(eddy.as_arrays()[0])
     k_z_arr = jnp.asarray(eddy.as_arrays()[1])
+    if not bool(jnp.all(jnp.isfinite(k_h_arr)) & jnp.all(jnp.isfinite(k_z_arr))):
+        raise ValueError("eddy diffusivity must be finite; got a NaN/inf K.")
     k_min = min(float(jnp.min(k_h_arr)), float(jnp.min(k_z_arr)))
     if k_min < 0.0:
         raise ValueError(
