@@ -32,12 +32,13 @@ classifiers = [
 ]
 # Core runtime deps — only what the forward models need. The NumPyro-based
 # Bayesian inference modules are imported lazily; consumers who only want the
-# xarray forward models do not pay for them. The jax/jaxlib upper bound mirrors
-# the research_notebook `plume-simulation` feature (numpyro < 0.21 still imports
-# `xla_pmap_p`, removed on the JAX 0.9 line).
+# xarray forward models do not pay for them. jax/jaxlib >= 0.10 tracks
+# finitevolx (>= 0.0.42) and gaussx (>= 0.0.17), which moved to the jaxlib
+# 0.10 line; numpyro >= 0.21 dropped the removed `xla_pmap_p` import and is
+# compatible.
 dependencies = [
-    "jax>=0.7,<0.9",
-    "jaxlib>=0.7,<0.9",
+    "jax>=0.10",
+    "jaxlib>=0.10",
     "numpy",
     "xarray",
     # netcdf4 backs the compressed-NetCDF LUT round-trip in hapi_lut; without a
@@ -48,10 +49,12 @@ dependencies = [
     "diffrax>=0.6",
     "equinox>=0.11",
     # finitevolx powers the Arakawa C-grid FVM operators used by les_fvm.
-    "finitevolx>=0.0.41",
+    # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it).
+    "finitevolx>=0.0.44",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
-    # Woodbury solve) used by the radtran matched-filter retrieval.
-    "gaussx",
+    # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.17
+    # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires.
+    "gaussx>=0.0.17",
     # optimistix powers the variational retrieval module (assimilation):
     # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
     "optimistix>=0.0.10",
@@ -66,7 +69,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # The `inference` submodules are the only consumers of numpyro.
-inference = ["numpyro>=0.16"]
+inference = ["numpyro>=0.21"]
 # The hapi_lut sub-package imports HAPI lazily — install this extra to build LUTs.
 hapi = ["hitran-api"]
 # Pulled in by the example notebooks (plots).
@@ -79,12 +82,9 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit" }
-finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.41" }
+finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.44" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle" }
-# gaussx >= 0.0.14 moved to jaxlib >= 0.10; pin to the last rev compatible
-# with the numpyro-driven jax < 0.9 line (mirrors the research_notebook
-# `plume-simulation` environment).
-gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "fd9a2427" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.0.17" }
 
 [dependency-groups]
 dev = [
@@ -92,7 +92,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.5",
     "pre-commit>=4.5.1",
-    "numpyro>=0.16",
+    "numpyro>=0.21",
     # pipekit-cycle is a *test-only* dep: the adapters satisfy its protocols
     # structurally, and the tests assert that conformance via isinstance.
     "pipekit-cycle",

@@ -97,10 +97,19 @@ def diffusion_tendency(
     -------
     Float[Array, "Nz Ny Nx"]
         Diffusive tendency at T-points, zero on every ghost face.
+
+    Notes
+    -----
+    The horizontal operator runs in finitevolX ``wall="open"`` mode, so the
+    lateral wall diffusive fluxes ``K_h·(C_edge − C_ghost)/dx`` are assembled
+    from the ghost ring.  The caller must fill the ghost cells with the
+    desired lateral BC (Dirichlet / periodic) *before* calling — see
+    :func:`~plumax.les_fvm.boundary.apply_boundary_conditions`.  This is what
+    makes horizontal diffusion honor ``bc_x`` / ``bc_y``.
     """
     k_h, k_z = eddy_diffusivity.as_arrays()
     horizontal_op = Diffusion3D(grid=plume_grid.grid)
-    horizontal = horizontal_op(concentration, k_h)
+    horizontal = horizontal_op(concentration, k_h, wall="open")
     vertical = vertical_diffusion_tendency(concentration, k_z, plume_grid.dz)
     return horizontal + vertical
 

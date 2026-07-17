@@ -56,8 +56,19 @@ def advection_tendency(
     -------
     Float[Array, "Nz Ny Nx"]
         Advective tendency at T-points, zero on every ghost face.
+
+    Notes
+    -----
+    The horizontal operator runs in finitevolX ``wall="open"`` mode, so the
+    lateral domain-wall face fluxes are assembled from the ghost ring
+    (first-order upwind against the wall, high-order ``method`` in the
+    interior).  The caller must fill the ghost cells with the desired lateral
+    BC (Dirichlet / outflow / periodic) *before* calling — see
+    :func:`~plumax.les_fvm.boundary.apply_boundary_conditions`, which
+    :class:`~plumax.les_fvm.dynamics.EulerianDispersionRHS` runs every step.
+    This is what makes horizontal transport honor ``bc_x`` / ``bc_y``.
     """
     horizontal_op = Advection3D(grid=plume_grid.grid)
-    horizontal = horizontal_op(concentration, u, v, method=method)
+    horizontal = horizontal_op(concentration, u, v, method=method, wall="open")
     vertical = vertical_advection_tendency(concentration, w, plume_grid.dz)
     return horizontal + vertical
