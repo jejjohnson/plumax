@@ -37,6 +37,7 @@ the Matérn-3/2 temporal prior from :mod:`plumax.lagrangian.inversion` supplies
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -229,6 +230,40 @@ def build_forward(
         w=uniform_wind[2],
     )
     eddy = make_eddy_diffusivity(eddy_diffusivity)
+
+    # Stability guard for the fixed-step 4D-Var solve. The default path is
+    # Heun + ConstantStepSize + dt0=1 (see `concentration_history`); an
+    # over-large dt0 silently blows up *inside* the optimisation loop, where
+    # it is hardest to diagnose. Check it once here on the static config
+    # (uniform wind + constant K), skipping only when the caller supplies an
+    # adaptive stepsize controller.
+    import diffrax
+
+    from plumax.les_fvm.simulate import stable_step_bound
+
+    _kw = dict(solver_kwargs or {})
+    _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
+    if isinstance(_controller, diffrax.ConstantStepSize):
+        _dt0 = float(_kw.get("dt0", 1.0))
+        _k_h, _k_z = eddy.as_arrays()
+        _bound = stable_step_bound(
+            dx=plume_grid.dx,
+            dy=plume_grid.dy,
+            dz=plume_grid.dz,
+            max_u=abs(float(uniform_wind[0])),
+            max_v=abs(float(uniform_wind[1])),
+            max_w=abs(float(uniform_wind[2])),
+            k_h=float(jnp.max(jnp.abs(jnp.asarray(_k_h)))),
+            k_z=float(jnp.max(jnp.abs(jnp.asarray(_k_z)))),
+        )
+        if _dt0 > _bound:
+            raise ValueError(
+                f"build_forward: dt0={_dt0:g} s exceeds the stable step "
+                f"~{_bound:g} s for the fixed-step 4D-Var solve on this "
+                f"grid+wind+K. Reduce dt0 (solver_kwargs={{'dt0': ...}}), "
+                f"soften K, or pass an adaptive stepsize_controller."
+            )
+
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=("dirichlet", "outflow"), bc_y="periodic", bc_z=("neumann", "neumann")
     )
@@ -402,6 +437,12 @@ class FourDVarResult:
         whitened: Optimal whitened control ``χ*``, shape ``(n_t,)``.
         cost: Final cost value ``J(χ*)``.
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
+        converged: optx's strict success flag (``sol.result == successful``).
+            L-BFGS on these stiff problems frequently exhausts ``max_steps``
+            while still returning a good, finite MAP, so ``converged is False``
+            with a finite ``source`` is common and not by itself alarming. The
+            genuine failure to watch for is a non-finite ``source`` (a diverged
+            solve), which :func:`solve_4dvar` warns about loudly.
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
             when :func:`solve_4dvar` is called with ``compute_posterior=True``.
     """
@@ -410,6 +451,7 @@ class FourDVarResult:
     whitened: jax.Array
     cost: float
     n_steps: int
+    converged: bool = True
     posterior: PosteriorCovariance | None = None
 
 
@@ -463,13 +505,31 @@ def solve_4dvar(
         max_steps=max_steps,
         throw=False,
     )
+    # `throw=False` suppresses the failure exception, so surface the outcome
+    # instead of trusting `sol.value` blindly. `converged` is optx's strict
+    # success flag; L-BFGS on these stiff transport problems frequently
+    # exhausts `max_steps` while still returning a good, finite MAP, so a bare
+    # `converged is False` is common and not alarming on its own. The genuine
+    # hazard the caller must be warned about loudly is a *diverged* solve whose
+    # MAP is non-finite and would silently poison `posterior_covariance`.
+    converged = bool(sol.result == optx.RESULTS.successful)
     chi_star = sol.value
+    source = problem.source_from_whitened(chi_star)
+    if not bool(jnp.all(jnp.isfinite(source))):
+        warnings.warn(
+            f"solve_4dvar: the optimiser returned a non-finite source "
+            f"(result={sol.result}); the solve diverged. Check the prior "
+            f"conditioning, `obs_variance`, and `initial_source`.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
     posterior = posterior_covariance(problem, chi_star) if compute_posterior else None
     return FourDVarResult(
-        source=problem.source_from_whitened(chi_star),
+        source=source,
         whitened=chi_star,
         cost=float(problem.cost(chi_star)),
         n_steps=int(sol.stats.get("num_steps", -1)),
+        converged=converged,
         posterior=posterior,
     )
 

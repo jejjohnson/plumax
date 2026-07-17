@@ -163,6 +163,19 @@ def wind_field_from_callable(
 ) -> PrescribedWindField:
     """General-purpose wind field from a user-supplied ``(t, X, Y, Z)`` function.
 
+    Each velocity component is sampled at its C-grid stagger point so the
+    field the advection operator consumes is correctly located:
+
+    - ``u`` at U-points — T-point coordinates shifted ``+dx/2`` in x,
+    - ``v`` at V-points — T-point coordinates shifted ``+dy/2`` in y,
+    - ``w`` at T-points (collocated, per the ``les_fvm`` convention).
+
+    ``fn`` is therefore evaluated three times — once per stagger — and
+    only the matching component is kept from each call.  A divergence-free
+    analytic wind sampled this way stays discretely divergence-free
+    (sampling all three at T-points would displace ``u``/``v`` by half a
+    cell and introduce spurious tracer sources).
+
     Parameters
     ----------
     plume_grid : PlumeGrid3D
@@ -176,8 +189,17 @@ def wind_field_from_callable(
     PrescribedWindField
     """
     X, Y, Z = coord_arrays_from_grid(plume_grid)
+    half_dx = 0.5 * plume_grid.dx
+    half_dy = 0.5 * plume_grid.dy
+    # Stagger the sampling coordinates: U-points sit half a cell east of
+    # the T-point in x, V-points half a cell north in y.
+    X_u = X + half_dx
+    Y_v = Y + half_dy
 
     def interior_fn(t):
-        return fn(t, X, Y, Z)
+        u = fn(t, X_u, Y, Z)[0]
+        v = fn(t, X, Y_v, Z)[1]
+        w = fn(t, X, Y, Z)[2]
+        return u, v, w
 
     return PrescribedWindField(plume_grid=plume_grid, interior_fn=interior_fn)

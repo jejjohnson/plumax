@@ -7,6 +7,8 @@ the whitening transform, and end-to-end twin recovery — not large-scale physic
 
 from __future__ import annotations
 
+import warnings
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -172,6 +174,20 @@ def test_solve_from_explicit_initial_source():
     prob = _problem(fwd, q_true)
     res = solve_4dvar(prob, initial_source=jnp.full(5, 0.5), max_steps=40)
     assert res.source.shape == (5,)
+    assert np.all(np.isfinite(np.asarray(res.source)))
+
+
+def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
+    # Regression for #30: `throw=False` hides the optimiser outcome, so the
+    # result must expose it. A single step cannot meet optx's strict success
+    # criterion, so `converged` is False — yet the MAP is still finite (a good
+    # partial recovery, not a divergence), so no spurious warning is raised.
+    fwd = _forward()
+    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        res = solve_4dvar(prob, max_steps=1)
+    assert res.converged is False
     assert np.all(np.isfinite(np.asarray(res.source)))
 
 

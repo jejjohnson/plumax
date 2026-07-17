@@ -302,6 +302,47 @@ def test_simulate_accepts_explicit_wind_field():
     assert float(ds["concentration"].max()) > 0.0
 
 
+def test_stable_step_bound_formula():
+    # Regression for #29: pin the advective-CFL / explicit-diffusion formula.
+    from plumax.les_fvm import stable_step_bound
+
+    # Pure advection: dt = 1 / (|u|/dx) = 1 / (2/10) = 5.
+    adv = stable_step_bound(
+        dx=10.0, dy=10.0, dz=10.0, max_u=2.0, max_v=0.0, max_w=0.0, k_h=0.0, k_z=0.0
+    )
+    np.testing.assert_allclose(adv, 5.0)
+    # Pure diffusion: dt = 1 / (2·(k_h/dx² + k_h/dy² + k_z/dz²)).
+    diff = stable_step_bound(
+        dx=10.0, dy=10.0, dz=10.0, max_u=0.0, max_v=0.0, max_w=0.0, k_h=1.0, k_z=1.0
+    )
+    np.testing.assert_allclose(diff, 1.0 / (2.0 * (0.01 + 0.01 + 0.01)))
+    # Motionless and diffusion-free → no constraint.
+    assert stable_step_bound(
+        dx=1.0, dy=1.0, dz=1.0, max_u=0.0, max_v=0.0, max_w=0.0, k_h=0.0, k_z=0.0
+    ) == float("inf")
+
+
+def test_fixed_step_solver_rejects_unstable_dt0():
+    # Regression for #29: a fixed-step solver with dt0 far above the CFL limit
+    # must raise before integration, not blow up mid-solve.
+    with pytest.raises(ValueError, match="stable step"):
+        simulate_eulerian_dispersion(**_common_kwargs(solver="heun", dt0=1000.0))
+
+
+def test_fixed_step_solver_runs_within_stability_bound():
+    # A bound-compliant dt0 on a fixed-step solver integrates normally.
+    ds = simulate_eulerian_dispersion(**_common_kwargs(solver="heun", dt0=0.5))
+    assert isinstance(ds, xr.Dataset)
+    assert float(ds["concentration"].max()) > 0.0
+
+
+def test_adaptive_solver_skips_stability_guard():
+    # The guard only applies to fixed-step solvers; an adaptive solver with a
+    # large dt0 (used only as the initial step) is not rejected.
+    ds = simulate_eulerian_dispersion(**_common_kwargs(solver="tsit5", dt0=1000.0))
+    assert isinstance(ds, xr.Dataset)
+
+
 def test_simulate_with_time_varying_wind_schedule():
     schedule = WindSchedule.from_speed_direction(
         times=jnp.linspace(0.0, 30.0, 7),

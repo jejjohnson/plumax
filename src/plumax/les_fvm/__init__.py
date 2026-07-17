@@ -65,7 +65,10 @@ from plumax.les_fvm.grid import (
     PlumeGrid3D,
     make_grid,
 )
-from plumax.les_fvm.simulate import simulate_eulerian_dispersion
+from plumax.les_fvm.simulate import (
+    simulate_eulerian_dispersion,
+    stable_step_bound,
+)
 from plumax.les_fvm.source import (
     GaussianSource,
     make_gaussian_source,
@@ -112,6 +115,7 @@ __all__ = [
     "simulate_eulerian_dispersion",
     "solve_4dvar",
     "source",
+    "stable_step_bound",
     "uniform_wind_field",
     "wind",
     "wind_field_from_callable",
