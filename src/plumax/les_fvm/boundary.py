@@ -257,20 +257,35 @@ def apply_boundary_conditions(
 def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
     """Return ``(x_periodic, y_periodic)`` for a horizontal BC set.
 
-    A lateral axis is periodic when either of its paired faces carries a
-    :class:`finitevolx.Periodic1D` atom.  Used to decide whether the normal
-    wind / diffusivity halos must be wrapped (rather than edge-padded) so the
-    two representations of a periodic seam face share a coefficient and the
-    open-wall fluxes cancel.
+    Periodicity is an *axis* property — both paired faces must wrap together —
+    so this is used to decide whether the normal wind / diffusivity halos are
+    wrapped (rather than edge-padded), keeping the two representations of a
+    periodic seam face consistent and the open-wall fluxes cancelling.
+
+    Raises
+    ------
+    ValueError
+        If exactly one face of an axis is :class:`finitevolx.Periodic1D`.  A
+        half-periodic axis is ill-defined (the seam couples both faces), and
+        wrapping the axis' halos would corrupt the non-periodic face's
+        wall coefficient; require periodic on both faces or neither.
     """
     bc_set = horizontal_bc.bc_set
-    x_periodic = isinstance(bc_set.west, Periodic1D) or isinstance(
-        bc_set.east, Periodic1D
-    )
-    y_periodic = isinstance(bc_set.south, Periodic1D) or isinstance(
-        bc_set.north, Periodic1D
-    )
-    return x_periodic, y_periodic
+    west_p = isinstance(bc_set.west, Periodic1D)
+    east_p = isinstance(bc_set.east, Periodic1D)
+    south_p = isinstance(bc_set.south, Periodic1D)
+    north_p = isinstance(bc_set.north, Periodic1D)
+    if west_p != east_p:
+        raise ValueError(
+            "periodic BC on only one x-face (west/east); periodicity couples "
+            "both faces of an axis — set it on both faces or neither."
+        )
+    if south_p != north_p:
+        raise ValueError(
+            "periodic BC on only one y-face (south/north); periodicity couples "
+            "both faces of an axis — set it on both faces or neither."
+        )
+    return west_p, south_p
 
 
 def build_default_concentration_bc(
