@@ -33,6 +33,7 @@ def advection_tendency(
     w: Float[Array, "Nz Ny Nx"],
     plume_grid: PlumeGrid3D,
     method: str = "weno5",
+    periodic: tuple[bool, bool] = (False, False),
 ) -> Float[Array, "Nz Ny Nx"]:
     """Flux-form advective tendency ``-∇·(u C)`` at interior T-points.
 
@@ -51,6 +52,13 @@ def advection_tendency(
     method : str, default ``"weno5"``
         Horizontal reconstruction scheme.  Passed through to
         :class:`finitevolx.Advection3D`.
+    periodic : tuple[bool, bool], default ``(False, False)``
+        ``(x_periodic, y_periodic)``.  On a periodic axis the normal-velocity
+        ghost face is *wrapped* (rather than left edge-padded) so the two
+        representations of the periodic seam share one velocity and the
+        open-wall fluxes cancel — otherwise a spatially-varying normal wind
+        breaks exact mass conservation at the seam.  See
+        :func:`~plumax.les_fvm.boundary.periodic_axes`.
 
     Returns
     -------
@@ -68,6 +76,13 @@ def advection_tendency(
     :class:`~plumax.les_fvm.dynamics.EulerianDispersionRHS` runs every step.
     This is what makes horizontal transport honor ``bc_x`` / ``bc_y``.
     """
+    x_periodic, y_periodic = periodic
+    if x_periodic:
+        # Wrap the x-normal velocity seam: west wall face (u[..., 0]) and east
+        # wall face (u[..., -2]) are the same periodic seam and must match.
+        u = u.at[:, :, 0].set(u[:, :, -2]).at[:, :, -1].set(u[:, :, 1])
+    if y_periodic:
+        v = v.at[:, 0, :].set(v[:, -2, :]).at[:, -1, :].set(v[:, 1, :])
     horizontal_op = Advection3D(grid=plume_grid.grid)
     horizontal = horizontal_op(concentration, u, v, method=method, wall="open")
     vertical = vertical_advection_tendency(concentration, w, plume_grid.dz)

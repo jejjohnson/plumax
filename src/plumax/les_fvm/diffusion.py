@@ -82,6 +82,7 @@ def diffusion_tendency(
     concentration: Float[Array, "Nz Ny Nx"],
     eddy_diffusivity: EddyDiffusivity,
     plume_grid: PlumeGrid3D,
+    periodic: tuple[bool, bool] = (False, False),
 ) -> Float[Array, "Nz Ny Nx"]:
     """Full 3-D eddy diffusion tendency ``∇·(K ∇C)`` at interior T-points.
 
@@ -92,6 +93,12 @@ def diffusion_tendency(
     eddy_diffusivity : EddyDiffusivity
         ``(K_h, K_z)`` diagonal diffusivity.
     plume_grid : PlumeGrid3D
+    periodic : tuple[bool, bool], default ``(False, False)``
+        ``(x_periodic, y_periodic)``.  For a **field** ``K_h`` on a periodic
+        axis the coefficient ghost is *wrapped* (rather than left edge-padded
+        by :meth:`EddyDiffusivity.as_arrays`) so the paired periodic seam
+        faces share one diffusivity and their diffusive fluxes cancel.  A
+        scalar ``K_h`` is uniform and already conserves, so it is untouched.
 
     Returns
     -------
@@ -108,6 +115,14 @@ def diffusion_tendency(
     makes horizontal diffusion honor ``bc_x`` / ``bc_y``.
     """
     k_h, k_z = eddy_diffusivity.as_arrays()
+    x_periodic, y_periodic = periodic
+    if jnp.ndim(k_h) > 0:
+        # Field K_h: wrap the coefficient ghost on periodic axes so a periodic
+        # seam uses one shared face diffusivity (scalar K_h needs nothing).
+        if x_periodic:
+            k_h = k_h.at[:, :, 0].set(k_h[:, :, -2]).at[:, :, -1].set(k_h[:, :, 1])
+        if y_periodic:
+            k_h = k_h.at[:, 0, :].set(k_h[:, -2, :]).at[:, -1, :].set(k_h[:, 1, :])
     horizontal_op = Diffusion3D(grid=plume_grid.grid)
     horizontal = horizontal_op(concentration, k_h, wall="open")
     vertical = vertical_diffusion_tendency(concentration, k_z, plume_grid.dz)
