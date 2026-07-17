@@ -85,6 +85,7 @@ def simulate_eulerian_dispersion(
     rtol: float = 1e-3,
     atol: float = 1e-8,
     max_steps: int = 100_000,
+    max_wind_speed: float | None = None,
     # Initial condition
     initial_concentration: Float[Array, "Nz Ny Nx"] | None = None,
     seed: int = 0,
@@ -131,6 +132,12 @@ def simulate_eulerian_dispersion(
         Adaptive-step controller tolerances (ignored for fixed-step solvers).
     max_steps : int
         Upper bound on diffrax internal steps.
+    max_wind_speed : float, optional
+        Conservative upper bound on each wind component ``|u|, |v|, |w|``
+        [m/s], used only by the fixed-step stability guard. Supply it for a
+        callable wind whose peak the guard cannot otherwise sample reliably;
+        when ``None`` the peak is estimated from the field (dense time grid +
+        any ``WindSchedule`` knots in the window).
     initial_concentration : ndarray, optional
         Interior-shaped ``(nz, ny, nx)`` initial tracer field.  Defaults
         to zero.
@@ -197,6 +204,13 @@ def simulate_eulerian_dispersion(
     save_times = _build_save_times(
         t_start=t_start, t_end=t_end, save_interval=save_interval
     )
+    # In-window WindSchedule knots — a piecewise-linear schedule attains its
+    # speed extrema at knots, so feed them to the fixed-step stability guard so
+    # a fast knot between the dense samples is not missed.
+    knot_times: tuple[float, ...] = ()
+    if wind_schedule is not None:
+        knots = np.asarray(wind_schedule.times, dtype=float)
+        knot_times = tuple(float(t) for t in knots if t_start <= t <= t_end)
     solution = _solve(
         rhs=rhs,
         t_start=t_start,
@@ -208,6 +222,8 @@ def simulate_eulerian_dispersion(
         rtol=rtol,
         atol=atol,
         max_steps=max_steps,
+        extra_sample_times=knot_times,
+        max_wind_speed=max_wind_speed,
     )
     return _to_dataset(
         plume_grid=plume_grid,
@@ -418,6 +434,24 @@ def _max_wind_components(
     return max_u, max_v, max_w
 
 
+def _max_diffusivity(eddy: EddyDiffusivity) -> tuple[float, float]:
+    """Return ``(max K_h, max K_z)``, rejecting any negative diffusivity.
+
+    A negative ``K`` is anti-diffusion: its modes grow every explicit step, so
+    no positive ``dt0`` is stable. Taking ``|K|`` would let the guard approve a
+    step the real (negative-``K``) tendency then blows up on, so reject it.
+    """
+    k_h_arr = jnp.asarray(eddy.as_arrays()[0])
+    k_z_arr = jnp.asarray(eddy.as_arrays()[1])
+    k_min = min(float(jnp.min(k_h_arr)), float(jnp.min(k_z_arr)))
+    if k_min < 0.0:
+        raise ValueError(
+            "eddy diffusivity must be non-negative; a negative K is "
+            f"anti-diffusion and is unconditionally unstable (min K = {k_min:g})."
+        )
+    return float(jnp.max(k_h_arr)), float(jnp.max(k_z_arr))
+
+
 def _check_fixed_step_stability(
     *,
     plume_grid: PlumeGrid3D,
@@ -427,21 +461,32 @@ def _check_fixed_step_stability(
     t_start: float,
     t_end: float,
     solver_name: str,
+    extra_sample_times: tuple[float, ...] = (),
+    max_wind_speed: float | None = None,
 ) -> None:
     """Raise if ``dt0`` exceeds the stable step for a fixed-step solver.
 
-    The wind's peak speed is estimated by sampling the field on a dense time
-    grid over ``[t_start, t_end]`` — enough to catch a fast schedule knot or a
-    callable-wind peak away from the endpoints (a coarse 2–3 point sample would
-    miss those and under-estimate the advective rate). A callable that peaks
-    between grid points on a sub-sample timescale can still be under-sampled;
-    such winds should keep ``dt0`` comfortably below the reported bound.
+    The wind's peak speed drives the advective CFL term. When
+    ``max_wind_speed`` is given it is taken as a conservative upper bound on
+    each component ``|u|, |v|, |w|`` and used directly — the robust choice for
+    an arbitrary callable wind whose peak the guard cannot otherwise know.
+    Otherwise the peak is estimated by sampling the field on a dense time grid
+    over ``[t_start, t_end]`` unioned with ``extra_sample_times`` (e.g. the
+    in-window ``WindSchedule`` knots, where a piecewise-linear schedule attains
+    its extrema). A callable that peaks between samples on a sub-grid timescale
+    and supplies no ``max_wind_speed`` can still be under-sampled.
     """
-    sample_times = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
-    max_u, max_v, max_w = _max_wind_components(wf, sample_times)
-    k_h_arr, k_z_arr = eddy.as_arrays()
-    k_h = float(jnp.max(jnp.abs(jnp.asarray(k_h_arr))))
-    k_z = float(jnp.max(jnp.abs(jnp.asarray(k_z_arr))))
+    if max_wind_speed is not None:
+        peak = float(max_wind_speed)
+        max_u = max_v = max_w = peak
+    else:
+        base = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
+        # Union (dedup) the dense grid with the supplied extra times.
+        sample_times = tuple(
+            dict.fromkeys(base + tuple(float(t) for t in extra_sample_times))
+        )
+        max_u, max_v, max_w = _max_wind_components(wf, sample_times)
+    k_h, k_z = _max_diffusivity(eddy)
     bound = stable_step_bound(
         dx=plume_grid.dx,
         dy=plume_grid.dy,
@@ -514,6 +559,8 @@ def _solve(
     rtol: float,
     atol: float,
     max_steps: int,
+    extra_sample_times: tuple[float, ...] = (),
+    max_wind_speed: float | None = None,
 ):
     solver, adaptive = _pick_solver(solver_name)
     if adaptive:
@@ -530,6 +577,8 @@ def _solve(
             t_start=t_start,
             t_end=t_end,
             solver_name=solver_name,
+            extra_sample_times=extra_sample_times,
+            max_wind_speed=max_wind_speed,
         )
         stepsize_controller = diffrax.ConstantStepSize()
     return _solve_jit(

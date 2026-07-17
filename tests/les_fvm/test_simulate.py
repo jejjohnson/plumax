@@ -351,6 +351,53 @@ def test_adaptive_solver_skips_stability_guard():
     assert isinstance(ds, xr.Dataset)
 
 
+def test_stability_guard_rejects_negative_diffusivity():
+    # Anti-diffusion (negative K) is unconditionally unstable; taking |K| would
+    # let the guard approve a step the real tendency then blows up on, so the
+    # guard must reject a negative diffusivity outright.
+    with pytest.raises(ValueError, match="non-negative"):
+        simulate_eulerian_dispersion(
+            **_common_kwargs(solver="heun", dt0=0.1, eddy_diffusivity=(-1.0, 1.0))
+        )
+
+
+def test_stability_guard_honors_max_wind_speed_override():
+    # A caller-supplied conservative peak overrides the sampled estimate: a huge
+    # max_wind_speed tightens the advective CFL bound and rejects dt0 even
+    # though the actual (uniform 5 m/s) wind would be fine.
+    with pytest.raises(ValueError, match="stable step"):
+        simulate_eulerian_dispersion(
+            **_common_kwargs(solver="heun", dt0=0.5, max_wind_speed=1.0e6)
+        )
+
+
+def test_stability_guard_includes_schedule_knots():
+    # A narrow high-speed knot at t=0.9 sits between the guard's dense samples
+    # and is bracketed by calm knots at 0.8 and 1.0, so the uniform grid alone
+    # would miss it. Including the in-window schedule knots must catch the spike
+    # and reject the step.
+    schedule = WindSchedule.from_speed_direction(
+        times=jnp.asarray([0.0, 0.8, 0.9, 1.0, 20.0]),
+        wind_speed=jnp.asarray([0.01, 0.01, 1.0e4, 0.01, 0.01]),
+        wind_direction=jnp.full(5, 270.0),
+    )
+    with pytest.raises(ValueError, match="stable step"):
+        simulate_eulerian_dispersion(
+            domain_x=(0.0, 400.0, 16),
+            domain_y=(0.0, 200.0, 8),
+            domain_z=(0.0, 80.0, 8),
+            t_start=0.0,
+            t_end=20.0,
+            save_interval=10.0,
+            emission_rate=0.1,
+            source_location=(50.0, 100.0, 20.0),
+            wind_schedule=schedule,
+            eddy_diffusivity=(1.0, 1.0),
+            solver="heun",
+            dt0=0.5,
+        )
+
+
 def test_simulate_with_time_varying_wind_schedule():
     schedule = WindSchedule.from_speed_direction(
         times=jnp.linspace(0.0, 30.0, 7),

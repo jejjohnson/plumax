@@ -191,6 +191,43 @@ def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
     assert np.all(np.isfinite(np.asarray(res.source)))
 
 
+def test_build_forward_guards_stepto_controller():
+    # StepTo is a fixed (non-adaptive) controller, so the guard must inspect its
+    # widest prescribed interval rather than skip it as if it were adaptive.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="stable step"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=2.0,
+            solver_kwargs={
+                "stepsize_controller": diffrax.StepTo(ts=jnp.asarray([0.0, 40.0]))
+            },
+        )
+
+
+def test_build_forward_rejects_negative_diffusivity():
+    # Negative (anti-diffusion) K is unconditionally unstable; the fixed-step
+    # 4D-Var guard must reject it rather than take |K|.
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="non-negative"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(4.0, 0.0, 0.0),
+            eddy_diffusivity=(-1.0, 1.0),
+        )
+
+
 # ── validation ───────────────────────────────────────────────────────────────
 
 

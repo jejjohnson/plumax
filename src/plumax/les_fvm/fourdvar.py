@@ -233,19 +233,26 @@ def build_forward(
 
     # Stability guard for the fixed-step 4D-Var solve. The default path is
     # Heun + ConstantStepSize + dt0=1 (see `concentration_history`); an
-    # over-large dt0 silently blows up *inside* the optimisation loop, where
+    # over-large step silently blows up *inside* the optimisation loop, where
     # it is hardest to diagnose. Check it once here on the static config
-    # (uniform wind + constant K), skipping only when the caller supplies an
-    # adaptive stepsize controller.
+    # (uniform wind + constant K). The largest step the solve will take is dt0
+    # for ConstantStepSize and the widest prescribed interval for StepTo — both
+    # fixed controllers; adaptive controllers (PIDController, …) are
+    # error-controlled, so the guard is skipped for them.
     import diffrax
 
-    from plumax.les_fvm.simulate import stable_step_bound
+    from plumax.les_fvm.simulate import _max_diffusivity, stable_step_bound
 
     _kw = dict(solver_kwargs or {})
     _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
+    _max_step: float | None = None
     if isinstance(_controller, diffrax.ConstantStepSize):
-        _dt0 = float(_kw.get("dt0", 1.0))
-        _k_h, _k_z = eddy.as_arrays()
+        _max_step = float(_kw.get("dt0", 1.0))
+    elif isinstance(_controller, diffrax.StepTo):
+        _ts = np.asarray(_controller.ts, dtype=float)
+        _max_step = float(np.max(np.diff(_ts))) if _ts.size >= 2 else 0.0
+    if _max_step is not None:
+        _k_h, _k_z = _max_diffusivity(eddy)
         _bound = stable_step_bound(
             dx=plume_grid.dx,
             dy=plume_grid.dy,
@@ -253,15 +260,15 @@ def build_forward(
             max_u=abs(float(uniform_wind[0])),
             max_v=abs(float(uniform_wind[1])),
             max_w=abs(float(uniform_wind[2])),
-            k_h=float(jnp.max(jnp.abs(jnp.asarray(_k_h)))),
-            k_z=float(jnp.max(jnp.abs(jnp.asarray(_k_z)))),
+            k_h=_k_h,
+            k_z=_k_z,
         )
-        if _dt0 > _bound:
+        if _max_step > _bound:
             raise ValueError(
-                f"build_forward: dt0={_dt0:g} s exceeds the stable step "
-                f"~{_bound:g} s for the fixed-step 4D-Var solve on this "
-                f"grid+wind+K. Reduce dt0 (solver_kwargs={{'dt0': ...}}), "
-                f"soften K, or pass an adaptive stepsize_controller."
+                f"build_forward: fixed step {_max_step:g} s exceeds the stable "
+                f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
+                f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
+                f"'ts'), soften K, or pass an adaptive stepsize_controller."
             )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
