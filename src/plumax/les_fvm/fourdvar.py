@@ -404,6 +404,18 @@ def build_problem(
         raise ValueError(
             f"build_problem: `observations` must be (n_t={n_t}, n_obs), got {y.shape}."
         )
+    # Reject non-finite inputs: a NaN would flow through the cost / posterior as
+    # a finite-`source` solve with a NaN objective and covariance (the source-
+    # only divergence check in `solve_4dvar` cannot catch that).
+    for _name, _arr in (
+        ("prior_mean", sb),
+        ("prior_covariance", b),
+        ("observations", y),
+    ):
+        if not bool(jnp.all(jnp.isfinite(_arr))):
+            raise ValueError(
+                f"build_problem: `{_name}` must be finite (contains NaN/inf)."
+            )
     # Jitter keeps the Cholesky factor PD for smooth Matérn kernels.
     chol = jnp.linalg.cholesky(b + 1e-9 * jnp.eye(n_t))
 
@@ -425,8 +437,12 @@ def build_problem(
         )
     if r_in.ndim == 1 and r_in.shape[0] == n_t:
         r_in = r_in[:, None]
-    if np.any(r_in <= 0.0):
-        raise ValueError("build_problem: `obs_variance` entries must be > 0.")
+    if not np.all(np.isfinite(r_in)) or np.any(r_in <= 0.0):
+        # NaN passes ``<= 0`` (every comparison is False), so check finiteness
+        # explicitly — a NaN R would give a NaN cost and posterior.
+        raise ValueError(
+            "build_problem: `obs_variance` entries must be finite and > 0."
+        )
     try:
         r = jnp.broadcast_to(jnp.asarray(r_in), y.shape)
     except (ValueError, TypeError) as exc:

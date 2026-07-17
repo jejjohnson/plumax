@@ -420,6 +420,37 @@ def test_build_problem_rejects_ambiguous_square_variance_vector():
         np.testing.assert_allclose(np.asarray(prob.obs_variance[t]), float(t + 1))
 
 
+def test_build_problem_rejects_nonfinite_obs_variance():
+    # NaN passes the `<= 0` check, so obs_variance finiteness must be enforced
+    # explicitly — otherwise the cost and posterior silently become NaN.
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="finite"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=float("nan"),
+        )
+
+
+def test_build_problem_rejects_nonfinite_observations():
+    # A NaN observation would leave `source` finite but the cost/posterior NaN.
+    fwd = _forward()
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])).at[0, 0].set(jnp.nan)
+    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
+    with pytest.raises(ValueError, match="finite"):
+        build_problem(
+            forward=fwd,
+            observations=y,
+            prior_mean=jnp.zeros(5),
+            prior_covariance=b,
+            obs_variance=1.0,
+        )
+
+
 def test_build_problem_per_receptor_variance_vector():
     # A length-n_obs obs_variance stays per-receptor (broadcast across time).
     fwd = _forward()
