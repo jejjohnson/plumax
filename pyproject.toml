@@ -52,8 +52,9 @@ dependencies = [
     # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it).
     "finitevolx>=0.0.44",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
-    # Woodbury solve) used by the radtran matched-filter retrieval.
-    "gaussx",
+    # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.17
+    # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires.
+    "gaussx>=0.0.17",
     # optimistix powers the variational retrieval module (assimilation):
     # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
     "optimistix>=0.0.10",
