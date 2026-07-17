@@ -49,8 +49,8 @@ dependencies = [
     "diffrax>=0.6",
     "equinox>=0.11",
     # finitevolx powers the Arakawa C-grid FVM operators used by les_fvm.
-    # >= 0.0.42 for the wall="open" lateral-BC mode (les_fvm needs it).
-    "finitevolx>=0.0.43",
+    # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it).
+    "finitevolx>=0.0.44",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
     # Woodbury solve) used by the radtran matched-filter retrieval.
     "gaussx",
@@ -81,10 +81,7 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit" }
-# TEMPORARY: pinned to the finitevolX #234 branch that adds the wall="open"
-# lateral-BC mode (jejjohnson/finitevolX#235). Move to the released tag once
-# that PR merges and is released.
-finitevolx = { git = "https://github.com/jejjohnson/finitevolX", rev = "833f45aa409771af2045cb46b0374d67ed1aa60a" }
+finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.44" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.0.17" }
 

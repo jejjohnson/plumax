@@ -610,8 +610,8 @@ wheels = [
 
 [[package]]
 name = "finitevolx"
-version = "0.0.43"
-source = { git = "https://github.com/jejjohnson/finitevolX?rev=833f45aa409771af2045cb46b0374d67ed1aa60a#833f45aa409771af2045cb46b0374d67ed1aa60a" }
+version = "0.0.44"
+source = { git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.44#626306c5dcc4c28957a503160b5ddc45514cfbb7" }
 dependencies = [
     { name = "beartype" },
     { name = "diffrax" },
@@ -1944,7 +1944,7 @@ typecheck = [
 requires-dist = [
     { name = "diffrax", specifier = ">=0.6" },
     { name = "equinox", specifier = ">=0.11" },
-    { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?rev=833f45aa409771af2045cb46b0374d67ed1aa60a" },
+    { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.44" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.0.17" },
     { name = "hitran-api", marker = "extra == 'hapi'" },
     { name = "ipython", marker = "extra == 'notebooks'" },
