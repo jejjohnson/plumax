@@ -399,6 +399,35 @@ def test_invalid_max_wind_speed_rejected():
             simulate_eulerian_dispersion(**_common_kwargs(max_wind_speed=bad))
 
 
+def test_stability_guard_rejects_nonfinite_wind():
+    # A NaN wind component reads as calm through max(prev, nan), so the guard
+    # would approve a step the RHS then corrupts; the sampler must reject it.
+    from plumax.les_fvm.wind import wind_field_from_callable
+
+    g = make_grid((0.0, 400.0, 16), (0.0, 200.0, 8), (0.0, 80.0, 8))
+
+    def nan_wind(t, X, Y, Z):
+        del t, Y, Z
+        return jnp.full_like(X, jnp.nan), jnp.zeros_like(X), jnp.zeros_like(X)
+
+    wf = wind_field_from_callable(g, nan_wind)
+    with pytest.raises(ValueError, match="non-finite"):
+        simulate_eulerian_dispersion(
+            domain_x=(0.0, 400.0, 16),
+            domain_y=(0.0, 200.0, 8),
+            domain_z=(0.0, 80.0, 8),
+            t_start=0.0,
+            t_end=20.0,
+            save_interval=10.0,
+            emission_rate=0.1,
+            source_location=(50.0, 100.0, 20.0),
+            wind_field=wf,
+            eddy_diffusivity=(1.0, 1.0),
+            solver="heun",
+            dt0=0.5,
+        )
+
+
 def test_stability_guard_includes_schedule_knots():
     # A narrow high-speed knot at t=0.9 sits between the guard's dense samples
     # and is bracketed by calm knots at 0.8 and 1.0, so the uniform grid alone

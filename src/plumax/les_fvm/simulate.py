@@ -445,10 +445,21 @@ def stable_step_bound(
 def _max_wind_components(
     wf: PrescribedWindField, sample_times: tuple[float, ...]
 ) -> tuple[float, float, float]:
-    """Component-wise max |u|, |v|, |w| over the interior at ``sample_times``."""
+    """Component-wise max |u|, |v|, |w| over the interior at ``sample_times``.
+
+    Raises on a non-finite sample: ``max(prev, nan)`` keeps ``prev`` (a NaN wind
+    would read as calm and let the guard approve a step the RHS then corrupts),
+    so reject it explicitly — the same treatment as the diffusivity check.
+    """
     max_u = max_v = max_w = 0.0
     for t in sample_times:
         u, v, w = wf(jnp.asarray(t, dtype=jnp.float32))
+        for name, comp in (("u", u), ("v", v), ("w", w)):
+            if not bool(jnp.all(jnp.isfinite(comp))):
+                raise ValueError(
+                    f"wind field has a non-finite {name} component at "
+                    f"t={float(t):g}; the CFL guard cannot bound a NaN/inf wind."
+                )
         max_u = max(max_u, float(jnp.max(jnp.abs(u))))
         max_v = max(max_v, float(jnp.max(jnp.abs(v))))
         max_w = max(max_w, float(jnp.max(jnp.abs(w))))
