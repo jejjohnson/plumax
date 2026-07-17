@@ -85,3 +85,28 @@ def test_make_eddy_diffusivity_pg_requires_class_and_speed():
 def test_make_eddy_diffusivity_unknown_string_rejected():
     with pytest.raises(ValueError, match=r"unknown string spec"):
         make_eddy_diffusivity("smagorinsky")
+
+
+def test_dirichlet_wall_diffusive_flux():
+    """A lateral Dirichlet ghost now drives a diffusive flux through the wall
+    (issue #26 — horizontal diffusion previously ignored all lateral BCs)."""
+    from plumax.les_fvm.boundary import (
+        apply_boundary_conditions,
+        build_default_concentration_bc,
+    )
+
+    g = _build_grid()
+    hbc, vbc = build_default_concentration_bc(
+        bc_x=(("dirichlet", 0.0), "outflow"),  # west wall value 0, east zero-grad
+        bc_y=(("neumann", 0.0), ("neumann", 0.0)),  # side walls no-flux
+        bc_z=("neumann", "neumann"),
+    )
+    # Uniform interior => zero interior gradient; only the west Dirichlet wall
+    # (ghost = -interior) produces a flux.
+    c = apply_boundary_conditions(jnp.ones(g.shape), hbc, vbc, g)
+    kappa = EddyDiffusivity(horizontal=0.5, vertical=0.0)
+    tend = diffusion_tendency(c, kappa, g)
+    # West edge column (i=1) diffuses toward the lower wall value -> nonzero.
+    assert float(jnp.max(jnp.abs(tend[1:-1, 1:-1, 1]))) > 1e-3
+    # Everywhere else (no active wall flux, uniform field) stays ~0.
+    np.testing.assert_allclose(np.asarray(tend[1:-1, 1:-1, 2:-1]), 0.0, atol=1e-5)

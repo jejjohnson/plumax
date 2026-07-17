@@ -61,6 +61,10 @@ class EulerianDispersionRHS(eqx.Module):
         del args
         # Enforce BCs before reading neighbours in the advection/diffusion
         # stencils so ghost cells reflect the current physical BC state.
+        # The horizontal operators run in finitevolX ``wall="open"`` mode, so
+        # these ghost values drive the lateral wall fluxes (Dirichlet /
+        # outflow / periodic); the vertical operators read the top/bottom
+        # ghost slices directly.
         c_bc = apply_boundary_conditions(
             concentration,
             horizontal_bc=self.horizontal_bc,
