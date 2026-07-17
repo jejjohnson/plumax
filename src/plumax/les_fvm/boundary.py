@@ -34,6 +34,56 @@ from plumax.les_fvm.grid import PlumeGrid3D
 
 VerticalBCKind = Literal["dirichlet", "neumann", "outflow", "periodic"]
 
+HorizontalFace = Literal["south", "north", "west", "east"]
+
+
+class CellDirichlet1D(eqx.Module):
+    """Advective (cell-value) Dirichlet ghost for one horizontal face.
+
+    Writes ``ghost = value`` — the boundary concentration as an exterior
+    *cell* value — so a first-order upwind advective flux at an inflow wall
+    carries the prescribed ``value``.  This differs from
+    :class:`finitevolx.Dirichlet1D`, which writes the *face* reflection
+    ``2*value - interior`` (the correct convention for the centred diffusion
+    gradient, but wrong as the upwind cell value for advection — see
+    jejjohnson/finitevolX#235).
+
+    Parameters
+    ----------
+    face : {"south", "north", "west", "east"}
+        Domain face to update.
+    value : float
+        Boundary concentration written into the ghost cells.
+    """
+
+    face: HorizontalFace = eqx.field(static=True)
+    value: float
+
+    def __call__(
+        self, field: Float[Array, "Ny Nx"], dx: float, dy: float
+    ) -> Float[Array, "Ny Nx"]:
+        """Return ``field`` with one face's ghost set to ``value`` (cell value)."""
+        del dx, dy
+        if self.face == "south":
+            return field.at[0, :].set(self.value)
+        if self.face == "north":
+            return field.at[-1, :].set(self.value)
+        if self.face == "west":
+            return field.at[:, 0].set(self.value)
+        return field.at[:, -1].set(self.value)
+
+
+def _to_cell_dirichlet(atom):
+    """Swap a face-Dirichlet atom for its cell-value advective counterpart.
+
+    All other atoms (outflow / periodic / Neumann / ``None``) are returned
+    unchanged — only Dirichlet needs a different ghost convention for
+    advection versus diffusion.
+    """
+    if isinstance(atom, Dirichlet1D):
+        return CellDirichlet1D(face=atom.face, value=atom.value)
+    return atom
+
 
 class HorizontalBC(eqx.Module):
     """Apply a :class:`BoundaryConditionSet` to every z-slice of a 3-D field."""
@@ -52,6 +102,25 @@ class HorizontalBC(eqx.Module):
             return self.bc_set(slab, dx=dx, dy=dy)
 
         return eqx.filter_vmap(apply_slice)(field)
+
+    def advection_variant(self) -> HorizontalBC:
+        """Return a copy whose Dirichlet faces use a cell-value ghost.
+
+        Open-mode advection reads the ghost as an exterior *cell* value; a
+        face-Dirichlet ghost (``2*value - interior``) would make an inflow
+        carry the wrong state.  Outflow / periodic / Neumann faces are
+        unchanged, so this is a no-op unless a Dirichlet face is present.
+        """
+        bc_set = self.bc_set
+        return HorizontalBC(
+            bc_set=BoundaryConditionSet(
+                south=_to_cell_dirichlet(bc_set.south),
+                north=_to_cell_dirichlet(bc_set.north),
+                west=_to_cell_dirichlet(bc_set.west),
+                east=_to_cell_dirichlet(bc_set.east),
+                mask=bc_set.mask,
+            )
+        )
 
 
 class VerticalBC(eqx.Module):
@@ -76,6 +145,9 @@ class VerticalBC(eqx.Module):
     top_kind: VerticalBCKind = eqx.field(static=True)
     bottom_value: float = 0.0
     top_value: float = 0.0
+    # When True, a Dirichlet face writes ghost = value (a cell value) instead
+    # of the face reflection ``2*value - interior`` — the advection convention.
+    dirichlet_cell: bool = eqx.field(static=True, default=False)
 
     def __call__(
         self,
@@ -93,6 +165,7 @@ class VerticalBC(eqx.Module):
             kind=self.bottom_kind,
             value=self.bottom_value,
             dz=dz,
+            dirichlet_cell=self.dirichlet_cell,
         )
         out = _apply_vertical_face(
             out,
@@ -100,8 +173,24 @@ class VerticalBC(eqx.Module):
             kind=self.top_kind,
             value=self.top_value,
             dz=dz,
+            dirichlet_cell=self.dirichlet_cell,
         )
         return out
+
+    def advection_variant(self) -> VerticalBC:
+        """Return a copy whose Dirichlet faces use a cell-value ghost.
+
+        The vertical advection term also upwinds the ghost slice, so a
+        Dirichlet vertical inflow needs the same cell-value convention as the
+        horizontal faces.  A no-op unless a vertical Dirichlet face is set.
+        """
+        return VerticalBC(
+            bottom_kind=self.bottom_kind,
+            top_kind=self.top_kind,
+            bottom_value=self.bottom_value,
+            top_value=self.top_value,
+            dirichlet_cell=True,
+        )
 
 
 def _apply_vertical_face(
@@ -110,6 +199,7 @@ def _apply_vertical_face(
     kind: VerticalBCKind,
     value: float,
     dz: float,
+    dirichlet_cell: bool = False,
 ) -> Float[Array, "Nz Ny Nx"]:
     """Update one vertical ghost slice using the requested BC flavour.
 
@@ -134,7 +224,9 @@ def _apply_vertical_face(
         ghost_index = -1
 
     if kind == "dirichlet":
-        ghost = 2.0 * value - interior_slice
+        # Advection wants the boundary value as a cell value (ghost = value);
+        # diffusion wants the face reflection so the centred gradient sees it.
+        ghost = value if dirichlet_cell else (2.0 * value - interior_slice)
     elif kind == "neumann":
         # Ghost value so that the finite-difference coordinate gradient
         # ``∂C/∂z`` (along +z) across the face equals ``value``. The
@@ -160,6 +252,40 @@ def apply_boundary_conditions(
     out = horizontal_bc(field, dx=plume_grid.dx, dy=plume_grid.dy)
     out = vertical_bc(out, dz=plume_grid.dz)
     return out
+
+
+def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
+    """Return ``(x_periodic, y_periodic)`` for a horizontal BC set.
+
+    Periodicity is an *axis* property — both paired faces must wrap together —
+    so this is used to decide whether the normal wind / diffusivity halos are
+    wrapped (rather than edge-padded), keeping the two representations of a
+    periodic seam face consistent and the open-wall fluxes cancelling.
+
+    Raises
+    ------
+    ValueError
+        If exactly one face of an axis is :class:`finitevolx.Periodic1D`.  A
+        half-periodic axis is ill-defined (the seam couples both faces), and
+        wrapping the axis' halos would corrupt the non-periodic face's
+        wall coefficient; require periodic on both faces or neither.
+    """
+    bc_set = horizontal_bc.bc_set
+    west_p = isinstance(bc_set.west, Periodic1D)
+    east_p = isinstance(bc_set.east, Periodic1D)
+    south_p = isinstance(bc_set.south, Periodic1D)
+    north_p = isinstance(bc_set.north, Periodic1D)
+    if west_p != east_p:
+        raise ValueError(
+            "periodic BC on only one x-face (west/east); periodicity couples "
+            "both faces of an axis — set it on both faces or neither."
+        )
+    if south_p != north_p:
+        raise ValueError(
+            "periodic BC on only one y-face (south/north); periodicity couples "
+            "both faces of an axis — set it on both faces or neither."
+        )
+    return west_p, south_p
 
 
 def build_default_concentration_bc(

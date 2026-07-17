@@ -17,6 +17,7 @@ from plumax.les_fvm.boundary import (
     HorizontalBC,
     VerticalBC,
     apply_boundary_conditions,
+    periodic_axes,
 )
 from plumax.les_fvm.diffusion import EddyDiffusivity, diffusion_tendency
 from plumax.les_fvm.grid import PlumeGrid3D
@@ -60,22 +61,46 @@ class EulerianDispersionRHS(eqx.Module):
         """Return ``dC/dt`` at time ``t`` for tracer field ``concentration``."""
         del args
         # Enforce BCs before reading neighbours in the advection/diffusion
-        # stencils so ghost cells reflect the current physical BC state.
-        # The horizontal operators run in finitevolX ``wall="open"`` mode, so
-        # these ghost values drive the lateral wall fluxes (Dirichlet /
-        # outflow / periodic); the vertical operators read the top/bottom
-        # ghost slices directly.
-        c_bc = apply_boundary_conditions(
+        # stencils so ghost cells reflect the current physical BC state. The
+        # horizontal operators run in finitevolX ``wall="open"`` mode, so these
+        # ghost values drive the lateral wall fluxes; the vertical operators
+        # read the top/bottom ghost slices directly.
+        #
+        # Advection and diffusion need *different* Dirichlet ghosts: advection
+        # upwinds the ghost as an exterior cell value (ghost = value), while
+        # diffusion needs the face reflection (2*value - interior) so the
+        # centred gradient sees the boundary value. Outflow / periodic /
+        # Neumann ghosts are identical, so the two fills differ only at
+        # Dirichlet faces.
+        c_diff = apply_boundary_conditions(
             concentration,
             horizontal_bc=self.horizontal_bc,
             vertical_bc=self.vertical_bc,
             plume_grid=self.plume_grid,
         )
-        u, v, w = self.wind_field(t)
-        adv = advection_tendency(
-            c_bc, u, v, w, self.plume_grid, method=self.advection_scheme
+        c_adv = apply_boundary_conditions(
+            concentration,
+            horizontal_bc=self.horizontal_bc.advection_variant(),
+            vertical_bc=self.vertical_bc.advection_variant(),
+            plume_grid=self.plume_grid,
         )
-        diff = diffusion_tendency(c_bc, self.eddy_diffusivity, self.plume_grid)
+        u, v, w = self.wind_field(t)
+        # Wrap the normal wind / field-diffusivity halos on periodic axes so
+        # the paired seam faces stay conservative under a spatially-varying
+        # wind or K_h (see periodic_axes / the tendency `periodic=` argument).
+        periodic = periodic_axes(self.horizontal_bc)
+        adv = advection_tendency(
+            c_adv,
+            u,
+            v,
+            w,
+            self.plume_grid,
+            method=self.advection_scheme,
+            periodic=periodic,
+        )
+        diff = diffusion_tendency(
+            c_diff, self.eddy_diffusivity, self.plume_grid, periodic=periodic
+        )
         src = self.source(t)
         # Keep ghost-cell entries of the tendency zero; time integration writes
         # only to the interior and the BC pass above has already updated the
