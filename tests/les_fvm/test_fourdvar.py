@@ -265,6 +265,29 @@ def test_build_forward_rejects_nonfinite_uniform_wind():
         )
 
 
+def test_build_forward_stepto_runs_with_stable_intervals():
+    # A stable StepTo config must actually run: dt0 is forced to None per
+    # diffrax's StepTo contract, so predict() succeeds instead of failing on the
+    # default dt0=1.0.
+    import diffrax
+
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    fwd = build_forward(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=save_times,
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+        solver_kwargs={
+            "stepsize_controller": diffrax.StepTo(ts=jnp.arange(0.0, 41.0, 1.0))
+        },
+    )
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    assert np.all(np.isfinite(np.asarray(y)))
+
+
 def test_build_forward_skips_guard_for_implicit_solver():
     # An implicit solver is stable at large fixed steps, so the explicit CFL
     # guard must not reject it — build_forward should succeed even at a huge dt0.

@@ -137,6 +137,11 @@ class EulerianForward4DVar:
             "max_steps": 100_000,
             **self.solver_kwargs,
         }
+        # diffrax's StepTo controller prescribes its own step points and requires
+        # dt0=None; the default dt0=1.0 above would otherwise make the solve
+        # fail, so drop it whenever a StepTo controller is in effect.
+        if isinstance(kw["stepsize_controller"], diffrax.StepTo):
+            kw["dt0"] = None
         sol = diffrax.diffeqsolve(
             diffrax.ODETerm(rhs),
             kw["solver"],
