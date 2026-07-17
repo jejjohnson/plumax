@@ -437,22 +437,24 @@ class FourDVarResult:
         whitened: Optimal whitened control ``χ*``, shape ``(n_t,)``.
         cost: Final cost value ``J(χ*)``.
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
-        converged: optx's strict success flag (``sol.result == successful``).
-            L-BFGS on these stiff problems frequently exhausts ``max_steps``
-            while still returning a good, finite MAP, so ``converged is False``
-            with a finite ``source`` is common and not by itself alarming. The
-            genuine failure to watch for is a non-finite ``source`` (a diverged
-            solve), which :func:`solve_4dvar` warns about loudly.
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
             when :func:`solve_4dvar` is called with ``compute_posterior=True``.
+        converged: optx's strict success flag (``sol.result == successful``).
+            Appended after ``posterior`` to preserve the positional constructor
+            contract. L-BFGS on these stiff problems frequently exhausts
+            ``max_steps`` while still returning a good, finite MAP, so
+            ``converged is False`` with a finite ``source`` is common and not by
+            itself alarming. The genuine failure to watch for is a non-finite
+            ``source`` (a diverged solve), which :func:`solve_4dvar` warns about
+            loudly.
     """
 
     source: jax.Array
     whitened: jax.Array
     cost: float
     n_steps: int
-    converged: bool = True
     posterior: PosteriorCovariance | None = None
+    converged: bool = True
 
 
 def solve_4dvar(

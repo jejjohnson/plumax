@@ -366,16 +366,17 @@ def stable_step_bound(
 ) -> float:
     """Maximum stable step for an explicit fixed-step transport solve.
 
-    Returns the smaller of the advective CFL bound and the explicit
-    diffusion bound, scaled by ``cfl_safety``::
+    Advection and diffusion are advanced in the *same* explicit step, so
+    their tendencies add and the conservative forward-Euler / Heun limit is
+    set by the summed rate::
 
-        dt_adv  = 1 / (|u|/dx + |v|/dy + |w|/dz)
-        dt_diff = 1 / (2·(K_h/dx² + K_h/dy² + K_z/dz²))
-        bound   = cfl_safety · min(dt_adv, dt_diff)
+        adv_rate  = |u|/dx + |v|/dy + |w|/dz
+        diff_rate = 2·(K_h/dx² + K_h/dy² + K_z/dz²)
+        bound     = cfl_safety / (adv_rate + diff_rate)
 
-    A term whose rate is zero (motionless component / no diffusion)
-    contributes no constraint (``inf``); the bound is ``inf`` only when the
-    field is both motionless and diffusion-free.
+    Using ``min(1/adv_rate, 1/diff_rate)`` instead would permit up to a 2×
+    step when the two rates are comparable. The bound is ``inf`` only when
+    the field is both motionless and diffusion-free.
 
     Parameters
     ----------
@@ -397,9 +398,11 @@ def stable_step_bound(
     """
     adv_rate = max_u / dx + max_v / dy + max_w / dz
     diff_rate = 2.0 * (k_h / dx**2 + k_h / dy**2 + k_z / dz**2)
-    dt_adv = float("inf") if adv_rate <= 0.0 else 1.0 / adv_rate
-    dt_diff = float("inf") if diff_rate <= 0.0 else 1.0 / diff_rate
-    return cfl_safety * min(dt_adv, dt_diff)
+    # Advection + diffusion act in the same explicit step, so the stable-step
+    # limit is set by the summed rate — 1/(adv_rate + diff_rate) — not by the
+    # looser min(1/adv_rate, 1/diff_rate).
+    total_rate = adv_rate + diff_rate
+    return float("inf") if total_rate <= 0.0 else cfl_safety / total_rate
 
 
 def _max_wind_components(
@@ -425,10 +428,17 @@ def _check_fixed_step_stability(
     t_end: float,
     solver_name: str,
 ) -> None:
-    """Raise if ``dt0`` exceeds the stable step for a fixed-step solver."""
-    max_u, max_v, max_w = _max_wind_components(
-        wf, (t_start, 0.5 * (t_start + t_end), t_end)
-    )
+    """Raise if ``dt0`` exceeds the stable step for a fixed-step solver.
+
+    The wind's peak speed is estimated by sampling the field on a dense time
+    grid over ``[t_start, t_end]`` — enough to catch a fast schedule knot or a
+    callable-wind peak away from the endpoints (a coarse 2–3 point sample would
+    miss those and under-estimate the advective rate). A callable that peaks
+    between grid points on a sub-sample timescale can still be under-sampled;
+    such winds should keep ``dt0`` comfortably below the reported bound.
+    """
+    sample_times = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
+    max_u, max_v, max_w = _max_wind_components(wf, sample_times)
     k_h_arr, k_z_arr = eddy.as_arrays()
     k_h = float(jnp.max(jnp.abs(jnp.asarray(k_h_arr))))
     k_z = float(jnp.max(jnp.abs(jnp.asarray(k_z_arr))))

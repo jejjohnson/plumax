@@ -316,6 +316,14 @@ def test_stable_step_bound_formula():
         dx=10.0, dy=10.0, dz=10.0, max_u=0.0, max_v=0.0, max_w=0.0, k_h=1.0, k_z=1.0
     )
     np.testing.assert_allclose(diff, 1.0 / (2.0 * (0.01 + 0.01 + 0.01)))
+    # Combined: the advective and diffusive rates *add* (same explicit step),
+    # so the bound is 1/(adv_rate + diff_rate) = 1/(0.2 + 0.06), strictly
+    # tighter than the looser min() of the two individual bounds.
+    combined = stable_step_bound(
+        dx=10.0, dy=10.0, dz=10.0, max_u=2.0, max_v=0.0, max_w=0.0, k_h=1.0, k_z=1.0
+    )
+    np.testing.assert_allclose(combined, 1.0 / (0.2 + 0.06))
+    assert combined < min(5.0, 1.0 / 0.06)
     # Motionless and diffusion-free → no constraint.
     assert stable_step_bound(
         dx=1.0, dy=1.0, dz=1.0, max_u=0.0, max_v=0.0, max_w=0.0, k_h=0.0, k_z=0.0
