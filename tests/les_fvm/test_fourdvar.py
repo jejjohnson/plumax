@@ -249,6 +249,22 @@ def test_build_forward_rejects_negative_diffusivity_with_adaptive_controller():
         )
 
 
+def test_build_forward_rejects_nonfinite_uniform_wind():
+    # A NaN uniform-wind component makes the CFL bound NaN and bypasses the
+    # guard; reject it at wind-field construction (before any branch).
+    save_times = jnp.linspace(0.0, 40.0, 5)
+    with pytest.raises(ValueError, match="finite"):
+        build_forward(
+            domain_x=(0.0, 400.0, 20),
+            domain_y=(-100.0, 100.0, 10),
+            domain_z=(0.0, 80.0, 4),
+            save_times=save_times,
+            source_location=(50.0, 0.0, 20.0),
+            uniform_wind=(float("nan"), 0.0, 0.0),
+            eddy_diffusivity=2.0,
+        )
+
+
 def test_build_forward_skips_guard_for_implicit_solver():
     # An implicit solver is stable at large fixed steps, so the explicit CFL
     # guard must not reject it — build_forward should succeed even at a huge dt0.

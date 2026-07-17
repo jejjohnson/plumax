@@ -276,7 +276,7 @@ def build_forward(
                 f"build_forward: fixed step {_max_step:g} s exceeds the stable "
                 f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
                 f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
-                f"'ts'), soften K, or pass an adaptive/implicit solver."
+                f"'ts'), soften K, or pass an adaptive stepsize_controller."
             )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
@@ -532,15 +532,24 @@ def solve_4dvar(
     converged = bool(sol.result == optx.RESULTS.successful)
     chi_star = sol.value
     source = problem.source_from_whitened(chi_star)
-    if not bool(jnp.all(jnp.isfinite(source))):
+    finite = bool(jnp.all(jnp.isfinite(source)))
+    if not finite:
         warnings.warn(
             f"solve_4dvar: the optimiser returned a non-finite source "
-            f"(result={sol.result}); the solve diverged. Check the prior "
-            f"conditioning, `obs_variance`, and `initial_source`.",
+            f"(result={sol.result}); the solve diverged. The posterior is "
+            f"skipped (it would be NaN). Check the prior conditioning, "
+            f"`obs_variance`, and `initial_source`.",
             RuntimeWarning,
             stacklevel=2,
         )
-    posterior = posterior_covariance(problem, chi_star) if compute_posterior else None
+    # Skip the posterior on a non-finite MAP: evaluating the Gauss-Newton
+    # Jacobian + inverse at a NaN control would raise or attach a NaN covariance
+    # — the exact downstream poisoning the finiteness check exists to prevent.
+    posterior = (
+        posterior_covariance(problem, chi_star)
+        if compute_posterior and finite
+        else None
+    )
     return FourDVarResult(
         source=source,
         whitened=chi_star,

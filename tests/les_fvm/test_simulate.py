@@ -428,6 +428,45 @@ def test_stability_guard_rejects_nonfinite_wind():
         )
 
 
+def test_max_wind_speed_override_still_rejects_nonfinite_wind():
+    # The override supplies the maxima but must not bypass finiteness: the field
+    # is still sampled, so a NaN callable wind is rejected even with an override.
+    from plumax.les_fvm.wind import wind_field_from_callable
+
+    g = make_grid((0.0, 400.0, 16), (0.0, 200.0, 8), (0.0, 80.0, 8))
+
+    def nan_wind(t, X, Y, Z):
+        del t, Y, Z
+        return jnp.full_like(X, jnp.nan), jnp.zeros_like(X), jnp.zeros_like(X)
+
+    wf = wind_field_from_callable(g, nan_wind)
+    with pytest.raises(ValueError, match="non-finite"):
+        simulate_eulerian_dispersion(
+            domain_x=(0.0, 400.0, 16),
+            domain_y=(0.0, 200.0, 8),
+            domain_z=(0.0, 80.0, 8),
+            t_start=0.0,
+            t_end=20.0,
+            save_interval=10.0,
+            emission_rate=0.1,
+            source_location=(50.0, 100.0, 20.0),
+            wind_field=wf,
+            eddy_diffusivity=(1.0, 1.0),
+            solver="heun",
+            dt0=0.5,
+            max_wind_speed=10.0,
+        )
+
+
+def test_nonfinite_uniform_wind_rejected():
+    # A NaN uniform-wind component would make the CFL bound NaN; reject it at
+    # wind-field construction, regardless of solver.
+    with pytest.raises(ValueError, match="finite"):
+        simulate_eulerian_dispersion(
+            **_common_kwargs(uniform_wind=(float("nan"), 0.0, 0.0))
+        )
+
+
 def test_stability_guard_includes_schedule_knots():
     # A narrow high-speed knot at t=0.9 sits between the guard's dense samples
     # and is bracketed by calm knots at 0.8 and 1.0, so the uniform grid alone

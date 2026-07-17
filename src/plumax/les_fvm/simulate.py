@@ -502,26 +502,28 @@ def _check_fixed_step_stability(
 ) -> None:
     """Raise if ``dt0`` exceeds the stable step for a fixed-step solver.
 
-    The wind's peak speed drives the advective CFL term. When
-    ``max_wind_speed`` is given it is taken as a conservative upper bound on
-    each component ``|u|, |v|, |w|`` and used directly — the robust choice for
-    an arbitrary callable wind whose peak the guard cannot otherwise know.
-    Otherwise the peak is estimated by sampling the field on a dense time grid
-    over ``[t_start, t_end]`` unioned with ``extra_sample_times`` (e.g. the
-    in-window ``WindSchedule`` knots, where a piecewise-linear schedule attains
-    its extrema). A callable that peaks between samples on a sub-grid timescale
-    and supplies no ``max_wind_speed`` can still be under-sampled.
+    The field is always sampled on a dense time grid over ``[t_start, t_end]``
+    unioned with ``extra_sample_times`` (e.g. the in-window ``WindSchedule``
+    knots, where a piecewise-linear schedule attains its extrema) — both to
+    estimate the peak speed that drives the advective CFL term and to reject a
+    non-finite wind. When ``max_wind_speed`` is given it overrides the sampled
+    maxima as a conservative per-component bound — the robust choice for a
+    callable whose peak sits between samples — while the sampling still runs so
+    the finiteness check is never bypassed.
     """
+    base = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
+    # Union (dedup) the dense grid with the supplied extra times.
+    sample_times = tuple(
+        dict.fromkeys(base + tuple(float(t) for t in extra_sample_times))
+    )
+    # Always sample: this validates finiteness (raises on a NaN/inf wind) even
+    # when an override supplies the maxima.
+    sampled_u, sampled_v, sampled_w = _max_wind_components(wf, sample_times)
     if max_wind_speed is not None:
         peak = float(max_wind_speed)
         max_u = max_v = max_w = peak
     else:
-        base = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
-        # Union (dedup) the dense grid with the supplied extra times.
-        sample_times = tuple(
-            dict.fromkeys(base + tuple(float(t) for t in extra_sample_times))
-        )
-        max_u, max_v, max_w = _max_wind_components(wf, sample_times)
+        max_u, max_v, max_w = sampled_u, sampled_v, sampled_w
     k_h, k_z = _max_diffusivity(eddy)
     bound = stable_step_bound(
         dx=plume_grid.dx,

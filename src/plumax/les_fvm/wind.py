@@ -21,6 +21,7 @@ operators.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 
 import equinox as eqx
@@ -99,7 +100,18 @@ def uniform_wind_field(
     Returns
     -------
     PrescribedWindField
+
+    Raises
+    ------
+    ValueError
+        If any of ``u``, ``v``, ``w`` is non-finite — a NaN/inf wind would make
+        the CFL bound NaN (disabling the fixed-step guard) and corrupt the solve.
     """
+    for name, comp in (("u", u), ("v", v), ("w", w)):
+        if not math.isfinite(float(comp)):
+            raise ValueError(
+                f"uniform_wind_field: {name} must be finite (got {comp!r})."
+            )
     nz, ny, nx = plume_grid.interior_shape
     u_arr = jnp.full((nz, ny, nx), u, dtype=plume_grid.x.dtype)
     v_arr = jnp.full((nz, ny, nx), v, dtype=plume_grid.x.dtype)
