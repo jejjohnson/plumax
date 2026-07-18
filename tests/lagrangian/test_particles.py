@@ -16,7 +16,7 @@ from plumax.lagrangian.particles import (
     uniform_wind,
     wind_from_speed_direction,
 )
-from plumax.lagrangian.turbulence import HomogeneousTurbulence
+from plumax.lagrangian.turbulence import HannaTurbulence, HomogeneousTurbulence
 
 
 @pytest.mark.parametrize(
@@ -159,6 +159,69 @@ def test_wind_from_speed_direction_west_wind_flows_east():
     wind = wind_from_speed_direction(5.0, 270.0)
     vec = np.asarray(wind(jnp.array(0.0)))
     np.testing.assert_allclose(vec, [5.0, 0.0, 0.0], atol=1e-6)
+
+
+def test_well_mixed_condition_hanna():
+    """An initially uniform slab stays uniform under inhomogeneous Hanna turbulence.
+
+    This is the well-mixed criterion (Thomson 1987): with height-dependent
+    ``σ_w(z)`` the integrator's drift correction ``½(1+v_w²/σ_w²)∂σ_w²/∂z`` is
+    what stops particles from piling up where the turbulence is weak. It is
+    unreachable with :class:`HomogeneousTurbulence` (zero gradient); the
+    :class:`HannaTurbulence` adapter is exactly what exercises it.
+    """
+    turb = HannaTurbulence(
+        u_star=0.5, pbl_height=1000.0, obukhov_length=-50.0, w_star=2.0
+    )  # convective → σ_w varies strongly with height
+    h = 1000.0
+    n = 8000
+    key = jax.random.PRNGKey(0)
+    key, zkey, vkey = jax.random.split(key, 3)
+    # Uniform in z, velocities drawn from the *local* stationary variance.
+    z0 = jax.random.uniform(zkey, (n,), minval=0.0, maxval=h)
+    pos = jnp.stack([jnp.zeros(n), jnp.zeros(n), z0], axis=1)
+    sigma0, _ = turb.at(z0)
+    vel = jax.random.normal(vkey, (n, 3)) * sigma0
+    state = ParticleState(position=pos, velocity=vel)
+
+    final, _ = integrate_particles(
+        state,
+        uniform_wind(0.0, 0.0, 0.0),
+        turb,
+        t0=0.0,
+        t1=400.0,
+        dt=1.0,
+        key=key,
+        pbl_height=h,
+    )
+    zf = np.asarray(final.position[:, 2])
+    assert np.all(zf >= -1e-6)
+    assert np.all(zf <= h + 1e-6)
+    # Still uniform: per-bin occupancy within ~20 % of N/nbins, and the mean
+    # near the slab centre (no collapse toward the low-σ_w upper layer).
+    counts, _ = np.histogram(zf, bins=5, range=(0.0, h))
+    expected = n / 5
+    assert np.max(np.abs(counts - expected)) / expected < 0.2
+    assert abs(float(zf.mean()) - 0.5 * h) < 0.1 * h
+
+
+def test_hanna_ground_level_drift_is_finite():
+    # The convective Hanna σ_w² carries a (z/h)^{2/3} factor whose ∂/∂z is
+    # singular at z = 0, so a ground-level particle (or one reflected exactly to
+    # the ground) would give inf/NaN vertical drift. HannaTurbulence.at floors z,
+    # so the langevin step must stay finite.
+    turb = HannaTurbulence(
+        u_star=0.5, pbl_height=1000.0, obukhov_length=-50.0, w_star=2.0
+    )
+    state = ParticleState(
+        position=jnp.array([[0.0, 0.0, 0.0]]),  # exactly at the ground
+        velocity=jnp.zeros((1, 3)),
+    )
+    nxt = langevin_step(
+        state, jnp.zeros(3), turb, 1.0, jax.random.PRNGKey(0), pbl_height=1000.0
+    )
+    assert np.all(np.isfinite(np.asarray(nxt.position)))
+    assert np.all(np.isfinite(np.asarray(nxt.velocity)))
 
 
 def test_single_step_matches_manual_ou():

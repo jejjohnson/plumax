@@ -255,14 +255,20 @@ class LagrangianDispersion(Operator):
         )
 
     def get_config(self) -> dict[str, Any]:
+        # Mirror the constructor surface (minus the non-serialisable
+        # ``turbulence`` object). The old payload emitted a bogus
+        # ``stability_class`` key — not a constructor parameter — and dropped
+        # ``pbl_height`` / ``background_conc`` / ``seed``.
         return {
-            "stability_class": None,
             "domain_x": self.domain_x,
             "domain_y": self.domain_y,
             "domain_z": self.domain_z,
             "n_particles": self.n_particles,
             "t_end": self.t_end,
             "dt": self.dt,
+            "pbl_height": self.pbl_height,
+            "background_conc": self.background_conc,
+            "seed": self.seed,
         }
 
 

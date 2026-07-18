@@ -8,11 +8,22 @@ footprint is the particle residence time in the well-mixed surface layer of
 [stohl2005flexpart]):
 
     F(r, s) = (1/N) Σ_particles Σ_steps  1[in column s, z < f_pbl·h] · Δt
-              / (ρ_air · A_cell · f_pbl·h)                          [s·m²·kg⁻¹].
+              / (ρ_air · f_pbl·h)                                   [s·m²·kg⁻¹].
+
+This is the **flux-sensitivity** convention: there is no per-cell-area division,
+so ``F`` is the sensitivity of the receptor value to a surface **flux**
+``q`` in kg·m⁻²·s⁻¹ (``y = Σ_s F(r,s)·q(s)``), matching [stohl2005flexpart]. A
+per-cell *emission-rate* sensitivity (kg/s) would divide by ``A_cell`` as well
+and carry units s·kg⁻¹ — a different convention; the consumer
+:mod:`plumax.lagrangian.inversion` assumes the flux one used here.
 
 Backward integration reuses the forward integrator with the mean wind reversed;
 for stationary turbulence the OU velocity process is statistically
-time-reversible, so the same turbulence model applies.
+time-reversible, so the same turbulence model applies. For a time-varying mean
+wind the backward trajectory undoes the forward intervals in reverse order (the
+partial final interval first) and samples ``−wind`` at each interval's physical
+start time on the *receptor* clock, so it is the exact discrete reverse of a
+forward run — which ``receptor_time`` anchors.
 """
 
 from __future__ import annotations
@@ -67,6 +78,7 @@ def compute_footprint(
     pbl_height: float = 1000.0,
     pbl_fraction: float = 0.5,
     air_density: float = 1.2,
+    receptor_time: float = 0.0,
     seed: int = 0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute a single receptor's surface footprint by backward integration.
@@ -76,7 +88,8 @@ def compute_footprint(
         turbulence: Turbulence model.
         domain_x / domain_y: ``(start, stop, n_cells)`` for the surface grid.
         wind: Forward mean-wind field ``t -> (u, v, w)``; integration reverses
-            it internally.
+            it internally and samples it on the receptor clock (see
+            ``receptor_time``).
         n_particles: Ensemble size.
         t_back: Backward integration time [s].
         dt: Time step [s].
@@ -84,21 +97,25 @@ def compute_footprint(
         pbl_fraction: Fraction ``f_pbl`` of ``h`` defining the surface layer in
             which surface flux is "seen".
         air_density: Air density ``ρ_air`` [kg/m³].
+        receptor_time: Physical time ``T`` of the receptor observation [s].
+            Backward steps undo the forward intervals in reverse order (the
+            partial final interval first) and sample ``−wind`` at each interval's
+            physical start time, so a time-varying ``wind`` is evaluated at the
+            correct time and the run is the exact discrete reverse of a forward
+            one. The default ``0.0`` is exact for a stationary ``wind`` (its
+            argument is ignored) and simply reverses it.
         seed: PRNG seed.
 
     Returns:
         ``(footprint, x_centers, y_centers)`` where ``footprint`` has shape
-        ``(nx, ny)`` and units ``s·m²·kg⁻¹``.
+        ``(nx, ny)`` and units ``s·m²·kg⁻¹`` (flux sensitivity; see the module
+        docstring).
     """
     x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
     y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
     x_c = 0.5 * (x_edges[:-1] + x_edges[1:])
     y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
-    cell_area = float((x_edges[1] - x_edges[0]) * (y_edges[1] - y_edges[0]))
     mix_height = pbl_fraction * pbl_height
-
-    def back_wind(t: jax.Array) -> jax.Array:
-        return -jnp.asarray(wind(t))
 
     key = jax.random.PRNGKey(seed)
     key, vkey = jax.random.split(key)
@@ -111,29 +128,44 @@ def compute_footprint(
     xe, ye = jnp.asarray(x_edges), jnp.asarray(y_edges)
     n_steps = n_steps_for_horizon(t_back, dt)
     keys = jax.random.split(key, n_steps)
-    # Per-step durations summing to exactly ``t_back``: the final step is
+    # Per-step durations summing to exactly ``t_back``: the final forward step is
     # shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
     # the footprint integrates over the requested horizon rather than
     # ``n_steps * dt`` (which would over-count surface residence).
-    times = dt * jnp.arange(n_steps)
-    dts = step_durations(t_back, dt, n_steps)
+    #
+    # Backward integration undoes the forward intervals in reverse order, so the
+    # first backward step consumes the (possibly partial) *final* forward
+    # interval — hence the reversal. ``wind_starts[j]`` is the physical start
+    # time of the interval step ``j`` undoes; sampling ``−wind(wind_starts[j])``
+    # (step-start, matching ``integrate_particles``) makes the backward run the
+    # exact discrete reverse of the forward one for any horizon.
+    dts = step_durations(t_back, dt, n_steps)[::-1]
+    wind_starts = receptor_time - jnp.cumsum(dts)
     nx, ny = len(x_c), len(y_c)
 
     def body(carry, inputs):
         st, hist = carry
-        t, k, dt_i = inputs
-        st = langevin_step(st, back_wind(t), turbulence, dt_i, k, pbl_height=pbl_height)
+        t_start, k, dt_i = inputs
+        st = langevin_step(
+            st,
+            -jnp.asarray(wind(t_start)),
+            turbulence,
+            dt_i,
+            k,
+            pbl_height=pbl_height,
+        )
         below = st.position[:, 2] < mix_height
         hist = hist + _bin_surface(st.position, xe, ye, below) * dt_i
         return (st, hist), None
 
     (_, residence), _ = jax.lax.scan(
-        body, (state, jnp.zeros((nx, ny))), (times, keys, dts)
+        body, (state, jnp.zeros((nx, ny))), (wind_starts, keys, dts)
     )
 
-    footprint = np.asarray(residence) / (
-        n_particles * air_density * cell_area * mix_height
-    )
+    # Flux-sensitivity normalisation: residence-time per particle divided by the
+    # surface-layer air mass column density ρ·h (no per-cell-area division), so
+    # ``F`` has units s·m²·kg⁻¹ and pairs with a surface flux in kg·m⁻²·s⁻¹.
+    footprint = np.asarray(residence) / (n_particles * air_density * mix_height)
     return footprint, x_c, y_c
 
 

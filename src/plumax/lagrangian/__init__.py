@@ -51,11 +51,16 @@ from plumax.lagrangian.particles import (
     uniform_wind,
     wind_from_speed_direction,
 )
-from plumax.lagrangian.turbulence import HomogeneousTurbulence, hanna_profiles
+from plumax.lagrangian.turbulence import (
+    HannaTurbulence,
+    HomogeneousTurbulence,
+    hanna_profiles,
+)
 
 
 __all__ = [
     "GaussianPosterior",
+    "HannaTurbulence",
     "HomogeneousTurbulence",
     "LognormalPosterior",
     "ParticleState",

@@ -32,7 +32,7 @@ import numpy as np
 
 
 if TYPE_CHECKING:
-    pass
+    from plumax.assimilation.control import WhiteningTransform
 
 
 def reduced_chi_squared(
@@ -58,8 +58,9 @@ def reduced_chi_squared(
 def degrees_of_freedom_for_signal(
     *,
     hessian_vector_product: Callable[[jax.Array], jax.Array],
-    background_op: lx.AbstractLinearOperator,
     state_size: int,
+    background_op: lx.AbstractLinearOperator | None = None,
+    whitened: bool = False,
     n_probes: int = 32,
     seed: int = 0,
     cg_rtol: float = 1e-6,
@@ -72,19 +73,53 @@ def degrees_of_freedom_for_signal(
     and ``DFS = trace(A)`` measures how many independent pieces of information
     the observations contributed (``DFS = 0`` → no information; ``DFS = N`` →
     observations fully pin the state). The posterior covariance is the
-    inverse Hessian at the optimum, ``Bₐ ≈ Hess⁻¹``, so each Hutchinson probe
-    needs:
+    inverse Hessian at the optimum, ``Bₐ ≈ Hess⁻¹``. Because DFS is invariant
+    under the control-variable change ``δx = U ξ``, the estimate must be
+    computed in the space the supplied ``hessian_vector_product`` lives in —
+    mixing an ξ-space Hessian with a model-space ``B`` gives a wrong answer for
+    any ``B ≠ I``.
 
-    - one ``B⁻¹ z`` via :func:`gaussx.solve` (structured dispatch);
-    - one ``Hess⁻¹ w`` via :func:`lineax.linear_solve` (CG on the HVP).
+    Two modes, one per cost builder:
+
+    - **Model space** (``whitened=False``, the default) — pass the Hessian from
+      :func:`plumax.assimilation.cost.build_cost_x` and ``background_op = B``.
+      Each Hutchinson probe needs one ``B⁻¹ z`` via :func:`gaussx.solve`
+      (structured dispatch) and one ``Hess⁻¹ w`` via CG:
+      ``DFS ≈ E[zᵀz − zᵀ Hess⁻¹ B⁻¹ z]``.
+    - **Whitened space** (``whitened=True``) — pass the Hessian from
+      :func:`plumax.assimilation.cost.build_cost_xi`
+      (``Hess_ξ = I + (HU)ᵀR⁻¹HU``). The whitened prior is the identity, so
+      ``B⁻¹`` drops out: ``DFS ≈ E[zᵀz − zᵀ Hess_ξ⁻¹ z]`` and ``background_op``
+      must be omitted.
 
     Cost per probe: ``O(n_CG · forward)`` — dominated by the CG solve.
 
-    Earlier versions of this function computed ``trace(B · Hess)``, which is
-    not DFS: in the zero-information limit (``Hess = B⁻¹``) it returns ``N``
-    instead of the correct ``0``. See PR-review thread on diagnostics.py.
+    Earlier versions computed ``trace(B · Hess)``, which is not DFS: in the
+    zero-information limit (``Hess = B⁻¹``) it returns ``N`` instead of the
+    correct ``0``. See PR-review thread on diagnostics.py.
     """
-    import gaussx as gx
+    if whitened:
+        if background_op is not None:
+            raise ValueError(
+                "degrees_of_freedom_for_signal: `whitened=True` uses the "
+                "whitened prior B_ξ = I; do not pass `background_op` (the ξ-space "
+                "Hessian already absorbs B via δx = U ξ)."
+            )
+
+        def b_inv(z: jax.Array) -> jax.Array:
+            return z
+    else:
+        if background_op is None:
+            raise ValueError(
+                "degrees_of_freedom_for_signal: model-space mode "
+                "(`whitened=False`) requires `background_op = B`; pass the "
+                "Hessian from build_cost_x, or set `whitened=True` for a "
+                "build_cost_xi (ξ-space) Hessian."
+            )
+        import gaussx as gx
+
+        def b_inv(z: jax.Array) -> jax.Array:
+            return gx.solve(background_op, z)
 
     # Build a CG-solvable operator for ``Hess⁻¹``.
     hess_op = lx.FunctionLinearOperator(
@@ -99,8 +134,8 @@ def degrees_of_freedom_for_signal(
     total = 0.0
     for z in z_batch:
         z_j = jnp.asarray(z, dtype=jnp.float64)
-        # w = B⁻¹ z     (structured dispatch, cheap for Kronecker / low-rank)
-        w = gx.solve(background_op, z_j)
+        # w = B⁻¹ z (model space) or z (whitened, since B_ξ = I).
+        w = b_inv(z_j)
         # u = Hess⁻¹ w  (matrix-free CG)
         u = lx.linear_solve(hess_op, w, solver=cg_solver, throw=False).value
         # zᵀ (I − Bₐ B⁻¹) z ≈ zᵀ z − zᵀ (Hess⁻¹ B⁻¹) z
@@ -112,15 +147,27 @@ def posterior_covariance_proxy(
     *,
     hessian_vector_product: Callable[[jax.Array], jax.Array],
     state_size: int,
+    whitening: WhiteningTransform | None = None,
     cg_rtol: float = 1e-6,
     cg_atol: float = 1e-9,
     cg_max_steps: int = 200,
 ) -> Callable[[jax.Array], jax.Array]:
-    """Return a callable ``v → Bₐ v`` via CG on the Hessian.
+    """Return a callable ``v → Bₐ v`` (model-space posterior covariance) via CG.
 
     ``Bₐ ≈ Hess⁻¹`` is the Laplace-approximation posterior covariance. We
     expose it as a matvec (rather than materialising) so per-pixel variance
     estimates remain ``O(state · cg_iters)`` — fine for moderate scenes.
+
+    Pass the Hessian that matches ``whitening``:
+
+    - ``whitening=None`` (default) — a **model-space** Hessian (from
+      :func:`plumax.assimilation.cost.build_cost_x`); the CG solve returns
+      ``Hess⁻¹ v = Bₐ v`` directly.
+    - a :class:`~plumax.assimilation.control.WhiteningTransform` — a **whitened**
+      Hessian (from :func:`plumax.assimilation.cost.build_cost_xi`), whose
+      inverse is the ξ-space covariance, *not* ``Bₐ``. The model-space
+      covariance is recovered as ``Bₐ = U Hess_ξ⁻¹ Uᵀ``, so each apply
+      un-whitens on both sides: ``v → U (Hess_ξ⁻¹ (Uᵀ v))``.
     """
 
     def matvec(v: jax.Array) -> jax.Array:
@@ -133,14 +180,18 @@ def posterior_covariance_proxy(
     )
 
     def apply(v: jax.Array) -> jax.Array:
+        v = jnp.asarray(v)
+        # Whitened Hessian: Bₐ = U Hess_ξ⁻¹ Uᵀ, so map into ξ-space first.
+        rhs = whitening.project_gradient(v) if whitening is not None else v
         # ``throw=False`` returns the best partial solution at max_steps rather
         # than raising — for diagnostics we'd rather get a noisy estimate than
         # crash the whole notebook on a stiff probe direction.
-        return lx.linear_solve(
+        sol = lx.linear_solve(
             op,
-            jnp.asarray(v),
+            rhs,
             solver=lx.CG(rtol=cg_rtol, atol=cg_atol, max_steps=cg_max_steps),
             throw=False,
         ).value
+        return whitening.apply(sol) if whitening is not None else sol
 
     return apply
