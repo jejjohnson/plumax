@@ -11,6 +11,8 @@ from plumax.lagrangian.footprint import compute_footprint
 from plumax.lagrangian.particles import (
     ParticleState,
     integrate_particles,
+    n_steps_for_horizon,
+    step_durations,
     wind_from_speed_direction,
 )
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
@@ -127,16 +129,18 @@ def test_footprint_lies_upwind_of_receptor():
     assert x_centroid < receptor_x
 
 
-def test_time_varying_wind_clock():
+@pytest.mark.parametrize("t_back", [60.0, 60.5])
+def test_time_varying_wind_clock(t_back):
     # For deterministic advection the backward trajectory from a receptor at
-    # physical time T is the exact time-reverse of a forward trajectory that
+    # physical time T is the exact discrete reverse of a forward trajectory that
     # arrives there at T. With a strongly time-varying (accelerating) wind this
-    # only holds if the backward step samples the wind on the receptor clock,
-    # -wind(T - τ). We forward-integrate a particle to fix the receptor, then
-    # check the backward footprint retraces the forward path — and that the old
-    # forward-clock behaviour (receptor_time=0) does not.
+    # only holds if the backward run undoes the forward intervals in reverse
+    # order (partial remainder first) and samples each at its physical start
+    # time on the receptor clock. A non-divisible t_back (60.5) exercises the
+    # remainder-first ordering. We forward-integrate a particle to fix the
+    # receptor, then check the backward footprint retraces the forward path —
+    # and that a wrong receptor clock (receptor_time=0) does not.
     calm = HomogeneousTurbulence(0.0, 0.0, 0.0, 100.0, 100.0, 100.0)
-    t_back = 60.0
 
     def wind(t):
         # Accelerating along +x: u sweeps 1 → 7 m/s over [0, T].
@@ -156,10 +160,12 @@ def test_time_varying_wind_clock():
         save_trajectory=True,
     )
     receptor_x = float(final.position[0, 0])
-    # The backward run bins the position after each step, visiting (in reverse)
-    # the forward positions p₀…pₙ₋₁ — i.e. the source up to just-before-receptor.
-    # Compare against that dt-weighted x-centroid of the forward path.
-    x_ref = float(np.asarray(traj[:-1, 0, 0]).mean())
+    # The backward run bins (in reverse) the forward positions p₀…pₙ₋₁, each
+    # weighted by its forward step duration. Compare against that duration-
+    # weighted x-centroid of the forward path.
+    n = n_steps_for_horizon(t_back, 1.0)
+    dts = np.asarray(step_durations(t_back, 1.0, n))
+    x_ref = float((dts * np.asarray(traj[:-1, 0, 0])).sum() / dts.sum())
 
     common = dict(
         receptor_location=(receptor_x, 0.0, 20.0),

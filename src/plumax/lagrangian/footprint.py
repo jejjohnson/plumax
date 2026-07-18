@@ -20,9 +20,10 @@ and carry units s·kg⁻¹ — a different convention; the consumer
 Backward integration reuses the forward integrator with the mean wind reversed;
 for stationary turbulence the OU velocity process is statistically
 time-reversible, so the same turbulence model applies. For a time-varying mean
-wind the backward trajectory must sample it on the *receptor* clock — at the
-start of each forward interval it undoes, ``receptor_time − τ − Δt`` for
-backward pseudo-time ``τ`` and step ``Δt`` — which ``receptor_time`` supplies.
+wind the backward trajectory undoes the forward intervals in reverse order (the
+partial final interval first) and samples ``−wind`` at each interval's physical
+start time on the *receptor* clock, so it is the exact discrete reverse of a
+forward run — which ``receptor_time`` anchors.
 """
 
 from __future__ import annotations
@@ -96,13 +97,13 @@ def compute_footprint(
         pbl_fraction: Fraction ``f_pbl`` of ``h`` defining the surface layer in
             which surface flux is "seen".
         air_density: Air density ``ρ_air`` [kg/m³].
-        receptor_time: Physical time ``T`` of the receptor observation [s]. The
-            backward step at pseudo-time ``τ`` (duration ``Δt``) samples
-            ``−wind(T − τ − Δt)`` — the start of the forward interval it undoes —
-            so a time-varying ``wind`` is evaluated at the correct physical time
-            and the run is the exact discrete reverse of a forward one. The
-            default ``0.0`` is exact for a stationary ``wind`` (its argument is
-            ignored) and simply reverses it.
+        receptor_time: Physical time ``T`` of the receptor observation [s].
+            Backward steps undo the forward intervals in reverse order (the
+            partial final interval first) and sample ``−wind`` at each interval's
+            physical start time, so a time-varying ``wind`` is evaluated at the
+            correct time and the run is the exact discrete reverse of a forward
+            one. The default ``0.0`` is exact for a stationary ``wind`` (its
+            argument is ignored) and simply reverses it.
         seed: PRNG seed.
 
     Returns:
@@ -116,16 +117,6 @@ def compute_footprint(
     y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
     mix_height = pbl_fraction * pbl_height
 
-    def back_wind(t: jax.Array, dt_i: jax.Array) -> jax.Array:
-        # Sample the mean wind on the receptor clock, at the START of the forward
-        # interval this backward step undoes: the step at pseudo-time ``t`` with
-        # duration ``dt_i`` reverses the forward interval ``[T − t − dt_i,
-        # T − t]``, whose step-start value is ``wind(T − t − dt_i)`` — matching
-        # the step-start sampling of ``integrate_particles``, so the backward run
-        # is the exact discrete reverse of the forward one. Negated for the
-        # reversed trajectory.
-        return -jnp.asarray(wind(receptor_time - t - dt_i))
-
     key = jax.random.PRNGKey(seed)
     key, vkey = jax.random.split(key)
     rec = jnp.asarray(receptor_location, dtype=float)
@@ -137,26 +128,38 @@ def compute_footprint(
     xe, ye = jnp.asarray(x_edges), jnp.asarray(y_edges)
     n_steps = n_steps_for_horizon(t_back, dt)
     keys = jax.random.split(key, n_steps)
-    # Per-step durations summing to exactly ``t_back``: the final step is
+    # Per-step durations summing to exactly ``t_back``: the final forward step is
     # shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
     # the footprint integrates over the requested horizon rather than
     # ``n_steps * dt`` (which would over-count surface residence).
-    times = dt * jnp.arange(n_steps)
-    dts = step_durations(t_back, dt, n_steps)
+    #
+    # Backward integration undoes the forward intervals in reverse order, so the
+    # first backward step consumes the (possibly partial) *final* forward
+    # interval — hence the reversal. ``wind_starts[j]`` is the physical start
+    # time of the interval step ``j`` undoes; sampling ``−wind(wind_starts[j])``
+    # (step-start, matching ``integrate_particles``) makes the backward run the
+    # exact discrete reverse of the forward one for any horizon.
+    dts = step_durations(t_back, dt, n_steps)[::-1]
+    wind_starts = receptor_time - jnp.cumsum(dts)
     nx, ny = len(x_c), len(y_c)
 
     def body(carry, inputs):
         st, hist = carry
-        t, k, dt_i = inputs
+        t_start, k, dt_i = inputs
         st = langevin_step(
-            st, back_wind(t, dt_i), turbulence, dt_i, k, pbl_height=pbl_height
+            st,
+            -jnp.asarray(wind(t_start)),
+            turbulence,
+            dt_i,
+            k,
+            pbl_height=pbl_height,
         )
         below = st.position[:, 2] < mix_height
         hist = hist + _bin_surface(st.position, xe, ye, below) * dt_i
         return (st, hist), None
 
     (_, residence), _ = jax.lax.scan(
-        body, (state, jnp.zeros((nx, ny))), (times, keys, dts)
+        body, (state, jnp.zeros((nx, ny))), (wind_starts, keys, dts)
     )
 
     # Flux-sensitivity normalisation: residence-time per particle divided by the
