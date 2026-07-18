@@ -187,14 +187,14 @@ def infer_emission_rate(
     infer_stability: bool = False,
     prior_mean: float = 0.1,
     prior_std: float = 0.05,
-    obs_noise_std: float = 5e-7,
-    background_prior_std: float = 5e-7,
     num_warmup: int = 500,
     num_samples: int = 1000,
     num_chains: int = 1,
     seed: int = 0,
     progress_bar: bool = False,
     print_summary: bool = False,
+    obs_noise_std: float = 5e-7,
+    background_prior_std: float = 5e-7,
 ) -> dict[str, NDArray]:
     """Infer the plume emission rate via NUTS.
 
@@ -219,12 +219,6 @@ def infer_emission_rate(
         If True, jointly sample a categorical stability-class latent.
     prior_mean, prior_std : float
         Prior parameters for the emission rate [kg/s].
-    obs_noise_std : float
-        Observation-noise σ for the Gaussian likelihood [kg/m³]. Set this to
-        the sensor noise so the posterior width reflects the instrument rather
-        than the hard-coded default.
-    background_prior_std : float
-        HalfNormal scale for the background-concentration prior [kg/m³].
     num_warmup, num_samples, num_chains : int
         NUTS sampler configuration.
     seed : int
@@ -233,6 +227,12 @@ def infer_emission_rate(
         If True, show the NumPyro progress bar. Default False.
     print_summary : bool
         If True, call ``mcmc.print_summary()`` after the run.
+    obs_noise_std : float
+        Observation-noise σ for the Gaussian likelihood [kg/m³]. Set this to
+        the sensor noise so the posterior width reflects the instrument rather
+        than the hard-coded default.
+    background_prior_std : float
+        HalfNormal scale for the background-concentration prior [kg/m³].
 
     Returns
     -------

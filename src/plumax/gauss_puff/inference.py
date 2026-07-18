@@ -176,13 +176,13 @@ def gaussian_puff_model(
     schedule: WindSchedule | None = None,
     release_times: jnp.ndarray | None = None,
     release_interval: float | None = None,
-    puff_durations: jnp.ndarray | None = None,
     stability_class: str = "C",
     scheme: str = "pg",
     prior_emission_rate_mean: float = 0.1,
     prior_emission_rate_std: float = 0.05,
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
+    puff_durations: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """NumPyro model for the Gaussian puff forward with a constant Q prior.
 
@@ -296,7 +296,6 @@ def gaussian_puff_rw_model(
     schedule: WindSchedule,
     release_times: jnp.ndarray,
     release_interval: float,
-    puff_durations: jnp.ndarray | None = None,
     stability_class: str = "C",
     scheme: str = "pg",
     prior_emission_rate_mean: float = 0.1,
@@ -304,6 +303,7 @@ def gaussian_puff_rw_model(
     rw_step_std: float = 0.02,
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
+    puff_durations: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Random-walk state-space model for a time-varying emission rate Q_i.
 
