@@ -20,9 +20,9 @@ and carry units s·kg⁻¹ — a different convention; the consumer
 Backward integration reuses the forward integrator with the mean wind reversed;
 for stationary turbulence the OU velocity process is statistically
 time-reversible, so the same turbulence model applies. For a time-varying mean
-wind the backward trajectory must sample it on the *receptor* clock — at
-physical time ``receptor_time − τ`` for backward pseudo-time ``τ`` — which
-``receptor_time`` supplies.
+wind the backward trajectory must sample it on the *receptor* clock — at the
+start of each forward interval it undoes, ``receptor_time − τ − Δt`` for
+backward pseudo-time ``τ`` and step ``Δt`` — which ``receptor_time`` supplies.
 """
 
 from __future__ import annotations
@@ -97,8 +97,10 @@ def compute_footprint(
             which surface flux is "seen".
         air_density: Air density ``ρ_air`` [kg/m³].
         receptor_time: Physical time ``T`` of the receptor observation [s]. The
-            backward step at pseudo-time ``τ`` samples ``−wind(T − τ)``, so a
-            time-varying ``wind`` is evaluated at the correct physical time. The
+            backward step at pseudo-time ``τ`` (duration ``Δt``) samples
+            ``−wind(T − τ − Δt)`` — the start of the forward interval it undoes —
+            so a time-varying ``wind`` is evaluated at the correct physical time
+            and the run is the exact discrete reverse of a forward one. The
             default ``0.0`` is exact for a stationary ``wind`` (its argument is
             ignored) and simply reverses it.
         seed: PRNG seed.
@@ -114,11 +116,15 @@ def compute_footprint(
     y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
     mix_height = pbl_fraction * pbl_height
 
-    def back_wind(t: jax.Array) -> jax.Array:
-        # Sample the mean wind on the receptor clock: at backward pseudo-time
-        # ``t`` the physical time is ``receptor_time − t``. Reversed for the
-        # backward trajectory.
-        return -jnp.asarray(wind(receptor_time - t))
+    def back_wind(t: jax.Array, dt_i: jax.Array) -> jax.Array:
+        # Sample the mean wind on the receptor clock, at the START of the forward
+        # interval this backward step undoes: the step at pseudo-time ``t`` with
+        # duration ``dt_i`` reverses the forward interval ``[T − t − dt_i,
+        # T − t]``, whose step-start value is ``wind(T − t − dt_i)`` — matching
+        # the step-start sampling of ``integrate_particles``, so the backward run
+        # is the exact discrete reverse of the forward one. Negated for the
+        # reversed trajectory.
+        return -jnp.asarray(wind(receptor_time - t - dt_i))
 
     key = jax.random.PRNGKey(seed)
     key, vkey = jax.random.split(key)
@@ -142,7 +148,9 @@ def compute_footprint(
     def body(carry, inputs):
         st, hist = carry
         t, k, dt_i = inputs
-        st = langevin_step(st, back_wind(t), turbulence, dt_i, k, pbl_height=pbl_height)
+        st = langevin_step(
+            st, back_wind(t, dt_i), turbulence, dt_i, k, pbl_height=pbl_height
+        )
         below = st.position[:, 2] < mix_height
         hist = hist + _bin_surface(st.position, xe, ye, below) * dt_i
         return (st, hist), None

@@ -246,9 +246,12 @@ def test_posterior_covariance_proxy_runs(obs_model_no_optics):
         observation=y,
         state_shape=(ny, nx),
     )
+    # The HVP is whitened (build_cost_xi), so pass `whitening` to get the
+    # model-space covariance Bₐ = U Hess_ξ⁻¹ Uᵀ rather than the raw ξ-space one.
     matvec = posterior_covariance_proxy(
         hessian_vector_product=lambda v: cost.hvp(jnp.zeros(ny * nx), v),
         state_size=ny * nx,
+        whitening=W,
         cg_max_steps=50,
     )
     Bv = matvec(jnp.ones(ny * nx))

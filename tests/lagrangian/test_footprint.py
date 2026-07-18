@@ -181,11 +181,12 @@ def test_time_varying_wind_clock():
         return float((x_c * w).sum() / w.sum())
 
     x_ok, x_bad = centroid(fp_ok), centroid(fp_bad)
-    # Correct clock retraces the forward path (the residual few-% gap is the
-    # forward-Euler half-step sampling asymmetry, not the clock); the wrong clock
-    # samples the slow early winds, under-displaces, and sits well downwind.
-    np.testing.assert_allclose(x_ok, x_ref, rtol=0.05)
-    assert x_bad > x_ok + 20.0
+    # Correct clock is the exact discrete reverse of the forward run, so its
+    # footprint centroid matches the forward path to binning resolution; a wrong
+    # receptor clock samples the wind at the wrong physical times and lands a
+    # materially different centroid.
+    np.testing.assert_allclose(x_ok, x_ref, rtol=0.02)
+    assert abs(x_ok - x_bad) > 20.0
 
 
 def test_footprint_scales_inversely_with_air_density():
