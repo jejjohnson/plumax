@@ -56,6 +56,36 @@ def test_pg_dispersion_monotone_increasing():
         assert jnp.all(jnp.diff(sz) > 0), f"σ_z not monotone for class {cls}"
 
 
+def test_pg_sigma_reference_values_at_1km():
+    # Regression for #31 + coefficient-integrity guard. At x = 1 km the McMullen
+    # (1975) fit reduces to σ = exp(I) (ln 1 km = 0), so the σ_y / σ_z the stored
+    # meter-coefficients produce at 1000 m must equal exp(McMullen intercept).
+    # This pins every class against its published PG curve and, in particular,
+    # catches the class-A σ_z transcription bug (old b_z=-1.172 → σ_z ≈ 18 km;
+    # correct b_z=-1.7172 → ≈ 418 m).
+    expected = {  # class: (σ_y at 1 km, σ_z at 1 km) [m] = (exp(I_y), exp(I_z))
+        "A": (212.1, 418.1),
+        "B": (157.2, 109.3),
+        "C": (104.7, 61.0),
+        "D": (68.7, 30.4),
+        "E": (50.5, 21.3),
+        "F": (34.2, 13.8),
+    }
+    for cls, (sy_ref, sz_ref) in expected.items():
+        _sx, sy, sz = calculate_pg_dispersion(
+            jnp.array(1000.0), PG_DISPERSION_PARAMS[cls]
+        )
+        np.testing.assert_allclose(float(sy), sy_ref, rtol=0.02, err_msg=f"σ_y {cls}")
+        np.testing.assert_allclose(float(sz), sz_ref, rtol=0.02, err_msg=f"σ_z {cls}")
+
+
+def test_pg_sigma_z_class_a_is_physical_not_kilometres():
+    # Direct anti-regression for the transcription bug: class-A σ_z at 1 km must
+    # be a few hundred metres, not the ~18 km the old coefficient produced.
+    _sx, _sy, sz = calculate_pg_dispersion(jnp.array(1000.0), PG_DISPERSION_PARAMS["A"])
+    assert 300.0 < float(sz) < 600.0
+
+
 def test_pg_dispersion_clamps_nonpositive_distance():
     # Distance clamp ensures ln(s) stays finite at s ≤ 0.
     params = PG_DISPERSION_PARAMS["D"]

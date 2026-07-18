@@ -184,6 +184,99 @@ def test_infer_shape_mismatch_rejected():
         )
 
 
+# ── #33: observation-noise / background-prior scale passthrough ───────────────
+
+
+def test_obs_noise_std_passthrough():
+    # The runner's obs_noise_std / background_prior_std must reach the model's
+    # likelihood and background-prior sites, not stay pinned at the defaults.
+    # A seeded trace exposes each site's distribution scale directly.
+    from numpyro import handlers
+
+    seeded = handlers.seed(gaussian_plume_model, jax.random.PRNGKey(0))
+    trace = handlers.trace(seeded).get_trace(
+        observations=None,
+        receptor_coords=None,
+        source_location=None,
+        wind_u=None,
+        wind_v=None,
+        obs_noise_std=1.3e-6,
+        background_prior_std=7e-7,
+    )
+    np.testing.assert_allclose(np.asarray(trace["obs"]["fn"].scale), 1.3e-6, rtol=1e-6)
+    np.testing.assert_allclose(
+        np.asarray(trace["background"]["fn"].scale), 7e-7, rtol=1e-6
+    )
+
+
+def test_infer_emission_rate_rejects_nonpositive_noise_scales():
+    obs = np.array([1e-6, 2e-6])
+    coords = (np.array([500.0, 600.0]), np.zeros(2), np.ones(2))
+    with pytest.raises(ValueError, match=r"`obs_noise_std` must be > 0"):
+        infer_emission_rate(
+            obs,
+            coords,
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            obs_noise_std=0.0,
+            num_warmup=1,
+            num_samples=1,
+        )
+    with pytest.raises(ValueError, match=r"`background_prior_std` must be > 0"):
+        infer_emission_rate(
+            obs,
+            coords,
+            (0, 0, 2),
+            wind_speed=5.0,
+            wind_direction=270.0,
+            background_prior_std=-1e-7,
+            num_warmup=1,
+            num_samples=1,
+        )
+
+
+@pytest.mark.slow
+def test_obs_noise_std_widens_posterior():
+    # A larger observation-noise scale should yield a wider emission-rate
+    # posterior on the same data — confirming the knob is actually wired into
+    # the likelihood end-to-end through the runner.
+    stab = "D"
+    params = BRIGGS_DISPERSION_PARAMS[stab]
+    source = (0.0, 0.0, 2.0)
+    wind_u, wind_v = 5.0, 0.0
+    x_obs = jnp.linspace(200.0, 2000.0, 24)
+    y_obs = jnp.zeros_like(x_obs)
+    z_obs = jnp.ones_like(x_obs)
+    clean = plume_concentration(
+        x_obs, y_obs, z_obs, *source, wind_u, wind_v, 0.15, params
+    )
+    rng = np.random.default_rng(0)
+    noisy = np.asarray(clean) + rng.normal(0.0, 2e-8, size=clean.shape[0])
+    coords = (np.asarray(x_obs), np.asarray(y_obs), np.asarray(z_obs))
+
+    def run(noise):
+        return infer_emission_rate(
+            noisy,
+            coords,
+            source_location=source,
+            wind_speed=5.0,
+            wind_direction=270.0,
+            stability_class=stab,
+            prior_mean=0.1,
+            prior_std=0.08,
+            obs_noise_std=noise,
+            num_warmup=300,
+            num_samples=500,
+            num_chains=1,
+            seed=0,
+        )
+
+    std_tight = float(run(1e-8)["emission_rate"].std())
+    std_wide = float(run(1e-6)["emission_rate"].std())
+    assert std_wide > std_tight
+
+
 @pytest.mark.slow
 def test_infer_emission_rate_recovers_synthetic_Q():
     """NUTS should recover a synthetic emission rate from noisy transect data."""

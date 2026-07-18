@@ -49,9 +49,19 @@ STABILITY_CLASSES: tuple[str, ...] = ("A", "B", "C", "D", "E", "F")
 
 
 # Format: [a_y, b_y, c_y, a_z, b_z, c_z]
-# Log-quadratic PG coefficients (Beychok 2005, Table 3.2).
+# Log-quadratic PG coefficients (Beychok 2005, Table 3.2), i.e. the
+# McMullen (1975) fit ``σ = exp(I + J·ln x + K·(ln x)²)`` re-expressed with the
+# travel distance ``x`` in **metres** rather than km (the ``c`` column equals
+# McMullen's ``K``; ``a``/``b`` absorb the km→m shift ``ln x_km = ln x_m − ln
+# 1000``). Valid over the fitted PG range ~0.1–10 km; below ~0.1 km the
+# log-quadratic form is an extrapolation (class A's large ``c_z`` gives σ_z a
+# shallow spurious minimum near 20 m), and class-A σ_z grows very fast past a
+# few km — both inherent to the McMullen class-A fit.
 PG_DISPERSION_PARAMS: dict[str, jnp.ndarray] = {
-    "A": jnp.array([-1.104, 0.9878, -0.0076, 4.679, -1.172, 0.2770]),
+    # class-A b_z was a dropped-digit transcription (-1.172); the km→m
+    # conversion of McMullen's J=2.1097, K=0.2770 gives -1.7172. The old value
+    # inflated σ_z(1 km, A) to ~18 km (vs the correct ~418 m).
+    "A": jnp.array([-1.104, 0.9878, -0.0076, 4.679, -1.7172, 0.2770]),
     "B": jnp.array([-1.634, 1.0350, -0.0096, -1.999, 0.8752, 0.0136]),
     "C": jnp.array([-2.054, 1.0231, -0.0076, -2.341, 0.9477, -0.0020]),
     "D": jnp.array([-2.555, 1.0423, -0.0087, -3.186, 1.1737, -0.0316]),
