@@ -32,12 +32,13 @@ from plumax.gauss_puff.dispersion import (
     get_dispersion_scheme,
 )
 from plumax.gauss_puff.puff import (
-    evolve_puffs,
+    PuffState,
     frequency_to_release_interval,
     make_release_times,
+    release_durations,
     simulate_puff_field,
 )
-from plumax.gauss_puff.wind import WindSchedule
+from plumax.gauss_puff.wind import WindSchedule, cumulative_wind_integrals
 
 
 def _forward_inputs_present(
@@ -112,16 +113,47 @@ def _predict_observations(
 
     Returns an array of shape ``(N_obs,)``: the k-th entry is the total
     puff field evaluated at ``(x[k], y[k], z[k])`` at time ``observation_times[k]``.
+
+    The wind integrals ``(I_u, I_v, S)`` at the release times are identical for
+    every observation, so — unlike a per-observation :func:`evolve_puffs` call —
+    the cumulative integrals are solved **once** over ``release_times ∪
+    observation_times`` and then gathered per observation. This turns ``N_obs``
+    adaptive ODE solves per likelihood evaluation into one, without changing the
+    result (same integrals, to solver tolerance).
     """
     x_obs, y_obs, z_obs = receptor_coords
+    src_x, src_y, src_z = source_location
 
-    def predict_one(x_k, y_k, z_k, t_k):
-        puff_state = evolve_puffs(
-            schedule,
-            release_times,
-            t_k,
-            source_location,
-            emission_per_puff,
+    # One diffrax solve over the union of release + observation times. SaveAt
+    # needs monotone times, so sort and unshuffle with the double-argsort trick.
+    all_times = jnp.concatenate([release_times, observation_times])
+    order = jnp.argsort(all_times)
+    i_u_s, i_v_s, s_s = cumulative_wind_integrals(schedule, all_times[order])
+    inv = jnp.argsort(order)
+    i_u, i_v, s_cum = i_u_s[inv], i_v_s[inv], s_s[inv]
+
+    n_rel = release_times.shape[0]
+    i_u_rel, i_v_rel, s_rel = i_u[:n_rel], i_v[:n_rel], s_cum[:n_rel]
+    i_u_obs, i_v_obs, s_obs = i_u[n_rel:], i_v[n_rel:], s_cum[n_rel:]
+
+    mass_arr = jnp.broadcast_to(jnp.asarray(emission_per_puff), release_times.shape)
+
+    def predict_one(x_k, y_k, z_k, t_k, iu_now, iv_now, s_now):
+        # Rebuild the puff ensemble at t_k from the shared release-time integrals
+        # (mirrors evolve_puffs, but with no per-observation ODE solve).
+        active = release_times <= t_k
+        x = src_x + jnp.where(active, iu_now - i_u_rel, 0.0)
+        y = src_y + jnp.where(active, iv_now - i_v_rel, 0.0)
+        z = jnp.full_like(release_times, src_z)
+        s = jnp.where(active, s_now - s_rel, 0.0)
+        mass = jnp.where(active, mass_arr, 0.0)
+        puff_state = PuffState(
+            release_times=release_times,
+            x=x,
+            y=y,
+            z=z,
+            travel_distance=s,
+            mass=mass,
         )
         single = simulate_puff_field(
             (jnp.atleast_1d(x_k), jnp.atleast_1d(y_k), jnp.atleast_1d(z_k)),
@@ -131,7 +163,9 @@ def _predict_observations(
         )
         return single[0]
 
-    return jax.vmap(predict_one)(x_obs, y_obs, z_obs, observation_times)
+    return jax.vmap(predict_one)(
+        x_obs, y_obs, z_obs, observation_times, i_u_obs, i_v_obs, s_obs
+    )
 
 
 def gaussian_puff_model(
@@ -148,6 +182,7 @@ def gaussian_puff_model(
     prior_emission_rate_std: float = 0.05,
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
+    puff_durations: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """NumPyro model for the Gaussian puff forward with a constant Q prior.
 
@@ -174,8 +209,16 @@ def gaussian_puff_model(
     schedule : WindSchedule, optional
     release_times : jnp.ndarray, shape (N_puffs,), optional
     release_interval : float, optional
-        ``Δt_release`` [s]. Used to convert ``Q`` → per-puff mass
-        (``m = Q · Δt``). Required when a forward evaluation is needed.
+        ``Δt_release`` [s]. Required (as a presence flag) when a forward
+        evaluation is needed. Used for the per-puff mass ``m = Q · Δt`` only as
+        a fallback when ``puff_durations`` is not supplied.
+    puff_durations : jnp.ndarray, shape (N_puffs,), optional
+        Per-puff emission-interval durations [s] (from
+        :func:`plumax.gauss_puff.puff.release_durations`). When given, the
+        per-puff mass is ``m_i = Q · duration_i`` — so the trailing, possibly
+        partial interval carries only its actual duration, matching
+        ``simulate_puff`` and conserving emitted mass. Falls back to
+        ``Q · release_interval`` for every puff when omitted.
     stability_class : str
     scheme : str
         Dispersion scheme: ``'pg'`` or ``'briggs'``.
@@ -220,7 +263,10 @@ def gaussian_puff_model(
     )
 
     if forward_ready:
-        puff_mass = emission_rate * release_interval * jnp.ones_like(release_times)
+        if puff_durations is not None:
+            puff_mass = emission_rate * jnp.asarray(puff_durations)
+        else:
+            puff_mass = emission_rate * release_interval * jnp.ones_like(release_times)
         predicted = _predict_observations(
             puff_mass,
             release_times,
@@ -257,6 +303,7 @@ def gaussian_puff_rw_model(
     rw_step_std: float = 0.02,
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
+    puff_durations: jnp.ndarray | None = None,
 ) -> jnp.ndarray:
     """Random-walk state-space model for a time-varying emission rate Q_i.
 
@@ -302,7 +349,10 @@ def gaussian_puff_rw_model(
 
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
-    puff_mass = emission_series * release_interval
+    if puff_durations is not None:
+        puff_mass = emission_series * jnp.asarray(puff_durations)
+    else:
+        puff_mass = emission_series * release_interval
     predicted = _predict_observations(
         puff_mass,
         release_times,
@@ -379,6 +429,24 @@ def _validate_inference_inputs(
         raise ValueError(
             f"{func_name}: `wind_direction` shape {wd.shape} must match "
             f"`wind_times` shape {wt.shape}"
+        )
+    # The cumulative wind integrals are solved from schedule.times[0], so any
+    # release or observation time earlier than the first wind knot lands before
+    # the ODE's t0 and raises an opaque diffrax error deep inside the trace.
+    # Catch it here with a clear message. (Extrapolation past wind_times[-1] is
+    # supported — see `cumulative_wind_integrals`.)
+    wind_start = float(wt[0])
+    if t_start < wind_start:
+        raise ValueError(
+            f"{func_name}: `t_start` ({t_start!r}) is before the wind schedule "
+            f"start `wind_times[0]` ({wind_start!r}); releases must lie within "
+            "the wind schedule."
+        )
+    obs_min = float(times.min())
+    if obs_min < wind_start:
+        raise ValueError(
+            f"{func_name}: earliest `observation_times` ({obs_min!r}) is before "
+            f"the wind schedule start `wind_times[0]` ({wind_start!r})."
         )
     if len(source_location) != 3:
         raise ValueError(
@@ -472,6 +540,9 @@ def infer_emission_rate(
     schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)
     release_interval = frequency_to_release_interval(release_frequency)
+    # Per-puff durations conserve emitted mass: the trailing partial interval
+    # carries only its actual duration (matches simulate_puff).
+    puff_durations = release_durations(release_times, t_end)
 
     obs_jax = jnp.asarray(obs)
     coords_jax = tuple(jnp.asarray(c) for c in coords)
@@ -493,6 +564,7 @@ def infer_emission_rate(
         schedule=schedule,
         release_times=release_times,
         release_interval=release_interval,
+        puff_durations=puff_durations,
         stability_class=stability_class,
         scheme=scheme,
         prior_emission_rate_mean=prior_mean,
@@ -566,6 +638,7 @@ def infer_emission_timeseries(
     schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)
     release_interval = frequency_to_release_interval(release_frequency)
+    puff_durations = release_durations(release_times, t_end)
 
     mcmc = MCMC(
         NUTS(gaussian_puff_rw_model),
@@ -583,6 +656,7 @@ def infer_emission_timeseries(
         schedule=schedule,
         release_times=release_times,
         release_interval=release_interval,
+        puff_durations=puff_durations,
         stability_class=stability_class,
         scheme=scheme,
         prior_emission_rate_mean=prior_mean,

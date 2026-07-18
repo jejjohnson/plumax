@@ -193,6 +193,8 @@ def infer_emission_rate(
     seed: int = 0,
     progress_bar: bool = False,
     print_summary: bool = False,
+    obs_noise_std: float = 5e-7,
+    background_prior_std: float = 5e-7,
 ) -> dict[str, NDArray]:
     """Infer the plume emission rate via NUTS.
 
@@ -225,6 +227,12 @@ def infer_emission_rate(
         If True, show the NumPyro progress bar. Default False.
     print_summary : bool
         If True, call ``mcmc.print_summary()`` after the run.
+    obs_noise_std : float
+        Observation-noise σ for the Gaussian likelihood [kg/m³]. Set this to
+        the sensor noise so the posterior width reflects the instrument rather
+        than the hard-coded default.
+    background_prior_std : float
+        HalfNormal scale for the background-concentration prior [kg/m³].
 
     Returns
     -------
@@ -270,6 +278,15 @@ def infer_emission_rate(
         raise ValueError(
             f"infer_emission_rate: `prior_std` must be > 0 (got {prior_std!r})"
         )
+    if not (obs_noise_std > 0.0):
+        raise ValueError(
+            f"infer_emission_rate: `obs_noise_std` must be > 0 (got {obs_noise_std!r})"
+        )
+    if not (background_prior_std > 0.0):
+        raise ValueError(
+            "infer_emission_rate: `background_prior_std` must be > 0 "
+            f"(got {background_prior_std!r})"
+        )
 
     theta_rad = np.deg2rad(wind_direction)
     wind_u = float(-wind_speed * np.sin(theta_rad))
@@ -302,6 +319,8 @@ def infer_emission_rate(
         prior_emission_rate_mean=prior_mean,
         prior_emission_rate_std=prior_std,
         infer_stability=infer_stability,
+        obs_noise_std=obs_noise_std,
+        background_prior_std=background_prior_std,
     )
     if print_summary:
         mcmc.print_summary()
