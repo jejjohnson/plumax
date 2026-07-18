@@ -5,6 +5,12 @@ from a discretised emission field ``q`` to predicted observations
 ``y_pred = F q`` (see :func:`plumax.lagrangian.compute_footprint`) — this module
 recovers a Bayesian posterior over ``q`` from observed column enhancements.
 
+Units follow ``F``'s flux-sensitivity convention (s·m²·kg⁻¹, see
+:func:`plumax.lagrangian.compute_footprint`): ``q`` is a per-cell surface
+**flux** in kg·m⁻²·s⁻¹, and the prior mean / covariance are expressed in those
+same flux units. The estimators are unit-agnostic — they only require ``q`` and
+``F`` to be mutually consistent so that ``F q`` lands in the observation units.
+
 Two estimators, both following the Tier II design note
 ([design](https://github.com/jejjohnson/plumax/blob/main/docs/design/02_tier2_lagrangian.md#tier2-inference)):
 

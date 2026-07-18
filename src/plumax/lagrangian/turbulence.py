@@ -179,4 +179,44 @@ def hanna_profiles(
     return sigma, tau
 
 
-__all__ = ["HomogeneousTurbulence", "hanna_profiles"]
+@dataclass(frozen=True)
+class HannaTurbulence:
+    """Height-dependent Hanna (1982) turbulence as a ``TurbulenceModel``.
+
+    Thin adapter that binds the surface-layer scales required by
+    :func:`hanna_profiles` and exposes the ``at(z) -> (sigma, tau)`` interface
+    the integrator (:func:`plumax.lagrangian.langevin_step`,
+    :func:`~plumax.lagrangian.integrate_particles`,
+    :func:`~plumax.lagrangian.compute_footprint`) expects. Because ``σ_w`` varies
+    with height, the well-mixed vertical drift correction ``½(1+v_w²/σ_w²)
+    ∂σ_w²/∂z`` is non-zero — the inhomogeneous path that
+    :class:`HomogeneousTurbulence` never exercises.
+
+    Attributes:
+        u_star: Friction velocity ``u_*`` [m/s].
+        pbl_height: Boundary-layer height ``h`` [m].
+        obukhov_length: Monin–Obukhov length ``L`` [m] (``< 0`` unstable).
+        w_star: Convective velocity scale ``w_*`` [m/s] (used when ``L < 0``).
+    """
+
+    u_star: float
+    pbl_height: float
+    obukhov_length: float
+    w_star: float = 0.0
+
+    def at(self, z: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return ``(σ, τ_L)`` at height(s) ``z`` from the Hanna (1982) profiles.
+
+        ``σ`` and ``τ_L`` have a trailing axis of size 3, matching
+        :meth:`HomogeneousTurbulence.at`.
+        """
+        return hanna_profiles(
+            z,
+            u_star=self.u_star,
+            pbl_height=self.pbl_height,
+            obukhov_length=self.obukhov_length,
+            w_star=self.w_star,
+        )
+
+
+__all__ = ["HannaTurbulence", "HomogeneousTurbulence", "hanna_profiles"]

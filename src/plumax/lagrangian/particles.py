@@ -18,7 +18,9 @@ well mixed (stationary velocity variance ``σ²`` with no time-step bias), and
 adds the inhomogeneous vertical drift correction with an Euler step. The
 correction's ``∂σ_w²/∂z`` is obtained by autodiff of the turbulence profile, so
 it is zero for :class:`~plumax.lagrangian.turbulence.HomogeneousTurbulence` and
-nonzero for :func:`~plumax.lagrangian.turbulence.hanna_profiles` automatically.
+nonzero for :class:`~plumax.lagrangian.turbulence.HannaTurbulence` (the
+``at``-exposing adapter over
+:func:`~plumax.lagrangian.turbulence.hanna_profiles`) automatically.
 
 Vertical motion reflects off the ground (``z = 0``) and, when a boundary-layer
 height is supplied, off the PBL top — flipping both ``z`` and ``v_w``.
