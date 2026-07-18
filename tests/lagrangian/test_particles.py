@@ -205,6 +205,25 @@ def test_well_mixed_condition_hanna():
     assert abs(float(zf.mean()) - 0.5 * h) < 0.1 * h
 
 
+def test_hanna_ground_level_drift_is_finite():
+    # The convective Hanna σ_w² carries a (z/h)^{2/3} factor whose ∂/∂z is
+    # singular at z = 0, so a ground-level particle (or one reflected exactly to
+    # the ground) would give inf/NaN vertical drift. HannaTurbulence.at floors z,
+    # so the langevin step must stay finite.
+    turb = HannaTurbulence(
+        u_star=0.5, pbl_height=1000.0, obukhov_length=-50.0, w_star=2.0
+    )
+    state = ParticleState(
+        position=jnp.array([[0.0, 0.0, 0.0]]),  # exactly at the ground
+        velocity=jnp.zeros((1, 3)),
+    )
+    nxt = langevin_step(
+        state, jnp.zeros(3), turb, 1.0, jax.random.PRNGKey(0), pbl_height=1000.0
+    )
+    assert np.all(np.isfinite(np.asarray(nxt.position)))
+    assert np.all(np.isfinite(np.asarray(nxt.velocity)))
+
+
 def test_single_step_matches_manual_ou():
     turb = HomogeneousTurbulence.isotropic(sigma=1.0, tau=10.0)
     state = ParticleState(

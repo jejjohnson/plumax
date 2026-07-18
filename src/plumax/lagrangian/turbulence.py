@@ -197,19 +197,35 @@ class HannaTurbulence:
         pbl_height: Boundary-layer height ``h`` [m].
         obukhov_length: Monin–Obukhov length ``L`` [m] (``< 0`` unstable).
         w_star: Convective velocity scale ``w_*`` [m/s] (used when ``L < 0``).
+        z_floor: Minimum height [m] at which the profiles are evaluated. The
+            convective ``σ_w²`` term carries a ``(z/h)^{2/3}`` factor whose
+            ``∂/∂z`` is singular at the ground, so the integrator's well-mixed
+            drift ``½(1+v_w²/σ_w²)∂σ_w²/∂z`` would be ``inf``/``NaN`` for a
+            ground-level source or a particle reflected exactly to ``z = 0``.
+            Flooring ``z`` keeps the drift finite; the default ``0.1 m`` sits at
+            the roughness / surface-layer scale where the similarity profiles are
+            not valid anyway.
     """
 
     u_star: float
     pbl_height: float
     obukhov_length: float
     w_star: float = 0.0
+    z_floor: float = 0.1
+
+    def __post_init__(self) -> None:
+        if not (self.z_floor > 0.0):
+            raise ValueError("HannaTurbulence: `z_floor` must be > 0")
 
     def at(self, z: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Return ``(σ, τ_L)`` at height(s) ``z`` from the Hanna (1982) profiles.
 
-        ``σ`` and ``τ_L`` have a trailing axis of size 3, matching
+        ``z`` is floored at :attr:`z_floor` before evaluation so the vertical
+        drift stays finite at the ground (see the class docstring). ``σ`` and
+        ``τ_L`` have a trailing axis of size 3, matching
         :meth:`HomogeneousTurbulence.at`.
         """
+        z = jnp.maximum(jnp.asarray(z, dtype=float), self.z_floor)
         return hanna_profiles(
             z,
             u_star=self.u_star,
