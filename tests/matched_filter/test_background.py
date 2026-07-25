@@ -117,3 +117,50 @@ def test_lowrank_covariance_is_symmetric(rng):
     cov_op = estimate_cov_lowrank(cube, rank=3, tikhonov=1e-3)
     M = np.asarray(cov_op.as_matrix())
     np.testing.assert_allclose(M, M.T, atol=1e-12)
+
+
+def test_masked_cov_excludes_plume(rng):
+    # A bright plume block inflates the unmasked covariance; masking those
+    # pixels must recover the background-only covariance (identical to the
+    # clean scene with the same pixels excluded).
+    B = 8
+    clean = 1.0 + rng.standard_normal((20, 20, B)) * 0.05
+    cube = clean.copy()
+    plume = np.zeros((20, 20), dtype=bool)
+    plume[:4, :4] = True
+    cube[plume] += 5.0  # strong contaminant only on the plume pixels
+
+    cov_all = np.asarray(estimate_cov_empirical(cube).as_matrix())
+    cov_masked = np.asarray(estimate_cov_empirical(cube, mask=plume).as_matrix())
+    # Reference: clean scene with the same pixels excluded (non-plume pixels of
+    # `cube` and `clean` are identical), so the masked estimate must match it.
+    cov_ref = np.asarray(estimate_cov_empirical(clean, mask=plume).as_matrix())
+
+    np.testing.assert_allclose(cov_masked, cov_ref, atol=1e-10)
+    assert np.trace(cov_all) > 5.0 * np.trace(cov_masked)
+
+
+def test_masked_cov_rejects_wrong_shape(rng):
+    cube = _noisy_cube(rng, H=10, W=10, B=4)
+    with pytest.raises(ValueError, match="one entry per pixel"):
+        estimate_cov_empirical(cube, mask=np.zeros(7, dtype=bool))
+
+
+def test_rank_deficient_scene_finite(rng):
+    # A rank-2 scene (all spectra are combinations of two) has covariance rank 2,
+    # so a rank-8 request yields near-zero eigen-directions. Without the
+    # rank-deficiency guard the Woodbury capacitance diag(1/d) blows up to
+    # inf/NaN; with it, the solve stays finite and matches the dense form.
+    import gaussx as gx
+
+    B = 10
+    basis = rng.standard_normal((2, B))
+    X = rng.standard_normal((400, 2)) @ basis  # exactly rank 2
+    cube = X.reshape(400, 1, B)
+    cov_op = estimate_cov_lowrank(cube, rank=8, tikhonov=1e-4)
+
+    rhs = jnp.asarray(rng.standard_normal(B))
+    x = np.asarray(gx.solve(cov_op, rhs))
+    assert np.all(np.isfinite(x))
+    dense = np.asarray(cov_op.as_matrix())
+    np.testing.assert_allclose(x, np.linalg.solve(dense, np.asarray(rhs)), atol=1e-6)

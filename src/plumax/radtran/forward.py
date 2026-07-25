@@ -79,6 +79,19 @@ def _interp_sigma(
             f"forward model: variable {var!r} not in dataset "
             f"(have {list(ds.data_vars)})"
         )
+    # Bounds-check (T, P) against the LUT grid before interpolating: xarray's
+    # linear interp returns all-NaN outside the grid, which surfaces downstream
+    # as a misleading "Σ is not PD" error. Fail here, naming the offending value.
+    for name, value in (("T_K", T_K), ("p_atm", p_atm)):
+        coord = "temperature" if name == "T_K" else "pressure"
+        if coord in ds.coords:
+            lo, hi = float(ds[coord].min()), float(ds[coord].max())
+            if not (lo <= float(value) <= hi):
+                raise ValueError(
+                    f"forward model: `{name}` ({value!r}) is outside the LUT "
+                    f"`{coord}` grid range [{lo}, {hi}]; extend the LUT or clamp "
+                    "the query."
+                )
     nu_da = xr.DataArray(np.asarray(nu_obs, dtype=float), dims=["obs_nu"])
     sigma = ds[var].interp(
         wavenumber=nu_da, temperature=T_K, pressure=p_atm, method="linear"

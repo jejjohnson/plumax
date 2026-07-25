@@ -161,6 +161,7 @@ def adaptive_window_background(
     cube: np.ndarray,
     *,
     window_size: int,
+    guard_size: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Per-pixel local mean and per-band variance over a square window.
 
@@ -177,6 +178,12 @@ def adaptive_window_background(
         Hyperspectral cube, shape ``(H, W, n_bands)``.
     window_size
         Edge length of the averaging window. Must be odd and ``>= 3``.
+    guard_size
+        Edge length of a central **guard region** excluded from each pixel's
+        window (a guard annulus). Must be odd and ``0 <= guard_size <
+        window_size``. The default ``0`` includes the centre pixel — but then a
+        plume pixel contaminates its *own* local background; ``guard_size=1``
+        excludes just the centre pixel, larger values exclude a bigger core.
 
     Returns
     -------
@@ -189,6 +196,15 @@ def adaptive_window_background(
         raise ValueError(
             f"adaptive_window_background: window_size must be an odd int ≥ 3; got {window_size}."
         )
+    if guard_size < 0 or (guard_size > 0 and guard_size % 2 == 0):
+        raise ValueError(
+            f"adaptive_window_background: guard_size must be 0 or an odd int; got {guard_size}."
+        )
+    if guard_size >= window_size:
+        raise ValueError(
+            f"adaptive_window_background: guard_size ({guard_size}) must be < "
+            f"window_size ({window_size})."
+        )
     arr = np.asarray(cube, dtype=float)
     if arr.ndim != 3:
         raise ValueError(
@@ -196,14 +212,28 @@ def adaptive_window_background(
         )
     from scipy.ndimage import uniform_filter
 
+    # Annulus counts: outer window minus the excluded central guard region.
+    n_out = window_size**2
+    n_in = guard_size**2 if guard_size > 0 else 0
+    n_ann = n_out - n_in
+
+    def window_mean(plane: np.ndarray) -> np.ndarray:
+        # Uniform (box) mean over the window, excluding the central guard region
+        # when guard_size > 0: annulus_sum / annulus_count via box-sum difference.
+        out_sum = uniform_filter(plane, size=window_size, mode="reflect") * n_out
+        if guard_size > 0:
+            in_sum = uniform_filter(plane, size=guard_size, mode="reflect") * n_in
+            return (out_sum - in_sum) / n_ann
+        return out_sum / n_out
+
     # Apply a 2-D moving average independently to each band — scipy handles
     # the reflect-boundary by default, matching how most MF codes handle
     # scene edges.
     mean = np.empty_like(arr)
     var = np.empty_like(arr)
     for b in range(arr.shape[-1]):
-        m = uniform_filter(arr[..., b], size=window_size, mode="reflect")
-        m2 = uniform_filter(arr[..., b] ** 2, size=window_size, mode="reflect")
+        m = window_mean(arr[..., b])
+        m2 = window_mean(arr[..., b] ** 2)
         mean[..., b] = m
         # Population variance — E[x²] - E[x]². Clipped to zero for numerics.
         var[..., b] = np.maximum(m2 - m * m, 0.0)

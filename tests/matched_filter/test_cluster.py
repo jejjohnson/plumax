@@ -53,6 +53,23 @@ def test_adaptive_window_rejects_even_window(rng):
         adaptive_window_background(cube, window_size=4)
 
 
+def test_adaptive_window_guard_annulus_excludes_centre(rng):
+    # guard_size=1 drops the centre pixel from each window, so a plume pixel
+    # can't contaminate its own local background. Interior annulus mean = window
+    # mean with the centre removed.
+    cube = rng.standard_normal((9, 9, 1)) * 0.5 + 1.0
+    mean, _ = adaptive_window_background(cube, window_size=3, guard_size=1)
+    patch = cube[3:6, 3:6, 0]
+    expected = (patch.sum() - patch[1, 1]) / (patch.size - 1)
+    np.testing.assert_allclose(mean[4, 4, 0], expected, atol=1e-12)
+
+
+def test_adaptive_window_rejects_guard_ge_window(rng):
+    cube = rng.standard_normal((7, 7, 2))
+    with pytest.raises(ValueError, match="guard_size"):
+        adaptive_window_background(cube, window_size=3, guard_size=3)
+
+
 def test_gmm_small_cluster_fallback_is_consistent(rng):
     """When a cluster has < 2 pixels the ``(μ_k, Σ_k)`` pair must be
     self-consistent — both coming from the global scene statistics. Regression

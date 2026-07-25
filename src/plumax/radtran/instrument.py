@@ -39,6 +39,11 @@ from jaxtyping import Array, Float
 
 
 PSFType = Literal["gaussian", "airy"]
+
+# Argument at which the Airy intensity ``(2·J₁(x)/x)²`` reaches half its peak.
+# Placing this at ``r = fwhm_pixels / 2`` makes the kernel's measured FWHM equal
+# ``fwhm_pixels`` — matching the Gaussian PSF's exact FWHM semantics.
+_AIRY_HALF_MAX_X: float = 1.6163399
 HRCube = Float[Array, "ny nx n_lambda"]
 LRCube = Float[Array, "ny_lr nx_lr n_lambda"]
 
@@ -120,7 +125,14 @@ class PointSpreadFunction:
 
     @classmethod
     def airy(cls, fwhm_pixels: float, kernel_size: int = 9) -> PointSpreadFunction:
-        """Build an Airy-disk-like PSF as a diffraction-ish surrogate."""
+        """Build an Airy-disk-like PSF as a diffraction-ish surrogate.
+
+        ``fwhm_pixels`` is the kernel's full width at half maximum, matching
+        :meth:`gaussian`. The Airy argument is scaled so the half-max radius
+        (``x = _AIRY_HALF_MAX_X``) falls at ``r = fwhm_pixels / 2``; the earlier
+        ``1.22·fwhm`` (first-zero) scaling produced a kernel ≈ 0.63× the
+        requested FWHM.
+        """
         from scipy.special import j1
 
         if fwhm_pixels <= 0.0:
@@ -128,7 +140,7 @@ class PointSpreadFunction:
         c = kernel_size // 2
         y, x = np.ogrid[-c : c + 1, -c : c + 1]
         r = np.sqrt(x * x + y * y)
-        xarg = np.where(r == 0.0, 1e-12, 2.0 * np.pi * r / (1.22 * fwhm_pixels))
+        xarg = np.where(r == 0.0, 1e-12, 2.0 * _AIRY_HALF_MAX_X * r / fwhm_pixels)
         k = (2.0 * j1(xarg) / xarg) ** 2
         return cls(kernel=k)
 

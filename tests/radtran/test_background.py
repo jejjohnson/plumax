@@ -77,3 +77,38 @@ def test_default_rank_is_reasonable():
     Sigma, _ = robust_lowrank_covariance(scene)  # rank=None → min(n_bands-1, 16)
     # Should still produce a full-rank Σ after the Tikhonov kick.
     assert np.linalg.matrix_rank(Sigma) == 10
+
+
+def test_noise_matched_floor_far():
+    # A low-rank background plus iid sensor noise. Retaining the signal rank and
+    # flooring the discarded subspace at the *noise* level (default None) should
+    # weight noise directions correctly, giving a tighter false-alarm
+    # distribution than the fixed λ=1e-6 floor, which over-weights that subspace.
+    rng = np.random.default_rng(0)
+    n_bands, k_true, noise_sigma = 60, 5, 0.01
+    modes = rng.standard_normal((k_true, n_bands))
+    scale = np.array([1.0, 0.7, 0.5, 0.3, 0.2])
+
+    def draw(n):
+        amps = rng.standard_normal((n, k_true)) * scale
+        return amps @ modes + rng.normal(scale=noise_sigma, size=(n, n_bands))
+
+    train = draw(4000)
+    scene = train.T  # (n_bands, n_pixels), band_axis=0
+    target = rng.standard_normal(n_bands) * 0.05
+
+    mu = trimmed_mean_spectrum(scene, trim_frac=0.0)
+    _, inv_matched = robust_lowrank_covariance(scene, rank=k_true, trim_frac=0.0)
+    _, inv_fixed = robust_lowrank_covariance(
+        scene, rank=k_true, trim_frac=0.0, regularization=1e-6
+    )
+
+    # Fresh noise-only (no target) test pixels; matched-filter statistic.
+    test = draw(5000)
+
+    def far_std(inv):
+        w = inv @ target
+        eps = (test - mu) @ w / float(target @ w)
+        return float(eps.std())
+
+    assert far_std(inv_matched) < far_std(inv_fixed)

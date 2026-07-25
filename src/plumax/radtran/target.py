@@ -33,7 +33,7 @@ from plumax.radtran.forward import (
     forward_maclaurin_normalized,
     forward_nonlinear_normalized,
 )
-from plumax.radtran.srf import SpectralResponseFunction
+from plumax.radtran.srf import SpectralResponseFunction, check_srf_lut_coverage
 
 
 def target_spectrum_normalized_nonlinear(
@@ -135,5 +135,8 @@ def target_bands(
     sort_idx = np.argsort(wavelengths_nm)
     lam = np.asarray(wavelengths_nm)[sort_idx]
     t = np.asarray(target_hr)[sort_idx]
+    # Flag bands whose SRF response reaches past the LUT wavelength coverage;
+    # np.interp zero-fills there and would silently attenuate the target.
+    check_srf_lut_coverage(srf, lam, context="target_bands")
     t_on_srf_grid = np.interp(srf.wavelengths_hr_nm, lam, t, left=0.0, right=0.0)
     return srf.apply(t_on_srf_grid)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from plumax.radtran.config import number_density_cm3
 from plumax.radtran.target import (
@@ -94,3 +95,13 @@ def test_target_bands_length_mismatch():
     srf_stub = None  # not reached — shape check happens first
     with np.testing.assert_raises(ValueError):
         target_bands(np.zeros(10), srf_stub, np.zeros(11))  # type: ignore[arg-type]
+
+
+def test_band_outside_lut_coverage_warns(synthetic_lut, swir_srf):
+    # The LUT covers ~2222–2500 nm; the B11 band @1610 nm lies entirely outside,
+    # so its band-integrated target is silently zero-filled — must warn naming
+    # the band and the uncovered fraction, not fail silently.
+    lam = 1e7 / synthetic_lut["wavenumber"].values
+    t_hr = np.zeros_like(lam)
+    with pytest.warns(UserWarning, match=r"B11.*outside the LUT"):
+        target_bands(t_hr, swir_srf, lam)
