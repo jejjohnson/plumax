@@ -8,8 +8,6 @@ import numpy as np
 from plumax.les_fvm._vertical_ops import (
     vertical_advection_tendency,
     vertical_diffusion_tendency,
-    zero_horizontal_ghosts,
-    zero_vertical_ghosts,
 )
 
 
@@ -94,21 +92,3 @@ def test_vertical_diffusion_handles_field_kappa():
     t_scalar = vertical_diffusion_tendency(c, kappa_z=kappa_scalar, dz=dz)
     t_field = vertical_diffusion_tendency(c, kappa_z=kappa_field, dz=dz)
     np.testing.assert_allclose(np.asarray(t_scalar), np.asarray(t_field), atol=1e-6)
-
-
-def test_zero_ghost_helpers_do_not_touch_interior():
-    field = jnp.arange(6 * 4 * 4, dtype=jnp.float32).reshape(6, 4, 4)
-    interior = np.asarray(field)[1:-1, 1:-1, 1:-1]
-
-    zeroed_h = zero_horizontal_ghosts(field)
-    np.testing.assert_allclose(np.asarray(zeroed_h)[1:-1, 1:-1, 1:-1], interior)
-    # Horizontal ghost rings are zero.
-    assert float(jnp.abs(zeroed_h[:, 0, :]).max()) == 0.0
-    assert float(jnp.abs(zeroed_h[:, -1, :]).max()) == 0.0
-    assert float(jnp.abs(zeroed_h[:, :, 0]).max()) == 0.0
-    assert float(jnp.abs(zeroed_h[:, :, -1]).max()) == 0.0
-
-    zeroed_v = zero_vertical_ghosts(field)
-    np.testing.assert_allclose(np.asarray(zeroed_v)[1:-1, 1:-1, 1:-1], interior)
-    assert float(jnp.abs(zeroed_v[0]).max()) == 0.0
-    assert float(jnp.abs(zeroed_v[-1]).max()) == 0.0

@@ -421,8 +421,14 @@ def build_problem(
             raise ValueError(
                 f"build_problem: `{_name}` must be finite (contains NaN/inf)."
             )
-    # Jitter keeps the Cholesky factor PD for smooth Matérn kernels.
-    chol = jnp.linalg.cholesky(b + 1e-9 * jnp.eye(n_t))
+    # Adaptive-jitter Cholesky: gx.safe_cholesky escalates the jitter on failure
+    # (JIT-compatible), succeeding for badly-scaled Matérn priors where a fixed
+    # 1e-9 kick would not.
+    chol = gx.safe_cholesky(
+        lx.MatrixLinearOperator(
+            b, tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+        )
+    )
 
     # Resolve obs_variance to R, the (n_t, n_obs) diagonal. A length-n_t 1-D
     # input is treated as one variance *per overpass* (R_t), so reshape it to a
@@ -662,6 +668,7 @@ def posterior_covariance(
     )
     p_chi = gx.inv(hessian_op).as_matrix()
     # Symmetrise to clean up asymmetric round-off before the congruence map.
+    # (Would be gx.symmetrize once exported — gaussx#202; manual until then.)
     p_chi = 0.5 * (p_chi + p_chi.T)
     chol = problem.prior_chol  # L with B = L Lᵀ
     p_source = chol @ p_chi @ chol.T
@@ -698,9 +705,12 @@ def laplace_sample(
     chi_star = jnp.asarray(whitened_map, dtype=float)
     post = posterior_covariance(problem, chi_star)
     n_t = chi_star.shape[0]
-    # Jitter keeps the whitened-covariance Cholesky PD against round-off.
-    chol_chi = jnp.linalg.cholesky(
-        post.whitened_covariance + 1e-12 * jnp.eye(n_t, dtype=chi_star.dtype)
+    # Adaptive-jitter Cholesky against round-off in the whitened covariance.
+    chol_chi = gx.safe_cholesky(
+        lx.MatrixLinearOperator(
+            post.whitened_covariance,
+            tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+        )
     )
     noise = jax.random.normal(key, (int(n_samples), n_t), dtype=chi_star.dtype)
     chi_samples = chi_star[None, :] + noise @ chol_chi.T

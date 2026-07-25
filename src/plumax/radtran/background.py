@@ -91,6 +91,88 @@ def trimmed_mean_spectrum(
     return np.asarray(trim_mean(flat, trim_frac, axis=0), dtype=float)
 
 
+def _estimate_lowrank_model(
+    radiance: np.ndarray,
+    *,
+    rank: int | None,
+    trim_frac: float,
+    regularization: float | None,
+    band_axis: int,
+    context: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, float]:
+    """Shared trim + truncated-SVD covariance model (single source of truth).
+
+    Centres the pixel stack with a trimmed mean, drops the extreme-energy
+    pixels, truncates the SVD to ``rank``, and picks the diagonal floor. Returns
+    ``(mu, U, d, lam)`` such that ``Σ = U diag(d) Uᵀ + lam·I``. Consumed by both
+    :func:`robust_lowrank_covariance` (which materialises Σ/Σ⁻¹) and
+    :func:`plumax.radtran.gaussx_solve.build_lowrank_covariance_operator` (which
+    wraps it in a gaussx operator) so the two paths cannot drift apart — the
+    dense-vs-operator agreement tests are only meaningful while they don't.
+
+    Parameters
+    ----------
+    radiance, band_axis
+        Radiance cube and its band axis.
+    rank
+        Truncation rank; ``None`` → ``min(n_bands - 1, 16)``.
+    trim_frac
+        Two-sided energy trim fraction in ``[0, 0.5)``.
+    regularization
+        Diagonal floor; ``None`` → noise-matched (:func:`_noise_matched_floor`).
+    context
+        Caller name, prepended to validation-error messages.
+
+    Returns
+    -------
+    mu : np.ndarray, shape ``(n_bands,)``
+    U : np.ndarray, shape ``(n_bands, rank)`` — principal directions (columns).
+    d : np.ndarray, shape ``(rank,)`` — retained covariance eigenvalues ``S_k²/N``.
+    lam : float — diagonal floor.
+    """
+    flat = _flatten_pixels(radiance, band_axis)  # (n_pixels, n_bands)
+    n_pixels, n_bands = flat.shape
+    if n_pixels < 2:
+        raise ValueError(f"{context}: need ≥ 2 pixels (got {n_pixels})")
+    if not (0.0 <= trim_frac < 0.5):
+        raise ValueError(
+            f"{context}: `trim_frac` must be in [0, 0.5) (got {trim_frac!r})"
+        )
+    if regularization is not None and regularization <= 0.0:
+        raise ValueError(f"{context}: `regularization` must be > 0.")
+    if rank is None:
+        rank = min(n_bands - 1, 16)
+    rank = max(1, min(int(rank), n_bands))
+
+    mu = trimmed_mean_spectrum(radiance, trim_frac=trim_frac, band_axis=band_axis)
+    centred = flat - mu[None, :]
+
+    # Drop the top/bottom `trim_frac` pixels by total energy so bright outliers
+    # don't dominate the SVD.
+    if trim_frac > 0.0:
+        energy = np.linalg.norm(centred, axis=1)
+        lo, hi = np.quantile(energy, [trim_frac, 1.0 - trim_frac])
+        keep = (energy >= lo) & (energy <= hi)
+        if keep.sum() < n_bands:
+            raise ValueError(
+                f"{context}: trimming left fewer pixels than bands; "
+                "reduce `trim_frac` or enlarge the scene."
+            )
+        centred = centred[keep]
+
+    # Deterministic truncated SVD (small scenes; keeps tests reproducible).
+    _, S, Vt = np.linalg.svd(centred, full_matrices=False)
+    n_kept = centred.shape[0]
+    U = Vt[:rank].T  # (n_bands, rank) — principal directions as columns
+    d = S[:rank] ** 2 / max(n_kept, 1)  # retained covariance eigenvalues
+    lam = (
+        _noise_matched_floor(S, rank, n_kept)
+        if regularization is None
+        else float(regularization)
+    )
+    return mu, U, d, lam
+
+
 def robust_lowrank_covariance(
     radiance: np.ndarray,
     *,
@@ -137,49 +219,17 @@ def robust_lowrank_covariance(
     Sigma, Sigma_inv : np.ndarray
         Symmetric PSD matrices, shape ``(n_bands, n_bands)``.
     """
-    flat = _flatten_pixels(radiance, band_axis)  # (n_pixels, n_bands)
-    n_pixels, n_bands = flat.shape
-    if n_pixels < 2:
-        raise ValueError(f"robust_lowrank_covariance: need ≥ 2 pixels (got {n_pixels})")
-    if not (0.0 <= trim_frac < 0.5):
-        raise ValueError(
-            f"robust_lowrank_covariance: `trim_frac` must be in [0, 0.5) (got {trim_frac!r})"
-        )
-    if regularization is not None and regularization <= 0.0:
-        raise ValueError("robust_lowrank_covariance: `regularization` must be > 0.")
-    if rank is None:
-        rank = min(n_bands - 1, 16)
-    rank = max(1, min(int(rank), n_bands))
-
-    mu = trimmed_mean_spectrum(radiance, trim_frac=trim_frac, band_axis=band_axis)
-    centred = flat - mu[None, :]
-
-    # Drop the top/bottom `trim_frac` pixels by total energy to keep bright
-    # outliers from dominating the SVD. This mirrors the dynamic-mode
-    # rejection in the original code but without the GMM complexity.
-    if trim_frac > 0.0:
-        energy = np.linalg.norm(centred, axis=1)
-        lo, hi = np.quantile(energy, [trim_frac, 1.0 - trim_frac])
-        keep = (energy >= lo) & (energy <= hi)
-        if keep.sum() < n_bands:
-            raise ValueError(
-                "robust_lowrank_covariance: trimming left fewer pixels than bands; "
-                "reduce `trim_frac` or enlarge the scene."
-            )
-        centred = centred[keep]
-
-    # Truncated SVD via numpy (scene is small for multispectral; for
-    # hyperspectral callers can pre-subsample). Randomised SVD would give
-    # a constant-factor speed-up but the deterministic path keeps tests
-    # reproducible.
-    _, S, Vt = np.linalg.svd(centred, full_matrices=False)
-    S_k = S[:rank]
-    V_k = Vt[:rank]  # shape (rank, n_bands); V_k.T are the principal directions.
-
-    # Σ in the top-k subspace (1 / N) · Vᵀ S² V, plus the diagonal floor λ.
-    N = centred.shape[0]
-    lam = _noise_matched_floor(S, rank, N) if regularization is None else regularization
-    Sigma = (V_k.T * (S_k**2)) @ V_k / max(N, 1) + lam * np.eye(n_bands)
+    mu, U, d, lam = _estimate_lowrank_model(
+        radiance,
+        rank=rank,
+        trim_frac=trim_frac,
+        regularization=regularization,
+        band_axis=band_axis,
+        context="robust_lowrank_covariance",
+    )
+    n_bands = mu.shape[0]
+    # Σ = U diag(d) Uᵀ + λ I (d = S_k² / N are the retained covariance eigenvalues).
+    Sigma = (U * d) @ U.T + lam * np.eye(n_bands)
 
     # Woodbury inverse for efficiency: (λI + Uᵀ D U)⁻¹ where
     #   U = V_k (rank, n_bands), D = diag(S_k² / N) (rank, rank).

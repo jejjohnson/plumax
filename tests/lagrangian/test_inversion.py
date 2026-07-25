@@ -123,6 +123,30 @@ def test_linear_inversion_reduces_variance():
     assert np.min(np.linalg.eigvalsh(p)) > -1e-8
 
 
+def test_posterior_cov_psd_ill_conditioned():
+    # Near-collinear observation rows + an extremely tight R make the innovation
+    # system S = F B Fᵀ + R badly ill-conditioned. The difference-form update
+    # (B − K S Kᵀ) can go slightly indefinite there; the gaussx Joseph form keeps
+    # the posterior covariance symmetric PSD.
+    rng = np.random.default_rng(3)
+    n_grid, n_obs = 10, 6
+    coords = np.linspace(0.0, 1000.0, n_grid)
+    b = np.asarray(matern32_covariance(coords, variance=1.0, length_scale=400.0))
+    base_row = rng.uniform(0.0, 1.0, size=n_grid)
+    f = np.stack([base_row + 1e-8 * rng.standard_normal(n_grid) for _ in range(n_obs)])
+    y = f @ np.full(n_grid, 1.2)
+    r = observation_covariance(
+        np.full(n_obs, 1e-12)
+    )  # extremely tight → ill-conditioned
+    post = linear_gaussian_inversion(
+        f, y, prior_mean=np.full(n_grid, 1.0), prior_cov=b, obs_variance=r
+    )
+    p = np.asarray(post.covariance)
+    np.testing.assert_allclose(p, p.T, atol=1e-9)
+    min_eig = float(np.min(np.linalg.eigvalsh(p)))
+    assert min_eig > -1e-8, f"posterior covariance not PSD: min eig {min_eig}"
+
+
 def test_linear_inversion_shape_validation():
     coords, f, q_true = _toy_problem()
     n_obs, n_grid = f.shape

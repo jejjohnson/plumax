@@ -133,75 +133,26 @@ def build_lowrank_covariance_operator(
         *same* trimmed pixel stack — avoiding a subtle bias where μ drops
         outliers that Σ's trim step kept.
     """
-    gx, jnp, lx = _import_gaussx_stack()
+    gx, jnp, _ = _import_gaussx_stack()
 
-    from plumax.radtran.background import (
-        _flatten_pixels,
-        _noise_matched_floor,
-        trimmed_mean_spectrum,
+    from plumax.radtran.background import _estimate_lowrank_model
+
+    # Shared trim/SVD model — identical (μ, U, d, λ) to the dense
+    # `robust_lowrank_covariance` path, so the two cannot drift apart.
+    mu, U, d, lam = _estimate_lowrank_model(
+        radiance,
+        rank=rank,
+        trim_frac=trim_frac,
+        regularization=regularization,
+        band_axis=band_axis,
+        context="build_lowrank_covariance_operator",
     )
-
-    flat = _flatten_pixels(radiance, band_axis)  # (n_pixels, n_bands)
-    n_pixels, n_bands = flat.shape
-    if n_pixels < 2:
-        raise ValueError(
-            f"build_lowrank_covariance_operator: need ≥ 2 pixels (got {n_pixels})"
-        )
-    if not (0.0 <= trim_frac < 0.5):
-        raise ValueError(
-            f"build_lowrank_covariance_operator: `trim_frac` must be in "
-            f"[0, 0.5) (got {trim_frac!r})"
-        )
-    if regularization is not None and regularization <= 0.0:
-        raise ValueError(
-            "build_lowrank_covariance_operator: `regularization` must be > 0."
-        )
-    if rank is None:
-        rank = min(n_bands - 1, 16)
-    rank = max(1, min(int(rank), n_bands))
-
-    mu = trimmed_mean_spectrum(radiance, trim_frac=trim_frac, band_axis=band_axis)
-    centred = flat - mu[None, :]
-
-    if trim_frac > 0.0:
-        energy = np.linalg.norm(centred, axis=1)
-        lo, hi = np.quantile(energy, [trim_frac, 1.0 - trim_frac])
-        keep = (energy >= lo) & (energy <= hi)
-        if keep.sum() < n_bands:
-            raise ValueError(
-                "build_lowrank_covariance_operator: trimming left fewer "
-                "pixels than bands; reduce `trim_frac` or enlarge the scene."
-            )
-        centred = centred[keep]
-
-    _, S, Vt = np.linalg.svd(centred, full_matrices=False)
-    S_k = S[:rank]
-    V_k = Vt[:rank]  # (rank, n_bands)
-    n_kept = centred.shape[0]
-
-    # U: principal directions as columns.
-    U = jnp.asarray(V_k.T)  # (n_bands, rank)
-    d = jnp.asarray(S_k**2 / max(n_kept, 1))  # diag of U d Uᵀ
-    # Diagonal floor λ: noise-matched by default (mean of the discarded
-    # covariance eigenvalues) so Σ⁻¹ weights the discarded subspace at the true
-    # sensor-noise level; see background._noise_matched_floor. Kept identical to
-    # the dense `robust_lowrank_covariance` path so the two agree.
-    lam = (
-        _noise_matched_floor(S, rank, n_kept)
-        if regularization is None
-        else float(regularization)
-    )
-    # Base: λ · I as an explicit *diagonal* operator so gaussx.solve picks up the
-    # fast per-element inverse path. A naive ``λ * IdentityLinearOperator(...)``
-    # would build a ScaledOperator that gaussx does not specialise and that would
-    # compute the dense inverse instead.
-    base = lx.DiagonalLinearOperator(lam * jnp.ones(n_bands, dtype=jnp.float64))
-
-    cov = gx.LowRankUpdate(
-        base,
-        U,
-        d,
-        tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+    n_bands = mu.shape[0]
+    # λ I + U diag(d) Uᵀ via the gaussx SVD constructor: it infers the
+    # symmetric/PSD tags and takes the orthonormal-factor solve path (U's columns
+    # are SVD directions), so we don't hand-maintain tags or a diagonal base.
+    cov = gx.svd_low_rank_plus_diag(
+        jnp.full(n_bands, lam), jnp.asarray(U), jnp.asarray(d), jnp.asarray(U)
     )
     return cov, mu
 

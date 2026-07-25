@@ -77,11 +77,10 @@ def test_dense_and_lowrank_agree_on_same_cov(rng):
     )
     import gaussx as gx
 
-    cov_lr = gx.LowRankUpdate(
-        lx.DiagonalLinearOperator(jnp.asarray(tikhonov * np.ones(B))),
-        jnp.asarray(V),
-        jnp.asarray(d),
-        tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+    # V is a general (non-orthonormal) factor here, so use the general
+    # low_rank_plus_diag constructor (diag + V diag(d) Vᵀ), not the SVD variant.
+    cov_lr = gx.low_rank_plus_diag(
+        jnp.asarray(tikhonov * np.ones(B)), jnp.asarray(V), jnp.asarray(d)
     )
     target = jnp.asarray(rng.standard_normal(B))
     pixel = jnp.asarray(rng.standard_normal(B))
