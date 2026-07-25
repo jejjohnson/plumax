@@ -9,7 +9,7 @@ single pytree leaf that diffrax can JIT as ``term = ODETerm(rhs)``.
 from __future__ import annotations
 
 import equinox as eqx
-import jax.numpy as jnp
+import finitevolx as fvx
 from jaxtyping import Array, Float
 
 from plumax.les_fvm.advection import advection_tendency
@@ -102,16 +102,9 @@ class EulerianDispersionRHS(eqx.Module):
             c_diff, self.eddy_diffusivity, self.plume_grid, periodic=periodic
         )
         src = self.source(t)
-        # Keep ghost-cell entries of the tendency zero; time integration writes
-        # only to the interior and the BC pass above has already updated the
-        # ghost ring of the state.
+        # Keep ghost-cell entries of the tendency zero (finitevolX `interior`
+        # idiom, no materialised mask): the integrator writes only to the
+        # interior, and the BC pass above already updated the ghost ring of the
+        # state.
         rhs = adv + diff + src
-        return jnp.where(_interior_mask(rhs.shape, rhs.dtype), rhs, 0.0)
-
-
-def _interior_mask(shape: tuple[int, int, int], dtype) -> Float[Array, "Nz Ny Nx"]:
-    """Indicator field that is 1 on interior cells and 0 on ghost cells."""
-    _Nz, _Ny, _Nx = shape
-    mask = jnp.zeros(shape, dtype=dtype)
-    mask = mask.at[1:-1, 1:-1, 1:-1].set(1.0)
-    return mask
+        return fvx.interior(rhs[1:-1, 1:-1, 1:-1], rhs)

@@ -97,9 +97,9 @@ def build_cost_x(
         delta_x = jnp.reshape(delta_x_flat, state_shape)
         x = x_b + delta_x
         residual = y - forward_fn(x)
-        # Prior term: ½ δxᵀ B⁻¹ δx. gaussx.solve dispatches on operator structure.
-        Binv_dx = gx.solve(background_op, delta_x_flat)
-        prior = 0.5 * jnp.dot(delta_x_flat, Binv_dx)
+        # Prior term: ½ δxᵀ B⁻¹ δx. gx.quadratic_form is xᵀ B⁻¹ x via a single
+        # structurally-dispatched solve — the same op gx.solve does, one call.
+        prior = 0.5 * gx.quadratic_form(background_op, delta_x_flat)
         obs = 0.5 * jnp.sum(R_inv * residual * residual)
         return prior + obs
 

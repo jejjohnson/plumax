@@ -42,8 +42,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import gaussx as gx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 
 
 def _is_traced(*values: object) -> bool:
@@ -157,24 +159,28 @@ def _blue_update(
     prior_cov: jax.Array,
     obs_var: jax.Array,
 ) -> tuple[jax.Array, jax.Array]:
-    """Solve the BLUE increment and posterior covariance via the innovation form.
+    """Solve the BLUE increment and posterior covariance via gaussx primitives.
 
     Returns ``(increment, posterior_cov)`` where
-    ``increment = B Fᵀ (F B Fᵀ + R)⁻¹ innovation`` and
-    ``posterior_cov = B − B Fᵀ (F B Fᵀ + R)⁻¹ F B``. ``R`` is diagonal, given by
-    ``obs_var``. The ``(n_obs × n_obs)`` system is solved with a Cholesky factor
-    for symmetry and speed (the efficient ordering when ``n_obs ≪ n_grid``).
+    ``increment = K · innovation`` with the Kalman gain
+    ``K = B Fᵀ (F B Fᵀ + R)⁻¹`` (:func:`gaussx.kalman_gain`), and the posterior
+    covariance is the numerically-superior **Joseph form**
+    ``(I − K F) B (I − K F)ᵀ + K R Kᵀ`` (:func:`gaussx.joseph_update`) —
+    algebraically identical to ``B − K (F B Fᵀ + R) Kᵀ`` for the exact gain but
+    guaranteed symmetric/PSD under floating-point error, so no manual
+    symmetrisation is needed. ``R`` is diagonal, given by ``obs_var``.
     """
-    bft = prior_cov @ jacobian.T  # B Fᵀ, (n_grid, n_obs)
-    s = jacobian @ bft  # F B Fᵀ, (n_obs, n_obs)
-    s = s + jnp.diag(obs_var)  # + R
-    # Symmetrise to kill round-off asymmetry before the Cholesky solve.
-    s = 0.5 * (s + s.T)
-    chol = jax.scipy.linalg.cho_factor(s, lower=True)
-    gain_t = jax.scipy.linalg.cho_solve(chol, bft.T)  # (F B Fᵀ + R)⁻¹ F B
-    increment = bft @ jax.scipy.linalg.cho_solve(chol, innovation)
-    posterior_cov = prior_cov - bft @ gain_t
-    posterior_cov = 0.5 * (posterior_cov + posterior_cov.T)
+    prior_op = lx.MatrixLinearOperator(
+        prior_cov,
+        tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+    )
+    gain = gx.kalman_gain(
+        prior_op,
+        lx.MatrixLinearOperator(jacobian),
+        lx.DiagonalLinearOperator(obs_var),
+    )  # K = B Fᵀ (F B Fᵀ + R)⁻¹, shape (n_grid, n_obs)
+    increment = gain @ innovation
+    posterior_cov = gx.joseph_update(prior_cov, gain, jacobian, jnp.diag(obs_var))
     return increment, posterior_cov
 
 

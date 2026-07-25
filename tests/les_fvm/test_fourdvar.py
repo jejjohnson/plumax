@@ -115,6 +115,36 @@ def test_cost_and_grad_are_finite():
     assert np.all(np.isfinite(np.asarray(g)))
 
 
+def test_badly_scaled_prior_cholesky():
+    # A prior covariance with a slightly-negative eigenvalue (round-off scale):
+    # the old fixed-1e-9 jitter still leaves the Cholesky NaN, but gx.safe_cholesky
+    # escalates the jitter (1e-8 → …) and returns a finite lower-triangular factor.
+    fwd = _forward()
+    n_t = fwd.save_times.shape[0]
+    rng = np.random.default_rng(0)
+    q = np.linalg.qr(rng.standard_normal((n_t, n_t)))[0]
+    eigs = np.linspace(1.0, 0.1, n_t)
+    eigs[-1] = -5e-9  # just indefinite — fixed 1e-9 jitter cannot rescue it
+    b = jnp.asarray(q @ np.diag(eigs) @ q.T)
+
+    # The old path fails on this prior.
+    l_fixed = np.asarray(jnp.linalg.cholesky(b + 1e-9 * jnp.eye(n_t)))
+    assert np.isnan(l_fixed).any()
+
+    # build_problem (now via safe_cholesky) yields a finite factor.
+    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    prob = build_problem(
+        forward=fwd,
+        observations=y,
+        prior_mean=jnp.full(n_t, 0.5),
+        prior_covariance=b,
+        obs_variance=1e-6,
+    )
+    chol = np.asarray(prob.prior_chol)
+    assert np.all(np.isfinite(chol))
+    np.testing.assert_allclose(chol, np.tril(chol), atol=1e-12)
+
+
 def test_cost_minimised_at_truth_in_whitened_space():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])

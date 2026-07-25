@@ -263,9 +263,7 @@ def estimate_cov_lowrank(
     V = svd.components_  # shape (rank, n_bands), rows are right singular vectors
     s = svd.singular_values_  # shape (rank,)
     d = (s**2) / max(n_samples, 1)
-    base = lx.DiagonalLinearOperator(
-        jnp.asarray(tikhonov * np.ones(n_bands, dtype=float))
-    )
+    diag = jnp.asarray(tikhonov * np.ones(n_bands, dtype=float))
     # Rank-deficiency guard: drop near-zero eigen-directions so the Woodbury
     # capacitance stays finite. If none survive (e.g. a constant scene), Σ is
     # just the strictly-PD Tikhonov floor λI.
@@ -273,14 +271,11 @@ def estimate_cov_lowrank(
     keep = d > rank_rtol * d_max if d_max > 0.0 else np.zeros(d.shape, dtype=bool)
     V, d = V[keep], d[keep]
     if d.size == 0:
-        return base
+        return lx.DiagonalLinearOperator(diag)
+    # λ I + U diag(d) Uᵀ via the gaussx SVD constructor (auto-inferred
+    # symmetric/PSD tags, orthonormal-factor solve path).
     U = jnp.asarray(V.T)  # (n_bands, n_kept) — spectral directions as columns
-    return gx.LowRankUpdate(
-        base,
-        U,
-        jnp.asarray(d),
-        tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
-    )
+    return gx.svd_low_rank_plus_diag(diag, U, jnp.asarray(d), U)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

@@ -109,27 +109,3 @@ def vertical_diffusion_tendency(
     tendency_interior = (flux_face[1:] - flux_face[:-1]) / dz
     out = jnp.zeros_like(concentration)
     return out.at[1:-1, :, :].set(tendency_interior)
-
-
-def zero_horizontal_ghosts(
-    field: Float[Array, "Nz Ny Nx"],
-) -> Float[Array, "Nz Ny Nx"]:
-    """Zero the four horizontal ghost faces of a 3-D field.
-
-    Useful after in-place interior updates when the caller wants the
-    ghost ring known to be zero before a BC application overwrites it.
-    """
-    out = field.at[:, 0, :].set(0.0)
-    out = out.at[:, -1, :].set(0.0)
-    out = out.at[:, :, 0].set(0.0)
-    out = out.at[:, :, -1].set(0.0)
-    return out
-
-
-def zero_vertical_ghosts(
-    field: Float[Array, "Nz Ny Nx"],
-) -> Float[Array, "Nz Ny Nx"]:
-    """Zero the top and bottom ghost slices of a 3-D field."""
-    out = field.at[0, :, :].set(0.0)
-    out = out.at[-1, :, :].set(0.0)
-    return out
