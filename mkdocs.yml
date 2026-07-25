@@ -56,6 +56,7 @@ nav:
           - V.B — Point process: design/06b_point_process.md
           - V.C — Persistency: design/06c_persistency.md
           - V.D — Total emission: design/06d_total_emission.md
+      - HyperGas audit: design/07_hypergas_audit.md
   - API Reference: api/reference.md
   - Changelog: changelog.md
 
