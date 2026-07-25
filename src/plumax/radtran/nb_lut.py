@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import numpy as np
 import xarray as xr
 
-from plumax.radtran.srf import SpectralResponseFunction
+from plumax.radtran.srf import SpectralResponseFunction, check_srf_lut_coverage
 
 
 @dataclass(frozen=True)
@@ -149,6 +149,9 @@ def build_nb_lut(
     # for np.interp after flipping).
     lam_src = sigma_lambda["lam_nm"].values
     sort = np.argsort(lam_src)
+    # Flag bands whose SRF response reaches past the LUT wavelength coverage;
+    # np.interp zero-fills σ there, producing a silently-attenuated nB (≡ 1).
+    check_srf_lut_coverage(srf, lam_src, context="build_nb_lut")
     sigma_hr = np.interp(
         srf.wavelengths_hr_nm,
         lam_src[sort],

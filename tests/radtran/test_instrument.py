@@ -34,6 +34,35 @@ jax.config.update("jax_enable_x64", True)
 # ── PSF ──────────────────────────────────────────────────────────────────────
 
 
+def _measured_fwhm(kernel: np.ndarray) -> float:
+    """Full width at half maximum of a PSF kernel's central horizontal cut [px].
+
+    Linear-interpolates the half-max crossing on the central row; the kernel is
+    isotropic so the horizontal cut equals the true radial FWHM.
+    """
+    c = kernel.shape[0] // 2
+    row = np.asarray(kernel[c], dtype=float)
+    peak = row[c]
+    half = 0.5 * peak
+    xs = np.arange(kernel.shape[0]) - c
+    for i in range(c, kernel.shape[0] - 1):
+        if row[i] >= half >= row[i + 1]:
+            frac = (row[i] - half) / (row[i] - row[i + 1])
+            return 2.0 * (xs[i] + frac)
+    raise AssertionError("no half-max crossing found in the kernel row")
+
+
+@pytest.mark.parametrize("family", ["gaussian", "airy"])
+def test_psf_fwhm_honored(family):
+    # Both PSF families must produce a kernel whose measured FWHM equals the
+    # requested `fwhm_pixels`. The Airy scaling previously used the first-zero
+    # (1.22·fwhm) argument, giving ≈ 0.63× the requested FWHM.
+    fwhm = 4.0
+    build = getattr(PointSpreadFunction, family)
+    psf = build(fwhm_pixels=fwhm, kernel_size=15)
+    np.testing.assert_allclose(_measured_fwhm(psf.kernel), fwhm, rtol=0.02)
+
+
 class TestPointSpreadFunction:
     def test_gaussian_kernel_normalised(self):
         psf = PointSpreadFunction.gaussian(fwhm_pixels=2.0, kernel_size=9)

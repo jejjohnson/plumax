@@ -26,6 +26,15 @@ inversion-free on the hot path:
 
 The functions accept NumPy inputs and return NumPy outputs — the gaussx
 internals run on JAX arrays for us, but callers don't need to know.
+
+.. important::
+   This path requires **64-bit JAX** (``jax_enable_x64``). With x64 disabled
+   (JAX's default) the float64 SVD factors are silently truncated to float32
+   and the ill-conditioned Woodbury capacitance solve loses precision (up to
+   ~1e-5 relative, worse for hyperspectral ``B ≳ 200``). Rather than return a
+   quietly-wrong result, every entry point raises a clear error when x64 is off
+   — enable it once at import time:
+   ``import jax; jax.config.update("jax_enable_x64", True)``.
 """
 
 from __future__ import annotations
@@ -59,19 +68,35 @@ _GAUSSX_INSTALL_HINT = (
 )
 
 
+_X64_REQUIRED_HINT = (
+    "plumax.radtran.gaussx_solve requires 64-bit JAX for its low-rank "
+    "covariance path. With `jax_enable_x64` disabled (JAX's default) the "
+    "float64 SVD factors are silently truncated to float32 and the "
+    "ill-conditioned Woodbury capacitance solve loses precision, so the result "
+    "would be quietly wrong. Enable x64 once, before building any arrays:\n"
+    "    import jax; jax.config.update('jax_enable_x64', True)"
+)
+
+
 def _import_gaussx_stack():
     """Import ``gaussx`` + the ``jax``/``lineax`` pieces this module needs.
 
     Wrapping the imports here lets us turn any ``ModuleNotFoundError`` into
     one actionable message instead of three different stack traces depending
-    on which dependency is missing.
+    on which dependency is missing. It also enforces the 64-bit-JAX
+    requirement (see the module docstring): the low-rank covariance path is
+    silently degraded to float32 without it, so we raise rather than return a
+    quietly-wrong result.
     """
     try:
         import gaussx as gx
+        import jax
         import jax.numpy as jnp
         import lineax as lx
     except ModuleNotFoundError as exc:  # pragma: no cover — install-time path
         raise ModuleNotFoundError(_GAUSSX_INSTALL_HINT) from exc
+    if not jax.config.jax_enable_x64:
+        raise RuntimeError(_X64_REQUIRED_HINT)
     return gx, jnp, lx
 
 
@@ -83,7 +108,7 @@ def build_lowrank_covariance_operator(
     *,
     rank: int | None = None,
     trim_frac: float = 0.1,
-    regularization: float = 1e-6,
+    regularization: float | None = None,
     band_axis: int = 0,
 ) -> tuple[LowRankUpdateOp, np.ndarray]:
     """Build a :class:`gaussx.LowRankUpdate` covariance operator from a scene.
@@ -112,6 +137,7 @@ def build_lowrank_covariance_operator(
 
     from plumax.radtran.background import (
         _flatten_pixels,
+        _noise_matched_floor,
         trimmed_mean_spectrum,
     )
 
@@ -126,7 +152,7 @@ def build_lowrank_covariance_operator(
             f"build_lowrank_covariance_operator: `trim_frac` must be in "
             f"[0, 0.5) (got {trim_frac!r})"
         )
-    if regularization <= 0.0:
+    if regularization is not None and regularization <= 0.0:
         raise ValueError(
             "build_lowrank_covariance_operator: `regularization` must be > 0."
         )
@@ -151,18 +177,25 @@ def build_lowrank_covariance_operator(
     _, S, Vt = np.linalg.svd(centred, full_matrices=False)
     S_k = S[:rank]
     V_k = Vt[:rank]  # (rank, n_bands)
+    n_kept = centred.shape[0]
 
     # U: principal directions as columns.
     U = jnp.asarray(V_k.T)  # (n_bands, rank)
-    d = jnp.asarray(S_k**2 / max(centred.shape[0], 1))  # diag of U d Uᵀ
-    # Base: regularisation · I as an explicit *diagonal* operator so
-    # gaussx.solve picks up the fast per-element inverse path. A naive
-    # ``regularization * IdentityLinearOperator(...)`` would build a
-    # ScaledOperator that gaussx does not specialise and that would
-    # compute the dense inverse instead.
-    base = lx.DiagonalLinearOperator(
-        regularization * jnp.ones(n_bands, dtype=jnp.float64)
+    d = jnp.asarray(S_k**2 / max(n_kept, 1))  # diag of U d Uᵀ
+    # Diagonal floor λ: noise-matched by default (mean of the discarded
+    # covariance eigenvalues) so Σ⁻¹ weights the discarded subspace at the true
+    # sensor-noise level; see background._noise_matched_floor. Kept identical to
+    # the dense `robust_lowrank_covariance` path so the two agree.
+    lam = (
+        _noise_matched_floor(S, rank, n_kept)
+        if regularization is None
+        else float(regularization)
     )
+    # Base: λ · I as an explicit *diagonal* operator so gaussx.solve picks up the
+    # fast per-element inverse path. A naive ``λ * IdentityLinearOperator(...)``
+    # would build a ScaledOperator that gaussx does not specialise and that would
+    # compute the dense inverse instead.
+    base = lx.DiagonalLinearOperator(lam * jnp.ones(n_bands, dtype=jnp.float64))
 
     cov = gx.LowRankUpdate(
         base,

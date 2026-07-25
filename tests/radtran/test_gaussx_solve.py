@@ -125,6 +125,22 @@ def test_tight_trim_frac_rejected_when_bands_exceed_kept_pixels():
         build_lowrank_covariance_operator(scene, rank=8, trim_frac=0.45)
 
 
+def test_float32_config_behavior():
+    # The low-rank covariance path silently degrades to float32 without x64, so
+    # it must raise a clear, actionable error rather than return wrong numbers.
+    # Toggle x64 off around the call (conftest force-enables it globally).
+    import jax
+
+    scene = _synthetic_scene(n_bands=4, shape=(16, 16))
+    original = jax.config.jax_enable_x64
+    jax.config.update("jax_enable_x64", False)
+    try:
+        with pytest.raises(RuntimeError, match=r"requires 64-bit JAX"):
+            build_lowrank_covariance_operator(scene, rank=3)
+    finally:
+        jax.config.update("jax_enable_x64", original)
+
+
 def test_rank_default_is_reasonable():
     scene = _synthetic_scene(n_bands=6, shape=(16, 16))
     cov, _ = build_lowrank_covariance_operator(scene)

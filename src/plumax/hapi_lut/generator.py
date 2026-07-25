@@ -11,6 +11,7 @@ plumax.hapi_lut`` does not require ``hitran-api`` to be installed.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import UTC, datetime
@@ -60,6 +61,38 @@ def _init_hapi_cache(cache_dir: Path) -> None:
     db_begin(str(cache_dir))
 
 
+def _range_sidecar_path(cache: Path, name: str) -> Path:
+    """Sidecar recording the wavenumber range currently backing ``<name>.data``."""
+    return cache / f"{name}.range.json"
+
+
+def _write_cached_range(cache: Path, name: str, nu_min: float, nu_max: float) -> None:
+    """Record the ν range a successful fetch wrote into the cache."""
+    _range_sidecar_path(cache, name).write_text(
+        json.dumps({"nu_min": float(nu_min), "nu_max": float(nu_max)})
+    )
+
+
+def _read_cached_range(cache: Path, name: str) -> tuple[float, float] | None:
+    """Return the cached ``(nu_min, nu_max)`` or ``None`` if unrecorded/unreadable."""
+    path = _range_sidecar_path(cache, name)
+    if not path.exists():
+        return None
+    try:
+        payload = json.loads(path.read_text())
+        return float(payload["nu_min"]), float(payload["nu_max"])
+    except (ValueError, KeyError, OSError):
+        return None
+
+
+def _range_covers(
+    cached: tuple[float, float], gas_config: GasConfig, *, tol: float = 1e-6
+) -> bool:
+    """True iff the cached range spans the requested ``[nu_min, nu_max]``."""
+    lo, hi = cached
+    return lo <= gas_config.nu_min + tol and hi + tol >= gas_config.nu_max
+
+
 def fetch_hitran_data(
     gas_config: GasConfig,
     cache_dir: Path | str | None = None,
@@ -67,14 +100,21 @@ def fetch_hitran_data(
     """Fetch HITRAN line parameters for ``gas_config`` into ``cache_dir``.
 
     HAPI writes a ``<GasConfig.name>.data`` + ``.header`` pair under
-    ``cache_dir``. If a cached pair already exists this call no-ops without
-    contacting HITRAN; otherwise the line parameters are downloaded and
-    parsed by HAPI.
+    ``cache_dir``, **overwriting** any existing pair (HAPI's ``fetch`` does not
+    no-op on a cache hit). A successful fetch also records the fetched ν range
+    in a ``<name>.range.json`` sidecar.
+
+    When ``fetch()`` fails (no network, API error) the previously-cached pair is
+    only reused if its recorded range **covers** the requested
+    ``[nu_min, nu_max]`` — otherwise a narrowed cache (e.g. left by
+    :func:`plumax.hapi_lut.multi.create_combined_lut`, which fetches over the
+    gas intersection range) would silently serve a truncated line list, and
+    ``absorptionCoefficient_Voigt`` would return σ ≈ 0 outside it.
 
     Raises:
-        RuntimeError: if ``fetch()`` raises (e.g. no network, invalid range)
-            *and* no cached pair is already present. The underlying HAPI
-            exception is chained so the network / API error is visible.
+        RuntimeError: if ``fetch()`` raises and either no cached pair is present
+            or its recorded range does not cover the request. The underlying
+            HAPI exception is chained so the network / API error is visible.
 
     Returns:
         The resolved cache directory.
@@ -95,9 +135,10 @@ def fetch_hitran_data(
         gas_config.isotopologue_id,
         gas_config.nu_min,
         gas_config.nu_max,
-        " [cache hit]" if already_cached else "",
+        " [cache present]" if already_cached else "",
     )
 
+    fetched = True
     try:
         fetch(
             gas_config.name,
@@ -107,26 +148,51 @@ def fetch_hitran_data(
             gas_config.nu_max,
         )
     except Exception as exc:
-        # HAPI raises plain Exceptions on network failures and API errors.
-        # If we have a cached pair we can proceed — otherwise the user sees
-        # a clear failure instead of silently-corrupt LUTs downstream.
-        if not already_cached:
+        # HAPI raises plain Exceptions on network failures and API errors. A
+        # cached pair is only trustworthy if its recorded range covers the
+        # request — otherwise proceeding would feed a truncated line list to
+        # the Voigt sum and silently produce σ ≈ 0 outside the cached window.
+        fetched = False
+        cached_range = _read_cached_range(cache, gas_config.name)
+        if (
+            not already_cached
+            or cached_range is None
+            or not _range_covers(cached_range, gas_config)
+        ):
+            detail = (
+                "no cached data was found"
+                if not already_cached
+                else (
+                    "the cached line list has no recorded range"
+                    if cached_range is None
+                    else f"the cached line list covers only "
+                    f"{cached_range[0]:.1f}-{cached_range[1]:.1f} cm^-1"
+                )
+            )
             raise RuntimeError(
                 f"HITRAN fetch failed for {gas_config.name} "
                 f"(M{gas_config.molecule_id} I{gas_config.isotopologue_id}, "
-                f"{gas_config.nu_min:.1f}-{gas_config.nu_max:.1f} cm^-1) "
-                f"and no cached data was found at {cache}."
+                f"{gas_config.nu_min:.1f}-{gas_config.nu_max:.1f} cm^-1) and "
+                f"{detail} at {cache}. Re-fetch online or point `cache_dir` at "
+                "a cache whose range spans the request."
             ) from exc
         logger.warning(
-            "fetch() raised %s — proceeding with cached %s.",
+            "fetch() raised %s — proceeding with cached %s (range %.1f-%.1f "
+            "cm^-1 covers the request).",
             type(exc).__name__,
             data_path,
+            cached_range[0],
+            cached_range[1],
         )
 
     if not (data_path.exists() and header_path.exists()):
         raise RuntimeError(
             f"HITRAN fetch for {gas_config.name} returned without error but "
             f"no {gas_config.name}.data/.header pair was produced under {cache}."
+        )
+    if fetched:
+        _write_cached_range(
+            cache, gas_config.name, gas_config.nu_min, gas_config.nu_max
         )
     return cache
 

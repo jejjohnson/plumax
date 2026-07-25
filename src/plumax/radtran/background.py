@@ -39,6 +39,26 @@ def _flatten_pixels(
     return bands_first.reshape(n_bands, -1).T  # (n_pixels, n_bands)
 
 
+def _noise_matched_floor(
+    singular_values: np.ndarray, rank: int, n_samples: int
+) -> float:
+    """Diagonal floor ``λ`` = mean of the *discarded* covariance eigenvalues.
+
+    The retained rank captures the signal subspace; the remaining singular
+    directions carry the sensor noise, with covariance eigenvalues
+    ``S[rank:]² / N``. Setting ``λ`` to their mean makes ``Σ⁻¹`` weight the
+    discarded subspace at the true noise level (SNR-optimal) rather than at an
+    arbitrary fixed floor. Falls back to a small positive value when no modes
+    are discarded (rank-complete) or the estimate is degenerate.
+    """
+    discarded = np.asarray(singular_values, dtype=float)[rank:]
+    if discarded.size > 0:
+        lam = float(np.mean(discarded**2) / max(n_samples, 1))
+        if lam > 0.0:
+            return lam
+    return 1e-6
+
+
 def trimmed_mean_spectrum(
     radiance: np.ndarray,
     *,
@@ -76,7 +96,7 @@ def robust_lowrank_covariance(
     *,
     rank: int | None = None,
     trim_frac: float = 0.1,
-    regularization: float = 1e-6,
+    regularization: float | None = None,
     band_axis: int = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Robust low-rank covariance + inverse ``(Σ, Σ⁻¹)``.
@@ -102,8 +122,13 @@ def robust_lowrank_covariance(
         variance is in a handful of modes.
     trim_frac : float
         Per-pixel energy-based trim fraction in ``[0, 0.5)``. Default 0.1.
-    regularization : float
-        Diagonal Tikhonov term ``λ``. Default ``1e-6``.
+    regularization : float or None
+        Diagonal Tikhonov floor ``λ`` on the discarded subspace. ``None``
+        (default) uses the **noise-matched** floor — the mean of the discarded
+        covariance eigenvalues ``mean(S[rank:]²)/N`` — so ``Σ⁻¹`` weights that
+        subspace at the real sensor-noise level instead of an arbitrary
+        constant. A floor too small over-weights the noise subspace (inflating
+        false alarms); too large leaks signal into it. Pass a float to override.
     band_axis : int
         Band axis of ``radiance``. Default 0.
 
@@ -120,7 +145,7 @@ def robust_lowrank_covariance(
         raise ValueError(
             f"robust_lowrank_covariance: `trim_frac` must be in [0, 0.5) (got {trim_frac!r})"
         )
-    if regularization <= 0.0:
+    if regularization is not None and regularization <= 0.0:
         raise ValueError("robust_lowrank_covariance: `regularization` must be > 0.")
     if rank is None:
         rank = min(n_bands - 1, 16)
@@ -151,9 +176,10 @@ def robust_lowrank_covariance(
     S_k = S[:rank]
     V_k = Vt[:rank]  # shape (rank, n_bands); V_k.T are the principal directions.
 
-    # Σ in the top-k subspace (1 / N) · Vᵀ S² V.
+    # Σ in the top-k subspace (1 / N) · Vᵀ S² V, plus the diagonal floor λ.
     N = centred.shape[0]
-    Sigma = (V_k.T * (S_k**2)) @ V_k / max(N, 1) + regularization * np.eye(n_bands)
+    lam = _noise_matched_floor(S, rank, N) if regularization is None else regularization
+    Sigma = (V_k.T * (S_k**2)) @ V_k / max(N, 1) + lam * np.eye(n_bands)
 
     # Woodbury inverse for efficiency: (λI + Uᵀ D U)⁻¹ where
     #   U = V_k (rank, n_bands), D = diag(S_k² / N) (rank, rank).

@@ -18,6 +18,18 @@ from plumax.radtran.forward import (
 NU_OBS = np.linspace(4100.0, 4400.0, 41)
 
 
+def test_out_of_grid_tp_raises(synthetic_lut):
+    # T grid is [220, 300] K, P grid [0.5, 1.0] atm. Out-of-grid queries make
+    # xarray's interp return all-NaN, which downstream masquerades as a "Σ not
+    # PD" error. The forward must fail here, naming the offending value.
+    nu = np.array([4300.0])
+    kw = dict(vmr=1e-6, path_length_cm=8.4e5, amf=2.0)
+    with pytest.raises(ValueError, match=r"T_K.*outside the LUT"):
+        forward_nonlinear(synthetic_lut, nu, T_K=400.0, p_atm=1.0, **kw)
+    with pytest.raises(ValueError, match=r"p_atm.*outside the LUT"):
+        forward_nonlinear(synthetic_lut, nu, T_K=280.0, p_atm=5.0, **kw)
+
+
 def test_forward_nonlinear_returns_nonneg_transmittance(synthetic_lut):
     result = forward_nonlinear(
         synthetic_lut,

@@ -15,6 +15,7 @@ unless that pair actually exists on disk.
 
 from __future__ import annotations
 
+import json
 import sys
 import types
 from pathlib import Path
@@ -152,9 +153,11 @@ def test_fetch_hitran_data_raises_when_fetch_fails_and_no_cache(monkeypatch, tmp
 def test_fetch_hitran_data_tolerates_fetch_failure_if_cache_present(
     monkeypatch, tmp_path
 ):
-    # Pre-populate the cache and then make fetch() raise — should not abort.
+    # Pre-populate the cache with a range sidecar that COVERS the request, then
+    # make fetch() raise — the offline fallback should proceed.
     (tmp_path / "CH4.data").write_text("stub\n")
     (tmp_path / "CH4.header").write_text("stub\n")
+    (tmp_path / "CH4.range.json").write_text('{"nu_min": 4000.0, "nu_max": 4001.0}')
     fake = _make_hapi_stub(fetch_raises=RuntimeError)
     monkeypatch.setitem(sys.modules, "hapi", fake)
     gas = GasConfig(
@@ -162,6 +165,46 @@ def test_fetch_hitran_data_tolerates_fetch_failure_if_cache_present(
     )
     out = fetch_hitran_data(gas, cache_dir=tmp_path)
     assert out == tmp_path
+
+
+def test_fetch_writes_range_sidecar(stub_hapi, tmp_path):
+    # A successful fetch records the fetched ν range for later coverage checks.
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4500.0
+    )
+    fetch_hitran_data(gas, cache_dir=tmp_path)
+    payload = json.loads((tmp_path / "CH4.range.json").read_text())
+    assert payload == {"nu_min": 4000.0, "nu_max": 4500.0}
+
+
+def test_cache_range_mismatch_rejected(monkeypatch, tmp_path):
+    # A narrowed cache (e.g. from a combined-LUT intersection fetch) plus an
+    # offline failure for a WIDER request must raise rather than silently serve
+    # a truncated line list.
+    (tmp_path / "CH4.data").write_text("stub\n")
+    (tmp_path / "CH4.header").write_text("stub\n")
+    (tmp_path / "CH4.range.json").write_text('{"nu_min": 4000.0, "nu_max": 4500.0}')
+    fake = _make_hapi_stub(fetch_raises=RuntimeError)
+    monkeypatch.setitem(sys.modules, "hapi", fake)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=8000.0
+    )
+    with pytest.raises(RuntimeError, match=r"covers only 4000\.0-4500\.0"):
+        fetch_hitran_data(gas, cache_dir=tmp_path)
+
+
+def test_fetch_failure_without_range_sidecar_rejected(monkeypatch, tmp_path):
+    # A legacy cache with no recorded range can't be verified — reject on the
+    # offline fallback rather than trust an unknown coverage.
+    (tmp_path / "CH4.data").write_text("stub\n")
+    (tmp_path / "CH4.header").write_text("stub\n")
+    fake = _make_hapi_stub(fetch_raises=RuntimeError)
+    monkeypatch.setitem(sys.modules, "hapi", fake)
+    gas = GasConfig(
+        "CH4", molecule_id=6, isotopologue_id=1, nu_min=4000.0, nu_max=4001.0
+    )
+    with pytest.raises(RuntimeError, match="no recorded range"):
+        fetch_hitran_data(gas, cache_dir=tmp_path)
 
 
 def test_compute_absorption_lut_raises_when_voigt_call_fails(monkeypatch, tmp_path):

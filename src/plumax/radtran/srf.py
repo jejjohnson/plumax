@@ -31,6 +31,7 @@ Plus ``'custom'`` which accepts an arbitrary ``(n_bands, n_λ)`` matrix
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -243,3 +244,54 @@ class SpectralResponseFunction:
                 f"must equal n_bands={self.n_bands}"
             )
         return np.einsum("bl, ...b -> ...l", self.matrix, u)
+
+
+def check_srf_lut_coverage(
+    srf: SpectralResponseFunction,
+    lut_wavelengths_nm: np.ndarray,
+    *,
+    context: str,
+    tol: float = 1e-2,
+) -> np.ndarray:
+    """Warn when SRF bands respond outside the LUT's wavelength coverage.
+
+    Resampling a cross-section / target spectrum onto the SRF grid zero-fills
+    wavelengths beyond the LUT range (``np.interp(..., left=0, right=0)``),
+    silently attenuating any band whose response reaches there — a band whose
+    support lies wholly outside gets an exactly-zero (and misleading) value.
+    This computes each band's fraction of SRF mass *outside* the LUT coverage
+    and warns for bands exceeding ``tol``.
+
+    Parameters
+    ----------
+    srf
+        Instrument SRF.
+    lut_wavelengths_nm
+        Wavelengths [nm] covered by the LUT (any order); coverage is taken as
+        ``[min, max]``.
+    context
+        Caller name, prepended to the warning message.
+    tol
+        Out-of-coverage SRF-mass fraction above which a band is flagged.
+
+    Returns
+    -------
+    frac_out : np.ndarray
+        Per-band fraction of SRF response outside the LUT coverage.
+    """
+    lam = np.asarray(lut_wavelengths_nm, dtype=float)
+    lam_min, lam_max = float(lam.min()), float(lam.max())
+    hr = srf.wavelengths_hr_nm
+    in_range = (hr >= lam_min) & (hr <= lam_max)
+    total = srf.matrix.sum(axis=1)
+    covered = srf.matrix[:, in_range].sum(axis=1)
+    frac_out = np.where(total > 0.0, 1.0 - covered / total, 0.0)
+    for b in np.nonzero(frac_out > tol)[0]:
+        warnings.warn(
+            f"{context}: band {srf.band_names[b]!r} has {frac_out[b] * 100:.1f}% "
+            f"of its SRF response outside the LUT wavelength coverage "
+            f"[{lam_min:.1f}, {lam_max:.1f}] nm; its band-integrated value is "
+            "silently zero-filled there.",
+            stacklevel=3,
+        )
+    return frac_out

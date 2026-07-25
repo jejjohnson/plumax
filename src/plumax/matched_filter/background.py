@@ -128,15 +128,19 @@ def estimate_cov_empirical(
     mean: np.ndarray | None = None,
     *,
     ridge: float = 0.0,
+    mask: np.ndarray | None = None,
 ) -> LinearOperator:
     """Empirical covariance via :class:`sklearn.covariance.EmpiricalCovariance`.
 
     Returns a dense :class:`lineax.MatrixLinearOperator`. Optionally adds a
     diagonal ``ridge`` for numerical PD-ness when ``n_samples ≲ n_bands``.
+    ``mask`` (boolean exclude-pixels) drops flagged pixels — e.g. a detected
+    plume — so ``Σ`` is estimated from background only, consistent with a robust
+    masked ``μ``.
     """
     from sklearn.covariance import EmpiricalCovariance
 
-    X = _flatten_cube(cube)
+    X = _flatten_cube_masked(cube, mask)
     est = EmpiricalCovariance(store_precision=False).fit(X)
     cov = est.covariance_
     if mean is not None:
@@ -154,14 +158,16 @@ def estimate_cov_shrunk(
     mean: np.ndarray | None = None,
     *,
     method: Literal["ledoit_wolf", "oas"] = "ledoit_wolf",
+    mask: np.ndarray | None = None,
 ) -> LinearOperator:
     """Shrinkage covariance estimator.
 
     Uses Ledoit–Wolf (``method='ledoit_wolf'``, default) or OAS
     (``'oas'``) — both shrink the sample covariance toward a scaled identity
-    and are PD by construction even when ``n_samples < n_bands``.
+    and are PD by construction even when ``n_samples < n_bands``. ``mask``
+    (boolean exclude-pixels) drops flagged pixels before fitting.
     """
-    X = _flatten_cube(cube)
+    X = _flatten_cube_masked(cube, mask)
     if mean is not None:
         X = X - mean
         assume_centered = True
@@ -193,6 +199,8 @@ def estimate_cov_lowrank(
     tikhonov: float,
     random_state: int | None = 0,
     n_oversamples: int = 10,
+    mask: np.ndarray | None = None,
+    rank_rtol: float = 1e-10,
 ) -> LinearOperator:
     """Low-rank + Tikhonov covariance: ``Σ = λI + V D Vᵀ``.
 
@@ -220,10 +228,19 @@ def estimate_cov_lowrank(
     n_oversamples
         Extra random directions for the Halko sampling — higher is slower but
         better-conditioned. sklearn's default is 10.
+    mask
+        Boolean exclude-pixels mask; flagged pixels (e.g. a detected plume) are
+        dropped before the SVD so ``Σ`` reflects background only.
+    rank_rtol
+        Components whose covariance eigenvalue ``d_i`` is below
+        ``rank_rtol · max(d)`` are dropped before building the operator. On a
+        rank-deficient scene (constant regions, duplicated spectra) those
+        ``d_i ≈ 0`` would make gaussx's Woodbury capacitance ``diag(1/d) +
+        VᵀL⁻¹U`` blow up to inf/NaN; dropping them keeps every score finite.
     """
     if tikhonov <= 0.0:
         raise ValueError("estimate_cov_lowrank: tikhonov must be > 0.")
-    X = _flatten_cube(cube)
+    X = _flatten_cube_masked(cube, mask)
     mu = X.mean(axis=0) if mean is None else np.asarray(mean)
     Xc = X - mu
     n_samples, n_bands = Xc.shape
@@ -246,10 +263,18 @@ def estimate_cov_lowrank(
     V = svd.components_  # shape (rank, n_bands), rows are right singular vectors
     s = svd.singular_values_  # shape (rank,)
     d = (s**2) / max(n_samples, 1)
-    U = jnp.asarray(V.T)  # (n_bands, rank) — spectral directions as columns
     base = lx.DiagonalLinearOperator(
         jnp.asarray(tikhonov * np.ones(n_bands, dtype=float))
     )
+    # Rank-deficiency guard: drop near-zero eigen-directions so the Woodbury
+    # capacitance stays finite. If none survive (e.g. a constant scene), Σ is
+    # just the strictly-PD Tikhonov floor λI.
+    d_max = float(d.max()) if d.size else 0.0
+    keep = d > rank_rtol * d_max if d_max > 0.0 else np.zeros(d.shape, dtype=bool)
+    V, d = V[keep], d[keep]
+    if d.size == 0:
+        return base
+    U = jnp.asarray(V.T)  # (n_bands, n_kept) — spectral directions as columns
     return gx.LowRankUpdate(
         base,
         U,
@@ -268,3 +293,32 @@ def _flatten_cube(cube: Float[Array, "H W B"] | np.ndarray) -> np.ndarray:
             f"background estimator: cube must be (H, W, n_bands), got shape {arr.shape}."
         )
     return arr.reshape(-1, arr.shape[-1])
+
+
+def _flatten_cube_masked(
+    cube: Float[Array, "H W B"] | np.ndarray,
+    mask: np.ndarray | None,
+) -> np.ndarray:
+    """Flatten a cube to ``(n_kept, n_bands)``, dropping masked-out pixels.
+
+    ``mask`` is a boolean **exclude** mask — ``True`` marks pixels (e.g.
+    detected plume / target) to leave out of the background statistics so the
+    filter is not attenuated by its own signal. Any shape with one entry per
+    pixel is accepted (``(H, W)`` or flat).
+    """
+    X = _flatten_cube(cube)
+    if mask is None:
+        return X
+    m = np.asarray(mask, dtype=bool).reshape(-1)
+    if m.shape[0] != X.shape[0]:
+        raise ValueError(
+            f"background estimator: `mask` must have one entry per pixel "
+            f"({X.shape[0]}), got {m.size}."
+        )
+    kept = X[~m]
+    if kept.shape[0] < 2:
+        raise ValueError(
+            "background estimator: `mask` excludes all but "
+            f"{kept.shape[0]} pixel(s); need ≥ 2 for a covariance estimate."
+        )
+    return kept
