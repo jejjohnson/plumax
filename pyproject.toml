@@ -110,7 +110,7 @@ docs = [
     # inside docstrings (html.escape on a None filename); 2.19.x is fine.
     "pygments<2.20",
     "mkdocstrings[python]>=0.25",
-    "mkdocs-jupyter>=0.24",
+    "mkdocs-jupyter>=0.26.2",
     "jupytext>=1.16",
     "ipykernel>=6.29",
 ]
