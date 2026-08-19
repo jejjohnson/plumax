@@ -1,0 +1,2103 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).">
+      
+      
+        <meta name="author" content="J. Emmanuel Johnson">
+      
+      
+      
+        <link rel="prev" href="../04_rtm_stack/">
+      
+      
+        <link rel="next" href="../06_tier5_population/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>Tier IV — Coupled E2E - plumax</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#tier-iv-end-to-end-coupled-system" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="plumax" class="md-header__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            plumax
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Tier IV — Coupled E2E
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../api/reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="plumax" class="md-nav__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    plumax
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap & Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00_prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01_tier1_gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier I — Gaussian family
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02_tier2_lagrangian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03_tier3_eulerian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier III — Eulerian FV
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04_rtm_stack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model — composed forward over multiple instruments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model — composed forward over multiple instruments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-per-instrument-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-state-vector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State vector — full enumeration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-multi-instrument-fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument fusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-q-of-t" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spatiotemporal alignment — \(Q(t)\) as a stochastic process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#build-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build order
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-end gradient — honest cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-flag-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality-flag handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior covariance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-trans-dim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trans-dimensional \(n_\text{sources}\)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator — coupled vs. stacked
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(3) Model emulator — coupled vs. stacked">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-stacked-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stacked emulators (tier-modular)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-coupled-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coupled emulator (single network)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decision-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-active-learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training-data budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#domain-randomization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domain randomization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-instrument-list-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument list input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-instrument-heads-tier-conditioned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument heads, tier-conditioned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trans-dimensional-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trans-dimensional output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior representation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#training-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout (proposed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier V — Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tier V — Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06_tier5_population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06a_instantaneous/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.A — Instantaneous
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06b_point_process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06c_persistency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.C — Persistency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06d_total_emission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.D — Total emission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model — composed forward over multiple instruments
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model — composed forward over multiple instruments">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-per-instrument-forward" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument forward
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-state-vector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State vector — full enumeration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-multi-instrument-fusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument fusion
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-q-of-t" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Spatiotemporal alignment — \(Q(t)\) as a stochastic process
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#build-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build order
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-gradient" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        End-to-end gradient — honest cost
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cost function
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-flag-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality-flag handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-covariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior covariance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-trans-dim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trans-dimensional \(n_\text{sources}\)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator — coupled vs. stacked
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(3) Model emulator — coupled vs. stacked">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier4-stacked-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stacked emulators (tier-modular)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-coupled-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Coupled emulator (single network)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#decision-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decision rule
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier4-active-learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training-data budget
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#domain-randomization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Domain randomization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#multi-instrument-list-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-instrument list input
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-instrument-heads-tier-conditioned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument heads, tier-conditioned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trans-dimensional-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Trans-dimensional output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-representation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior representation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#training-data" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Training data
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout (proposed)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tier4-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="tier-iv-end-to-end-coupled-system">Tier IV — End-to-end coupled system<a class="headerlink" href="#tier-iv-end-to-end-coupled-system" title="Permanent link">&para;</a></h1>
+<p><strong>Forward model:</strong> transport + RTM + multi-instrument fusion, from source parameters all the way to simulated radiances across multiple satellites simultaneously. This is the full operational pipeline.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Source params (Q_{1:K}(t), x₀_{1:K}, t₀_{1:K},  ū, θ_wind, c_bg, α_BC, …)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>       ↓  [Tier I/II/III transport]
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Concentration field  c(x,t)
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>       ↓  [RTM / AK operator,  per instrument]
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Simulated observations  {y_inst}_{inst ∈ {TROPOMI, EMIT, Tanager, GHGSat, …}}
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>       ↑
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Cross-instrument bias correction  bias_inst
+</code></pre></div>
+<p>Tier IV is <strong>assembly + multi-instrument fusion</strong>, not new modelling: it composes transport (any of Tiers I–III) with the <a href="../04_rtm_stack/">RTM stack</a> and joins observations from multiple satellites into a single coherent posterior. The contribution at this tier is the joint multi-instrument inference, the operational predictor, and the cross-instrument calibration.</p>
+<hr />
+<h2 id="tier4-simple-model">(1) Simple model — composed forward over multiple instruments<a class="headerlink" href="#tier4-simple-model" title="Permanent link">&para;</a></h2>
+<h3 id="tier4-per-instrument-forward">Per-instrument forward<a class="headerlink" href="#tier4-per-instrument-forward" title="Permanent link">&para;</a></h3>
+<p>For a single instrument <span class="arithmatex">\(\text{inst}\)</span>:</p>
+<div class="arithmatex">\[
+\mathbf{y}_\text{inst} \;=\; \mathbf{A}_\text{inst}\, \mathrm{col}_z\!\bigl(\text{transport}(Q(t), x_0, \text{met}) + \mathbf{c}_\text{bg}\bigr) \;+\; \text{bias}_\text{inst} \;+\; \boldsymbol{\varepsilon}_\text{inst}
+\]</div>
+<div class="arithmatex">\[
+\boldsymbol{\varepsilon}_\text{inst} \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_{\text{retr},\text{inst}} + \mathbf{R}_{\text{repr},\text{inst}} + \mathbf{R}_{\text{align},\text{inst}})
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\text{transport}(Q(t), x_0, \text{met})\)</span> — Tier I, II, or III. <strong><span class="arithmatex">\(Q(t)\)</span> is time-resolved</strong>, not a static rate (see §3 below).</li>
+<li><span class="arithmatex">\(\mathbf{c}_\text{bg}\)</span> — regional background, with prior from the <a href="../00_prerequisites/#prereqs-emission-inventory">emission inventory loader</a>.</li>
+<li><span class="arithmatex">\(\mathbf{A}_\text{inst}\)</span>, <span class="arithmatex">\(\mathbf{R}_{\text{retr},\text{inst}}\)</span> — per-instrument from the <a href="../04_rtm_stack/">RTM stack</a> or directly from the L2 product.</li>
+<li><span class="arithmatex">\(\text{bias}_\text{inst} \sim \mathcal{N}(0, \sigma^{2}_\text{inst})\)</span> — per-instrument additive bias, <strong>first-class state element</strong>. Documented inter-instrument biases are <span class="arithmatex">\(O(\pm 10\)</span> ppb); ignoring them double-counts agreement.</li>
+<li><span class="arithmatex">\(\mathbf{R}_{\text{repr},\text{inst}}\)</span> — representation error (model-vs-pixel-footprint mismatch); rises with terrain complexity.</li>
+<li><span class="arithmatex">\(\mathbf{R}_{\text{align},\text{inst}}\)</span> — temporal misalignment error (overpass at <span class="arithmatex">\(t_\text{inst}\)</span> vs. modelled state at <span class="arithmatex">\(t\)</span>).</li>
+</ul>
+<h3 id="tier4-state-vector">State vector — full enumeration<a class="headerlink" href="#tier4-state-vector" title="Permanent link">&para;</a></h3>
+<p>Single-overpass coupled inference works in a state space far larger than just <span class="arithmatex">\((Q, x_0, t_0)\)</span>:</p>
+<div class="arithmatex">\[
+\mathbf{x} \;=\; \bigl(\,
+   Q_{1:K}(t),\;
+   x_{0,1:K},\;
+   \bar{u},\, \theta_\text{wind},\;
+   \mathbf{c}_\text{bg},\;
+   \alpha_\text{BC},\;
+   \text{bias}_\text{inst},\;
+   A_\text{surf},\, \text{AOD},\,
+   \dots
+\bigr)
+\]</div>
+<p>with trans-dimensional <span class="arithmatex">\(K = n_\text{sources}\)</span> (basin case). Single-source single-instrument is the sanity-check special case, not the operational target.</p>
+<h3 id="tier4-multi-instrument-fusion">Multi-instrument fusion<a class="headerlink" href="#tier4-multi-instrument-fusion" title="Permanent link">&para;</a></h3>
+<p>The joint observation operator is a <strong>list-of-forwards</strong> keyed on <code>instrument_id</code>, not a single forward:</p>
+<div class="arithmatex">\[
+\mathbf{y} \;=\; [\mathbf{y}_\text{TROPOMI},\, \mathbf{y}_\text{EMIT},\, \mathbf{y}_\text{Tanager},\, \mathbf{y}_\text{GHGSat},\, \dots], \qquad
+\mathbf{H}(\mathbf{x}) \;=\; \bigl[\, \mathbf{H}_\text{inst}(\mathbf{x}) \;:\; \text{inst} \in \text{instruments} \,\bigr]
+\]</div>
+<p>Each <span class="arithmatex">\(\mathbf{H}_\text{inst}\)</span> carries its own AK, footprint, native resolution, observation time, and quality-flag schema (see [s5p_tropomi,emit,carbon_mapper,ghgsat]).</p>
+<div class="admonition important">
+<p class="admonition-title">Don't pre-regrid to a common resolution</p>
+<p>Pre-regridding loses information; do the AK + footprint averaging at native resolution per instrument, fuse at the likelihood level.</p>
+</div>
+<h3 id="tier4-q-of-t">Spatiotemporal alignment — <span class="arithmatex">\(Q(t)\)</span> as a stochastic process<a class="headerlink" href="#tier4-q-of-t" title="Permanent link">&para;</a></h3>
+<p>Different satellites overpass at different times. With a static <span class="arithmatex">\(Q\)</span> the coupled forward implies the same source state at every overpass — wrong for intermittent/leak emissions and wrong over multi-day windows.</p>
+<p><strong>Default:</strong> <span class="arithmatex">\(Q(t) \sim \text{Ornstein–Uhlenbeck}\)</span> with a basin-typical correlation timescale (hours to days), or <strong>Gaussian process</strong> prior with Matérn-3/2 covariance:</p>
+<div class="arithmatex">\[
+\mathrm{d} Q(t) \;=\; -\theta\, \bigl(Q(t) - \mu_Q\bigr)\, \mathrm{d}t \;+\; \sigma_Q\, \mathrm{d}W(t)
+\]</div>
+<p>Captures intermittent / burst emissions naturally.</p>
+<h3 id="build-order">Build order<a class="headerlink" href="#build-order" title="Permanent link">&para;</a></h3>
+<p>Start with the cheapest combination that is still physically coherent, with multi-instrument fusion enabled from day 1:</p>
+<ol>
+<li><strong>Tier I + AK + L2 fusion across {TROPOMI, GHGSat, EMIT}</strong> for static <span class="arithmatex">\(Q\)</span>. This is the v1 target — Methane Alert and Response System (MARS, UNEP-IMEO) style attribution with multi-satellite cross-validation.</li>
+<li>Lagrangian (Tier II) + AK + L2 fusion → handles wind-driven plumes; same fusion harness.</li>
+<li>FV (Tier III) + neural RTM + L1 fusion → full L1-radiance inversion with end-to-end gradients.</li>
+<li><span class="arithmatex">\(Q(t)\)</span> stochastic-process upgrade once multi-day events appear in the catalog.</li>
+</ol>
+<p>The point: <strong>don't try to ship the most complex tier first.</strong> Each upgrade replaces a single block in the diagram; the multi-instrument fusion harness, likelihood structure, and observational comparison stay the same.</p>
+<hr />
+<h2 id="tier4-inference">(2) Model-based inference<a class="headerlink" href="#tier4-inference" title="Permanent link">&para;</a></h2>
+<h3 id="tier4-gradient">End-to-end gradient — honest cost<a class="headerlink" href="#tier4-gradient" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+\nabla_{\mathbf{x}} J \;=\; \nabla_{\mathbf{x}}\!\left[\, \sum_\text{inst} \tfrac{1}{2}\lVert \mathbf{H}_\text{inst}(\mathbf{x}) - \mathbf{y}_\text{inst} \rVert^{2}_{\mathbf{R}_\text{inst}} \;+\; \tfrac{1}{2}\lVert \mathbf{x} - \mathbf{x}_b \rVert^{2}_{\mathbf{B}} \right]
+\]</div>
+<p>JAX autodiff propagates through transport + RTM jointly — no chain rule by hand. <strong>Cost is non-trivial:</strong> each gradient call runs transport + RTM for every instrument's <span class="arithmatex">\(\mathbf{H}_\text{inst}\)</span>. For Tier III + HAPI that's seconds-to-minutes per call; emulator-based inference (Step 4) is the operational path.</p>
+<div class="admonition caution">
+<p class="admonition-title">'JAX gives you gradients for free' is a half-truth</p>
+<p>The gradient is automatic, but the <em>forward cost per gradient step</em> dominates wall time. Budget accordingly.</p>
+</div>
+<h3 id="tier4-cost">Cost function<a class="headerlink" href="#tier4-cost" title="Permanent link">&para;</a></h3>
+<p>Three terms:</p>
+<div class="arithmatex">\[
+J(\mathbf{x}) \;=\;
+   \underbrace{\sum_\text{inst} \tfrac{1}{2}\lVert \mathbf{H}_\text{inst}(\mathbf{x}) - \mathbf{y}_\text{inst} \rVert^{2}_{\mathbf{R}_\text{inst}}}_{\text{observations, per-instrument}}
+   \;+\; \underbrace{\tfrac{1}{2}\lVert \mathbf{x} - \mathbf{x}_b \rVert^{2}_{\mathbf{B}}}_{\text{prior on full state}}
+   \;+\; \underbrace{\tfrac{1}{2}\lVert Q(t) - \mu_Q(t) \rVert^{2}_{\mathbf{K}_Q}}_{Q(t)\text{ stochastic-process prior}}
+\]</div>
+<p><span class="arithmatex">\(\mathbf{B}\)</span> carries the structured priors from §1 (lognormal <span class="arithmatex">\(Q\)</span>, met-tight <span class="arithmatex">\(\bar{u}\)</span>, <span class="arithmatex">\(\theta_\text{wind}\)</span>, GP/OU on <span class="arithmatex">\(Q(t)\)</span>, etc.); <span class="arithmatex">\(\mathbf{K}_Q\)</span> is the OU/GP kernel. <span class="arithmatex">\(\mathbf{R}_\text{inst}\)</span> includes representation, retrieval, and temporal-alignment terms.</p>
+<h3 id="quality-flag-handling">Quality-flag handling<a class="headerlink" href="#quality-flag-handling" title="Permanent link">&para;</a></h3>
+<p>Per-instrument quality flags from the RTM stack flow into the coupled forward. <strong>Default policy:</strong> flagged pixels contribute zero log-likelihood (mask multiplier in <span class="arithmatex">\(\mathbf{R}^{-1}\)</span>).</p>
+<div class="admonition caution">
+<p class="admonition-title">Don't drop flagged pixels silently</p>
+<p>Keep masks visible in diagnostics so the effective per-instrument observation count is auditable.</p>
+</div>
+<h3 id="posterior-covariance">Posterior covariance<a class="headerlink" href="#posterior-covariance" title="Permanent link">&para;</a></h3>
+<p>Three paths, mirroring Tier III:</p>
+<ul>
+<li><strong>Laplace around MAP</strong> — cheapest, default for Tier I + L2 fusion.</li>
+<li><strong>Gauss–Newton Hessian</strong> via Krylov / <a href="https://github.com/jejjohnson/gaussx"><code>gaussx</code></a> — used when posterior is approximately Gaussian and tractable.</li>
+<li><strong>Ensemble (En-EKI / En-4D-Var)</strong> via <a href="https://github.com/jejjohnson/filterax"><code>filterax</code></a> — required when the posterior is non-Gaussian (multi-modal across <span class="arithmatex">\(n_\text{sources}\)</span>, heavy-tailed <span class="arithmatex">\(Q\)</span>).</li>
+</ul>
+<p>Posterior export to Tier V.A is via the same adapter pattern as Tiers I/II/III.</p>
+<h3 id="tier4-trans-dim">Trans-dimensional <span class="arithmatex">\(n_\text{sources}\)</span><a class="headerlink" href="#tier4-trans-dim" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(K = n_\text{sources}\)</span> is itself unknown. Three options:</p>
+<ul>
+<li><strong>Reversible-jump MCMC (RJMCMC).</strong> Birth/death proposals on source count. Exact but slow.</li>
+<li><strong>Max-K with masking.</strong> Fix <span class="arithmatex">\(K_\text{max}\)</span>, infer activity probabilities <span class="arithmatex">\(p_k\)</span> per slot. Tractable, biased toward <span class="arithmatex">\(K_\text{max}\)</span>.</li>
+<li><strong>Hierarchical Dirichlet-process prior.</strong> Variable <span class="arithmatex">\(K\)</span> with a non-parametric prior. Middle ground.</li>
+</ul>
+<p>v1: max-K with masking (<span class="arithmatex">\(K_\text{max} = 10\)</span> per basin tile). Promote to RJMCMC when basin events exceed <span class="arithmatex">\(K_\text{max}\)</span> regularly.</p>
+<hr />
+<h2 id="tier4-emulator">(3) Model emulator — coupled vs. stacked<a class="headerlink" href="#tier4-emulator" title="Permanent link">&para;</a></h2>
+<p>Two architectural choices:</p>
+<h3 id="tier4-stacked-emulator">Stacked emulators (tier-modular)<a class="headerlink" href="#tier4-stacked-emulator" title="Permanent link">&para;</a></h3>
+<p>Compose Tier-N transport emulator + RTM emulator at runtime.</p>
+<ul>
+<li><strong>Pros:</strong> any emulator can be swapped independently; intermediate <span class="arithmatex">\(c(\mathbf{x},t)\)</span> is materialised for diagnostics; modular validation chains directly into Steps 3/4 of each parent tier.</li>
+<li><strong>Cons:</strong> two emulator calls per forward; no joint training signal.</li>
+</ul>
+<h3 id="tier4-coupled-emulator">Coupled emulator (single network)<a class="headerlink" href="#tier4-coupled-emulator" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+g_\phi : (\text{met fields},\, \text{source params},\, \text{instrument metadata}) \;\longmapsto\; \text{simulated multi-instrument overpass tensor}
+\]</div>
+<ul>
+<li><strong>Pros:</strong> one network call replaces transport + RTM; massive speedup; potentially learns coupling biases the stack misses.</li>
+<li><strong>Cons:</strong> intermediate <span class="arithmatex">\(c(\mathbf{x},t)\)</span> is no longer materialised; cross-tier diagnostics break; retraining required when any block changes.</li>
+</ul>
+<h3 id="decision-rule">Decision rule<a class="headerlink" href="#decision-rule" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Development / interpretability / cross-tier diagnostics:</strong> stacked.</li>
+<li><strong>Operational latency-bound deployment (e.g. real-time alerting):</strong> coupled.</li>
+</ul>
+<p>Both should exist; the coupled emulator is validated against the stacked composition before deployment.</p>
+<h3 id="tier4-active-learning">Training-data budget<a class="headerlink" href="#tier4-active-learning" title="Permanent link">&para;</a></h3>
+<p>"Millions of pairs" naively needs <span class="arithmatex">\(O(10^{6})\)</span> transport+RTM simulations. For Tier III + HAPI that's CPU-years on a single machine.</p>
+<div class="admonition important">
+<p class="admonition-title">Active learning is mandatory</p>
+<p>Sample sequentially, prioritise loss-residual hot spots and operationally important tails (sun-glint, high AOD, low PBL, multi-source basins). Reaches operational accuracy with <span class="arithmatex">\(O(10^{5})\)</span> or fewer simulations.</p>
+</div>
+<h3 id="domain-randomization">Domain randomization<a class="headerlink" href="#domain-randomization" title="Permanent link">&para;</a></h3>
+<p>Sample the joint <span class="arithmatex">\((\text{met regime}, \text{source configuration}, \text{scene class}, \text{viewing geometry}, \text{instrument}, n_\text{sources})\)</span> distribution with <strong>stratified sampling</strong>, not uniform. Naive uniform under-represents the tail regimes that actually drive operational failures.</p>
+<hr />
+<h2 id="tier4-emu-inference">(4) Emulator-based inference<a class="headerlink" href="#tier4-emu-inference" title="Permanent link">&para;</a></h2>
+<p>Use the coupled (or stacked) emulator in EKI (<a href="https://github.com/jejjohnson/filterax"><code>filterax</code></a>) or gradient-based inversion. Real-time capable.</p>
+<ul>
+<li><strong>Adjoint validation:</strong> emulator-autodiff gradient ≈ physics-stack gradient on a held-out set. Same hard test as Tiers III and RTM — failure means the inversion is biased even when forward predictions look fine.</li>
+<li><strong>Posterior validation:</strong> posterior from coupled-emulator inversion ≈ posterior from end-to-end physics inversion (Step 2).</li>
+</ul>
+<hr />
+<h2 id="tier4-amortized">(5) Amortized inference (predictor)<a class="headerlink" href="#tier4-amortized" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+f_\theta : \bigl(\, \{(\text{instrument\_id}, \mathbf{y}_\text{inst}, \mathbf{A}_\text{inst}, \text{mask}_\text{inst}, \text{footprint}_\text{inst})\},\;
+\text{met}_\text{reanalysis},\, \text{transport\_tier\_id} \,\bigr)
+\;\longmapsto\;
+p\!\bigl(\, Q_{1:K}(t),\, x_{0,1:K},\, K \,\big|\, \text{observations}, \text{met} \,\bigr)
+\]</div>
+<p>This is <strong>the operational product</strong>: a multi-instrument satellite-overpass list goes in, source-parameter posterior comes out.</p>
+<h3 id="multi-instrument-list-input">Multi-instrument list input<a class="headerlink" href="#multi-instrument-list-input" title="Permanent link">&para;</a></h3>
+<p>Input is a <em>list</em> of per-instrument observation tuples — same pattern as Tier II/III, generalised to a heterogeneous list. Each element keeps native resolution, AK, mask, and footprint. <strong>No pre-regridding.</strong></p>
+<h3 id="per-instrument-heads-tier-conditioned">Per-instrument heads, tier-conditioned<a class="headerlink" href="#per-instrument-heads-tier-conditioned" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Per-instrument summary networks</strong> (TROPOMI 5 km vs. EMIT 60 m vs. Tanager 30 m vs. GHGSat hyperspectral need different encoders).</li>
+<li><strong>Transport tier as categorical context.</strong> <span class="arithmatex">\(\text{transport\_tier\_id} \in \{\text{I}, \text{II}, \text{III}\}\)</span> conditions the posterior head — the predictor is one model that handles all tiers, not three separate models.</li>
+<li><strong>Met + tier conditioning</strong> wired in via FiLM / hypernet primitives in <a href="https://github.com/jejjohnson/pyrox"><code>pyrox.nn</code></a> — same pattern as Tiers I/II/III.</li>
+</ul>
+<h3 id="trans-dimensional-output">Trans-dimensional output<a class="headerlink" href="#trans-dimensional-output" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(K = n_\text{sources}\)</span> varies. Default architecture: <strong>max-K masked output</strong>, predicting <span class="arithmatex">\((K, \{Q_k(t), x_{0,k}\}_{k=1}^{K_\text{max}}, \text{activity\_mask})\)</span> jointly. Activity mask is a Bernoulli per slot. Promote to RJMCMC predictor head only if max-K masking shows systematic basin saturation.</p>
+<h3 id="posterior-representation">Posterior representation<a class="headerlink" href="#posterior-representation" title="Permanent link">&para;</a></h3>
+<ul>
+<li><span class="arithmatex">\(Q_k(t)\)</span> posterior is a 1D function — conditional flow over time-axis (<code>gauss_flows</code> 1D handles natively).</li>
+<li><span class="arithmatex">\(x_{0,k}\)</span> posterior is 2D Gaussian per source.</li>
+<li><span class="arithmatex">\(K\)</span> posterior is categorical.</li>
+<li>Joint via factorised flow + categorical head.</li>
+</ul>
+<h3 id="training-data">Training data<a class="headerlink" href="#training-data" title="Permanent link">&para;</a></h3>
+<p>Simulate millions of <span class="arithmatex">\((\text{source config}, \text{multi-instrument overpass})\)</span> pairs spanning the realistic met regime distribution + scene-class distribution + instrument coverage distribution. Active learning over the training schedule (§3) is mandatory at this scale.</p>
+<hr />
+<h2 id="tier4-improve">(6) Improve<a class="headerlink" href="#tier4-improve" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Active learning loop.</strong> Flag high-uncertainty scenes for targeted follow-up (e.g. trigger a GHGSat tasking based on a TROPOMI alert; [ghgsat,s5p_tropomi]). Posterior entropy from the predictor is the natural trigger metric.</li>
+<li><strong>Joint met + source posterior.</strong> Currently we condition on met with tight priors; instead infer <span class="arithmatex">\(p(Q, \bar{u}, \theta_\text{wind}, \dots \mid \mathbf{y})\)</span> jointly with a looser met prior. WRF becomes informative prior, not hard constraint. Critical for remote regions where reanalysis is poor.</li>
+<li><strong>Hierarchical bias correction.</strong> <span class="arithmatex">\(\text{bias}_\text{inst}\)</span> per instrument is currently a flat Gaussian. Promote to hierarchical: per-(instrument, basin, season) — captures known seasonal/regional structure in inter-instrument biases.</li>
+<li><strong>Multi-species coupling.</strong> When CO + CH₄ are observed jointly (e.g. TROPOMI), use the source-ratio prior to constrain attribution (fossil vs. agricultural).</li>
+<li><strong><span class="arithmatex">\(Q(t)\)</span> hierarchical prior.</strong> Promote OU correlation timescale and amplitude to hyperparameters with their own posterior.</li>
+</ul>
+<hr />
+<h2 id="tier4-modules">Module layout (proposed)<a class="headerlink" href="#tier4-modules" title="Permanent link">&para;</a></h2>
+<p><em>Tier IV proposed module layout — step, concern, target module, status.</em></p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Concern</th>
+<th>Module</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Coupled forward (Tier I + AK + multi-inst)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/forward.py"><code>coupled/forward.py</code></a> (<code>CoupledForward</code>, <code>PlumeSource</code>)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Per-instrument observation spec (receptors, AK, <code>R = R_retr+R_repr+R_align</code>)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/instrument.py"><code>coupled/instrument.py</code></a> (<code>Instrument</code>)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Multi-instrument fusion harness (closed-form <code>(Q, bias)</code> posterior)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/fusion.py"><code>coupled/fusion.py</code></a> (<code>fuse_observations</code>)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Cross-instrument bias model</td>
+<td>first-class state in <code>coupled.fusion</code> (per-instrument additive bias)</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Coupled forward (Tier II + AK + multi-inst)</td>
+<td><code>plumax.coupled</code> (Tier II transport)</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>RTM observation operator — nonlinear (column → ΔVMR → band radiance, <code>L=exp(-Δτ)</code>)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py"><code>coupled/rtm.py</code></a> (<code>RadianceObservationOperator</code>, <code>radiance_response</code>)</td>
+<td>🚧</td>
+</tr>
+<tr>
+<td>1</td>
+<td>RTM observation operator — linearised / tangent-linear (linear in <code>Q</code>, pure-JAX)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py"><code>coupled/rtm.py</code></a> (<code>LinearisedRadianceOperator</code>, <code>linearise</code>, <code>radiance_response_linear</code>)</td>
+<td>🚧</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Coupled forward (Tier III + RTM + multi-inst)</td>
+<td><code>plumax.coupled</code> (Tier III + RTM)</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Quality-flag aggregator</td>
+<td><code>plumax.coupled.quality</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td><span class="arithmatex">\(Q(t)\)</span> stochastic-process model (OU / GP)</td>
+<td><code>plume_simulation.coupled.q_dynamics</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Trans-dimensional source-count handling</td>
+<td><code>plume_simulation.coupled.k_sources</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>End-to-end inversion</td>
+<td>reuse <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/"><code>assimilation/</code></a> with composed <code>forward</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Posterior covariance (Laplace / Hessian / EnKF)</td>
+<td>reuse Tier III's posterior modules</td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Posterior export → Tier V</td>
+<td><code>plume_simulation.coupled.posterior_export</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Stacked emulator runtime</td>
+<td><code>plume_simulation.coupled.stacked_emulator</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Coupled emulator (end-to-end)</td>
+<td><code>plume_simulation.coupled.emulator</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Active-learning training scheduler</td>
+<td><code>plume_simulation.coupled.active_learning</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Operational predictor (per-instrument, tier-conditioned)</td>
+<td><code>plume_simulation.coupled.predictor</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Joint met + source inversion</td>
+<td><code>plume_simulation.coupled.joint_met</code></td>
+<td>☐</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>coupled</code> subpackage doesn't exist yet; this is the proposed shape. It's the only tier where new top-level modules are still needed once Tiers I–III and RTM are done.</p>
+<hr />
+<h2 id="tier4-validation">Validation strategy<a class="headerlink" href="#tier4-validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Composition correctness.</strong> Apply identity AK, identity RTM, single-instrument list → coupled forward should equal the bare transport forward. Cheap, catches plumbing bugs.</li>
+<li><strong>Linear-conditional-Gaussian limit.</strong> Tier I + linear AK + Gaussian noise → conditional posterior <span class="arithmatex">\(p(Q \mid x_0, \bar{u}, \theta_\text{wind}, \mathbf{c}_\text{bg})\)</span> is closed-form via <a href="https://github.com/jejjohnson/gaussx"><code>gaussx</code></a>. Compare end-to-end JAX inversion to the closed-form result. (Note: only <span class="arithmatex">\(Q\)</span> is linear; the joint over <span class="arithmatex">\((x_0, \bar{u}, \dots)\)</span> is nonlinear — phrase the test as conditional, not joint.)</li>
+<li><strong>Synthetic-truth recovery.</strong> Simulate a known multi-instrument overpass through the full pipeline → run inversion → recover within reported posterior uncertainty. Stratify by instrument count (1, 2, 3+) — fusion benefit should be quantifiable.</li>
+<li><strong>Cross-instrument hold-out.</strong> Invert with <span class="arithmatex">\(N - 1\)</span> instruments, predict the held-out instrument's observations from the source posterior + coupled forward, compare predicted to actual. Catches multi-instrument fusion bugs and exposes the value of fusion vs. single-instrument inversion.</li>
+<li><strong>Cross-tier consistency.</strong> Run inversion with Tier I, II, III transports on the same observations under stationary met conditions. Posteriors should overlap within stated uncertainty. Catches systematic biases between transport tiers and confirms the fusion harness is tier-agnostic.</li>
+<li><strong>Real-data multi-pass benchmark.</strong> <strong>The validation that proves Tier IV works.</strong> Invert a documented event using <span class="arithmatex">\((\text{TROPOMI} + \text{GHGSat} + \text{EMIT})\)</span> simultaneously (e.g. published Permian super-emitter from Sherwin et al. 2024 cross-comparison campaigns); compare posterior to the reported emission. Without this the tier is unvalidated for its intended use.</li>
+<li><strong>Bias-correction calibration.</strong> With known cross-instrument biases (Sherwin et al.'s controlled-release flights), the inferred <span class="arithmatex">\(\text{bias}_\text{inst}\)</span> posterior should recover the published values within 95% CI.</li>
+<li><strong>Predictor calibration.</strong> SBC stratified by instrument count, met regime, scene class. Standard-deviation calibration vs. empirical RMSE on a held-out set.</li>
+</ul>
+<hr />
+<h2 id="tier4-open-questions">Open questions<a class="headerlink" href="#tier4-open-questions" title="Permanent link">&para;</a></h2>
+<div class="admonition attention">
+<p class="admonition-title">Tiering at inference time</p>
+<p>Should the user choose the transport tier, or should the predictor figure it out (e.g. choose Tier I for stationary winds, Tier II for turbulent regimes)? Probably the former for v1 — explicit is safer; predictor-side dispatch as v2.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Trans-dimensional posterior — RJMCMC vs. masked-K</p>
+<p>v1 commitment is masked-K (<span class="arithmatex">\(K_\text{max} = 10\)</span>). When does basin saturation force the upgrade to RJMCMC? Operationally: when &gt;5% of overpasses saturate <span class="arithmatex">\(K_\text{max}\)</span>.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title"><span class="arithmatex">\(Q(t)\)</span> parameterisation</p>
+<p>OU process is the simplest non-trivial choice; GP with Matérn-3/2 is more flexible but slower. v1: OU; v2: hierarchical kernel choice.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Cross-instrument bias structure</p>
+<p>Flat per-instrument Gaussian (v1), per-(instrument, basin) (v1.5), per-(instrument, basin, season) (v2). Promotion driven by residual diagnostics on real-data benchmark.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Training-data budget</p>
+<p>Coupled-emulator training cost is operationally prohibitive without active learning. Open: target <span class="arithmatex">\(O(10^{5})\)</span> simulations with sequential design vs. <span class="arithmatex">\(O(10^{6})\)</span> uniform — confirm the active-learning factor in pilot.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Coupled vs. stacked emulator default</p>
+<p>Stacked for development. Coupled for deployment. Open: at what predictor latency budget does coupled become required? Likely when overall pipeline must respond &lt;1 s to an alert trigger.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">What goes into 'operational'?</p>
+<p>This is the line between research artefact and product. Need to decide: SLA on inference latency, supported scene types, failure modes, monitoring. Probably outside scope of <code>plumax</code> itself — that's <code>plumax-deploy</code> or similar.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Posterior summaries</p>
+<p>A full distribution over all state elements is unwieldy for downstream consumers. Canonical 1-page summary: per-source mode + 68/95% credible region + entropy budget + per-instrument bias posterior + activity flag. Pin the schema before Tier V.A starts consuming.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Quality-flag aggregation</p>
+<p>Mask flagged pixels (default), or down-weight via inflated <span class="arithmatex">\(\mathbf{R}\)</span>? Open: empirical comparison on real data.</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
