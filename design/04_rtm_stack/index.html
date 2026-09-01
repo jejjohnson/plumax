@@ -1,0 +1,2099 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).">
+      
+      
+        <meta name="author" content="J. Emmanuel Johnson">
+      
+      
+      
+        <link rel="prev" href="../03_tier3_eulerian/">
+      
+      
+        <link rel="next" href="../05_tier4_coupled/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>RTM stack - plumax</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#radiative-transfer-rtm-stack-parallel-track" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="plumax" class="md-header__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            plumax
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              RTM stack
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../api/reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="plumax" class="md-nav__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    plumax
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap & Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00_prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01_tier1_gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier I — Gaussian family
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02_tier2_lagrangian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03_tier3_eulerian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier III — Eulerian FV
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model — line-by-line via HAPI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model — line-by-line via HAPI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-beer-lambert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clear-sky two-way Beer–Lambert (SWIR scope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-thermal-ir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Thermal-IR addendum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scattering-out-of-scope-for-v1-planned-for-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scattering — out-of-scope for v1, planned for v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#line-shape-and-continuum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Line shape and continuum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-hapi-trace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HAPI traceability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-state-vector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Joint state vector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior \(\mathbf{S}_a\)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-gauss-newton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Iterative Gauss–Newton
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-info-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior covariance and information content
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-quality-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality flags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator — two levels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(3) Model emulator — two levels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-emu-lut" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level A — factorised LUT RTM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-emu-neural" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level B — Neural RTM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-neural-jacobian" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural-Jacobian calibration is mandatory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-the-joint-posterior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output the joint posterior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-instrument-heads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument heads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-conditioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context conditioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-over-the-spatial-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior over the spatial profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uncertainty-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uncertainty calibration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05_tier4_coupled/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier V — Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tier V — Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06_tier5_population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06a_instantaneous/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.A — Instantaneous
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06b_point_process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06c_persistency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.C — Persistency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06d_total_emission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.D — Total emission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-simple-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (1) Simple model — line-by-line via HAPI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(1) Simple model — line-by-line via HAPI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-beer-lambert" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clear-sky two-way Beer–Lambert (SWIR scope)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-thermal-ir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Thermal-IR addendum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scattering-out-of-scope-for-v1-planned-for-v2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scattering — out-of-scope for v1, planned for v2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#line-shape-and-continuum" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Line shape and continuum
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-hapi-trace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HAPI traceability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (2) Model-based inference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(2) Model-based inference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-state-vector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Joint state vector
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-prior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prior \(\mathbf{S}_a\)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-gauss-newton" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Iterative Gauss–Newton
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-info-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior covariance and information content
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-quality-flags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality flags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-emulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (3) Model emulator — two levels
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(3) Model emulator — two levels">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rtm-emu-lut" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level A — factorised LUT RTM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-emu-neural" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Level B — Neural RTM
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rtm-neural-jacobian" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Neural-Jacobian calibration is mandatory
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-emu-inference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (4) Emulator-based inference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-amortized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (5) Amortized inference (predictor)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="(5) Amortized inference (predictor)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#output-the-joint-posterior" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output the joint posterior
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#per-instrument-heads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-instrument heads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-conditioning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context conditioning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#posterior-over-the-spatial-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Posterior over the spatial profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#uncertainty-calibration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Uncertainty calibration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-improve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        (6) Improve
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rtm-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="radiative-transfer-rtm-stack-parallel-track">Radiative transfer (RTM) stack — parallel track<a class="headerlink" href="#radiative-transfer-rtm-stack-parallel-track" title="Permanent link">&para;</a></h1>
+<p>The RTM is the <strong>observation operator</strong> <span class="arithmatex">\(\mathbf{H}_\text{obs} : c(\mathbf{x},t) \to \mathbf{y}_\text{radiance}\)</span>. It connects Tiers II–IV to actual satellite measurements. Independent of transport tier — can be developed in parallel by a different person without coordination.</p>
+<p>If you're working with <strong>Level-2 XCH₄ products</strong> (e.g. TROPOMI official retrieval; [s5p_tropomi]), the entire RTM stack collapses to just the <a href="../00_prerequisites/#prereqs-ak-operator">averaging-kernel operator</a>; this whole page becomes "use the published L2." This page assumes Level-1 (radiance) work, where you build the retrieval yourself.</p>
+<hr />
+<h2 id="rtm-simple-model">(1) Simple model — line-by-line via HAPI<a class="headerlink" href="#rtm-simple-model" title="Permanent link">&para;</a></h2>
+<p><a href="https://hitran.org/hapi/">HAPI (HITRAN Application Programming Interface)</a> ([gordon2022hitran,kochanov2016hapi]) provides absorption cross-sections <span class="arithmatex">\(\sigma(\nu, T, p)\)</span> from the HITRAN database. <strong>All operational satellites for methane retrieval are SWIR</strong> — solar reflection, not thermal emission. The two-way path matters and so does scattering; a pure clear-sky Beer–Lambert model is biased by 10–30% on aerosol-loaded scenes.</p>
+<h3 id="rtm-beer-lambert">Clear-sky two-way Beer–Lambert (SWIR scope)<a class="headerlink" href="#rtm-beer-lambert" title="Permanent link">&para;</a></h3>
+<div class="arithmatex">\[
+L(\nu) \;=\; \frac{F_\text{solar}(\nu)}{\pi}\, A_\text{surf}(\nu)\, \cos(\text{SZA})\, \exp\!\bigl(-\tau_\text{total}(\nu)\bigr)
+\]</div>
+<div class="arithmatex">\[
+\tau_\text{total}(\nu) \;=\; \frac{\tau(\nu)}{\cos(\text{SZA})} \;+\; \frac{\tau(\nu)}{\cos(\text{VZA})}
+\]</div>
+<div class="arithmatex">\[
+\tau(\nu) \;=\; \int \sigma\!\bigl(\nu, T(z), p(z)\bigr)\, \rho_{\text{CH}_4}(z)\, \mathrm{d}z
+\]</div>
+<ul>
+<li><span class="arithmatex">\(F_\text{solar}(\nu)\)</span> — top-of-atmosphere solar irradiance.</li>
+<li><span class="arithmatex">\(A_\text{surf}(\nu)\)</span> — surface albedo (Lambertian for v1, BRDF for v2).</li>
+<li><span class="arithmatex">\((\text{SZA}, \text{VZA}, \text{RAA})\)</span> — solar zenith, viewing zenith, relative azimuth from L1 metadata.</li>
+<li><span class="arithmatex">\(\tau_\text{total}\)</span> — <strong>two-way</strong> optical depth: light goes down through the atmosphere, reflects, comes back up. The earlier <span class="arithmatex">\(\exp(-\tau)\)</span> form was one-way and silently biased at oblique geometries.</li>
+</ul>
+<h3 id="rtm-thermal-ir">Thermal-IR addendum<a class="headerlink" href="#rtm-thermal-ir" title="Permanent link">&para;</a></h3>
+<p>For TIR work (legacy / portability), the surface term is emission, not solar reflection:</p>
+<div class="arithmatex">\[
+L_\text{TIR}(\nu) \;=\; \varepsilon_\text{surf}(\nu)\, B(T_\text{surf}, \nu)\, \exp\!\bigl(-\tau(\nu)\bigr) \;+\; \int B(\nu, T(z))\, \mathrm{d}\!\exp\!\bigl(-\tau(\nu, z)\bigr)
+\]</div>
+<p>Different physics, different priors (<span class="arithmatex">\(\varepsilon_\text{surf}\)</span> instead of <span class="arithmatex">\(A_\text{surf}\)</span>, <span class="arithmatex">\(T_\text{surf}\)</span> instead of <span class="arithmatex">\(F_\text{solar}\)</span>). Don't conflate the two surface models in code — split per spectral regime.</p>
+<h3 id="scattering-out-of-scope-for-v1-planned-for-v2">Scattering — out-of-scope for v1, planned for v2<a class="headerlink" href="#scattering-out-of-scope-for-v1-planned-for-v2" title="Permanent link">&para;</a></h3>
+<p>SWIR aerosol scattering is the leading systematic for methane retrievals over bright/aerosol-loaded scenes. v1 commits to <strong>clear-sky direct-beam</strong> with explicit AOD-based screening (reject pixels with <span class="arithmatex">\(\text{AOD} &gt; 0.2\)</span>); v2 couples to <strong>LIDORT / DISORT / 6S</strong> for multiple-scattering Jacobians. Validation against operational L2 in Step 4 must stratify by AOD to expose the v1 limit.</p>
+<h3 id="line-shape-and-continuum">Line shape and continuum<a class="headerlink" href="#line-shape-and-continuum" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Voigt profile</strong> with explicit wing cutoffs (default: 25 cm⁻¹). HAPI is the source of truth; expose the cutoff as a config knob — too tight underestimates absorption in the wings, too wide adds noise.</li>
+<li><strong>CO₂-specific line mixing</strong> in the methane window. Required because CO₂ overlaps the 1.65 μm CH₄ band; ignoring line mixing biases retrievals by ~5 ppb.</li>
+<li><strong>MT_CKD H₂O continuum.</strong> Non-trivial in the methane band; load alongside HAPI cross-sections.</li>
+</ul>
+<h3 id="rtm-hapi-trace">HAPI traceability<a class="headerlink" href="#rtm-hapi-trace" title="Permanent link">&para;</a></h3>
+<div class="admonition important">
+<p class="admonition-title">HAPI is not JAX-traceable</p>
+<p>The architectural choice is explicit: pre-tabulate, then trace.</p>
+<ul>
+<li><strong>Path A — pre-tabulate, JAX-trace.</strong> HAPI generates <span class="arithmatex">\(\sigma(\nu, T, p)\)</span> lookup tables offline; runtime <code>forward.py</code> interpolates inside <code>jax.jit</code>. This is what <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/"><code>hapi_lut/</code></a> already implements. Default for v1.</li>
+<li><strong>Path B — <code>jax.pure_callback</code> with custom VJP.</strong> Wrap HAPI calls in a callback when needed inside differentiable code. Use only for cross-section sensitivities not pre-tabulated.</li>
+</ul>
+<p><strong>Why:</strong> <code>jax.jacobian</code> "exactly" works only on Path A; on Path B, the VJP is whatever you wrote. Document the chosen path on every forward-RT helper.</p>
+</div>
+<hr />
+<h2 id="rtm-inference">(2) Model-based inference<a class="headerlink" href="#rtm-inference" title="Permanent link">&para;</a></h2>
+<h3 id="rtm-state-vector">Joint state vector<a class="headerlink" href="#rtm-state-vector" title="Permanent link">&para;</a></h3>
+<p>Operational SWIR retrievals do <strong>not</strong> retrieve XCH₄ alone. The state vector is jointly:</p>
+<div class="arithmatex">\[
+\mathbf{x} \;=\; (\text{profile}_{\text{CH}_4},\; \text{profile}_{\text{H}_2\text{O}},\; A_\text{surf},\; \text{AOD},\; p_\text{surf,offset})
+\]</div>
+<ul>
+<li><span class="arithmatex">\(\text{profile}_{\text{CH}_4}\)</span> — CH₄ vertical profile (typically 12–30 layers).</li>
+<li><span class="arithmatex">\(\text{profile}_{\text{H}_2\text{O}}\)</span> — H₂O profile is coupled (overlapping bands, continuum).</li>
+<li><span class="arithmatex">\(A_\text{surf}\)</span> — spectrally-resolved albedo.</li>
+<li><span class="arithmatex">\(\text{AOD}\)</span> — aerosol optical depth (coarse-mode and fine-mode separately for high-fidelity work).</li>
+<li><span class="arithmatex">\(p_\text{surf,offset}\)</span> — DEM error proxy; small but matters for column accounting.</li>
+</ul>
+<div class="admonition caution">
+<p class="admonition-title">Don't retrieve XCH₄ alone</p>
+<p>Single-parameter retrievals (XCH₄ only) are biased — the coupling is real and load-bearing.</p>
+</div>
+<h3 id="rtm-prior">Prior <span class="arithmatex">\(\mathbf{S}_a\)</span><a class="headerlink" href="#rtm-prior" title="Permanent link">&para;</a></h3>
+<p><em>Prior structure for the joint RTM state vector.</em></p>
+<table>
+<thead>
+<tr>
+<th>Element</th>
+<th>Form</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="arithmatex">\(\text{profile}_{\text{CH}_4}\)</span></td>
+<td>climatological covariance + AR(1) in vertical</td>
+<td>smoothness prior; covariance from CAMS reanalysis</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\text{profile}_{\text{H}_2\text{O}}\)</span></td>
+<td>same structure</td>
+<td>from ECMWF or in-situ profile climatology</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(A_\text{surf}\)</span></td>
+<td>per-band Gaussian around L1 prior or MODIS climatology</td>
+<td></td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(\text{AOD}\)</span></td>
+<td><span class="arithmatex">\(\operatorname{LogNormal}(\mu_\text{AOD}, \sigma^2)\)</span></td>
+<td>non-negative, heavy-tail</td>
+</tr>
+<tr>
+<td><span class="arithmatex">\(p_\text{surf,offset}\)</span></td>
+<td>tight Gaussian around DEM</td>
+<td>sub-pixel terrain uncertainty</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition important">
+<p class="admonition-title">Diagonal <span class="arithmatex">\(\mathbf{S}_a\)</span> is wrong</p>
+<p>Always carry vertical correlation in the gas profiles — diagonal <span class="arithmatex">\(\mathbf{S}_a\)</span> produces wildly noisy retrieved profiles.</p>
+</div>
+<h3 id="rtm-gauss-newton">Iterative Gauss–Newton<a class="headerlink" href="#rtm-gauss-newton" title="Permanent link">&para;</a></h3>
+<p>The closed-form formula in the prior version is the <em>first</em> update. The converged retrieval iterates ([rodgers2000]):</p>
+<div class="arithmatex">\[
+\mathbf{x}^{k+1} \;=\; \mathbf{x}_a + \mathbf{G}_k\, \bigl(\mathbf{y} - F(\mathbf{x}^k) + \mathbf{K}_k (\mathbf{x}^k - \mathbf{x}_a)\bigr)
+\]</div>
+<div class="arithmatex">\[
+\mathbf{G}_k \;=\; (\mathbf{K}_k^{\top}\, \mathbf{S}_\varepsilon^{-1}\, \mathbf{K}_k + \mathbf{S}_a^{-1})^{-1}\, \mathbf{K}_k^{\top}\, \mathbf{S}_\varepsilon^{-1}, \qquad \mathbf{K}_k \;=\; \frac{\partial F}{\partial \mathbf{x}}\bigg|_{\mathbf{x}^k}
+\]</div>
+<p><strong>Convergence criterion</strong> ([rodgers2000] §5.7):</p>
+<div class="arithmatex">\[
+\delta \chi^{2}_{k} \;=\; (\mathbf{x}^{k+1} - \mathbf{x}^{k})^{\top}\, (\mathbf{S}^{*})^{-1}\, (\mathbf{x}^{k+1} - \mathbf{x}^{k}) \;&lt;\; 0.5 \cdot \text{DOFs}
+\]</div>
+<p>Cap at <span class="arithmatex">\(k_\text{max} = 10\)</span>. Pixels that fail to converge get a quality flag.</p>
+<h3 id="rtm-info-content">Posterior covariance and information content<a class="headerlink" href="#rtm-info-content" title="Permanent link">&para;</a></h3>
+<p>Standard outputs of optimal estimation — should appear on every retrieved pixel:</p>
+<div class="arithmatex">\[
+\mathbf{S}^{*} \;=\; (\mathbf{K}^{\top}\, \mathbf{S}_\varepsilon^{-1}\, \mathbf{K} + \mathbf{S}_a^{-1})^{-1}
+\]</div>
+<div class="arithmatex">\[
+\mathbf{A} \;=\; \mathbf{G}\, \mathbf{K}, \qquad \text{DOFs} \;=\; \operatorname{tr}(\mathbf{A})
+\]</div>
+<div class="arithmatex">\[
+H \;=\; \tfrac{1}{2} \log \det(\mathbf{S}_a) - \tfrac{1}{2} \log \det(\mathbf{S}^{*}), \qquad \Delta \mathbf{S} \;=\; \operatorname{tr}(\mathbf{S}_a) - \operatorname{tr}(\mathbf{S}^{*})
+\]</div>
+<p>These are load-bearing for instrument-design questions (EMIT vs Tanager vs TROPOMI comparisons) and for the cross-tier UQ pipeline that Tier IV assembles. Currently absent from the doc — must appear in the retrieved-product schema.</p>
+<h3 id="rtm-quality-flags">Quality flags<a class="headerlink" href="#rtm-quality-flags" title="Permanent link">&para;</a></h3>
+<p>Each retrieval emits a flag bitmask:</p>
+<ul>
+<li><span class="arithmatex">\(\chi^{2}\)</span> excessive (poor fit)</li>
+<li>non-convergence (<span class="arithmatex">\(k = k_\text{max}\)</span> reached)</li>
+<li>cloud / cirrus</li>
+<li>sun-glint over water</li>
+<li>AOD &gt; screening threshold</li>
+<li>snow / ice</li>
+<li>DEM error excessive</li>
+</ul>
+<div class="admonition caution">
+<p class="admonition-title">Quality flags are mandatory upstream</p>
+<p>Without these flags, downstream Tiers II–IV silently consume bad retrievals → corrupted source posteriors.</p>
+</div>
+<hr />
+<h2 id="rtm-emulator">(3) Model emulator — two levels<a class="headerlink" href="#rtm-emulator" title="Permanent link">&para;</a></h2>
+<h3 id="rtm-emu-lut">Level A — factorised LUT RTM<a class="headerlink" href="#rtm-emu-lut" title="Permanent link">&para;</a></h3>
+<p>A dense LUT over <span class="arithmatex">\((T, p, q_{\text{CH}_4}, A_\text{surf}, \text{SZA}, \text{VZA}, \text{RAA}, \text{AOD})\)</span> has <span class="arithmatex">\(\sim 4 \times 10^{13}\)</span> cells — untrainable. <strong>Operational practice: factorise.</strong></p>
+<p>Decompose the radiance into multiplicative / additive components on lower-dimensional sub-LUTs:</p>
+<div class="arithmatex">\[
+L(\nu) \;=\; \underbrace{T_\text{gas}\!\bigl(\nu \,\big|\, T(z), p(z), q_{\text{CH}_4}(z)\bigr)}_{\text{sub-LUT 1: gas transmittance}}
+\;\times\; \underbrace{R_\text{surf}\!\bigl(\nu \,\big|\, A_\text{surf}, \text{SZA}, \text{VZA}, \text{RAA}\bigr)}_{\text{sub-LUT 2: surface BRDF kernel}}
+\;+\; \underbrace{S_\text{scatt}\!\bigl(\nu \,\big|\, \text{AOD}, \text{SZA}, \text{VZA}, \text{RAA}\bigr)}_{\text{sub-LUT 3 (v2): scattering source term}}
+\]</div>
+<p>Sub-LUT sizes are tractable (~<span class="arithmatex">\(10^{6}\)</span> cells each). Combine analytically at runtime. <strong>This is the only viable path for high-dimensional SWIR retrieval</strong> — without factorisation, LUTs don't fit.</p>
+<ul>
+<li>Pros: bit-exact reproducibility, conservative.</li>
+<li>Cons: factorisation introduces approximation error at sub-LUT interaction boundaries; needs Step-4-style validation.</li>
+</ul>
+<h3 id="rtm-emu-neural">Level B — Neural RTM<a class="headerlink" href="#rtm-emu-neural" title="Permanent link">&para;</a></h3>
+<p>MLP / Fourier-feature network mapping <span class="arithmatex">\((\text{profile}, \text{geometry}, A_\text{surf}, \text{AOD}) \to L(\nu)\)</span>. Train on factorised LUT or directly on HAPI outputs.</p>
+<ul>
+<li><strong>Architecture choice.</strong> SIREN is mentioned in earlier drafts but is justified for <em>spatial</em> signals; spectra are smooth in <span class="arithmatex">\(\nu\)</span> with sharp absorption features, which favours <strong>Fourier-feature MLP</strong> or <strong>per-band wavelet basis</strong>. SIREN works but isn't the obvious pick — benchmark before committing.</li>
+<li><strong>Per-scene-class heads.</strong> Land vs. water vs. sun-glint vs. ice have different spectral signatures and different aerosol regimes. Either one network per scene class (dispatched by L1 scene flag) or scene class as a categorical input — <em>don't</em> train a single net across all scenes.</li>
+<li><strong>Spectral resolution.</strong> TROPOMI ~1000 channels in the methane window; EMIT ~285. Per-instrument heads at native resolution; don't pre-convolve to a common grid.</li>
+<li>Pros: smooth, differentiable everywhere, compact (~MB vs ~GB for an LUT).</li>
+<li>Cons: training is non-trivial, needs validation against HAPI on out-of-distribution states.</li>
+<li>Reference implementations: JPL FastMDA, ESA's neural SCIAMACHY RTM ([sciamachy]).</li>
+</ul>
+<h3 id="rtm-neural-jacobian">Neural-Jacobian calibration is mandatory<a class="headerlink" href="#rtm-neural-jacobian" title="Permanent link">&para;</a></h3>
+<p>Backprop through a trained neural RTM gives <em>some</em> gradient — whether it matches HAPI's <span class="arithmatex">\(\mathbf{K}\)</span> is an empirical question, and the entire Step-4 retrieval depends on it.</p>
+<div class="admonition important">
+<p class="admonition-title">Hard validation test</p>
+<p>Neural-RTM Jacobian vs. HAPI Jacobian on a held-out state set, <span class="arithmatex">\(&lt;5\%\)</span> relative error in operator norm. If the neural RTM has accurate forward predictions but a biased Jacobian, the retrieval converges to the wrong state.</p>
+</div>
+<hr />
+<h2 id="rtm-emu-inference">(4) Emulator-based inference<a class="headerlink" href="#rtm-emu-inference" title="Permanent link">&para;</a></h2>
+<p>Replace HAPI with the neural RTM in the optimal-estimation loop. The entire retrieval becomes differentiable end-to-end:</p>
+<div class="arithmatex">\[
+\nabla_{\mathbf{x}} J \;=\; \texttt{jax.grad}\!\Bigl(\bigl\lVert \texttt{NeuralRTM}(\mathbf{x}) - \mathbf{y}\bigr\rVert^{2}\Bigr)
+\]</div>
+<p>Same Gauss–Newton iteration, ~1000× faster per step, gradients trivially available.</p>
+<ul>
+<li><strong>Forward validation:</strong> posterior from neural-RTM retrieval ≈ posterior from HAPI retrieval on the same observations.</li>
+<li><strong>Adjoint validation:</strong> neural-RTM Jacobian ≈ HAPI Jacobian (Step-3 calibration test). If this fails, the inversion is biased even when forward predictions look fine.</li>
+</ul>
+<hr />
+<h2 id="rtm-amortized">(5) Amortized inference (predictor)<a class="headerlink" href="#rtm-amortized" title="Permanent link">&para;</a></h2>
+<div class="arithmatex">\[
+f_\theta : (\mathbf{y}_\text{radiance},\, \text{geometry},\, \text{prior}_\text{atm},\, \text{instrument\_id}) \;\longmapsto\; p(\text{profile}_{\text{CH}_4},\, A_\text{surf},\, \text{AOD} \mid \mathbf{y})
+\]</div>
+<h3 id="output-the-joint-posterior">Output the joint posterior<a class="headerlink" href="#output-the-joint-posterior" title="Permanent link">&para;</a></h3>
+<p>Collapsing to <span class="arithmatex">\(p(\text{XCH}_4 \mid \mathbf{y})\)</span> throws away information Tier IV wants — the joint <span class="arithmatex">\((\text{profile}, \text{albedo}, \text{AOD})\)</span> is the right output. Collapse to XCH₄ at the consumer side, not in the predictor.</p>
+<h3 id="per-instrument-heads">Per-instrument heads<a class="headerlink" href="#per-instrument-heads" title="Permanent link">&para;</a></h3>
+<p>Different spectral resolutions (TROPOMI ~1000 ch [s5p_tropomi], EMIT ~285 ch [emit], GHGSat hyperspectral [ghgsat], Tanager hyperspectral [carbon_mapper]) → per-instrument predictor heads dispatched by <code>instrument_id</code>. Same pattern as Tiers II/III.</p>
+<h3 id="context-conditioning">Context conditioning<a class="headerlink" href="#context-conditioning" title="Permanent link">&para;</a></h3>
+<p><span class="arithmatex">\(\text{prior}_\text{atm} = (T(z), p(z), q_{\text{H}_2\text{O}}(z))\)</span> from the <a href="../00_prerequisites/#prereqs-metfield-schema">met field</a> and <span class="arithmatex">\(\text{geometry} = (\text{SZA}, \text{VZA}, \text{RAA})\)</span> from L1 metadata. Wire in via FiLM / hypernet primitives in <a href="https://github.com/jejjohnson/pyrox"><code>pyrox.nn</code></a> — same pattern as Tiers I/II/III.</p>
+<h3 id="posterior-over-the-spatial-profile">Posterior over the spatial profile<a class="headerlink" href="#posterior-over-the-spatial-profile" title="Permanent link">&para;</a></h3>
+<p>Conditional flow over the vertical profile (1D — <code>gauss_flows</code> handles this natively, no 2D extension needed) for <span class="arithmatex">\(\text{profile}_{\text{CH}_4}\)</span> and joint Gaussian for <span class="arithmatex">\((A_\text{surf}, \text{AOD})\)</span> is the simplest split. Validate via SBC against HAPI-based optimal-estimation posteriors on synthetic data, <strong>stratified by SNR / SZA / AOD</strong>.</p>
+<h3 id="uncertainty-calibration">Uncertainty calibration<a class="headerlink" href="#uncertainty-calibration" title="Permanent link">&para;</a></h3>
+<p>SBC is necessary but not sufficient — the <em>specific</em> requirement is that the predictor's standard deviation matches the empirical RMSE on a held-out set, stratified by SNR / SZA / AOD. Without stratification, calibration on the easy regime hides miscalibration on the hard regime.</p>
+<hr />
+<h2 id="rtm-improve">(6) Improve<a class="headerlink" href="#rtm-improve" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Multi-window retrieval.</strong> Joint CH₄ + CO + H₂O across multiple SWIR bands tightens the posterior and resolves degeneracies.</li>
+<li><strong>Multiple scattering.</strong> Couple to LIDORT / DISORT / 6S for <span class="arithmatex">\(\text{AOD} &gt; 0.2\)</span> scenes (the v1 screening threshold).</li>
+<li><strong>Surface BRDF.</strong> Cox–Munk for sun-glint over water; RPV / Ross–Li for vegetated surfaces; per-band Lambertian for snow. Replace the single-Lambertian assumption with a BRDF registry.</li>
+<li><strong>Heteroscedastic retrieval uncertainty.</strong> Output retrieval-error covariance per observation, not a fixed <span class="arithmatex">\(\mathbf{S}_\varepsilon\)</span>.</li>
+<li><strong>Polarisation.</strong> For polarisation-capable instruments (Sentinel-3 SLSTR [sentinel3], future missions), add Stokes-vector RTM. Out of scope for <code>plumax</code> v1, deferred-decision note.</li>
+<li><strong>Hierarchical Matérn length-scale on profile prior.</strong> Promote the AR(1) decorrelation length to a hyperparameter — same pattern as Tiers II/III.</li>
+</ul>
+<hr />
+<h2 id="rtm-modules">Module layout<a class="headerlink" href="#rtm-modules" title="Permanent link">&para;</a></h2>
+<p><em>RTM stack module layout — step, concern, target module, status.</em></p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Concern</th>
+<th>Module</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>HAPI Beer-Lambert (clear-sky, two-way)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/beers.py"><code>hapi_lut/beers.py</code></a></td>
+<td>✓ — <strong>add</strong> two-way path if not already</td>
+</tr>
+<tr>
+<td>1</td>
+<td>LUT generator</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/generator.py"><code>hapi_lut/generator.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>LUT config</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/config.py"><code>hapi_lut/config.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Multi-gas LUT</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/multi.py"><code>hapi_lut/multi.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Factorised LUT (gas × surf × scatt)</td>
+<td><code>plume_simulation.hapi_lut.factorised</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Forward RTM</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/forward.py"><code>radtran/forward.py</code></a></td>
+<td>🚧</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Spectral response (SRF)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/srf.py"><code>radtran/srf.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Instrument model</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/instrument.py"><code>radtran/instrument.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Background atmosphere</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/background.py"><code>radtran/background.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Target gas spec</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/target.py"><code>radtran/target.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Surface model — SWIR (albedo / BRDF)</td>
+<td><code>plume_simulation.radtran.surface_swir</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Surface model — TIR (emissivity)</td>
+<td><code>plume_simulation.radtran.surface_tir</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Aerosol / scattering coupling (v2)</td>
+<td><code>plume_simulation.radtran.scattering</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Matched filter (detection)</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/matched_filter.py"><code>radtran/matched_filter.py</code></a>, <a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/"><code>matched_filter/</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>—</td>
+<td>gaussx-based linear solve</td>
+<td><a href="https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/gaussx_solve.py"><code>radtran/gaussx_solve.py</code></a></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Optimal-estimation iterative loop</td>
+<td><code>plume_simulation.radtran.retrieval</code></td>
+<td>☐ — clarify scope vs. <code>gaussx_solve.py</code> (linear solve only there)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Quality flags + screening</td>
+<td><code>plume_simulation.radtran.quality</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Information-content diagnostics</td>
+<td><code>plume_simulation.radtran.diagnostics</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Posterior export → Tier IV</td>
+<td><code>plume_simulation.radtran.posterior_export</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Neural RTM (per scene class)</td>
+<td><code>plume_simulation.radtran.neural_rtm</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Neural-Jacobian calibration harness</td>
+<td><code>plume_simulation.radtran.neural_jacobian_test</code></td>
+<td>☐</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Direct retrieval predictor (per instrument)</td>
+<td><code>plume_simulation.radtran.predictor</code></td>
+<td>☐</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="rtm-validation">Validation strategy<a class="headerlink" href="#rtm-validation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>HAPI Beer–Lambert — unit optical depth.</strong> For a known column and a known cross-section, <span class="arithmatex">\(\tau\)</span> must match the analytical product <span class="arithmatex">\(\sigma \times \text{column}\)</span>.</li>
+<li><strong>Two-way path consistency.</strong> At nadir (<span class="arithmatex">\(\text{SZA} = \text{VZA} = 0\)</span>), <span class="arithmatex">\(\tau_\text{total} = 2\tau\)</span>; at oblique geometries, the airmass factor must match <span class="arithmatex">\(1/\cos(\text{SZA}) + 1/\cos(\text{VZA})\)</span>. Catches one-way / two-way bugs.</li>
+<li><strong>LUT vs. HAPI — in-distribution.</strong> Interpolation error <span class="arithmatex">\(&lt;1\%\)</span> on the radiance for any state inside the LUT bounding box.</li>
+<li><strong>LUT vs. HAPI — OOD.</strong> Random states <em>outside</em> the box should fail loudly via boundary checks — not silently extrapolate.</li>
+<li><strong>Neural RTM forward.</strong> Held-out set spans all training-distribution corners; report worst-case relative error per channel, stratified by scene class.</li>
+<li><strong>Neural-RTM Jacobian.</strong> Calibration vs. HAPI Jacobian, <span class="arithmatex">\(&lt;5\%\)</span> operator-norm error. <strong>Hard test</strong> — failure means Step 4 retrieval is biased.</li>
+<li><strong>Optimal estimation against synthetic truth.</strong> Generate radiances for a known profile via HAPI, retrieve, compare retrieved profile to truth. Should sit inside the reported posterior covariance with ~68% frequency over many trials.</li>
+<li><strong>Information-content recovery.</strong> Generate synthetic radiances at varying SNR / SZA, report retrieved DOFs vs. theoretical maximum from instrument SRF. Catches retrieval-side regressions invisible to mean-error tests.</li>
+<li><strong>Real-data benchmark.</strong> Compare HAPI-based retrieval to TROPOMI / EMIT / GHGSat <em>official</em> L2 product on overlap pixels ([s5p_tropomi,emit,ghgsat]). Median bias &lt; 5 ppb, RMSE within instrument noise floor. Stratify by AOD to expose the v1 clear-sky-only limit. <strong>Without this the retrieval is a synthetic exercise.</strong></li>
+<li><strong>Predictor calibration.</strong> SBC stratified by SNR / SZA / AOD; standard-deviation calibration vs. empirical RMSE on held-out set.</li>
+</ul>
+<hr />
+<h2 id="rtm-open-questions">Open questions<a class="headerlink" href="#rtm-open-questions" title="Permanent link">&para;</a></h2>
+<div class="admonition attention">
+<p class="admonition-title">Spectral resolution storage</p>
+<p>Native HAPI is sub-cm⁻¹. Operational instruments are ~0.1 nm. Store at native HAPI then convolve with SRF at runtime (storage-efficient but slow), or pre-convolve per instrument (fast but bloats storage)? Probably runtime convolution with a sparse SRF representation — open: pick the SRF sparsity scheme.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Vertical profile representation</p>
+<p>Layer-mean concentrations vs. discretised continuous profiles. Affects how the AK is constructed and how the prior covariance is parameterised.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Surface BRDF beyond Lambertian</p>
+<p>Cox–Munk for water sun-glint, RPV / Ross–Li for vegetation, per-band Lambertian for snow. Build a BRDF registry keyed on land-use class? In scope for v1.5 / v2.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Cloud / cirrus screening</p>
+<p>Internal detection step or rely on L1 cloud mask? Likely the latter for v1, but document the trust assumption — TROPOMI cloud mask is conservative, EMIT lacks one, Tanager cloud handling is in flux.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Scattering scope</p>
+<p>Strict clear-sky (<span class="arithmatex">\(\text{AOD} &lt; 0.2\)</span>) for v1 vs. multiple-scattering hybrid for v2 — when do we promote? Probably driven by Tier-IV bias diagnostics.</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">HAPI traceability</p>
+<p>Path A (pre-tabulate) vs. Path B (<code>pure_callback</code>). v1 default is A. When does B become necessary — when retrieving cross-section sensitivities not pre-computed?</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Polarisation deferred-decision</p>
+<p>Sentinel-3 SLSTR and future missions are polarised. Plan a v3 Stokes-vector RTM, or stay scalar and discount polarised instruments?</p>
+</div>
+<div class="admonition attention">
+<p class="admonition-title">Aerosol/cloud joint retrieval vs. screening</p>
+<p>Joint retrieval extends the operational AOD ceiling (currently 0.2) but adds two state-vector elements and slows convergence. Open: do we promote AOD from a <em>screening flag</em> to an <em>inverted parameter</em>?</p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "content.code.annotate"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
