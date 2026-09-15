@@ -231,24 +231,24 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 | 1 | Source injection | [`les_fvm/source.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/source.py) | ✓ |
 | 1 | Boundary conditions | [`les_fvm/boundary.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/boundary.py) | ✓ |
 | 1 | Time integration | [`les_fvm/dynamics.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/dynamics.py), [`simulate.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/simulate.py) | ✓ |
-| 1 | Eddy diffusivity (MO + Smagorinsky) | `plume_simulation.les_fvm.diffusivity` | ☐ |
-| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ |
+| 1 | Eddy diffusivity | [`les_fvm/diffusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/diffusion.py) (`EddyDiffusivity`, `pg_eddy_diffusivity`) | 🚧 PG ✓; MO + Smagorinsky ☐ [#94](https://github.com/jejjohnson/plumax/issues/94) |
+| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | 4D-Var cost (prior + time-summed obs) over the FV transport | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`FourDVarProblem`) | ✓ |
 | 2 | Differentiable forward (emission → column-obs series) + exact adjoint via AD | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`EulerianForward4DVar`) | ✓ |
 | 2 | Column observation operator `H_t` | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`ColumnObservationOperator`) | ✓ |
 | 2 | Likelihood + temporal prior on the emission series (Matérn-3/2, `R = R_retr + R_repr`) | reuse `lagrangian.inversion.matern32_covariance` | ✓ |
-| 2 | Spatial source prior (per-cell `B`) | future — v1 control is a scalar emission rate at a known source | ☐ |
+| 2 | Spatial source prior (per-cell `B`) | `SpatialControl` in `fourdvar.py` — v1 control is a scalar emission rate at a known source | ☐ [#91](https://github.com/jejjohnson/plumax/issues/91) |
 | 2 | Control vector + whitening transform | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (Cholesky whitening of `B`) | ✓ |
 | 2 | 4D-Var solver (L-BFGS in whitened space) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`solve_4dvar`) | ✓ |
-| 2 | Incremental (Gauss-Newton inner) 4D-Var solver | [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) | 🚧 |
-| 2 | Background ($S_b$, $c_b$, BC scaling) | [`assimilation/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/background.py) | 🚧 |
+| 2 | Incremental (Gauss-Newton inner) 4D-Var solver | [`assimilation/solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) (`run_gauss_newton`, `run_dual_psas` exist; not wired to the FV forward) | 🚧 [#93](https://github.com/jejjohnson/plumax/issues/93) |
+| 2 | Background ($S_b$, $c_b$, BC scaling) | [`assimilation/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/background.py) (`B` builders exist; not in the 4D-Var cost) | 🚧 [#92](https://github.com/jejjohnson/plumax/issues/92) |
 | 2 | Diagnostics | [`assimilation/diagnostics.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/diagnostics.py) | 🚧 |
-| 2 | Posterior covariance (Hessian / Laplace / En4D-Var) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`posterior_covariance`, `laplace_sample`) | 🚧 |
-| 2 | Posterior export → Tier V | `plume_simulation.assimilation.posterior_export` | ☐ |
-| 3 | Emulator (UNet / GNN / FNO) | `plume_simulation.les_fvm.emulator` | ☐ |
-| 3 | Emulator-adjoint calibration harness | `plume_simulation.les_fvm.emulator_adjoint_test` | ☐ |
-| 5 | Sequence predictor (set-transformer) | `plume_simulation.les_fvm.predictor` | ☐ |
-| 6 | Multi-species coupling | `plume_simulation.les_fvm.multispecies` | ☐ |
+| 2 | Posterior covariance (Hessian / Laplace / En4D-Var) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`posterior_covariance`, `laplace_sample`) | 🚧 Gauss-Newton Laplace ✓; En4D-Var ☐ |
+| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `FourDVarResult` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 3 | Emulator (UNet / GNN / FNO) | `plumax.les_fvm.emulator` | ☐ [#95](https://github.com/jejjohnson/plumax/issues/95) |
+| 3 | Emulator-adjoint calibration harness | `plumax.les_fvm.emulator_adjoint_test` | ☐ [#95](https://github.com/jejjohnson/plumax/issues/95) |
+| 5 | Sequence predictor (set-transformer) | `plumax.les_fvm.predictor` | ☐ |
+| 6 | Multi-species coupling | `plumax.les_fvm.multispecies` | ☐ |
 
 ---
 

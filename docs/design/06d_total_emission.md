@@ -8,7 +8,7 @@ This is the **inventory-grade output** of `plumax` — the number that gets repo
 
 ## The missing-mass paradox {#vd-paradox}
 
-The full Monte Carlo proof is in [`methane_pod/notebooks/03_missing_mass_paradox`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/03_missing_mass_paradox.ipynb). The result, in one sentence:
+The full Monte Carlo proof is in `methane_pod/notebooks/03_missing_mass_paradox`. The result, in one sentence:
 
 !!! important "The paradox"
     A POD-thinned plume catalog simultaneously **overestimates the average emission rate** (because it oversamples big leaks) and **underestimates the total emitted mass** (because it misses many small leaks).
@@ -67,7 +67,7 @@ Reported as posterior median + 95% credible interval. Both integrals are tractab
 - **MC ground truth (bias direction).** Reproduce the qualitative result of the paradox notebook: simulate a known $(\lambda^{*}, f^{*}, P_d^{*})$, compute $M_\text{true}$ exactly, and check that the corrected estimator recovers $M_\text{true}$ while $M_\text{naive}$ is biased low.
 - **MC ground truth (calibration).** Across 1000 replicates of the previous test, the 95% credible interval on $M_\text{total}$ should contain $M_\text{true}$ ~95% of the time.
 - **Per-satellite sensitivity.** Same population, two different $P_d$ (e.g. GHGSat-floor [ghgsat] vs. TROPOMI-floor [s5p_tropomi]) → corrected estimator should give the same $M_\text{total}$ posterior. The naive estimator gives wildly different $M_\text{naive}$. This is the test that *proves* the correction is doing its job.
-- **Real-data benchmark.** Once [`07_pod_fitting_mcmc`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/07_pod_fitting_mcmc.md) lands with IMEO + Tanager data, compare the corrected total for a well-studied basin (Permian) to published bottom-up inventories ([epa_ghgi,scarpelli2020sectoral], GHGRP) and to top-down inverse-modelling estimates ([maasakkers2023ghgi,jacob2022quantifying], Sherwin et al.). They will disagree; the question is whether the corrected estimator is *closer* to the top-down number than the naive one.
+- **Real-data benchmark.** Once `07_pod_fitting_mcmc` lands with IMEO + Tanager data, compare the corrected total for a well-studied basin (Permian) to published bottom-up inventories ([epa_ghgi,scarpelli2020sectoral], GHGRP) and to top-down inverse-modelling estimates ([maasakkers2023ghgi,jacob2022quantifying], Sherwin et al.). They will disagree; the question is whether the corrected estimator is *closer* to the top-down number than the naive one.
 
 ---
 
@@ -77,11 +77,11 @@ Reported as posterior median + 95% credible interval. Both integrals are tractab
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Missing-mass MC simulator | [`methane_pod.paradox`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/paradox.py) | ✓ (NumPy) |
-| Posterior fit | [`methane_pod.fitting`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py) | ✓ (synthetic); 🚧 (real data) |
-| $M_\text{total}$ estimator + uncertainty | `plume_simulation.population.totals` | ☐ |
-| Per-satellite calibration loader | `plume_simulation.population.satellite_pod` | ☐ |
-| Multi-satellite fusion | `plume_simulation.population.fusion` | ☐ |
+| Missing-mass MC simulator | `plumax.population.paradox` (from `methane_pod.paradox`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| Posterior fit | `plumax.population.fitting` (from `methane_pod.fitting`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106); real data needs [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| $M_\text{total}$ estimator + uncertainty | `plumax.population.totals` | ☐ [#113](https://github.com/jejjohnson/plumax/issues/113) |
+| Per-satellite calibration loader | `plumax.population.pod.load_pod_calibrations` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Multi-satellite fusion | `plumax.population.pod.pod_union` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 
 ---
 
@@ -109,7 +109,7 @@ This is the "any satellite saw it" probability. Folds into the TMTPP likelihood 
     Currently temporal-only. Aggregating $M_\text{total}$ over a basin requires either a spatial point process (cleaner) or stratifying the sources by facility class and combining (operational shortcut). v1: stratification; v2: spatial CGS / Cox process.
 
 !!! attention "POD parameter sources"
-    Per-satellite POD parameters can come from (a) fits in [`methane_pod`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/) on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
+    Per-satellite POD parameters can come from (a) fits in `methane_pod` on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
 
 !!! attention "Reporting cadence"
     Inventories are annual; satellites are daily-ish. How do we smooth the $M_\text{total}$ time series? Rolling 30-day window? Bayesian time-series prior on $\lambda(t)$?

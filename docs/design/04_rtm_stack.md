@@ -249,28 +249,28 @@ SBC is necessary but not sufficient — the *specific* requirement is that the p
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/beers.py) | ✓ — **add** two-way path if not already |
+| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/beers.py) | ✓ — two-way path consistency test tracked in [#99](https://github.com/jejjohnson/plumax/issues/99) |
 | 1 | LUT generator | [`hapi_lut/generator.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/generator.py) | ✓ |
 | 1 | LUT config | [`hapi_lut/config.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/config.py) | ✓ |
 | 1 | Multi-gas LUT | [`hapi_lut/multi.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/multi.py) | ✓ |
-| 1 | Factorised LUT (gas × surf × scatt) | `plume_simulation.hapi_lut.factorised` | ☐ |
+| 1 | Factorised LUT (gas × surf × scatt) | `plumax.hapi_lut.factorised` | ☐ [#99](https://github.com/jejjohnson/plumax/issues/99) |
 | 1 | Forward RTM | [`radtran/forward.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/forward.py) | 🚧 |
 | 1 | Spectral response (SRF) | [`radtran/srf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/srf.py) | ✓ |
 | 1 | Instrument model | [`radtran/instrument.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/instrument.py) | ✓ |
 | 1 | Background atmosphere | [`radtran/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/background.py) | ✓ |
 | 1 | Target gas spec | [`radtran/target.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/target.py) | ✓ |
-| 1 | Surface model — SWIR (albedo / BRDF) | `plume_simulation.radtran.surface_swir` | ☐ |
-| 1 | Surface model — TIR (emissivity) | `plume_simulation.radtran.surface_tir` | ☐ |
-| 1 | Aerosol / scattering coupling (v2) | `plume_simulation.radtran.scattering` | ☐ |
+| 1 | Surface model — SWIR (albedo / BRDF) | `plumax.radtran.surface_swir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
+| 1 | Surface model — TIR (emissivity) | `plumax.radtran.surface_tir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
+| 1 | Aerosol / scattering coupling (v2) | `plumax.radtran.scattering` | ☐ |
 | — | Matched filter (detection) | [`radtran/matched_filter.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/matched_filter.py), [`matched_filter/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/) | ✓ |
 | — | gaussx-based linear solve | [`radtran/gaussx_solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/gaussx_solve.py) | ✓ |
-| 2 | Optimal-estimation iterative loop | `plume_simulation.radtran.retrieval` | ☐ — clarify scope vs. `gaussx_solve.py` (linear solve only there) |
-| 2 | Quality flags + screening | `plume_simulation.radtran.quality` | ☐ |
-| 2 | Information-content diagnostics | `plume_simulation.radtran.diagnostics` | ☐ |
-| 2 | Posterior export → Tier IV | `plume_simulation.radtran.posterior_export` | ☐ |
-| 3 | Neural RTM (per scene class) | `plume_simulation.radtran.neural_rtm` | ☐ |
-| 3 | Neural-Jacobian calibration harness | `plume_simulation.radtran.neural_jacobian_test` | ☐ |
-| 5 | Direct retrieval predictor (per instrument) | `plume_simulation.radtran.predictor` | ☐ |
+| 2 | Optimal-estimation iterative loop | `plumax.radtran.retrieval` (`gaussx_solve.py` stays the one-shot linear matched-filter path) | ☐ [#96](https://github.com/jejjohnson/plumax/issues/96) |
+| 2 | Quality flags + screening | `plumax.radtran.quality` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
+| 2 | Information-content diagnostics | `plumax.radtran.diagnostics` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
+| 2 | Posterior export → Tier IV | `OEResult` consumed by the coupled inversion | ☐ [#102](https://github.com/jejjohnson/plumax/issues/102) |
+| 3 | Neural RTM (per scene class) | `plumax.radtran.neural_rtm` | ☐ [#100](https://github.com/jejjohnson/plumax/issues/100) |
+| 3 | Neural-Jacobian calibration harness | `plumax.radtran.neural_jacobian_test` | ☐ [#100](https://github.com/jejjohnson/plumax/issues/100) |
+| 5 | Direct retrieval predictor (per instrument) | `plumax.radtran.predictor` | ☐ |
 
 ---
 

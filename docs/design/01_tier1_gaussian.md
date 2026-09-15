@@ -192,21 +192,21 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | --- | --- | --- | --- |
 | 1 | Plume forward | [`gauss_plume/plume.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/plume.py) | ✓ |
 | 1 | Puff forward | [`gauss_puff/puff.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/puff.py) | ✓ |
-| 1 | Plume rise (Briggs) | `gauss_plume.plume_rise` | ☐ |
+| 1 | Plume rise (Briggs) | `gauss_plume.plume_rise` | ☐ [#82](https://github.com/jejjohnson/plumax/issues/82) |
 | 1 | Stability + dispersion | [`gauss_plume/dispersion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/dispersion.py) | 🚧 partial |
 | 1 | Puff turbulence | [`gauss_puff/turbulence.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/turbulence.py) | ✓ |
-| 1 | Column + AK pipeline | `gauss_plume.observation` (links to [`assimilation/obs_operator.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/obs_operator.py)) | ☐ |
-| 1 | Background $c_\text{bg}$ loader | `plume_simulation.priors.background` | ☐ |
-| 2 | Likelihoods + priors | `gauss_plume.likelihoods` | ☐ |
+| 1 | Column + AK pipeline | `gauss_plume.observation` (shared by Tiers II–III; today split between `coupled.column_response` and `les_fvm.ColumnObservationOperator`) | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
+| 1 | Background $c_\text{bg}$ loader | `plumax.priors.background` | ☐ [#81](https://github.com/jejjohnson/plumax/issues/81) |
+| 2 | Likelihoods + priors | `gauss_plume.likelihoods` | ☐ [#84](https://github.com/jejjohnson/plumax/issues/84) |
 | 2 | Plume MAP/MCMC | [`gauss_plume/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ |
 | 2 | Puff inference | [`gauss_puff/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/inference.py) | ✓ |
-| 2 | Posterior export → Tier V | `gauss_plume.posterior_export` (mark-likelihood adapter for [V.A](06a_instantaneous.md)) | ☐ |
-| 3 | Plume emulator | `gauss_plume.emulator` | ☐ |
-| 4 | Emulator-based MCMC | wired in `inference.py` once emulator exists | ☐ |
-| 5 | NPE / flow predictor | `gauss_plume.predictor` | ☐ |
+| 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06a_instantaneous.md)) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 3 | Plume emulator | `gauss_plume.emulator` | — skipped: model is cheap (see [cycle](index.md#cycle-overview)) |
+| 4 | Emulator-based MCMC | wired in `inference.py` once emulator exists | — skipped with Step 3 |
+| 5 | NPE / flow predictor | `gauss_plume.predictor` | ☐ [#87](https://github.com/jejjohnson/plumax/issues/87) |
 | 5 | Context-conditioning layer | uses `pyrox.nn` FiLM/hypernet primitives | external dep |
-| 6 | Multi-source (RJMCMC) | extend `inference.py` with reversible-jump kernel | ☐ |
-| 6 | MO $\sigma$ swap | `gauss_plume.dispersion_mo` | ☐ |
+| 6 | Multi-source (masked-K v1, RJMCMC later) | extend `inference.py` with a `K_max` activity mask | ☐ [#85](https://github.com/jejjohnson/plumax/issues/85) |
+| 6 | MO $\sigma$ swap | `gauss_plume.dispersion_mo` | ☐ [#86](https://github.com/jejjohnson/plumax/issues/86) (needs [#78](https://github.com/jejjohnson/plumax/issues/78)) |
 
 ---
 
