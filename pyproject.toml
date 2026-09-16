@@ -49,12 +49,15 @@ dependencies = [
     "diffrax>=0.6",
     "equinox>=0.11",
     # finitevolx powers the Arakawa C-grid FVM operators used by les_fvm.
-    # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it).
-    "finitevolx>=0.0.44",
+    # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it);
+    # 0.0.45 is additive (masked reductions, spherical cell widths).
+    "finitevolx>=0.0.45",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
     # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.17
-    # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires.
-    "gaussx>=0.0.17",
+    # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires;
+    # >= 0.0.25 for `symmetrize`, a reverse-mode-differentiable `safe_cholesky`,
+    # and the state-space layer (MaternSDE / MarkovGaussian) Tier IV builds on.
+    "gaussx>=0.0.25",
     # optimistix powers the variational retrieval module (assimilation):
     # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
     "optimistix>=0.0.10",
@@ -79,12 +82,25 @@ notebooks = ["matplotlib", "ipython"]
 Repository = "https://github.com/jejjohnson/plumax"
 Documentation = "https://jejjohnson.github.io/plumax"
 
+[tool.uv]
+# finitevolx and spectraldiffx carry their own `gaussx = { tag = "v0.0.17" }`
+# source, which uv sees as a conflicting direct URL once plumax pins a newer
+# rev. Force the whole graph onto plumax's gaussx (the pattern somax uses);
+# every symbol those two packages import still exists at this rev.
+override-dependencies = [
+    "gaussx @ git+https://github.com/jejjohnson/gaussx@58e90a68aa240bed1e0117d88fcd5b2813dadcb9",
+]
+
 # Unpublished sibling packages resolve from git; everything else from PyPI.
+# Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
+# unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
+# release commit); gaussx is pinned one commit past v0.0.25 because the
+# MarkovGaussian / UDL state-space layer landed there untagged.
 [tool.uv.sources]
-pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit" }
-finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.44" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.0.17" }
+pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }
 
 [dependency-groups]
 dev = [

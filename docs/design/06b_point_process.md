@@ -129,7 +129,7 @@ $$
 \;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
 $$
 
-This is the form implemented in the standalone `methane_pod.fitting.pod_powerlaw_model` (to be ported in tree under [#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](06a_instantaneous.md#va-regime-rule) decides when it's safe to use.
+This is the form implemented in the standalone `methane_pod.fitting.pod_powerlaw_model` (to be rebuilt on `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess` under [#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](06a_instantaneous.md#va-regime-rule) decides when it's safe to use.
 
 ### Numerical stability of the integrated thinned-rate term {#vb-numerical-stability}
 

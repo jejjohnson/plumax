@@ -668,13 +668,12 @@ def posterior_covariance(
     )
     p_chi = gx.inv(hessian_op).as_matrix()
     # Symmetrise to clean up asymmetric round-off before the congruence map.
-    # (Would be gx.symmetrize once exported — gaussx#202; manual until then.)
-    p_chi = 0.5 * (p_chi + p_chi.T)
+    p_chi = gx.symmetrize(p_chi)
     chol = problem.prior_chol  # L with B = L Lᵀ
     p_source = chol @ p_chi @ chol.T
     return PosteriorCovariance(
         whitened_covariance=p_chi,
-        source_covariance=0.5 * (p_source + p_source.T),
+        source_covariance=gx.symmetrize(p_source),
     )
 
 

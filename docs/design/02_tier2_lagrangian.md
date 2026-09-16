@@ -122,7 +122,7 @@ with $\tilde{\mathbf{F}} = \operatorname{diag}(\mathbf{q}_a)\, \mathbf{F}$ (the 
 ### Scaling beyond moderate grids
 
 - "≲10k cells × ≲1k obs" is the dense-solver limit. Beyond that:
-  - **Krylov + structure-aware solves** via `gaussx` (Kronecker-Matérn, low-rank $\mathbf{F}$). Pushes direct solves to ~100k cells with sufficient sparsity.
+  - **Krylov + structure-aware solves** via `gaussx` (`Kronecker` for separable correlation, `LowRankUpdate` for low-rank $\mathbf{F}$, CG / Lanczos solvers). `gaussx` ships no covariance-kernel functions, so the Matérn matrices themselves are built in `plumax.lagrangian.inversion.matern32_covariance` and handed to the operators. Pushes direct solves to ~100k cells with sufficient sparsity.
   - **Ensemble Kalman Inversion (EKI):** ensemble of forward trajectories → ensemble-based $\partial \mathbf{c} / \partial \mathbf{Q}$. Plug into [`filterax`](https://github.com/jejjohnson/filterax); couple with `vardaX` for the variational version.
   - **MCMC over $\log \mathbf{q}(\mathbf{x})$:** expensive but exact. Use only when EKI is suspected biased.
 

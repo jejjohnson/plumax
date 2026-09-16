@@ -123,7 +123,7 @@ $$
 \boldsymbol{\chi} \;=\; \mathbf{B}^{-1/2}(S - S_b), \qquad \text{optimise } J(S(\boldsymbol{\chi})) \text{ in } \boldsymbol{\chi}\text{-space (prior = identity Gaussian)}.
 $$
 
-$\mathbf{B}^{-1/2}$ materialised via Matérn factorisation in [`gaussx`](https://github.com/jejjohnson/gaussx) (Kronecker structure for separable correlation). This is the load-bearing trick that makes 4D-Var tractable; should be explicit in `assimilation/control.py` and on the API.
+$\mathbf{B}^{-1/2}$ materialised via the structure-aware Cholesky in [`gaussx`](https://github.com/jejjohnson/gaussx) (`Kronecker` structure for separable correlation). `gaussx` has no covariance-kernel functions: the spatial Matérn matrix is built in plumax (`matern32_covariance`), while the temporal axis can use `gaussx.MaternSDE` + `MarkovGaussian`, the state-space Matérn with $O(T)$ solves. This is the load-bearing trick that makes 4D-Var tractable; should be explicit in `assimilation/control.py` and on the API.
 
 ### Posterior covariance — three options
 
