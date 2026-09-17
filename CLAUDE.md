@@ -65,6 +65,7 @@ public API is re-exported through `src/plumax/__init__.py`.
 | `hapi_lut`         | HITRAN line-by-line Voigt LUTs + Beer–Lambert forward model. **RTM stack.** |
 | `radtran`          | Band-integrated radiative transfer + matched-filter retrieval. **RTM stack.** |
 | `matched_filter`   | Hyperspectral matched-filter detection pipeline. **RTM stack.** |
+| `met`              | `MetField` gridded meteorology on the `les_fvm` analysis grid + `wrfout` loader (`load_wrf`) + `to_prescribed_wind` adapter. **Tier 0.** |
 | `assimilation`     | 3D/4D-Var cost / control / solve scaffolding (optimistix). |
 | `operators`        | `pipekit.Operator` wrappers over the forward models. |
 | `adapters`         | `pipekit_cycle` `ForwardModel` / `ObservationOperator` adapters. |

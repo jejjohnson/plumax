@@ -187,7 +187,7 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 | Concern | Module | Status | Blocks |
 | --- | --- | --- | --- |
-| Met loader (WRF) | `plumax.met.wrf` | ☐ [#76](https://github.com/jejjohnson/plumax/issues/76) | Tier II, III |
+| Met loader (WRF) | [`met/wrf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/wrf.py) (`load_wrf`) + [`met/field.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/field.py) (`MetField`, `to_prescribed_wind`) | ✓ v1 — destagger, η→z per column, bilinear onto the C-grid stagger, piecewise-linear in time; `origin` places the grid until frames land ([#79](https://github.com/jejjohnson/plumax/issues/79)) | Tier II, III |
 | Met loader (ERA5) | `plumax.met.era5` | ☐ [#77](https://github.com/jejjohnson/plumax/issues/77) | global Tier II/III |
 | PBL diagnostics | `plumax.met.pbl` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | Tier II reflection, Tier IV partitioning |
 | Static fields ($z_0$, LU, terrain) | `plumax.met.static` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | MO similarity, Tier III BCs |
@@ -199,7 +199,7 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 | L1/L2 ingest | `plumax.obs.ingest` | ☐ [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV (and any real-data work) |
 | AK operator | `plumax.assimilation.obs_operator` (radiance model) + `coupled.Instrument` (AK payload) | 🚧 — shared column + AK pipeline [#83](https://github.com/jejjohnson/plumax/issues/83); L2 ingest builds `Instrument`s [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV column-space comparison |
 
-A `plumax.met` subpackage doesn't exist yet — proposed home for the prerequisites that aren't tied to any particular tier. Same for `plumax.priors` and `plumax.obs`. All eleven concerns are tracked under the Tier 0 epic [#69](https://github.com/jejjohnson/plumax/issues/69).
+`plumax.met` now exists (the `MetField` container and the WRF loader); the remaining met concerns land beside them. `plumax.priors` and `plumax.obs` are still proposed. All eleven concerns are tracked under the Tier 0 epic [#69](https://github.com/jejjohnson/plumax/issues/69).
 
 ---
 
