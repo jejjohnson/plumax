@@ -115,6 +115,30 @@ def test_time_slice(synthetic_wrf):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=ORIGIN, times=slice(5, 6))
 
 
+def test_times_only_file_keeps_hourly_cadence(tmp_path):
+    from tests.met.conftest import write_synthetic_wrfout
+
+    spec = write_synthetic_wrfout(tmp_path / "wrfout_no_xtime.nc", with_xtime=False)
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+    field = load_wrf(spec.path, plume_grid=grid, origin=ORIGIN)
+    np.testing.assert_allclose(np.asarray(field.times), spec.seconds)
+    assert field.t0 == "2024-06-01_00:00:00"
+
+
+def test_vertical_targets_are_relative_to_grid_surface(loaded, synthetic_wrf):
+    """A grid whose surface sits at z_min != 0 sees the same heights above ground."""
+    _grid_ref, field_ref = loaded
+    z_min, z_max, nz = DOMAIN_Z
+    lifted = make_grid(
+        DOMAIN_X, DOMAIN_Y, (z_min + 50.0, z_max + 50.0, nz), dtype=jnp.float64
+    )
+    field = load_wrf(synthetic_wrf.path, plume_grid=lifted, origin=ORIGIN)
+    np.testing.assert_allclose(np.asarray(field.u), np.asarray(field_ref.u), atol=1e-9)
+    np.testing.assert_allclose(
+        np.asarray(field.pressure), np.asarray(field_ref.pressure), rtol=1e-12
+    )
+
+
 def test_grid_outside_wrf_domain_raises(synthetic_wrf):
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     too_far = (synthetic_wrf.x_max - 100.0, 100.0)

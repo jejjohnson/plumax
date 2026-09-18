@@ -76,7 +76,9 @@ def load_wrf(
             WRF mass-point domain (the loader never extrapolates
             horizontally), or if ``times`` selects nothing.
     """
-    with xr.open_dataset(path) as ds:
+    # Time decoding off: WRF gives XTIME CF units (``minutes since ...``),
+    # which xarray would otherwise turn into datetimes; we want raw minutes.
+    with xr.open_dataset(path, decode_times=False) as ds:
         if times is not None:
             ds = ds.isel(Time=times)
         if ds.sizes["Time"] == 0:
@@ -109,7 +111,11 @@ def load_wrf(
     y_t = np.asarray(plume_grid.y, dtype=np.float64) + origin[1]
     x_u = x_t + 0.5 * plume_grid.dx
     y_v = y_t + 0.5 * plume_grid.dy
-    z_t = np.asarray(plume_grid.z, dtype=np.float64)
+    # WRF heights are above ground; the analysis grid's lower boundary is its
+    # surface (``make_grid`` semantics), so interpolate at heights above
+    # ``z_min = z[0] - dz/2`` rather than at the raw ``z`` coordinates.
+    z_abs = np.asarray(plume_grid.z, dtype=np.float64)
+    z_t = z_abs - (z_abs[0] - 0.5 * plume_grid.dz)
     _check_inside(x_u, y_v, dx_w=dx_w, dy_w=dy_w, n_x_w=n_x_w, n_y_w=n_y_w)
     _check_inside(x_t, y_t, dx_w=dx_w, dy_w=dy_w, n_x_w=n_x_w, n_y_w=n_y_w)
 
@@ -133,18 +139,41 @@ def load_wrf(
 
 
 def _time_axis(ds: xr.Dataset) -> tuple[np.ndarray, str]:
-    """Seconds since the first selected time, plus that time's stamp."""
+    """Seconds since the first selected time, plus that time's stamp.
+
+    Prefers ``XTIME`` (minutes since the simulation start; read undecoded,
+    or converted back from datetimes if a caller passed a decoded dataset).
+    Falls back to parsing the ``Times`` strings so a file without ``XTIME``
+    keeps its real cadence. Raises if neither is present rather than
+    inventing one.
+    """
+    stamps = _decode_times(ds) if "Times" in ds else None
     if "XTIME" in ds:
-        minutes = np.asarray(ds["XTIME"].values, dtype=np.float64)
-        seconds = (minutes - minutes[0]) * 60.0
+        xtime = ds["XTIME"].values
+        if np.issubdtype(xtime.dtype, np.datetime64):
+            seconds = (xtime - xtime[0]) / np.timedelta64(1, "s")
+        else:
+            minutes = np.asarray(xtime, dtype=np.float64)
+            seconds = (minutes - minutes[0]) * 60.0
+    elif stamps is not None:
+        seconds = (stamps - stamps[0]) / np.timedelta64(1, "s")
     else:
-        seconds = np.arange(ds.sizes["Time"], dtype=np.float64)
-    t0 = ""
-    if "Times" in ds:
-        first = ds["Times"].values[0]
-        raw = first.tobytes() if isinstance(first, np.ndarray) else first
-        t0 = raw.decode() if isinstance(raw, bytes) else str(raw)
-    return seconds, t0.strip("\x00 ")
+        raise ValueError(
+            "load_wrf: the file has neither `XTIME` nor `Times`, so the met "
+            "cadence cannot be recovered"
+        )
+    t0 = "" if stamps is None else str(stamps[0]).replace("T", "_")
+    return np.asarray(seconds, dtype=np.float64), t0
+
+
+def _decode_times(ds: xr.Dataset) -> np.ndarray:
+    """``Times`` (``YYYY-MM-DD_HH:MM:SS`` char rows) as ``datetime64[s]``."""
+    out = []
+    for row in ds["Times"].values:
+        raw = row.tobytes() if isinstance(row, np.ndarray) else row
+        text = raw.decode() if isinstance(raw, bytes) else str(raw)
+        out.append(np.datetime64(text.strip("\x00 ").replace("_", "T"), "s"))
+    return np.asarray(out, dtype="datetime64[s]")
 
 
 def _check_inside(

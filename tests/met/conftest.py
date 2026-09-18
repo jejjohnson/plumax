@@ -75,6 +75,7 @@ def write_synthetic_wrfout(
     dx: float = 50.0,
     dy: float = 50.0,
     dz: float = 20.0,
+    with_xtime: bool = True,
 ) -> SyntheticWrf:
     """Write a flat-terrain synthetic ``wrfout`` and return its analytic spec."""
     z_stag = dz * np.arange(n_lev + 1, dtype=np.float64)
@@ -134,11 +135,20 @@ def write_synthetic_wrfout(
             "PHB": (("Time", "bottom_top_stag", "south_north", "west_east"), phb),
             "HGT": (("Time", "south_north", "west_east"), np.zeros((n_time, n_y, n_x))),
             "PBLH": (("Time", "south_north", "west_east"), pblh),
-            "XTIME": (("Time",), spec.seconds / 60.0),
+            "XTIME": (
+                ("Time",),
+                spec.seconds / 60.0,
+                {
+                    "units": "minutes since 2024-06-01 00:00:00",
+                    "description": "minutes since simulation start",
+                },
+            ),
             "Times": (("Time",), times),
         },
         attrs={"DX": dx, "DY": dy, "TITLE": "synthetic wrfout for plumax tests"},
     )
+    if not with_xtime:
+        ds = ds.drop_vars("XTIME")
     ds.to_netcdf(path)
     return spec
 
