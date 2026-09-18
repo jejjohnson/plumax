@@ -257,23 +257,23 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 | 1 | Per-instrument observation spec (receptors, AK, `R = R_retr+R_repr+R_align`) | [`coupled/instrument.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/instrument.py) (`Instrument`) | ✓ |
 | 1 | Multi-instrument fusion harness (closed-form `(Q, bias)` posterior) | [`coupled/fusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/fusion.py) (`fuse_observations`) | ✓ |
 | 1 | Cross-instrument bias model | first-class state in `coupled.fusion` (per-instrument additive bias) | ✓ |
-| 1 | Coupled forward (Tier II + AK + multi-inst) | `plumax.coupled` (Tier II transport) | ☐ |
+| 1 | Coupled forward (Tier II + AK + multi-inst) | `coupled.forward.LagrangianSource` (`TransportBackend`) | ☐ [#101](https://github.com/jejjohnson/plumax/issues/101) |
 | 1 | RTM observation operator — nonlinear (column → ΔVMR → band radiance, `L=exp(-Δτ)`) | [`coupled/rtm.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py) (`RadianceObservationOperator`, `radiance_response`) | 🚧 |
 | 1 | RTM observation operator — linearised / tangent-linear (linear in `Q`, pure-JAX) | [`coupled/rtm.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py) (`LinearisedRadianceOperator`, `linearise`, `radiance_response_linear`) | 🚧 |
-| 1 | Coupled forward (Tier III + RTM + multi-inst) | `plumax.coupled` (Tier III + RTM) | ☐ |
-| 1 | Quality-flag aggregator | `plumax.coupled.quality` | ☐ |
-| 1 | $Q(t)$ stochastic-process model (OU / GP) | `plume_simulation.coupled.q_dynamics` | ☐ |
-| 1 | Trans-dimensional source-count handling | `plume_simulation.coupled.k_sources` | ☐ |
-| 2 | End-to-end inversion | reuse [`assimilation/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/) with composed `forward` | ☐ |
-| 2 | Posterior covariance (Laplace / Hessian / EnKF) | reuse Tier III's posterior modules | ☐ |
-| 2 | Posterior export → Tier V | `plume_simulation.coupled.posterior_export` | ☐ |
-| 3 | Stacked emulator runtime | `plume_simulation.coupled.stacked_emulator` | ☐ |
-| 3 | Coupled emulator (end-to-end) | `plume_simulation.coupled.emulator` | ☐ |
-| 3 | Active-learning training scheduler | `plume_simulation.coupled.active_learning` | ☐ |
-| 5 | Operational predictor (per-instrument, tier-conditioned) | `plume_simulation.coupled.predictor` | ☐ |
-| 6 | Joint met + source inversion | `plume_simulation.coupled.joint_met` | ☐ |
+| 1 | Coupled forward (Tier III + RTM + multi-inst) | `coupled.forward.EulerianSource` (`TransportBackend`) | ☐ [#101](https://github.com/jejjohnson/plumax/issues/101) |
+| 1 | Quality-flag aggregator | `plumax.coupled.quality` | ☐ [#105](https://github.com/jejjohnson/plumax/issues/105) |
+| 1 | $Q(t)$ stochastic-process model (OU / GP) | `plumax.coupled.q_dynamics` | ☐ [#103](https://github.com/jejjohnson/plumax/issues/103) |
+| 1 | Trans-dimensional source-count handling | `plumax.coupled.k_sources` | ☐ [#104](https://github.com/jejjohnson/plumax/issues/104) |
+| 2 | End-to-end inversion | `coupled.inversion` — reuse [`assimilation/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/) with composed `forward` | ☐ [#102](https://github.com/jejjohnson/plumax/issues/102) |
+| 2 | Posterior covariance (Laplace / Hessian / EnKF) | reuse Tier III's posterior modules | ☐ [#102](https://github.com/jejjohnson/plumax/issues/102) |
+| 2 | Posterior export → Tier V | `FusionPosterior` already consumed by `population.catalog`; full-sample payload | 🚧 [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 3 | Stacked emulator runtime | `plumax.coupled.stacked_emulator` | ☐ |
+| 3 | Coupled emulator (end-to-end) | `plumax.coupled.emulator` | ☐ |
+| 3 | Active-learning training scheduler | `plumax.coupled.active_learning` | ☐ |
+| 5 | Operational predictor (per-instrument, tier-conditioned) | `plumax.coupled.predictor` | ☐ |
+| 6 | Joint met + source inversion | `plumax.coupled.joint_met` | ☐ |
 
-The `coupled` subpackage doesn't exist yet; this is the proposed shape. It's the only tier where new top-level modules are still needed once Tiers I–III and RTM are done.
+`plumax.coupled` exists (v1 fusion in #10, radiance operators in #13); the ☐ rows are tracked under the Tier IV epic [#74](https://github.com/jejjohnson/plumax/issues/74). It's the only tier where new top-level modules are still needed once Tiers I–III and RTM are done.
 
 ---
 

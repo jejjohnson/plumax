@@ -187,19 +187,19 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 | Concern | Module | Status | Blocks |
 | --- | --- | --- | --- |
-| Met loader (WRF) | `plume_simulation.met.wrf` | ☐ | Tier II, III |
-| Met loader (ERA5) | `plume_simulation.met.era5` | ☐ | global Tier II/III |
-| PBL diagnostics | `plume_simulation.met.pbl` | ☐ | Tier II reflection, Tier IV partitioning |
-| Static fields ($z_0$, LU, terrain) | `plume_simulation.met.static` | ☐ | MO similarity, Tier III BCs |
-| PG stability | `plume_simulation.gauss_plume.dispersion` | 🚧 partial | Tier I (only) |
-| MO similarity | `plume_simulation.met.surface_layer` | ☐ | Tier II turbulence, Tier III diffusivity |
-| Coord transforms | `plume_simulation.met.frames` | ☐ | all tiers |
-| Time / Timestamp | `plume_simulation.met.time` | ☐ | all tiers |
-| Emission inventory loader | `plume_simulation.priors.inventory` | ☐ | Tier I–IV inversion priors |
-| L1/L2 ingest | `plume_simulation.obs.ingest` | ☐ | Tier IV (and any real-data work) |
-| AK operator | `plume_simulation.assimilation.obs_operator` | 🚧 scaffold | Tier IV column-space comparison |
+| Met loader (WRF) | [`met/wrf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/wrf.py) (`load_wrf`) + [`met/field.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/field.py) (`MetField`, `to_prescribed_wind`) | ✓ v1 — destagger, η→z per column, bilinear onto the C-grid stagger, piecewise-linear in time; `origin` places the grid until frames land ([#79](https://github.com/jejjohnson/plumax/issues/79)) | Tier II, III |
+| Met loader (ERA5) | `plumax.met.era5` | ☐ [#77](https://github.com/jejjohnson/plumax/issues/77) | global Tier II/III |
+| PBL diagnostics | `plumax.met.pbl` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | Tier II reflection, Tier IV partitioning |
+| Static fields ($z_0$, LU, terrain) | `plumax.met.static` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | MO similarity, Tier III BCs |
+| PG stability | `plumax.gauss_plume.dispersion` | 🚧 partial | Tier I (only) |
+| MO similarity | `plumax.met.surface_layer` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | Tier II turbulence, Tier III diffusivity |
+| Coord transforms | `plumax.met.frames` | ☐ [#79](https://github.com/jejjohnson/plumax/issues/79) | all tiers |
+| Time / Timestamp | `plumax.met.time` | ☐ [#79](https://github.com/jejjohnson/plumax/issues/79) | all tiers |
+| Emission inventory loader | `plumax.priors.inventory` | ☐ [#81](https://github.com/jejjohnson/plumax/issues/81) | Tier I–IV inversion priors |
+| L1/L2 ingest | `plumax.obs.ingest` | ☐ [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV (and any real-data work) |
+| AK operator | `plumax.assimilation.obs_operator` (radiance model) + `coupled.Instrument` (AK payload) | 🚧 — shared column + AK pipeline [#83](https://github.com/jejjohnson/plumax/issues/83); L2 ingest builds `Instrument`s [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV column-space comparison |
 
-A `plume_simulation.met` subpackage doesn't exist yet — proposed home for the prerequisites that aren't tied to any particular tier. Same for `plume_simulation.priors` and `plume_simulation.obs`.
+`plumax.met` now exists (the `MetField` container and the WRF loader); the remaining met concerns land beside them. `plumax.priors` and `plumax.obs` are still proposed. All eleven concerns are tracked under the Tier 0 epic [#69](https://github.com/jejjohnson/plumax/issues/69).
 
 ---
 

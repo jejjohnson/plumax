@@ -182,22 +182,22 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Per-event posterior (Tier I) | [`gauss_plume.inference`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ — needs to emit `per_event_prior_logpdf` |
-| Per-event posterior (Tier II/III) | [`assimilation.solve`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/solve.py) | 🚧 |
-| Per-event posterior export adapter | tier-specific `posterior_export` modules | ☐ |
-| Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | 🚧 — duck-typed adapter over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`; full-sample + prior-recall payload pending |
-| Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | 🚧 — hierarchical lognormal NUTS fit with per-event uncertainty propagation; importance correction pending |
-| Per-event payload summariser | `plume_simulation.population.adapter.summariser` | ☐ |
-| Per-event prior recall | `plume_simulation.population.adapter.prior_recall` | ☐ |
-| Importance-weight calculator | `plume_simulation.population.adapter.importance` | ☐ |
-| Regime selector | `plume_simulation.population.adapter.regime` | ☐ |
-| De-duplication / spatial-temporal clustering | `plume_simulation.population.adapter.dedup` | ☐ |
-| Wind-source consistency rescaling | `plume_simulation.population.proxy.wind_rescale` | ☐ |
-| Catalog ingest — IMEO | `plume_simulation.population.ingest.imeo` | ☐ |
-| Catalog ingest — Tanager | `plume_simulation.population.ingest.tanager` | ☐ |
-| Catalog ingest — Carbon Mapper | `plume_simulation.population.ingest.carbon_mapper` | ☐ |
-| Catalog ingest — GHGSat | `plume_simulation.population.ingest.ghgsat` | ☐ |
-| Per-instrument overpass coverage (for non-detection integral) | `plume_simulation.population.ingest.coverage` | ☐ |
+| Per-event posterior (Tier I) | [`gauss_plume.inference`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ — `per_event_prior_logpdf` / samples via [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event posterior (Tier II/III) | `lagrangian.inversion` (closed form) / `les_fvm.fourdvar` (Laplace) | ✓ — payload extension via [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event posterior export adapter | extended `PerEventPosterior` Protocol implemented by every tier | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | 🚧 — duck-typed adapter over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`; full-sample + prior-recall payload [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | 🚧 — hierarchical lognormal NUTS fit with per-event uncertainty propagation; importance correction [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Per-event payload summariser | `plumax.population.catalog` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event prior recall | `plumax.population.catalog` (`prior_logpdf`) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Importance-weight calculator | `plumax.population.importance` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Regime selector | `plumax.population.importance.Regime` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| De-duplication / spatial-temporal clustering | `plumax.population.dedup` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Wind-source consistency rescaling | `plumax.population.wind_rescale` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Catalog ingest — IMEO | `plumax.population.ingest.imeo` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Catalog ingest — Tanager | `plumax.population.ingest.tanager` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Catalog ingest — Carbon Mapper | `plumax.population.ingest.carbon_mapper` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Catalog ingest — GHGSat | `plumax.population.ingest.ghgsat` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Per-instrument overpass coverage (for non-detection integral) | `plumax.population.ingest.overpass_coverage` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
 
 ---
 

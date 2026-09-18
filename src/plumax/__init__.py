@@ -18,6 +18,9 @@ Sub-packages
 - ``matched_filter``: hyperspectral matched-filter detection pipeline.
 - ``assimilation`` : 3D/4D-Var cost / control / solve scaffolding
                      (``optimistix``); imported on demand.
+- ``met``          : gridded meteorology (``MetField``) on the ``les_fvm``
+                     analysis grid, with a ``wrfout`` loader and the adapter
+                     that feeds it to the Eulerian solver as wind.
 
 The ``operators`` and ``adapters`` modules expose the forward models as
 ``pipekit`` operators and ``pipekit_cycle`` protocol adapters respectively.
@@ -34,6 +37,7 @@ from plumax import (
     gauss_puff,
     hapi_lut,
     les_fvm,
+    met,
     population,
     radtran,
 )
@@ -47,6 +51,7 @@ __all__ = [
     "gauss_puff",
     "hapi_lut",
     "les_fvm",
+    "met",
     "population",
     "radtran",
 ]

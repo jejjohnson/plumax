@@ -122,7 +122,7 @@ with $\tilde{\mathbf{F}} = \operatorname{diag}(\mathbf{q}_a)\, \mathbf{F}$ (the 
 ### Scaling beyond moderate grids
 
 - "≲10k cells × ≲1k obs" is the dense-solver limit. Beyond that:
-  - **Krylov + structure-aware solves** via `gaussx` (Kronecker-Matérn, low-rank $\mathbf{F}$). Pushes direct solves to ~100k cells with sufficient sparsity.
+  - **Krylov + structure-aware solves** via `gaussx` (`Kronecker` for separable correlation, `LowRankUpdate` for low-rank $\mathbf{F}$, CG / Lanczos solvers). `gaussx` ships no covariance-kernel functions, so the Matérn matrices themselves are built in `plumax.lagrangian.inversion.matern32_covariance` and handed to the operators. Pushes direct solves to ~100k cells with sufficient sparsity.
   - **Ensemble Kalman Inversion (EKI):** ensemble of forward trajectories → ensemble-based $\partial \mathbf{c} / \partial \mathbf{Q}$. Plug into [`filterax`](https://github.com/jejjohnson/filterax); couple with `vardaX` for the variational version.
   - **MCMC over $\log \mathbf{q}(\mathbf{x})$:** expensive but exact. Use only when EKI is suspected biased.
 
@@ -191,18 +191,18 @@ When fusing across instruments, each observation tensor carries its own AK and f
 | 1 | Turbulence parameterisation ($\sigma_{ij}, \tau_L$) | `plumax.lagrangian.turbulence` | ✓ |
 | 1 | Forward concentration (residence-time binning) | `plumax.lagrangian.concentration` | ✓ |
 | 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |
-| 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ |
-| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ |
+| 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ [#88](https://github.com/jejjohnson/plumax/issues/88) |
+| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr) | `plumax.lagrangian.inversion` | ✓ |
 | 2 | Linear inversion (Gaussian / lognormal closed form) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`) | ✓ |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |
-| 2 | Posterior export → Tier V | `plume_simulation.lagrangian.posterior_export` | ☐ |
-| 3 | Footprint emulator | `plume_simulation.lagrangian.emulator` | ☐ |
-| 5 | Field predictor (per instrument) | `plume_simulation.lagrangian.predictor` | ☐ |
-| 6 | Met-ensemble runner | `plume_simulation.lagrangian.met_ensemble` | ☐ |
+| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 3 | Footprint emulator (+ Step 4 inversion on it) | `plumax.lagrangian.emulator` | ☐ [#90](https://github.com/jejjohnson/plumax/issues/90) |
+| 5 | Field predictor (per instrument) | `plumax.lagrangian.predictor` | ☐ after [#90](https://github.com/jejjohnson/plumax/issues/90) |
+| 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` | ☐ [#89](https://github.com/jejjohnson/plumax/issues/89) |
 
-The whole subpackage doesn't exist yet; this is the proposed shape.
+`plumax.lagrangian` exists (Steps 1–2 landed in #8, corrected in #63); the ☐ rows are tracked under the Tier II epic [#71](https://github.com/jejjohnson/plumax/issues/71).
 
 ---
 

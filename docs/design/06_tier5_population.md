@@ -53,7 +53,7 @@ with $\pi_\text{per-event}(Q)$ the **per-event prior** used at Tier I–IV. The 
     **Why:** the per-event posterior already absorbs $\pi_\text{per-event}$; using its samples directly under $f$ multiplies the prior in. The IS ratio is the standard fix.
     **How to apply:** every per-event posterior consumed by the population fit must carry its prior log-density; the importance weight is computed at fit time.
 
-This is the central math of cross-tier inference. Currently the prototype in [`methane_pod.fitting`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py) summarises per-event posteriors to point estimates before the population fit, side-stepping the importance correction. Formalising this is the v1 deliverable for [`06a_instantaneous.md`](06a_instantaneous.md).
+This is the central math of cross-tier inference. Currently the prototype in `methane_pod.fitting` summarises per-event posteriors to point estimates before the population fit, side-stepping the importance correction. Formalising this is the v1 deliverable for [`06a_instantaneous.md`](06a_instantaneous.md).
 
 ---
 
@@ -122,7 +122,7 @@ The factorised likelihood above assumes detections at different overpasses are i
 
 ## Module layout — depend on `methane_pod`, don't absorb it {#tier5-modules}
 
-`plumax` depends on the standalone [`methane_pod`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/) package (pinned `methane_pod >= 0.1, < 0.2` for v1); the population-scale code is not re-implemented. Rationale:
+`plumax` depends on the standalone `methane_pod` package (pinned `methane_pod >= 0.1, < 0.2` for v1); the population-scale code is not re-implemented. Rationale:
 
 - `methane_pod` has its own audience (point-process methodologists), test suite, release cadence.
 - `plumax` consumes it through a thin adapter that materialises Tier I–IV posteriors as inputs to `methane_pod.fitting`.
@@ -132,22 +132,22 @@ The factorised likelihood above assumes detections at different overpasses are i
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Intensity registry $\lambda(t)$ | [`methane_pod.intensity`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/intensity.py) | library ✓ (13 kernels) |
-| POD registry $P_d(\cdot)$ | [`methane_pod.pod_functions`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/pod_functions.py) | library ✓ (10 models) |
-| Missing-mass MC simulator | [`methane_pod.paradox`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/paradox.py) | library ✓ |
-| NUTS fitter | [`methane_pod.fitting`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/src/methane_pod/fitting.py) | library ✓; **importance-correction integration ☐** |
-| Per-event posterior summariser | `plume_simulation.population.adapter.summariser` | ☐ |
-| Per-event prior recall ($\pi_\text{per-event}$ lookup) | `plume_simulation.population.adapter.prior_recall` | ☐ — required for importance weighting |
-| Importance-weight calculator | `plume_simulation.population.adapter.importance` | ☐ |
-| Multi-satellite POD union | `plume_simulation.population.adapter.pod_union` | ☐ |
-| Catalog schema (in-memory cross-tier) | `plumax.population.catalog` (`EmissionEvent` / `EmissionCatalog`) | 🚧 — in-memory Gaussian-summary catalog landed; CSV / parquet ingest pending |
-| Real-data CSV ingestion | `plume_simulation.population.ingest` | ☐ (placeholder in [`07_pod_fitting_mcmc.md`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/07_pod_fitting_mcmc.md)) |
-| Population SBC harness | `plume_simulation.population.validation.sbc` | ☐ |
-| Importance-weight ESS diagnostic | `plume_simulation.population.validation.iw_ess` | ☐ |
-| Per-event-prior swap-out test | `plume_simulation.population.validation.prior_swap` | ☐ |
-| Spatial Cox-process extension (v2) | `plume_simulation.population.spatial` | ☐ |
+| Intensity registry $\lambda(t)$ | `plumax.population.intensity` (from `methane_pod.intensity`, 13 kernels) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| POD registry $P_d(\cdot)$ | `plumax.population.pod` (from `methane_pod.pod_functions`, 10 models) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| Missing-mass MC simulator | `plumax.population.paradox` (from `methane_pod.paradox`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| NUTS fitter | `plumax.population.fitting` (from `methane_pod.fitting`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106); importance-correction integration ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Per-event posterior summariser | `plumax.population.catalog` (`PerEventPosterior.samples`) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event prior recall ($\pi_\text{per-event}$ lookup) | `plumax.population.catalog` (`PerEventPosterior.prior_logpdf`) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) — required for importance weighting |
+| Importance-weight calculator | `plumax.population.importance` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Multi-satellite POD union | `plumax.population.pod.pod_union` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Catalog schema (in-memory cross-tier) | `plumax.population.catalog` (`EmissionEvent` / `EmissionCatalog`) | 🚧 — in-memory Gaussian-summary catalog landed; CSV / parquet ingest [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Real-data CSV ingestion | `plumax.population.ingest` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Population SBC harness | `plumax.population.validation` | ☐ [#114](https://github.com/jejjohnson/plumax/issues/114) |
+| Importance-weight ESS diagnostic | `plumax.population.importance.ess_report` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Per-event-prior swap-out test | `plumax.population.validation.prior_swap_test` | ☐ [#114](https://github.com/jejjohnson/plumax/issues/114) |
+| Spatial Cox-process extension (v2) | `plumax.population.spatial` | ☐ v2 (temporal LGCP first: [#115](https://github.com/jejjohnson/plumax/issues/115)) |
 
-The `plumax.population` subpackage now exists with the v1 core (`catalog`, `size_distribution`, `point_process`); the `methane_pod`-backed importance-corrected modules above remain the proposed shape.
+The `plumax.population` subpackage exists with the v1 core (`catalog`, `size_distribution`, `point_process`). The `methane_pod` library the tables above lean on is **not in this repository** — its *generative* machinery is to be replaced — the plan for [#106](https://github.com/jejjohnson/plumax/issues/106); `xtremax` is not yet a declared dependency — by a git-pinned dependency on [`xtremax.point_processes`](https://github.com/jejjohnson/xtremax) (which already covers intensities, compensators, thinning samplers, Hawkes, marked processes, a `ThinningProcess` whose retention function is exactly $P_d(Q)$, goodness-of-fit and survival / wait-time primitives) and only the *methane-domain* primitives — POD registry, heavy-tail mark families, missing-mass simulator, fit drivers — are to be ported in tree under the same issue, and the remaining rows are tracked under the Tier V epic [#75](https://github.com/jejjohnson/plumax/issues/75).
 
 ---
 
@@ -161,12 +161,12 @@ This isn't a coincidence — it's why `plumax`'s tier structure works: the same 
 
 ## Status snapshot {#tier5-status}
 
-- **Theory.** TMTPP foundations and the missing-mass paradox are written up in [`methane_pod/notebooks/01_mttpp_theory`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/01_mttpp_theory.md) and [`03_missing_mass_paradox`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/03_missing_mass_paradox.ipynb).
-- **`methane_pod` library:** ✓ — intensity, POD, paradox simulator, NUTS fitter all implemented.
-- **`plumax.population` subpackage:** 🚧 — the v1 cross-tier catalog adapter (`catalog.py`), V.A hierarchical lognormal size-distribution fit (`size_distribution.py`), and V.B point-process core (`point_process.py` — closed-form Gamma-Poisson rate + log-linear inhomogeneous intensity) have landed. The Gaussian-summary `(emission_rate, emission_std)` representation is consumed; the importance-corrected full-sample path (below) is still future work.
-- **Cross-tier integration:** 🚧 — the tier-agnostic catalog (`event_from_posterior` over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`) and per-event uncertainty propagation into the population fit have landed. Per-event posteriors still enter the population fit as Gaussian summaries, not importance-corrected full samples; formalising the importance correction remains Tier V's main outstanding code deliverable.
-- **Synthetic validation.** [`06_stationary_numpyro_mcmc`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/06_stationary_numpyro_mcmc.ipynb) recovers POD parameters on synthetic data without the soft-observation layer.
-- **Real-data fit.** [`07_pod_fitting_mcmc`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/notebooks/07_pod_fitting_mcmc.md) is a placeholder; needs IMEO + Tanager CSV ingestion.
+- **Theory.** TMTPP foundations and the missing-mass paradox are written up in the standalone `methane_pod` notebooks (`01_mttpp_theory`, `03_missing_mass_paradox`); porting them into `docs/notebooks/` is part of [#106](https://github.com/jejjohnson/plumax/issues/106).
+- **`methane_pod` library:** ☐ **not in tree** (2026-09-15) — intensity, POD, paradox simulator and NUTS fitter exist as a standalone library but `src/plumax/src/methane_pod/` does not exist in this repository. Adopting `xtremax.point_processes` for the generative layer and landing the methane-domain primitives under `plumax.population` is [#106](https://github.com/jejjohnson/plumax/issues/106) and blocks the rest of Tier V. What neither library has is the importance-weighted soft-observation mark likelihood — that stays [#108](https://github.com/jejjohnson/plumax/issues/108).
+- **`plumax.population` subpackage:** 🚧 — the v1 cross-tier catalog adapter (`catalog.py`), V.A hierarchical lognormal size-distribution fit (`size_distribution.py`), and V.B point-process core (`point_process.py` — closed-form Gamma-Poisson rate + log-linear inhomogeneous intensity) have landed (#14). The Gaussian-summary `(emission_rate, emission_std)` representation is consumed; the importance-corrected full-sample path is [#107](https://github.com/jejjohnson/plumax/issues/107) + [#108](https://github.com/jejjohnson/plumax/issues/108).
+- **Cross-tier integration:** 🚧 — the tier-agnostic catalog (`event_from_posterior` over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`) and per-event uncertainty propagation into the population fit have landed. Per-event posteriors still enter as Gaussian summaries; the extended `PerEventPosterior` payload (samples + prior recall) is [#107](https://github.com/jejjohnson/plumax/issues/107) and the importance correction — Tier V's main outstanding code deliverable — is [#108](https://github.com/jejjohnson/plumax/issues/108).
+- **Synthetic validation.** The standalone `06_stationary_numpyro_mcmc` notebook recovers POD parameters on synthetic data without the soft-observation layer; the in-tree SBC harness is [#114](https://github.com/jejjohnson/plumax/issues/114).
+- **Real-data fit.** `07_pod_fitting_mcmc` is a placeholder; IMEO / Tanager / Carbon Mapper / GHGSat ingestion is [#111](https://github.com/jejjohnson/plumax/issues/111). Persistency metrics (V.C) are [#112](https://github.com/jejjohnson/plumax/issues/112), the total-emission estimator (V.D) is [#113](https://github.com/jejjohnson/plumax/issues/113), Hawkes / LGCP intensities are [#115](https://github.com/jejjohnson/plumax/issues/115).
 
 ---
 

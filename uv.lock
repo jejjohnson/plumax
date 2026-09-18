@@ -16,6 +16,9 @@ resolution-markers = [
     "python_full_version < '3.13' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+overrides = [{ name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }]
+
 [[package]]
 name = "appnope"
 version = "0.1.4"
@@ -610,8 +613,8 @@ wheels = [
 
 [[package]]
 name = "finitevolx"
-version = "0.0.44"
-source = { git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.44#626306c5dcc4c28957a503160b5ddc45514cfbb7" }
+version = "0.0.45"
+source = { git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45#f3db7de46917af7c2f74b808a19e221be278d4f4" }
 dependencies = [
     { name = "beartype" },
     { name = "diffrax" },
@@ -677,8 +680,8 @@ wheels = [
 
 [[package]]
 name = "gaussx"
-version = "0.0.17"
-source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.0.17#156f0c77835e2ad59befd4b5d89257f3dfa49b47" }
+version = "0.0.25"
+source = { git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9#58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }
 dependencies = [
     { name = "einx" },
     { name = "equinox" },
@@ -1170,11 +1173,11 @@ wheels = [
 
 [[package]]
 name = "matfree"
-version = "0.5.5"
+version = "0.6.2"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/07/20/7daab1915d09f3618c089db9cf9d645c3da245eeb6236a7281b4759713fe/matfree-0.5.5.tar.gz", hash = "sha256:c478e0ddee7323ec0144fff558459d384a7b9283fd55fd56fc6876bd9701c55b", size = 55624, upload-time = "2025-12-02T09:01:34.401Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/ae/ac950986206dcd5d49b8fd7c415d5b8eff11586df99da4b4213aea341ad9/matfree-0.6.2.tar.gz", hash = "sha256:b73b4f04a0f2822c22621696c8ed3b784807c4bc55953961d1918fc3a04e49ac", size = 75589, upload-time = "2026-09-02T05:30:43.409Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/57/1d8c13471272eee62970c9e84e4dbf5dba1278d415b8c2923e4247289574/matfree-0.5.5-py3-none-any.whl", hash = "sha256:9ed7c079ec85c902df6d2c36664faa1b50069284a88ff16f8d55f1f4ba2393d0", size = 34657, upload-time = "2025-12-02T09:01:33.119Z" },
+    { url = "https://files.pythonhosted.org/packages/39/03/48458c50ff59b21e212dac2e4d2c83abe3c6855718e283eb24064675287c/matfree-0.6.2-py3-none-any.whl", hash = "sha256:41592a0188ac3cacd2ae169d146284f9f7d2e5ed94709f790130a2a97da32e92", size = 44028, upload-time = "2026-09-02T05:30:41.901Z" },
 ]
 
 [[package]]
@@ -1854,13 +1857,13 @@ wheels = [
 
 [[package]]
 name = "pipekit"
-version = "0.0.1"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit#9db29764e1cc27d4e04847b72caab8039b292391" }
+version = "0.0.2"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 
 [[package]]
 name = "pipekit-cycle"
-version = "0.0.1"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle#9db29764e1cc27d4e04847b72caab8039b292391" }
+version = "0.0.2"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 dependencies = [
     { name = "pipekit" },
 ]
@@ -1885,7 +1888,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -1944,8 +1947,8 @@ typecheck = [
 requires-dist = [
     { name = "diffrax", specifier = ">=0.6" },
     { name = "equinox", specifier = ">=0.11" },
-    { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.44" },
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.0.17" },
+    { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9" },
     { name = "hitran-api", marker = "extra == 'hapi'" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
@@ -1955,7 +1958,7 @@ requires-dist = [
     { name = "numpy" },
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
-    { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit" },
+    { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "scikit-learn", specifier = ">=1.3" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "xarray" },
@@ -1965,7 +1968,7 @@ provides-extras = ["inference", "hapi", "notebooks"]
 [package.metadata.requires-dev]
 dev = [
     { name = "numpyro", specifier = ">=0.21" },
-    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle" },
+    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
