@@ -45,6 +45,7 @@ nav:
   - Design:
       - Roadmap & Architecture: design/index.md
       - Prerequisites: design/00_prerequisites.md
+      - Prerequisites — xrtoolz boundary: design/00a_xrtoolz_boundary.md
       - Tier I — Gaussian family: design/01_tier1_gaussian.md
       - Tier II — Lagrangian: design/02_tier2_lagrangian.md
       - Tier III — Eulerian FV: design/03_tier3_eulerian.md
