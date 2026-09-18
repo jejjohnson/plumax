@@ -12,6 +12,8 @@ The page is grouped into:
 
 The fixed [forward interface](#prereqs-forward-interface) is the contract that ties them together.
 
+The pre- and post-processing around these interfaces (file readers, CF hygiene, regridding, vertical remapping, subsetting, masking, verification metrics) is not plumax code: it comes from [`xrtoolz`](https://github.com/jejjohnson/xrtoolz), and anything missing there is added upstream first. The [xrtoolz boundary](00a_xrtoolz_boundary.md) page fixes the rule and lists the gaps.
+
 ---
 
 ## 1 · Forcing — meteorology {#prereqs-met}
@@ -236,7 +238,7 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
     Should the source location be snapped to the analysis grid, or do we carry it as continuous lat/lon with bilinear injection? Affects gradient sharpness in 4D-Var.
 
 !!! attention "`coordax` adoption"
-    `MetField` is a near-perfect fit for a `coordax.Dataset`. Commit to it, or keep raw PyTrees for Step-1 simplicity? **Leaning:** `coordax` everywhere — the dimension naming pays for itself by Tier II.
+    `MetField` is a near-perfect fit for a `coordax.Dataset`. Commit to it, or keep raw PyTrees for Step-1 simplicity? **Leaning (revised):** `xarray` at the boundary via `xrtoolz` (`MetField.from_dataset` / `to_dataset`), raw PyTrees inside the trace — see the [xrtoolz boundary](00a_xrtoolz_boundary.md#xrtoolz-rule).
 
 !!! attention "Inventory provenance"
     EDGAR / GFEI / EPA disagree by ~factor 2 in well-studied basins. Which is the default $q_a$, and how do we expose the choice as a configurable rather than a hard-coded prior?

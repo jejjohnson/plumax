@@ -44,6 +44,7 @@ Every tier in `plumax` follows the same loop:
 | Tier | Forward model | Complexity | When to use | Detail |
 | --- | --- | --- | --- | --- |
 | 0 (prereq) | Met field + AK operator | Data interface | All tiers depend on it | [Prerequisites](00_prerequisites.md) |
+| 0 (prereq) | Pre / post-processing ring (loaders, regrid, masks, metrics) | Data interface | Everything outside a JAX trace | [xrtoolz boundary](00a_xrtoolz_boundary.md) |
 | I | Gaussian plume / puff | Analytical | Fast prototyping, validation | [Tier I — Gaussian family](01_tier1_gaussian.md) |
 | II | Lagrangian particle / footprint | Stochastic ODE | Wind-realistic transport | [Tier II — Lagrangian](02_tier2_lagrangian.md) |
 | III | Eulerian finite-volume PDE | PDE | High-fidelity spatial fields | [Tier III — Eulerian FV](03_tier3_eulerian.md) |
