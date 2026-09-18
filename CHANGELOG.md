@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/jejjohnson/plumax/compare/v0.1.1...v0.1.2) (2026-09-18)
+
+
+### Features
+
+* roadmap status refresh, pinned git dependencies, and the MetField wrfout loader ([#116](https://github.com/jejjohnson/plumax/issues/116)) ([46fd747](https://github.com/jejjohnson/plumax/commit/46fd74721150a4dbc9ca8aa492a169a8a8b515ec))
+
 ## [0.1.1](https://github.com/jejjohnson/plumax/compare/v0.1.0...v0.1.1) (2026-08-19)
 
 
