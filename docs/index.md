@@ -33,12 +33,13 @@ breakdown (Gaussian → Lagrangian → Eulerian → Coupled E2E → Population).
 uv add plumax
 ```
 
-`gaussx` and `pipekit` are not yet on PyPI; from a checkout they resolve
-from git via `[tool.uv.sources]`. NumPyro (Bayesian inference) and
-`hitran-api` (LUT generation) are optional extras:
+`gaussx`, `pipekit` and `xrtoolz` are not yet on PyPI; from a checkout they
+resolve from git via `[tool.uv.sources]`. NumPyro (Bayesian inference),
+`hitran-api` (LUT generation) and `xrtoolz` (the WRF loader and the
+pre/post-processing ring, extra `data`) are optional extras:
 
 ```bash
-uv add "plumax[inference,hapi]"
+uv add "plumax[inference,hapi,data]"
 ```
 
 ## Quickstart

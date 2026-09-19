@@ -83,8 +83,13 @@ public API is re-exported through `src/plumax/__init__.py`.
 - NumPyro inference submodules are imported lazily (PEP 562) — importing a
   forward model never pulls in NumPyro.
 - `hapi_lut` imports HAPI lazily; install the `hapi` extra to build LUTs.
-- `gaussx` and `pipekit` resolve from git (`[tool.uv.sources]`); they are
-  not yet on PyPI.
+- `plumax.met.load_wrf` imports `xrtoolz` lazily; install the `data` extra
+  for the met loaders. Everything that maps xarray in to xarray out
+  outside a JAX trace comes from `xrtoolz` (see
+  `docs/design/00a_xrtoolz_boundary.md`); `xrtoolz.atm` primitives are the
+  test oracles for the JAX column kernels.
+- `gaussx`, `pipekit` and the `xrtoolz` workspace packages resolve from git
+  (`[tool.uv.sources]`, pinned revs); they are not yet on PyPI.
 
 ## Documentation
 

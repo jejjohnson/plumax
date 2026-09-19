@@ -105,11 +105,12 @@ print(ds)
 
 - Core install pulls JAX, xarray, diffrax/equinox, finitevolX, optimistix,
   scikit-learn, and pipekit.
-- `gaussx` and `pipekit` are not yet on PyPI; from a checkout they resolve
-  from git via `[tool.uv.sources]`.
+- `gaussx`, `pipekit` and `xrtoolz` are not yet on PyPI; from a checkout they
+  resolve from git via `[tool.uv.sources]`.
 - Optional extras: `inference` (NumPyro), `hapi` (HITRAN LUT generation),
+  `data` (xrtoolz — the WRF loader and the pre/post-processing ring),
   `notebooks` (matplotlib / IPython). Install with
-  `uv add "plumax[inference,hapi]"`.
+  `uv add "plumax[inference,hapi,data]"`.
 
 ---
 

@@ -189,7 +189,7 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 | Concern | Module | Status | Blocks |
 | --- | --- | --- | --- |
-| Met loader (WRF) | [`met/wrf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/wrf.py) (`load_wrf`) + [`met/field.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/field.py) (`MetField`, `to_prescribed_wind`) | ✓ v1 — destagger, η→z per column, bilinear onto the C-grid stagger, piecewise-linear in time; `origin` places the grid until frames land ([#79](https://github.com/jejjohnson/plumax/issues/79)) | Tier II, III |
+| Met loader (WRF) | [`met/wrf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/wrf.py) (`load_wrf`) + [`met/field.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/met/field.py) (`MetField`, `to_prescribed_wind`) | ✓ v1 — `xrtoolz.atm.open_wrfout` (time decode, destagger, physical fields, `z_agl`) → per-column `remap_axis` onto the analysis heights → bilinear onto the C-grid stagger; piecewise-linear in time; grid-relative wind; `origin` places the grid until frames land ([#79](https://github.com/jejjohnson/plumax/issues/79)); needs the `data` extra | Tier II, III |
 | Met loader (ERA5) | `plumax.met.era5` | ☐ [#77](https://github.com/jejjohnson/plumax/issues/77) | global Tier II/III |
 | PBL diagnostics | `plumax.met.pbl` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | Tier II reflection, Tier IV partitioning |
 | Static fields ($z_0$, LU, terrain) | `plumax.met.static` | ☐ [#78](https://github.com/jejjohnson/plumax/issues/78) | MO similarity, Tier III BCs |
