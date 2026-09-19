@@ -483,3 +483,27 @@ def test_simulate_puff_rejects_wrong_length_emission_series():
             time_array=time_array,
             release_frequency=1.0,
         )
+
+
+def test_simulate_puff_column_matches_xrtoolz_column_integral():
+    # The per-frame trapezoid column must agree with xrtoolz.atm.column_integral,
+    # the reference column integral (docs/design/00a_xrtoolz_boundary.md).
+    atm = pytest.importorskip("xrtoolz.atm")
+    n_t = 3
+    time_array = np.linspace(0, 30, n_t, dtype=np.float32)
+    ds = simulate_puff(
+        emission_rate=0.1,
+        source_location=(0.0, 0.0, 2.0),
+        wind_speed=np.full(n_t, 5.0, dtype=np.float32),
+        wind_direction=np.full(n_t, 270.0, dtype=np.float32),
+        stability_class="C",
+        domain_x=(0, 200, 11),
+        domain_y=(-50, 50, 5),
+        domain_z=(0.0, 60.0, 7),
+        time_array=time_array,
+        background_conc=1e-9,
+    )
+    oracle = atm.column_integral(ds["concentration"], dim="z", method="trapezoid")
+    np.testing.assert_allclose(
+        ds["column_concentration"].values, oracle.values, rtol=1e-6, atol=0.0
+    )

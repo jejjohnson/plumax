@@ -330,3 +330,25 @@ def test_simulate_plume_background_column_uses_trapezoid():
     )
     col = ds["column_concentration"].values
     np.testing.assert_allclose(col, background * (z1 - z0), rtol=1e-6)
+
+
+def test_simulate_plume_column_matches_xrtoolz_column_integral():
+    # xrtoolz.atm.column_integral is the reference implementation of the
+    # vertical column integral (docs/design/00a_xrtoolz_boundary.md); the
+    # NumPy trapezoid inside simulate_plume must agree with it to round-off.
+    atm = pytest.importorskip("xrtoolz.atm")
+    ds = simulate_plume(
+        emission_rate=0.1,
+        source_location=(0.0, 0.0, 2.0),
+        wind_speed=5.0,
+        wind_direction=270.0,
+        stability_class="D",
+        domain_x=(-200.0, 2000.0, 23),
+        domain_y=(-500.0, 500.0, 11),
+        domain_z=(0.0, 200.0, 9),
+        background_conc=1e-9,
+    )
+    oracle = atm.column_integral(ds["concentration"], dim="z", method="trapezoid")
+    np.testing.assert_allclose(
+        ds["column_concentration"].values, oracle.values, rtol=1e-12, atol=0.0
+    )

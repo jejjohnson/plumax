@@ -412,3 +412,26 @@ def test_radiance_response_linear_is_linear_in_Q(synthetic_lut, nu_obs):
     d1 = np.asarray(r1) - np.asarray(base)
     d2 = np.asarray(r2) - np.asarray(base)
     np.testing.assert_allclose(d2, 2.0 * d1, rtol=1e-6, atol=1e-9 * np.abs(d1).max())
+
+
+def test_column_mass_to_delta_vmr_matches_xrtoolz_oracle():
+    # The JAX conversion is tested against its xrtoolz.atm.gas.ch4 twin rather
+    # than re-derived here (docs/design/00a_xrtoolz_boundary.md, corollary 2):
+    # same constants, xrtoolz works in SI (Pa, m) where plumax takes atm / cm.
+    ch4 = pytest.importorskip("xrtoolz.atm.gas.ch4")
+    from plumax.coupled.rtm import CH4_MOLAR_MASS_KG_PER_MOL
+    from plumax.radtran.config import ATM_TO_PA
+
+    mass = np.array([1e-4, 1e-3, 5e-3, 1e-2])
+    p_atm, T_K, path_cm = 0.9, 288.15, 5.0e4
+    got = np.asarray(
+        column_mass_to_delta_vmr(mass, p_atm=p_atm, T_K=T_K, path_length_cm=path_cm)
+    )
+    oracle = ch4.column_mass_to_delta_vmr(
+        xr.DataArray(mass, dims=("n",)),
+        pressure_pa=p_atm * ATM_TO_PA,
+        temperature_k=T_K,
+        path_length_m=path_cm / 100.0,
+        molar_mass_kg_mol=CH4_MOLAR_MASS_KG_PER_MOL,
+    )
+    np.testing.assert_allclose(got, oracle.values, rtol=1e-12, atol=0.0)

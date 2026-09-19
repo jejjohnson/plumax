@@ -312,3 +312,37 @@ def test_fusion_is_jittable_and_differentiable():
     g0, g1 = jax.grad(lambda a, b: q_hat(a, b), argnums=(0, 1))(y[0], y[1])
     assert np.all(np.isfinite(np.asarray(g0)))
     assert np.all(np.isfinite(np.asarray(g1)))
+
+
+def test_column_response_matches_xrtoolz_column_integral():
+    # The traced trapezoid inside column_response is checked against
+    # xrtoolz.atm.column_integral, the reference implementation, instead of
+    # being re-derived here (docs/design/00a_xrtoolz_boundary.md, corollary 2).
+    atm = pytest.importorskip("xrtoolz.atm")
+    import xarray as xr
+
+    from plumax.gauss_plume.dispersion import get_dispersion_params
+    from plumax.gauss_plume.plume import plume_concentration_vmap
+
+    src, inst = _source(), _instrument()  # identity AK
+    z = np.asarray(src.column_z, dtype=float)
+    receptors = np.asarray(inst.receptors, dtype=float)
+    n_obs, n_z = receptors.shape[0], z.size
+    u, v = src.wind_uv()
+    conc = plume_concentration_vmap(
+        jnp.repeat(jnp.asarray(receptors[:, 0]), n_z),
+        jnp.repeat(jnp.asarray(receptors[:, 1]), n_z),
+        jnp.tile(jnp.asarray(z), n_obs),
+        *src.location,
+        u,
+        v,
+        1.0,
+        get_dispersion_params(src.stability_class),
+    )
+    field = xr.DataArray(
+        np.asarray(conc).reshape(n_obs, n_z), dims=("obs", "z"), coords={"z": z}
+    )
+    oracle = atm.column_integral(field, dim="z", method="trapezoid")
+    np.testing.assert_allclose(
+        np.asarray(column_response(src, inst)), oracle.values, rtol=1e-12, atol=0.0
+    )
