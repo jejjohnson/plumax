@@ -77,6 +77,13 @@ inference = ["numpyro>=0.21"]
 hapi = ["hitran-api"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
+# The pre/post-processing ring around the models (file readers, CF hygiene,
+# regridding, vertical remapping, column diagnostics) comes from xrtoolz — see
+# docs/design/00a_xrtoolz_boundary.md. It is heavy (cartopy, rioxarray,
+# regionmask, xrft, xskillscore, dask), so `plumax.met.load_wrf` imports it
+# lazily and only this extra installs it. >= 0.0.3 carries `atm.open_wrfout`,
+# per-column `remap_axis` and the `atm` / `atm.gas.ch4` column primitives.
+data = ["xrtoolz>=0.0.3"]
 
 [project.urls]
 Repository = "https://github.com/jejjohnson/plumax"
@@ -101,6 +108,17 @@ pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packa
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }
+# xrtoolz is a uv workspace, so every member the `data` extra pulls in has to
+# be named as a subdirectory source. All six are pinned to the same rev — the
+# release commit for xrtoolz 0.0.3 / xrtoolz-reader 0.0.4 (the release that
+# closed the plumax-integration epic, xrtoolz#293). xrtoolz's own lock pins
+# pipekit to the same rev as plumax; bump both pins together.
+xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
+xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
+xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
+xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
+xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
+xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "81b620152c6388819affa2aef0ec0bad925abd95" }
 
 [dependency-groups]
 dev = [
@@ -112,6 +130,9 @@ dev = [
     # pipekit-cycle is a *test-only* dep: the adapters satisfy its protocols
     # structurally, and the tests assert that conformance via isinstance.
     "pipekit-cycle",
+    # The `data` extra, so the met loader tests run and the xrtoolz.atm
+    # primitives serve as oracles for the JAX column kernels.
+    "xrtoolz>=0.0.3",
 ]
 lint = [
     "ruff>=0.15.10",
