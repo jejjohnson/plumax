@@ -419,6 +419,8 @@ This is the quantity an inventory wants; $s_k$ (the on-state rate) is what a sin
 
     Retrieval noise $\sigma_r$ averages down as $1/\sqrt{n}$ over $n$ clear overpasses while a persistent diffuse enhancement does not, so area sources emerge from stacks that no single scene shows. The coarse mapper's daily revisit is what makes this work: 30 clear days gives noise $\approx \sigma_r/\sqrt{30} \approx 2$ ppb against a field-$D$ enhancement of a few ppb.
 
+    The $1/\sqrt{n}$ law assumes **independent, zero-mean** errors. Errors shared across scenes (background subtraction, calibration, transport) give a stack variance of $\mathbf{1}^{\mathsf T}\Sigma\,\mathbf{1}/n^2$, which approaches a nonzero floor, so treat $2$ ppb as a lower bound unless the temporal error covariance $\Sigma$ is carried through.
+
 === "Sampling intermittent point sources"
 
     The fine imager at $\Delta t = 5$ d *samples* $Z_k(t)$. If overpass times are independent of the source's state, the fraction of "on" scenes is an unbiased estimate of $\pi_k$.
