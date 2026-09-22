@@ -73,7 +73,7 @@ Consequences:
 | enhancement $f(x)$ | $\mathrm{XCH_4}$ minus local background | ppb |
 | plume mask | pixels flagged as plume | — |
 | rate estimate | per-plume flux from mask + wind (e.g. IME method) | $\mathrm{kg\,h^{-1}}$ |
-| wind $U$ | 10 m wind from reanalysis | $\mathrm{m\,s^{-1}}$ |
+| wind $\mathbf{U}$ | 10 m wind vector from reanalysis | $\mathrm{m\,s^{-1}}$ |
 | bottom-up inventory | gridded prior emission density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
 | infrastructure database | candidate site coordinates $c_j$ (pads, compressors) | km, km |
 
@@ -188,6 +188,8 @@ Fixed for the whole section.
     | $s_k$ | on-state rate of point source $k$ | $\mathrm{kg\,h^{-1}}$ |
     | $s_0$ | reference rate, $1\ \mathrm{kg\,h^{-1}}$ | $\mathrm{kg\,h^{-1}}$ |
     | $\pi_k$ | persistence (fraction of time on) of source $k$ | — |
+    | $G(\mathrm{d}\pi \mid u)$ | distribution of persistence given on-state rate | — |
+    | $p_{\mathrm{camp}}$ | probability a source is detected at least once over a campaign | — |
     | $e(x)$ | diffuse flux density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
     | $\mu(A)$ | total emission rate from $A$ (point + diffuse) | $\mathrm{kg\,h^{-1}}$ |
     | $\mu_{\mathrm{pt}}$, $\mu_{\mathrm{df}}$ | atomic and diffuse parts of $\mu$ | $\mathrm{kg\,h^{-1}}$ |
@@ -201,7 +203,7 @@ Fixed for the whole section.
     | $\Delta x$, $\Delta t$ | pixel size, revisit interval | km, d |
     | $C_\Delta$ | coarsening operator: $\mu \mapsto$ pixel totals | — |
     | $\mathcal{T}$ | atmospheric transport operator: $\mu \mapsto f$ | ppb per $\mathrm{kg\,h^{-1}}$ |
-    | $U$ | wind speed | $\mathrm{m\,s^{-1}}$ |
+    | $\mathbf{U}$, $U$ | 10 m wind vector (east, north); its speed $U = \lVert\mathbf{U}\rVert$ | $\mathrm{m\,s^{-1}}$ |
     | $p(x,s)$ | detection probability | — |
     | $s_{\min}$ | detection limit | $\mathrm{kg\,h^{-1}}$ |
     | $c_j$, $Z_j$ | candidate site $j$; its emitting indicator | km km, — |
@@ -210,4 +212,4 @@ Fixed for the whole section.
 
 !!! note "Two conventions"
     - Inside $\rho(\mathrm{d}u)$ and Gamma shape parameters, rates are **dimensionless**: $u = s/s_0$, and physical totals carry the factor $s_0$ back.
-    - Wind enters space–time kernels as $v = U \times 86.4\ \mathrm{km\,d^{-1}}$ per $\mathrm{m\,s^{-1}}$.
+    - Wind enters space–time kernels as the velocity vector $\mathbf{v} = 86.4\,\mathbf{U}$, converting $\mathrm{m\,s^{-1}}$ to $\mathrm{km\,d^{-1}}$.

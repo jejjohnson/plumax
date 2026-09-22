@@ -313,10 +313,10 @@ flowchart LR
     lam -->|"Poisson given λ"| N["N<br/><i>point sources</i>"]
 ```
 
-Given $\lambda$, disjoint cells are independent. **Marginally they are positively correlated**, because the same $g$ shaped both. This is the LGCP, and it is the natural *discovery* prior: detections in $A_1$ raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched.
+Given $\lambda$, disjoint cells are independent. **Marginally they are positively correlated**, because the same $g$ shaped both. This is the LGCP, and it is the natural *discovery* prior: **more detections in $A_1$ than its search effort predicts** raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched, and fewer lower it. The update depends on the count relative to its expectation, because the Poisson likelihood pairs the observed points with the integrated-intensity penalty $-\int p\,\lambda$.
 
 ???+ example "Running example"
-    With $k_g$'s correlation length 20 km, finding source 1 in $A_1$ raises $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$; under plain Poisson it would not move.
+    With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$, in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](03_phases.md#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
 
 ## II.8 Scale — coarsening, transport, and averaging *(all phases)* {#ii-8}
 
@@ -413,7 +413,7 @@ This is the quantity an inventory wants; $s_k$ (the on-state rate) is what a sin
         If they are not (overpass at 10:30 local, blowdowns scheduled mornings) the estimate is biased and **no amount of data fixes it**.
 
 ???+ example "Running example — source 3"
-    $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten fine-imager scenes, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$, give $\hat\pi_3 = 0.3$, $\hat{s}_3 \approx 400$, $\hat{\bar{s}}_3 \approx 120\ \mathrm{kg\,h^{-1}}$. Good, *if* the ten overpasses are a fair sample of the source's schedule.
+    $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten clear fine-imager scenes, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$. The raw fraction $3/10$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.33$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 133\ \mathrm{kg\,h^{-1}}$ against a truth of 123. Good, *if* the ten overpasses are a fair sample of the source's schedule.
 
 ## II.9 Observing point sources — thinning and the full operator *(Phases A, B)* {#ii-9}
 
@@ -570,7 +570,7 @@ $$
 
 ### II.10.4 Space × time {#ii-10-4}
 
-$X = S \times T$. Kernels are separable ($k_S \cdot k_T$) or non-separable; the advective kernel depends on $x - x' - v(t - t')$ with $v = 86.4\,U\ \mathrm{km\,d^{-1}}$, a plume carried by the wind. Per-source rate functions $s_k(t)$: the continuous-time version of [§II.4.4](#ii-4-4) is a two-state Markov (or semi-Markov, for non-exponential durations) switching process. This is the right model for a leak that stays on until repair: the on-state duration is the repair time.
+$X = S \times T$. Kernels are separable ($k_S \cdot k_T$) or non-separable; the advective kernel depends on the displacement $x - x' - \mathbf{v}(t - t')$ with velocity vector $\mathbf{v} = 86.4\,\mathbf{U}\ \mathrm{km\,d^{-1}}$, a plume carried by the wind in the wind's direction. Per-source rate functions $s_k(t)$: the continuous-time version of [§II.4.4](#ii-4-4) is a two-state Markov (or semi-Markov, for non-exponential durations) switching process. This is the right model for a leak that stays on until repair: the on-state duration is the repair time.
 
 ```mermaid
 stateDiagram-v2
