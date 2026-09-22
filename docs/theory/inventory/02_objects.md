@@ -201,7 +201,10 @@ Every atom is now a **probability** $\pi_k \in (0,1)$: the fraction of time sour
 
 The overpass $\times$ source matrix $Z$ (filled = on, hollow = off) is the *feature allocation*; $c$ controls how many sources are persistent versus flickering. Integrating out the $\pi_k$ gives the IBP on $Z$.[^ibp]
 
-**Known candidate sites — the finite version.** When the infrastructure database supplies candidate coordinates $c_1,\dots,c_J$, there is nothing nonparametric about *those*: model each with $Z_j \sim \mathrm{Bernoulli}(\pi_j)$, $\pi_j \sim \mathrm{Beta}(a,b)$. The Beta *process* is what you still need for sources *not* in the database (unknown-unknowns), and the Poisson/Cox process ([§II.3](#ii-3), [§II.7](#ii-7)) for their locations.
+**Known candidate sites — the finite version.** When the infrastructure database supplies candidate coordinates $c_1,\dots,c_J$, there is nothing nonparametric about *those*: model each with $Z_j \sim \mathrm{Bernoulli}(\pi_j)$, $\pi_j \sim \mathrm{Beta}(a,b)$. Sources *not* in the database (unknown-unknowns) need **one marked process**: locations from the Poisson/Cox process ([§II.3](#ii-3), [§II.7](#ii-7)), with each atom carrying its own persistence mark $\pi_k \sim G(\mathrm{d}\pi \mid u_k)$. This is the construction used in [§III.1](03_phases.md#iii-1).
+
+!!! warning "Don't stack a Beta process on a separate location process"
+    A Beta process generates its own atoms through $B_0$. Drawn independently of a Poisson/Cox location process, its atoms almost surely never coincide with the source locations on a continuous domain, so the persistence weights attach to nothing. Either mark the location process, as above, or use the Beta process *as* the location process, with $B_0$ carrying the spatial intensity.
 
 <div class="grid" markdown>
 
@@ -213,7 +216,7 @@ The overpass $\times$ source matrix $Z$ (filled = on, hollow = off) is the *feat
 !!! question "Unknown-unknowns → Phase A"
     - sites **random**
     - state *and* site random
-    - Poisson/Cox + Beta process
+    - Poisson/Cox process with persistence marks
 
 </div>
 
@@ -252,6 +255,9 @@ This is the **Dirichlet process** $\mathrm{DP}(H/s_0)$: its base measure is the 
 
 Attribution matters when two plumes in one fine-imager scene could come from one source or two.
 
+!!! warning "Emission fractions are not clustering weights"
+    The weights of $G$ are emission fractions $s_k/\mu_{\mathrm{pt}}(S)$. A detection catalog does not sample sources in that proportion: source $k$ appears at a rate of roughly $\pi_k\,p(x_k, s_k)$ per clear scene, set by persistence, exposure, and POD. For plume-to-source assignment, use mixture weights built from those observation rates (or condition the assignment likelihood on them). Use the DP/PY only as the prior over *how many* sources there are, not as the law of which source the next plume comes from.
+
 ## II.6 Fields — for concentrations *and* for area sources *(Phases A, C)* {#ii-6}
 
 Three quantities in this problem are **fields**, not measures:
@@ -264,7 +270,9 @@ Three quantities in this problem are **fields**, not measures:
 
 None of them is additive over regions. All three need the same construction.
 
-**Random field.** Specify, for every finite set of locations $x_1,\dots,x_n$, the joint law of $(f(x_1),\dots,f(x_n))$, subject to *consistency*: integrating the $(n+1)$-point law over one coordinate must reproduce the $n$-point law. A consistent family determines a unique random function on $S$.[^kolmogorov] Consistency is what lets you say "*the* field".
+**Random field.** Specify, for every finite set of locations $x_1,\dots,x_n$, the joint law of $(f(x_1),\dots,f(x_n))$, subject to *consistency*: integrating the $(n+1)$-point law over one coordinate must reproduce the $n$-point law. A consistent family determines a unique stochastic process *in distribution*.[^kolmogorov] Consistency is what lets you say "*the* field".
+
+Pathwise quantities such as $\int_A e(x)\,\mathrm{d}x$ need more than the law: they need a **measurable, integrable modification** of the process. For the kernels used here (exponential, Matérn, squared-exponential), the Kolmogorov continuity criterion supplies a continuous one, which is what makes those integrals well defined.
 
 **Gaussian process $\mathcal{GP}(m,k)$.**
 
@@ -378,14 +386,14 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 
 ### II.8.2 Atmospheric transport — the field-side observation operator {#ii-8-2}
 
-The satellite does not retrieve $\mu$; it retrieves $f$. The link is a transport operator
+The satellite does not retrieve $\mu$; it retrieves the raw column $y(x) = \mathrm{XCH_4}(x)$. The link is a transport operator
 
 $$
-f(x) = (\mathcal{T}\mu)(x) + f_{\mathrm{bg}}(x) + \varepsilon_r(x),
+y(x) = (\mathcal{T}\mu)(x) + f_{\mathrm{bg}}(x) + \varepsilon_r(x),
 \qquad \varepsilon_r \sim \mathcal{N}(0, \sigma_r^2)
 $$
 
-where $\mathcal{T}$ convolves emissions with a plume kernel driven by wind $U$, and $f_{\mathrm{bg}}$ is background.
+where $\mathcal{T}$ convolves emissions with a plume kernel driven by wind $U$, and $f_{\mathrm{bg}}$ is background. The enhancement product of [§I.4](01_problem.md#i-4) has the background already removed, $f = y - f_{\mathrm{bg}} = \mathcal{T}\mu + \varepsilon_r$. Model one or the other, never $f_{\mathrm{bg}}$ twice.
 
 - For a single atom, $\mathcal{T}(s_k\delta_{x_k})$ is a **compact plume** of peak enhancement roughly $\propto s_k/U$.
 - For a diffuse patch, $\mathcal{T}\mu_{\mathrm{df}}$ is a **broad, low enhancement**.
@@ -393,7 +401,7 @@ where $\mathcal{T}$ convolves emissions with a plume kernel driven by wind $U$, 
 Per-plume rate estimation (IME and cross-sectional methods) is the local inversion of $\mathcal{T}$ for one atom; it returns a noisy $s_k\eta_k$ with $\eta_k$ log-normal ([§II.9.3](#ii-9-3)). In `plumax` the forward side of $\mathcal{T}$ is the Tier I–III dispersion models ([Gaussian plume/puff](../../design/01_tier1_gaussian.md), [Eulerian FV](../../design/03_tier3_eulerian.md)).
 
 !!! warning "Critical note"
-    $\mathcal{T}$ is linear in $\mu$, so a point source and an equal-total diffuse patch produce enhancements with the same **integral** but very different **peak**. Detection thresholds act on the peak. That is why $p(x,s)$ in [§II.9](#ii-9) is a property of point sources, and why area sources are found by *averaging* ([§II.8.3](#ii-8-3)), not by single-scene thresholding.
+    If $\mathcal{T}$ conserves mass (a spatially invariant kernel, no loss, and a domain large enough to contain the plumes), then a point source and an equal-total diffuse patch produce enhancements with the same **integral** but very different **peak**. Linearity alone does not give this; varying winds, finite domains, loss, and retrieval sensitivity can all break it, but the peak contrast survives. Detection thresholds act on the peak. That is why $p(x,s)$ in [§II.9](#ii-9) is a property of point sources, and why area sources are found by *averaging* ([§II.8.3](#ii-8-3)), not by single-scene thresholding.
 
 ### II.8.3 Temporal scale — averaging and sampling {#ii-8-3}
 

@@ -23,13 +23,13 @@ f(\mathrm{d}u) = \frac{\rho(\mathrm{d}u)\,\mathbf{1}[u \ge u_{\mathrm{floor}}]}{
 R = \rho\bigl([u_{\mathrm{floor}}, \infty)\bigr).
 $$
 
-A source at $x$ with marks $(u, \pi)$, covered by $n$ clear scenes so far, is detected at least once with probability
+A source at $x$ with marks $(u, \pi)$, covered by clear scenes $i = 1, \dots, n$ so far, is detected at least once with probability
 
 $$
-p_{\mathrm{camp}}(x,u,\pi) = 1 - \bigl(1 - \pi\,p(x,u)\bigr)^{n},
+p_{\mathrm{camp}}(x,u,\pi) = 1 - \prod_{i=1}^{n} \bigl(1 - \pi\,p_i(x,u)\bigr),
 $$
 
-where $p(x,u)$ is the single-scene POD of [§II.9.2](02_objects.md#ii-9-2) and on/off states are independent across scenes. Its mark average is $\bar p(x) = \iint p_{\mathrm{camp}}(x,u,\pi)\,G(\mathrm{d}\pi \mid u)\,f(\mathrm{d}u)$.
+where $p_i(x,u)$ is scene $i$'s POD ([§II.9.2](02_objects.md#ii-9-2); it varies with wind, viewing geometry, and retrieval sensitivity) and on/off states are independent across scenes. With identical scenes this reduces to $1 - (1 - \pi\,p)^{n}$. Its mark average is $\bar p(x) = \iint p_{\mathrm{camp}}(x,u,\pi)\,G(\mathrm{d}\pi \mid u)\,f(\mathrm{d}u)$.
 
 !!! abstract "The central identity"
     By the (marked) thinning theorem, on a searched cell $A$, **conditional on the intensity** $\lambda$:
@@ -71,7 +71,7 @@ flowchart LR
 ```
 
 ???+ example "Running example"
-    After one clear fine-imager scene over $A_1$ detecting source 1: $N_{\mathrm{obs}}(A_1) = 1$ against a prior mean of 4.5 detectable, so the posterior $\lambda(A_1)$ drops; the Cox prior propagates a milder drop to $A_3$; $A_2$ and $A_4$ are unsearched and unchanged. Expected undiscovered in $A_1 \approx (1 - \bar p)\,\hat\lambda_{\ge}(A_1)$ with mark-averaged $\bar p \approx 0.3$.
+    Choose the floor so that $\lambda_{\ge}(A_1) \approx 15$, the count of [§II.3](02_objects.md#ii-3). With $\bar p \approx 0.3$, the prior mean of detections is $0.3 \times 15 = 4.5$. After one clear fine-imager scene over $A_1$ detecting source 1: $N_{\mathrm{obs}}(A_1) = 1$ against that prior mean of 4.5 detectable, so the posterior $\lambda(A_1)$ drops; the Cox prior propagates a milder drop to $A_3$; $A_2$ and $A_4$ are unsearched and unchanged. Expected undiscovered in $A_1 \approx (1 - \bar p)\,\hat\lambda_{\ge}(A_1)$ with mark-averaged $\bar p \approx 0.3$.
 
 ## III.2 Phase B — Monitoring {#iii-2}
 
@@ -143,7 +143,7 @@ $$
 
 The posterior over $\lambda$ adds its own spread on top. Never report (i) + (iii) plus a point value for (ii): that silently drops the Poisson/CRM variance of everything below the detection limit.
 
-Detection depends on both marks. Sources 2 and 4 have $p \approx 0$ and fall entirely into (ii). Source 3 is intermittent but bright: $1 - (1 - 0.3 \times 0.9)^{8} \approx 0.92$, so it is almost surely found, even though its time-averaged $123\ \mathrm{kg\,h^{-1}}$ is near the threshold. Collapsing it to one averaged rate would wrongly place it in (ii).
+Detection depends on both marks. Sources 2 and 4 have $p \approx 0$ and fall entirely into (ii). Source 3 is intermittent but bright: with $p_i \approx 0.9$ in each of 8 clear scenes, $1 - (1 - 0.3 \times 0.9)^{8} \approx 0.92$, so it is almost surely found, even though its time-averaged $123\ \mathrm{kg\,h^{-1}}$ is near the threshold. Collapsing it to one averaged rate would wrongly place it in (ii).
 
 Each term has its own uncertainty:
 
@@ -153,7 +153,9 @@ Each term has its own uncertainty:
 
 === "(ii) Undiscovered points"
 
-    Driven by the **tail** of $\rho$ below $s_{\min}$. This is where the choice of Gamma versus generalised Gamma changes the answer by a large factor, and the only handle on it is bottom-up knowledge of small-source rates.
+    Spans **all** rates, each weighted by $1 - p_{\mathrm{camp}}$. In well-covered cells it is dominated by the tail of $\rho$ below $s_{\min}$. This is where the choice of Gamma versus generalised Gamma changes the answer by a large factor, and the only handle on it is bottom-up knowledge of small-source rates.
+
+    Above the threshold, $1 - p_{\mathrm{camp}}$ stays positive wherever coverage is thin or persistence is low: an intermittent super-emitter in a rarely imaged cell can be missed and dominate the missing mass. Never truncate (ii) at $s_{\min}$.
 
 === "(iii) Diffuse"
 
@@ -165,7 +167,7 @@ Each term has its own uncertainty:
     | Term | Truth ($\mathrm{kg\,h^{-1}}$) | Estimate ($\mathrm{kg\,h^{-1}}$) | Note |
     |---|---|---|---|
     | (i) monitored | $0.9\cdot 120 + 0.3\cdot 410 = 231$ | $\approx 231$, $\pm\approx 30\,\%$ per source | sources 1, 3 |
-    | (ii) undiscovered | $35 + 60 = 95$ | posterior of the missed-source sum; mean and spread from $\rho$ below $100\ \mathrm{kg\,h^{-1}}$ | matches 95 only if the prior's missed mass happens to be right |
+    | (ii) undiscovered | $35 + 60 = 95$ | posterior of the missed-source sum over all rates, weighted by $1 - p_{\mathrm{camp}}$ (here mostly the tail below $100\ \mathrm{kg\,h^{-1}}$) | matches 95 only if the prior's missed mass happens to be right |
     | (iii) diffuse | $400$ | $\approx 400 \pm 60$ | 30-day mapper stack |
     | **total** | **726** | $\approx 631 + \text{(ii)}$ | **(ii) is set by the prior, not the data** |
 
@@ -177,7 +179,7 @@ Each term has its own uncertainty:
         "(iii) diffuse" : 400
     ```
 
-**Attribution.** When two fine-imager plumes are near each other, DP/Pitman–Yor ([§II.5](02_objects.md#ii-5)) decides "one source or two", with the rich-get-richer prior favouring the known large one. Pitman–Yor is the safer choice given the heavy tail.
+**Attribution.** When two fine-imager plumes are near each other, DP/Pitman–Yor ([§II.5](02_objects.md#ii-5)) decides "one source or two", with assignment weights built from each candidate's observation rate $\pi_k\,p(x_k, s_k)$, not its emission fraction (see the warning in [§II.5](02_objects.md#ii-5)). Pitman–Yor is the safer choice given the heavy tail.
 
 !!! tip "In `plumax`"
     The population-level machinery for this phase (TMTPP, POD-corrected totals, the missing-mass paradox) is laid out in [Tier V.D — Total emission estimation](../../design/06d_total_emission.md).
