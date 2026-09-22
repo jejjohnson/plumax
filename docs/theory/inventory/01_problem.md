@@ -190,6 +190,7 @@ Fixed for the whole section.
     | $\pi_k$ | persistence (fraction of time on) of source $k$ | — |
     | $G(\mathrm{d}\pi \mid u)$ | distribution of persistence given on-state rate | — |
     | $p_{\mathrm{camp}}$ | probability a source is detected at least once over a campaign | — |
+    | $\lambda_{\ge}$, $R$ | count intensity of sources above the floor $u_{\mathrm{floor}}$; $R = \rho([u_{\mathrm{floor}},\infty))$ | $\mathrm{km^{-2}}$, — |
     | $e(x)$ | diffuse flux density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
     | $\mu(A)$ | total emission rate from $A$ (point + diffuse) | $\mathrm{kg\,h^{-1}}$ |
     | $\mu_{\mathrm{pt}}$, $\mu_{\mathrm{df}}$ | atomic and diffuse parts of $\mu$ | $\mathrm{kg\,h^{-1}}$ |

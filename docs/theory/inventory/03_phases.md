@@ -13,21 +13,31 @@ Each phase gets the same four headings: **what is random**, the **object** from 
 **Data**
 :   Fine-imager scenes over searched cells; the infrastructure database; the bottom-up inventory as the GP mean $m_g$
 
-Discovery counts **sources**, so it needs a finite number of them. Restrict attention to sources above a size floor $u_{\mathrm{floor}}$ (well below $s_{\min}/s_0$), let $\lambda$ be the intensity of those sources, and give them the normalised mark distribution
+Discovery counts **sources**, so it needs a finite number of them. Keep $\lambda$ as the CRM base measure of [§II.4](02_objects.md#ii-4) (the same one [§III.3](#iii-3) integrates against), and give each source two marks: its **on-state** rate $s_0 u$, with Lévy measure $\rho(\mathrm{d}u)$, and its persistence $\pi$, with conditional distribution $G(\mathrm{d}\pi \mid u)$. Count only sources above a size floor $u_{\mathrm{floor}}$ (well below $s_{\min}/s_0$). Their count intensity and normalised rate distribution are
 
 $$
-f(\mathrm{d}u) = \frac{\rho(\mathrm{d}u)\,\mathbf{1}[u \ge u_{\mathrm{floor}}]}{\rho([u_{\mathrm{floor}}, \infty))}.
+\lambda_{\ge}(\mathrm{d}x) = R\,\lambda(\mathrm{d}x),
+\qquad
+f(\mathrm{d}u) = \frac{\rho(\mathrm{d}u)\,\mathbf{1}[u \ge u_{\mathrm{floor}}]}{R},
+\qquad
+R = \rho\bigl([u_{\mathrm{floor}}, \infty)\bigr).
 $$
 
-Let $p(x,u)$ be the probability that a source at $x$ with on-state rate $s_0 u$ has been detected by the searches so far (overpass, cloud, persistence and POD combined), and $\bar p(x) = \int p(x,u)\,f(\mathrm{d}u)$ its mark average.
+A source at $x$ with marks $(u, \pi)$, covered by $n$ clear scenes so far, is detected at least once with probability
+
+$$
+p_{\mathrm{camp}}(x,u,\pi) = 1 - \bigl(1 - \pi\,p(x,u)\bigr)^{n},
+$$
+
+where $p(x,u)$ is the single-scene POD of [§II.9.2](02_objects.md#ii-9-2) and on/off states are independent across scenes. Its mark average is $\bar p(x) = \iint p_{\mathrm{camp}}(x,u,\pi)\,G(\mathrm{d}\pi \mid u)\,f(\mathrm{d}u)$.
 
 !!! abstract "The central identity"
     By the (marked) thinning theorem, on a searched cell $A$, **conditional on the intensity** $\lambda$:
 
     $$
     \begin{aligned}
-    N_{\mathrm{det}}(A) \mid \lambda &\sim \mathrm{Poisson}\!\left(\int_A \bar p(x)\,\lambda(\mathrm{d}x)\right),\\
-    N_{\mathrm{miss}}(A) \mid \lambda &\sim \mathrm{Poisson}\!\left(\int_A \bigl(1-\bar p(x)\bigr)\,\lambda(\mathrm{d}x)\right),
+    N_{\mathrm{det}}(A) \mid \lambda &\sim \mathrm{Poisson}\!\left(\int_A \bar p(x)\,\lambda_{\ge}(\mathrm{d}x)\right),\\
+    N_{\mathrm{miss}}(A) \mid \lambda &\sim \mathrm{Poisson}\!\left(\int_A \bigl(1-\bar p(x)\bigr)\,\lambda_{\ge}(\mathrm{d}x)\right),
     \qquad \text{independent given } \lambda
     \end{aligned}
     $$
@@ -37,21 +47,21 @@ Let $p(x,u)$ be the probability that a source at $x$ with on-state rate $s_0 u$ 
 So the posterior over $\lambda$ updates from **both** detections **and** searched-but-empty cells, and the expected number still undiscovered (above the floor) is
 
 $$
-\int_A \bigl(1 - \bar p(x)\bigr)\,\lambda(\mathrm{d}x)
+\int_A \bigl(1 - \bar p(x)\bigr)\,\lambda_{\ge}(\mathrm{d}x)
 $$
 
 computable, not guessed.
 
 !!! warning "Why the floor"
-    With the infinite-activity priors of [§II.4](02_objects.md#ii-4), $\int (1-p)\,\rho = \infty$: the missed source **count** is infinite, even though the missed **mass** is finite. Counting questions (Phase A) therefore need the floor, and mass questions (Phase C, [§III.3](#iii-3)) are posed directly on the missed mass, with no floor.
+    With the infinite-activity priors of [§II.4](02_objects.md#ii-4), $R \to \infty$ as $u_{\mathrm{floor}} \to 0$: the missed source **count** is infinite, even though the missed **mass** is finite. Counting questions (Phase A) therefore need the floor. Mass questions (the search objective below, and Phase C in [§III.3](#iii-3)) integrate against $\lambda\,\rho$ directly, with no floor and no factor $R$.
 
-**Search strategy falls out.** The next cell to image is the one maximising the posterior expected emission that is still undiscovered **and** that the next image would detect,
+**Search strategy falls out.** The next cell to image is the one maximising the posterior expected *inventory* emission that is still undiscovered **and** that the next image would detect,
 
 $$
-s_0\,\mathbb{E}\!\left[\int_A \int u\,\bigl(1 - p(x,u)\bigr)\,p_{\mathrm{next}}(x,u)\,f(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]
+s_0\,\mathbb{E}\!\left[\int_A \int_0^\infty\!\!\int_0^1 \pi u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,\pi\,p_{\mathrm{next}}(x,u)\;G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]
 $$
 
-which weights high posterior density (Cox correlation from neighbours) against what the instrument can actually see.
+Here $\pi u$ weights each source by its time-averaged contribution, not its on-state rate, and $\pi\,p_{\mathrm{next}}$ is the chance the next scene catches it on and detects it. Keeping $\pi$ inside one integral preserves the dependence between past misses and the next detection, which share the same $\pi$; averaging them over $\pi$ separately would misrank intermittent bright sources against persistent faint ones. The objective weights high posterior density (Cox correlation from neighbours) against what the instrument can actually see.
 
 ```mermaid
 flowchart LR
@@ -61,7 +71,7 @@ flowchart LR
 ```
 
 ???+ example "Running example"
-    After one clear fine-imager scene over $A_1$ detecting source 1: $N_{\mathrm{obs}}(A_1) = 1$ against a prior mean of 4.5 detectable, so the posterior $\lambda(A_1)$ drops; the Cox prior propagates a milder drop to $A_3$; $A_2$ and $A_4$ are unsearched and unchanged. Expected undiscovered in $A_1 \approx (1 - \bar p)\,\hat\lambda(A_1)$ with mark-averaged $\bar p \approx 0.3$.
+    After one clear fine-imager scene over $A_1$ detecting source 1: $N_{\mathrm{obs}}(A_1) = 1$ against a prior mean of 4.5 detectable, so the posterior $\lambda(A_1)$ drops; the Cox prior propagates a milder drop to $A_3$; $A_2$ and $A_4$ are unsearched and unchanged. Expected undiscovered in $A_1 \approx (1 - \bar p)\,\hat\lambda_{\ge}(A_1)$ with mark-averaged $\bar p \approx 0.3$.
 
 ## III.2 Phase B — Monitoring {#iii-2}
 
@@ -111,24 +121,29 @@ flowchart LR
 :   The full measure $\mu = \mu_{\mathrm{pt}} + \mu_{\mathrm{df}}$ with a heavy-tailed CRM prior on $\mu_{\mathrm{pt}}$ ([§II.4.3](02_objects.md#ii-4-3)), a log-GP prior on $e$ ([§II.6](02_objects.md#ii-6)), and the per-plume observation model ([§II.8.2](02_objects.md#ii-8-2), [§II.9.3](02_objects.md#ii-9-3))
 
 !!! abstract "Decomposition of the basin total"
-    Time-averaged,
+    Time-averaged, over the sources that exist:
 
     $$
-    \begin{aligned}
     \bar\mu(S)
-    = {}& \underbrace{\sum_{k\ \mathrm{detected}} \pi_k s_k}_{\text{(i) monitored points}}\\
-    & + \underbrace{s_0\,\mathbb{E}\!\left[\int_S \int_0^\infty\!\!\int_0^1 \pi\,u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]}_{\text{(ii) undiscovered points}}\\
-    & + \underbrace{\int_S e(x)\,\mathrm{d}x}_{\text{(iii) diffuse}}
-    \end{aligned}
+    = \underbrace{\sum_{k\ \mathrm{detected}} \pi_k s_k}_{\text{(i) monitored points}}
+    + \underbrace{\sum_{k\ \mathrm{undetected}} \pi_k s_k}_{\text{(ii) undiscovered points}}
+    + \underbrace{\int_S e(x)\,\mathrm{d}x}_{\text{(iii) diffuse}}
     $$
 
-    Each source carries two marks: its **on-state** rate $s_0 u$ (as in [§II.4](02_objects.md#ii-4), the quantity the POD acts on) and its persistence $\pi$, with conditional distribution $G(\mathrm{d}\pi \mid u)$. Its time-averaged contribution is $\pi s_0 u$. Detection over the campaign depends on both marks: with $n$ clear scenes and independent on/off states,
+    This is an identity between **random** quantities: all three terms are uncertain, and the object to report is the posterior of the whole sum.
 
-    $$
-    p_{\mathrm{camp}}(x,u,\pi) = 1 - \bigl(1 - \pi\,p(x,u)\bigr)^{n}.
-    $$
+Term (ii) is a sum over sources nobody has seen, with the marks $(u, \pi)$ and campaign detection probability $p_{\mathrm{camp}}$ of [§III.1](#iii-1). By marked thinning, given $\lambda$ the undetected sources form a Poisson process with intensity $\bigl(1 - p_{\mathrm{camp}}\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)$, independent of the detected ones. Campbell's theorem then gives its first two moments:
 
-    Term (ii) integrates the missed time-averaged emission $\pi u\,(1-p_{\mathrm{camp}})$ jointly over location, rate and persistence. Sources 2 and 4 have $p \approx 0$ and fall entirely into (ii). Source 3 is intermittent but bright: $1 - (1 - 0.3 \times 0.9)^{8} \approx 0.92$, so it is almost surely found, even though its time-averaged $123\ \mathrm{kg\,h^{-1}}$ is near the threshold. Collapsing it to one averaged rate would wrongly place it in (ii).
+$$
+\begin{aligned}
+\mathbb{E}\bigl[\text{(ii)} \mid \lambda\bigr] &= s_0 \int_S \int_0^\infty\!\!\int_0^1 \pi u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x),\\
+\mathrm{Var}\bigl[\text{(ii)} \mid \lambda\bigr] &= s_0^2 \int_S \int_0^\infty\!\!\int_0^1 (\pi u)^2\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x).
+\end{aligned}
+$$
+
+The posterior over $\lambda$ adds its own spread on top. Never report (i) + (iii) plus a point value for (ii): that silently drops the Poisson/CRM variance of everything below the detection limit.
+
+Detection depends on both marks. Sources 2 and 4 have $p \approx 0$ and fall entirely into (ii). Source 3 is intermittent but bright: $1 - (1 - 0.3 \times 0.9)^{8} \approx 0.92$, so it is almost surely found, even though its time-averaged $123\ \mathrm{kg\,h^{-1}}$ is near the threshold. Collapsing it to one averaged rate would wrongly place it in (ii).
 
 Each term has its own uncertainty:
 
@@ -145,16 +160,18 @@ Each term has its own uncertainty:
     From the coarse-mapper stack; scales as $\sigma_r/\sqrt{n_{\mathrm{clear}}}$.
 
 ???+ example "Running example"
-    | Term | Estimate ($\mathrm{kg\,h^{-1}}$) | Note |
-    |---|---|---|
-    | (i) monitored | $0.9\cdot 120 + 0.3\cdot 410 = 231$ | sources 1, 3; $\pm\approx 30\,\%$ each |
-    | (ii) undiscovered | sources 2, 4 + tail $\approx 95 +$ prior tail | truth 95; known only via $\rho$ below $100\ \mathrm{kg\,h^{-1}}$ |
-    | (iii) diffuse | $\approx 400 \pm 60$ | 30-day mapper stack |
-    | **total** | $\approx 726$ (truth 726) | **(ii) is set by the prior, not the data** |
+    The toy basin contains only the four listed sources, so its true (ii) is exactly sources 2 and 4. A real basin also has a tail of smaller sources, and the estimate of (ii) always includes one.
+
+    | Term | Truth ($\mathrm{kg\,h^{-1}}$) | Estimate ($\mathrm{kg\,h^{-1}}$) | Note |
+    |---|---|---|---|
+    | (i) monitored | $0.9\cdot 120 + 0.3\cdot 410 = 231$ | $\approx 231$, $\pm\approx 30\,\%$ per source | sources 1, 3 |
+    | (ii) undiscovered | $35 + 60 = 95$ | posterior of the missed-source sum; mean and spread from $\rho$ below $100\ \mathrm{kg\,h^{-1}}$ | matches 95 only if the prior's missed mass happens to be right |
+    | (iii) diffuse | $400$ | $\approx 400 \pm 60$ | 30-day mapper stack |
+    | **total** | **726** | $\approx 631 + \text{(ii)}$ | **(ii) is set by the prior, not the data** |
 
     ```mermaid
     %%{init: {"themeVariables": {"pie1": "#00695c", "pie2": "#26a69a", "pie3": "#80cbc4", "pie4": "#b2dfdb", "pie5": "#ffb74d", "pieStrokeColor": "#ffffff", "pieOuterStrokeColor": "#9e9e9e", "pieTitleTextColor": "#8a8a8a", "pieLegendTextColor": "#8a8a8a", "pieSectionTextColor": "#ffffff"}}}%%
-    pie showData title Where the 726 kg/h comes from
+    pie showData title Where the true 726 kg/h comes from
         "(i) monitored points" : 231
         "(ii) undiscovered points" : 95
         "(iii) diffuse" : 400

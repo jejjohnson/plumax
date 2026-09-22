@@ -227,7 +227,7 @@ $$
 \bigl(G(A_1),\dots,G(A_n)\bigr) \sim \mathrm{Dirichlet}\!\left(\frac{H(A_1)}{s_0},\dots,\frac{H(A_n)}{s_0}\right)
 $$
 
-This is the **Dirichlet process** $\mathrm{DP}(H)$.
+This is the **Dirichlet process** $\mathrm{DP}(H/s_0)$: its base measure is the dimensionless $H/s_0$, whose total mass $H(S)/s_0$ is the concentration.
 
 ???+ example "Running example"
     $H = (500, 150, 500, 200)\ \mathrm{kg\,h^{-1}}$ gives fractions centred on $(0.37, 0.11, 0.37, 0.15)$.
@@ -313,10 +313,16 @@ flowchart LR
     lam -->|"Poisson given λ"| N["N<br/><i>point sources</i>"]
 ```
 
-Given $\lambda$, disjoint cells are independent. **Marginally they are positively correlated**, because the same $g$ shaped both. This is the LGCP, and it is the natural *discovery* prior: **more detections in $A_1$ than its search effort predicts** raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched, and fewer lower it. The update depends on the count relative to its expectation, because the Poisson likelihood pairs the observed points with the integrated-intensity penalty $-\int p\,\lambda$.
+Given $\lambda$, disjoint cells are independent. **Marginally they are correlated**, because the same $g$ shaped both:
+
+$$
+\mathrm{Cov}\bigl(\lambda(x), \lambda(x')\bigr) = \mathbb{E}[\lambda(x)]\,\mathbb{E}[\lambda(x')]\,\bigl(e^{k_g(x,x')} - 1\bigr),
+$$
+
+positive wherever $k_g > 0$, as it is everywhere for the usual exponential, Matérn, and squared-exponential kernels, and negative where a kernel with negative lobes has $k_g < 0$. This is the LGCP, and it is the natural *discovery* prior: **more detections in $A_1$ than its search effort predicts** raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched, and fewer lower it. The update depends on the count relative to its expectation, because the Poisson likelihood pairs the observed points with the integrated-intensity penalty $-\int p\,\lambda$.
 
 ???+ example "Running example"
-    With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$, in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](03_phases.md#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
+    With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$. Because this exponential kernel is positive, $A_3$ moves in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](03_phases.md#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
 
 ## II.8 Scale — coarsening, transport, and averaging *(all phases)* {#ii-8}
 
@@ -413,7 +419,7 @@ This is the quantity an inventory wants; $s_k$ (the on-state rate) is what a sin
         If they are not (overpass at 10:30 local, blowdowns scheduled mornings) the estimate is biased and **no amount of data fixes it**.
 
 ???+ example "Running example — source 3"
-    $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten clear fine-imager scenes, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$. The raw fraction $3/10$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.33$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 133\ \mathrm{kg\,h^{-1}}$ against a truth of 123. Good, *if* the ten overpasses are a fair sample of the source's schedule.
+    $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten fine-imager overpasses, eight clear, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$ (the same sequence as [§III.2](03_phases.md#iii-2)). The raw fraction $3/8$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.42$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 167\ \mathrm{kg\,h^{-1}}$ against a truth of 123. The gap is sampling noise on eight scenes ([§III.2](03_phases.md#iii-2) gives the interval), and the estimate is unbiased only *if* the overpasses are a fair sample of the source's schedule.
 
 ## II.9 Observing point sources — thinning and the full operator *(Phases A, B)* {#ii-9}
 
