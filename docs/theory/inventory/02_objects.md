@@ -41,8 +41,14 @@ Measure
 Point mass
 :   $\delta_x(A) = 1$ if $x \in A$, else $0$.
 
-!!! abstract "The point/area split is a theorem about measures"
-    Any emission measure decomposes uniquely into an *atomic* part and a *diffuse* part:
+!!! abstract "The point/area split rests on a theorem about measures"
+    Any (σ-finite) emission measure decomposes **uniquely** into three parts:[^lebesgue]
+
+    $$
+    \mu = \mu_{\mathrm{atomic}} + \mu_{\mathrm{ac}} + \mu_{\mathrm{sc}}
+    $$
+
+    atoms at points, an absolutely continuous part with a density over area, and a singular-continuous remainder (mass on a curve such as a pipeline). As a **modelling choice** we fold $\mu_{\mathrm{sc}}$ into whichever of the other two suits the instrument, and work with the two-part representation
 
     $$
     \mu(A) = \mu_{\mathrm{pt}}(A) + \mu_{\mathrm{df}}(A)
@@ -58,7 +64,7 @@ Point mass
     \qquad\text{(area sources: a flux density } e(x) \text{ in } \mathrm{kg\,h^{-1}\,km^{-2}}\text{)}
     $$
 
-    There is a third, singular-continuous, part (mass on a curve such as a pipeline), which we fold into $\mu_{\mathrm{pt}}$ or $\mu_{\mathrm{df}}$ as convenient.[^lebesgue]
+    Once $\mu_{\mathrm{sc}}$ has been folded in, this split is an approximation we chose, not a unique decomposition.
 
 ???+ example "Running example"
     $$
@@ -73,7 +79,7 @@ Point mass
 
 **Why the split matters for modelling.** Atoms are described by a *point process* ([§II.3](#ii-3)–[§II.5](#ii-5)). A density $e(x)$ is a *field* ([§II.6](#ii-6)). They are different random objects and get different priors. Everything else in this section is organised around that fact.
 
-[^lebesgue]: This is the Lebesgue decomposition of a measure into atomic, absolutely continuous, and singular-continuous parts.
+[^lebesgue]: The Lebesgue decomposition, with respect to area, into atomic, absolutely continuous, and singular-continuous parts.
 
 ## II.2 Randomising the inventory *(all phases)* {#ii-2}
 
@@ -102,47 +108,47 @@ $N$ is itself a completely random measure: the case where every atom weighs 1.
 
 ## II.4 Attaching rates — the completely random measure *(Phase C)* {#ii-4}
 
-Treat the pairs $(x_k, s_k)$ as a Poisson process on $S \times (0,\infty)$ with intensity
+Work with **dimensionless marks** $u_k = s_k/s_0$, so that the physical rate is $s_k = s_0 u_k$. Treat the pairs $(x_k, u_k)$ as a Poisson process on $S \times (0,\infty)$ with intensity
 
 $$
-\nu(\mathrm{d}x, \mathrm{d}s) = \lambda(\mathrm{d}x)\,\rho(\mathrm{d}s)
+\nu(\mathrm{d}x, \mathrm{d}u) = \lambda(\mathrm{d}x)\,\rho(\mathrm{d}u)
 $$
 
-*Reading.* $\nu(A \times [a,b])$ = expected number of sources in $A$ with rate in $[a,b]$. $\lambda$ handles **where**, $\rho$ handles **how big**.
+*Reading.* $\nu(A \times [a,b])$ = expected number of sources in $A$ with rate in $[a s_0, b s_0]$. $\lambda$ handles **where**, $\rho$ handles **how big**.
 
-**What $\rho$ is.** Not a probability density. $\rho(\mathrm{d}s)$ is the expected number of sources, per unit of $\lambda$, with dimensionless rate $s/s_0$ in $\mathrm{d}s$. It may have infinite mass near $0$; what is required is
+**What $\rho$ is.** Not a probability density. $\rho(\mathrm{d}u)$ is the expected number of sources, per unit of $\lambda$, with dimensionless rate in $\mathrm{d}u$. It may have infinite mass near $0$; what is required is
 
 $$
-\int_0^\infty \min(s, 1)\,\rho(\mathrm{d}s) < \infty
+\int_0^\infty \min(u, 1)\,\rho(\mathrm{d}u) < \infty
 $$
 
 Infinitely many negligible sources, finite total. This is the nonparametric part: **the number of sources is never fixed.**
 
-The atomic random measure is $\mu_{\mathrm{pt}}(A) = \sum_{k:\,x_k\in A} s_k$, and its law in every region follows from $\rho$ via the Laplace functional (for dimensionless $\theta \ge 0$)
+The atomic random measure is $\mu_{\mathrm{pt}}(A) = \sum_{k:\,x_k\in A} s_k = s_0 \sum_{k:\,x_k\in A} u_k$, and its law in every region follows from $\rho$ via the Laplace functional (for dimensionless $\theta \ge 0$)
 
 $$
 \mathbb{E}\!\left[\exp\!\left(-\theta\,\frac{\mu_{\mathrm{pt}}(A)}{s_0}\right)\right]
-= \exp\!\left(-\lambda(A)\int_0^\infty \bigl(1 - e^{-\theta s}\bigr)\,\rho(\mathrm{d}s)\right)
+= \exp\!\left(-\lambda(A)\int_0^\infty \bigl(1 - e^{-\theta u}\bigr)\,\rho(\mathrm{d}u)\right)
 $$
 
 The choice of Lévy measure $\rho$ selects the member of the family:
 
 ```mermaid
 flowchart LR
-    CRM["CRM<br/>μ_pt = Σₖ sₖ δ(xₖ)"]
+    CRM["CRM<br/>μ_pt = s₀ Σₖ uₖ δ(xₖ)"]
     CRM -->|"ρ = δ₁"| P["Poisson process<br/>§II.4.1"]
-    CRM -->|"ρ = s⁻¹ e⁻ˢ ds"| G["Gamma process<br/>§II.4.2"]
-    CRM -->|"ρ ∝ s⁻¹⁻σ e⁻τˢ ds"| GG["Generalised Gamma<br/>§II.4.3"]
+    CRM -->|"ρ = u⁻¹ e⁻ᵘ du"| G["Gamma process<br/>§II.4.2"]
+    CRM -->|"ρ ∝ u⁻¹⁻σ e⁻τᵘ du"| GG["Generalised Gamma<br/>§II.4.3"]
     CRM -->|"ρ on (0,1)"| B["Beta process<br/>§II.4.4"]
 ```
 
 ### II.4.1 Poisson process {#ii-4-1}
 
-$\rho = \delta_1$. Every atom weighs 1; $\mu_{\mathrm{pt}}(A) = N(A)$. A prior over **counts**.
+$\rho = \delta_1$. Every atom weighs 1; $\mu_{\mathrm{pt}}(A)/s_0 = N(A)$. A prior over **counts**.
 
 ### II.4.2 Gamma process — inventory prior with light tails {#ii-4-2}
 
-Take a prior inventory $H$ ($\mathrm{kg\,h^{-1}}$ per region, e.g. from a bottom-up product) and set $\lambda(\mathrm{d}x) = H(\mathrm{d}x)/s_0$ and $\rho(\mathrm{d}s) = s^{-1}e^{-s}\,\mathrm{d}s$. Then
+Take a prior inventory $H$ ($\mathrm{kg\,h^{-1}}$ per region, e.g. from a bottom-up product) and set $\lambda(\mathrm{d}x) = H(\mathrm{d}x)/s_0$ and $\rho(\mathrm{d}u) = u^{-1}e^{-u}\,\mathrm{d}u$. Then
 
 $$
 \frac{\mu_{\mathrm{pt}}(A)}{s_0} \sim \mathrm{Gamma}\!\left(\text{shape}=\frac{H(A)}{s_0},\ \text{rate}=1\right),
@@ -151,16 +157,16 @@ $$
 $$
 
 ???+ example "Running example"
-    $H(A_3) = 500\ \mathrm{kg\,h^{-1}}$ gives $\mu_{\mathrm{pt}}(A_3)/s_0 \sim \mathrm{Gamma}(500, 1)$: mean 500, standard deviation $\approx 22\ \mathrm{kg\,h^{-1}}$. The true 410 is comfortably inside.
+    $H(A_3) = 500\ \mathrm{kg\,h^{-1}}$ gives $\mu_{\mathrm{pt}}(A_3)/s_0 \sim \mathrm{Gamma}(500, 1)$: mean 500, standard deviation $\approx 22\ \mathrm{kg\,h^{-1}}$. The true 410 sits $(500 - 410)/22 \approx 4$ standard deviations below the mean: this prior all but rules the truth out.
 
 !!! warning "Critical notes"
     - **Rate $= 1$ forces $\mathrm{Var} = \mathbb{E}\cdot s_0$**, which is arbitrary. Add a dispersion $\theta_d$ (shape $H/(\theta_d s_0)$, rate $1/\theta_d$).
-    - **The $e^{-s}$ tail forbids super-emitters.** A prior standard deviation of $22\ \mathrm{kg\,h^{-1}}$ on a cell whose true content is dominated by one $410\ \mathrm{kg\,h^{-1}}$ source is overconfident about the wrong thing.
+    - **The $e^{-u}$ tail forbids super-emitters.** A prior standard deviation of $22\ \mathrm{kg\,h^{-1}}$ on a cell whose true content is dominated by one $410\ \mathrm{kg\,h^{-1}}$ source is overconfident about the wrong thing.
 
 ### II.4.3 Generalised Gamma — inventory prior with super-emitters {#ii-4-3}
 
 $$
-\rho(\mathrm{d}s) \propto s^{-1-\sigma} e^{-\tau s}\,\mathrm{d}s,
+\rho(\mathrm{d}u) \propto u^{-1-\sigma} e^{-\tau u}\,\mathrm{d}u,
 \qquad \sigma \in (0,1),\ \tau \ge 0
 $$
 
@@ -178,7 +184,7 @@ Power-law body, exponential cut-off at scale $1/\tau$.
 ### II.4.4 Beta process — persistence prior *(Phase B)* {#ii-4-4}
 
 $$
-\rho(\mathrm{d}s) = c\, s^{-1}(1-s)^{c-1}\,\mathrm{d}s \ \text{ on } (0,1),
+\rho(\mathrm{d}\pi) = c\, \pi^{-1}(1-\pi)^{c-1}\,\mathrm{d}\pi \ \text{ on } (0,1),
 \qquad \lambda = B_0
 $$
 
@@ -353,7 +359,7 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 </div>
 
 ???+ example "Running example"
-    The coarse mapper's 7 km pixel over the north-east of $A_2$ contains source 2 ($35\ \mathrm{kg\,h^{-1}}$) and roughly a quarter of field $D$ ($100\ \mathrm{kg\,h^{-1}}$): $C_\Delta\mu \approx 135\ \mathrm{kg\,h^{-1}}$ for that pixel, and the mapper cannot tell the two apart. The fine imager sees source 2 as a compact plume and field $D$ as no plume at all.
+    The coarse mapper's 7 km pixel over the north-east of $A_2$ contains source 2 ($35\ \mathrm{kg\,h^{-1}}$) and roughly a quarter of field $D$ ($100\ \mathrm{kg\,h^{-1}}$): $C_\Delta\mu \approx 135\ \mathrm{kg\,h^{-1}}$ for that pixel, and the mapper cannot tell the two apart. The fine imager *resolves* source 2 geometrically (its footprint would be a compact plume), but at $35\ \mathrm{kg\,h^{-1}}$ it is below the $\approx 100\ \mathrm{kg\,h^{-1}}$ detection limit, so it goes **undetected** ([§II.9.2](#ii-9-2)); field $D$ produces no plume at all. Resolution and detection are different properties.
 
 !!! tip "Modelling consequence"
     At the coarse scale, model $C_\Delta\mu$ directly as a *gridded field* (e.g. a GP on log pixel totals) and let the point/area decomposition live at the fine scale only. The two scales are linked by linearity,
@@ -423,19 +429,28 @@ This is the quantity an inventory wants; $s_k$ (the on-state rate) is what a sin
 
 ### II.9.2 Rate-dependent thinning and the detection limit {#ii-9-2}
 
-With $p(x,s)$, a CRM with intensity $\lambda(\mathrm{d}x)\rho(\mathrm{d}s)$ is observed as
+Let the detection probability depend on the rate, writing $p(x,u)$ for a source at $x$ with rate $s = s_0 u$. A CRM with intensity $\lambda(\mathrm{d}x)\rho(\mathrm{d}u)$ is observed as
 
 $$
-\lambda(\mathrm{d}x)\,p(x,s)\,\rho(\mathrm{d}s)
+\lambda(\mathrm{d}x)\,p(x,u)\,\rho(\mathrm{d}u)
 $$
 
-Take $p(s)$ a sigmoid around $s_{\min}$ (the POD curve). Then:
+Take $p(u)$ to be the POD curve, rising around $s_{\min}/s_0$, and require
+
+$$
+\int_0^\infty p(u)\,\rho(\mathrm{d}u) < \infty .
+$$
+
+!!! warning "The detection curve must vanish fast enough near zero"
+    For an infinite-activity $\rho$ (Gamma, generalised Gamma), a logistic curve in the *linear* rate has $p(0) > 0$, so $\int p\,\rho$ diverges and the model "observes" infinitely many sources. Use a hard cutoff, or a curve in $\log u$ whose decay near $0$ beats the blow-up of $\rho$.
+
+Under that condition:
 
 1. $\rho_{\mathrm{obs}} = p\rho$ has **finite mass**: you observe finitely many sources. "Infinitely many" was about the truth, never the data.
 2. The observed total is biased low by the factor
 
     $$
-    \frac{\int s\,p(s)\,\rho(\mathrm{d}s)}{\int s\,\rho(\mathrm{d}s)}
+    \frac{\int u\,p(u)\,\rho(\mathrm{d}u)}{\int u\,\rho(\mathrm{d}u)}
     $$
 
     This is the below-detection-limit gap, in one line.
@@ -490,7 +505,9 @@ $$
 M(t) = \sum_{k:\,t_k \le t} m_k
 $$
 
-Nondecreasing, independent stationary increments: a *subordinator*, i.e. a CRM on the time axis. Poisson gives a counting process; Gamma gives the Gamma subordinator; stable gives rare huge jumps.
+$M$ is always nondecreasing. It is a *subordinator* (independent, stationary increments, i.e. a CRM on the time axis) **only if** the pairs $(t_k, m_k)$ form a Poisson random measure with time-homogeneous intensity $\mathrm{d}t\,\rho(\mathrm{d}m)$, so that release times carry no memory and no seasonality. Under that assumption: Poisson gives a counting process; Gamma gives the Gamma subordinator; stable gives rare huge jumps.
+
+Renewal, Hawkes, and time-varying intensities ([§II.10.2](#ii-10-2)) break the assumption, and then $M(t)$ is not a subordinator.
 
 ### II.10.2 Conditional intensity — history dependence {#ii-10-2}
 
@@ -515,7 +532,9 @@ Poisson: $\lambda^*$ ignores $\mathcal{H}_t$ (memoryless). Others:
     \qquad \varphi \ge 0,\ \int\varphi < 1
     $$
 
-    A detection raises the near-term rate: a leak persisting until repair.
+    Each emission *initiation* raises the near-term rate of new, distinct initiations: a process upset that triggers follow-on venting, or cascading equipment failures.
+
+    A single leak that stays on until repair is **not** a Hawkes process. It is one initiation followed by an on-state duration, modelled with the switching process of [§II.10.4](#ii-10-4). Repeat satellite detections of the same leak are observations of that state, not new events.
 
 === "Cox in time"
 
@@ -536,7 +555,7 @@ $$
 
 ### II.10.3 GPs in time are SDEs — the Kalman link {#ii-10-3}
 
-Matérn-family GPs over $t$ are linear SDEs; e.g. with $W$ standard Brownian motion,
+Matérn GPs over $t$ with **half-integer** smoothness $\nu = p + \tfrac12$ are exactly linear SDEs with a $(p+1)$-dimensional state. General $\nu$ has no finite state-space form. The simplest case, $\nu = \tfrac12$, with $W$ standard Brownian motion:
 
 $$
 k(t,t') = \sigma_f^2 \exp\!\left(-\frac{\lvert t - t'\rvert}{\ell_t}\right)
@@ -544,14 +563,14 @@ k(t,t') = \sigma_f^2 \exp\!\left(-\frac{\lvert t - t'\rvert}{\ell_t}\right)
 \mathrm{d}f = -\frac{1}{\ell_t} f\,\mathrm{d}t + \sqrt{\frac{2\sigma_f^2}{\ell_t}}\,\mathrm{d}W
 $$
 
-(Ornstein–Uhlenbeck). GP smoothing becomes a Kalman filter + smoother, $O(n)$. Squared-exponential kernels get no such structure.
+(Ornstein–Uhlenbeck). For these kernels GP smoothing becomes a Kalman filter + smoother, $O(n)$. Squared-exponential kernels (and Matérn with non-half-integer $\nu$) get no exact such structure, only approximations.
 
 !!! info
     The background prior in a Kalman/4D-Var system is a GP in disguise. See the `plumax.assimilation` scaffolding and [pipekit-cycle](https://github.com/jejjohnson/pipekit) for the data-assimilation side.
 
 ### II.10.4 Space × time {#ii-10-4}
 
-$X = S \times T$. Kernels are separable ($k_S \cdot k_T$) or non-separable; the advective kernel depends on $x - x' - v(t - t')$ with $v = 86.4\,U\ \mathrm{km\,d^{-1}}$, a plume carried by the wind. Per-source rate functions $s_k(t)$: the continuous-time version of [§II.4.4](#ii-4-4) is a two-state Markov switching process.
+$X = S \times T$. Kernels are separable ($k_S \cdot k_T$) or non-separable; the advective kernel depends on $x - x' - v(t - t')$ with $v = 86.4\,U\ \mathrm{km\,d^{-1}}$, a plume carried by the wind. Per-source rate functions $s_k(t)$: the continuous-time version of [§II.4.4](#ii-4-4) is a two-state Markov (or semi-Markov, for non-exponential durations) switching process. This is the right model for a leak that stays on until repair: the on-state duration is the repair time.
 
 ```mermaid
 stateDiagram-v2

@@ -14,14 +14,16 @@ Each phase gets the same four headings: **what is random**, the **object** from 
 :   Fine-imager scenes over searched cells; the infrastructure database; the bottom-up inventory as the GP mean $m_g$
 
 !!! abstract "The central identity"
-    By the thinning theorem, on a searched cell $A$ with detection probability $p$:
+    By the thinning theorem, on a searched cell $A$ with detection probability $p$, **conditional on the intensity** $\lambda$:
 
     $$
-    N_{\mathrm{det}}(A) \sim \mathrm{Poisson}\bigl(p\,\lambda(A)\bigr),
+    N_{\mathrm{det}}(A) \mid \lambda \sim \mathrm{Poisson}\bigl(p\,\lambda(A)\bigr),
     \qquad
-    N_{\mathrm{miss}}(A) \sim \mathrm{Poisson}\bigl((1-p)\,\lambda(A)\bigr),
-    \qquad \text{independent}
+    N_{\mathrm{miss}}(A) \mid \lambda \sim \mathrm{Poisson}\bigl((1-p)\,\lambda(A)\bigr),
+    \qquad \text{independent given } \lambda
     $$
+
+    Under the LGCP, $\lambda$ is random, and marginally the two counts are **dependent** through it. That dependence is exactly what lets detections (and empty searched cells) inform the posterior over $\lambda$, and hence the expected number missed. Write the likelihood conditionally on $\lambda$ and integrate over $\lambda$; never factor the marginal.
 
 So the posterior over $\lambda$ updates from **both** detections **and** searched-but-empty cells, and the expected number still undiscovered is
 
@@ -34,7 +36,7 @@ computable, not guessed.
 **Search strategy falls out.** The next cell to image is the one maximising posterior expected *undiscovered* emission,
 
 $$
-\mathbb{E}\!\left[\int_A (1-p)\,\lambda\,\mathrm{d}x \cdot \int s\,p(s)\,\rho(\mathrm{d}s)\right]
+s_0\,\mathbb{E}\!\left[\int_A (1-p)\,\lambda\,\mathrm{d}x \cdot \int u\,p(u)\,\rho(\mathrm{d}u)\right]
 $$
 
 which weights high posterior density (Cox correlation from neighbours) against what the instrument can actually see.
@@ -55,7 +57,7 @@ flowchart LR
 :   The on/off state and timing of *known* sources
 
 **Object**
-:   Per-site Beta–Bernoulli persistence ([§II.4.4](02_objects.md#ii-4-4)) or a temporal point process ([§II.10.2](02_objects.md#ii-10-2)), observed through the thinned clock ([§II.9.3](02_objects.md#ii-9-3), [§II.10.6](02_objects.md#ii-10-6))
+:   Per-site Beta–Bernoulli persistence ([§II.4.4](02_objects.md#ii-4-4)) a temporal point process of initiations ([§II.10.2](02_objects.md#ii-10-2)), or an on/off switching process ([§II.10.4](02_objects.md#ii-10-4)), observed through the thinned clock ([§II.9.3](02_objects.md#ii-9-3), [§II.10.6](02_objects.md#ii-10-6))
 
 **Data**
 :   The sequence of (overpass, cloud, detected, rate) for each known site
@@ -65,7 +67,8 @@ flowchart LR
 | Physical behaviour | Model | Key parameter |
 |---|---|---|
 | scheduled venting | renewal | $h$ peaked at 7 d |
-| leak until repair | Hawkes | $\varphi$ decaying over days |
+| leak until repair | two-state (semi-)Markov switching ([§II.10.4](02_objects.md#ii-10-4)) | on-state duration = repair time |
+| clustered distinct initiations (upsets, cascades) | Hawkes | $\varphi$ decaying over days |
 | random operations | Beta–Bernoulli | $\pi_k$ |
 
 !!! danger "The identifiability warning"
@@ -85,7 +88,7 @@ flowchart LR
     \hat\pi_3 \approx \frac{3/8}{0.9} \approx 0.42
     $$
 
-    against a truth of 0.3. The discrepancy is sampling noise on 8 scenes, and a $\mathrm{Beta}(1,1)$ prior gives a 90 % interval of roughly $(0.15, 0.7)$. Renewal or Hawkes structure would tighten this if the blowdowns are regular.
+    against a truth of 0.3. The discrepancy is sampling noise on 8 scenes, and a $\mathrm{Beta}(1,1)$ prior gives a 90 % interval of roughly $(0.15, 0.7)$. Renewal structure would tighten this if the blowdowns are regular.
 
 ## III.3 Phase C — Estimation of rates and total {#iii-3}
 
@@ -101,9 +104,11 @@ flowchart LR
     $$
     \bar\mu(S)
     = \underbrace{\sum_{k\ \mathrm{detected}} \pi_k s_k}_{\text{(i) monitored points}}
-    + \underbrace{\mathbb{E}\!\left[\int_S (1-p)\,\lambda\,\mathrm{d}x \cdot \int s\,\bar p\,\rho(\mathrm{d}s)\right]}_{\text{(ii) undiscovered points}}
+    + \underbrace{s_0\,\mathbb{E}\!\left[\int_S \int_0^\infty u\,\bigl(1 - p(x,u)\bigr)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]}_{\text{(ii) undiscovered points}}
     + \underbrace{\int_S e(x)\,\mathrm{d}x}_{\text{(iii) diffuse}}
     $$
+
+    Here $u$ is the dimensionless *time-averaged* rate, and $p(x,u)$ is the probability that such a source was detected at least once over the whole campaign. Term (ii) integrates the missed marks $u\,(1-p)$ jointly over location and rate. Rate matters inside the integral: it is what makes sources below $s_{\min}$, like sources 2 and 4, fall almost entirely into (ii).
 
 Each term has its own uncertainty:
 
@@ -149,7 +154,7 @@ Each term has its own uncertainty:
 | **seen by** | fine imager, 1 scene | coarse mapper, stack |
 | **detection** | threshold on peak | averaging, $1/\sqrt{n}$ |
 | **time** | sampled: $\pi_k s_k$ | averaged: persistent |
-| **phase** | A, B | C |
+| **phase** | A, B, C | C |
 | **fails when** | extent $\gtrsim \Delta x$ | extent $\lesssim \Delta x$ |
 
 ## III.5 The assumptions carrying the structure {#iii-5}
@@ -157,9 +162,9 @@ Each term has its own uncertainty:
 | # | Assumption | Fails when | Repaired by |
 |:---:|---|---|---|
 | 1 | *Independence across disjoint regions* ([§II.2](02_objects.md#ii-2)) | shared geology | Cox process ([§II.7](02_objects.md#ii-7)) |
-| 2 | *Memorylessness in time* ([§II.10.2](02_objects.md#ii-10-2), Poisson) | persistent leaks and schedules | renewal / Hawkes |
+| 2 | *Memorylessness in time* ([§II.10.2](02_objects.md#ii-10-2), Poisson) | persistent leaks, schedules, clustered upsets | on/off switching (leaks), renewal (schedules), Hawkes (clustered initiations) |
 | 3 | *Point/area is fixed* | always: it is relative to $\Delta x$ ([§II.8.1](02_objects.md#ii-8-1)) | model at the fine scale and coarsen, never the reverse |
 | 4 | *Overpasses are a fair sample of source state* ([§II.8.3](02_objects.md#ii-8-3)) | operations correlate with local overpass time | no fix from data alone |
 
 !!! quote "The identifiability warning that runs through all three phases"
-    The data see only products ($p\lambda$, $\pi_k p$, $\int s\,p(s)\,\rho(\mathrm{d}s)$), and **everything below the detection limit rests on calibration done outside the model.**
+    The data see only products ($p\lambda$, $\pi_k p$, $\int u\,p(u)\,\rho(\mathrm{d}u)$), and **everything below the detection limit rests on calibration done outside the model.**

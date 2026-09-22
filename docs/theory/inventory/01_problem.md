@@ -192,7 +192,8 @@ Fixed for the whole section.
     | $\mu(A)$ | total emission rate from $A$ (point + diffuse) | $\mathrm{kg\,h^{-1}}$ |
     | $\mu_{\mathrm{pt}}$, $\mu_{\mathrm{df}}$ | atomic and diffuse parts of $\mu$ | $\mathrm{kg\,h^{-1}}$ |
     | $H(A)$ | prior expected emission from $A$ | $\mathrm{kg\,h^{-1}}$ |
-    | $\rho(\mathrm{d}s)$ | Lévy measure over dimensionless rates $s/s_0$ | — |
+    | $u_k$ | dimensionless rate $s_k/s_0$ | — |
+    | $\rho(\mathrm{d}u)$ | Lévy measure over dimensionless rates $u$ | — |
     | $G(A)$ | fraction of basin total from $A$ | — |
     | $f(x)$ | $\mathrm{XCH_4}$ enhancement | ppb |
     | $m(x)$, $k(x,x')$ | mean, covariance kernel of a field | ppb, $\mathrm{ppb^2}$ |
@@ -208,5 +209,5 @@ Fixed for the whole section.
     | $\lambda^*(t)$, $\mathcal{H}_t$ | conditional intensity; history before $t$ | $\mathrm{d^{-1}}$, — |
 
 !!! note "Two conventions"
-    - Inside $\rho(\mathrm{d}s)$ and Gamma shape parameters, rates are **dimensionless multiples of $s_0$**.
+    - Inside $\rho(\mathrm{d}u)$ and Gamma shape parameters, rates are **dimensionless**: $u = s/s_0$, and physical totals carry the factor $s_0$ back.
     - Wind enters space–time kernels as $v = U \times 86.4\ \mathrm{km\,d^{-1}}$ per $\mathrm{m\,s^{-1}}$.
