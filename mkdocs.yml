@@ -12,6 +12,10 @@ theme:
     - navigation.top
     - content.code.copy
     - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - navigation.footer
+    - toc.follow
   palette:
     - scheme: default
       primary: teal
@@ -56,21 +60,40 @@ nav:
           - V.B — Point process: design/06b_point_process.md
           - V.C — Persistency: design/06c_persistency.md
           - V.D — Total emission: design/06d_total_emission.md
+  - Theory:
+      - Inventory from detections:
+          - Overview: theory/inventory/index.md
+          - I — The problem & the data: theory/inventory/01_problem.md
+          - II — Mathematical objects: theory/inventory/02_objects.md
+          - III — Mapping onto the phases: theory/inventory/03_phases.md
   - API Reference: api/reference.md
   - Changelog: changelog.md
 
 markdown_extensions:
+  - abbr
   - admonition
+  - def_list
+  - footnotes
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
   - pymdownx.details
   - pymdownx.snippets:
       base_path: ["."]
+      auto_append:
+        - docs/.snippets/abbreviations.md
+  - pymdownx.mark
   - attr_list
   - md_in_html
   - tables

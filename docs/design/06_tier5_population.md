@@ -17,6 +17,9 @@ Sub-pages:
 - [Persistency](06c_persistency.md) — operational forecasts from inverted $\lambda(t)$: wait times, dispatch windows, occurrence probabilities.
 - [Total emission estimation](06d_total_emission.md) — the missing-mass paradox and POD-corrected regional/national totals.
 
+!!! tip "Mathematical background"
+    [From Satellite Detections to a Methane Inventory](../theory/inventory/index.md) builds the random objects used here (Poisson and Cox processes, completely random measures, thinning, temporal point processes) from first principles, with one worked Permian example.
+
 ---
 
 ## TMTPP foundations — the three-term log-likelihood {#tier5-loglik}
