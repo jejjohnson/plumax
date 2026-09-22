@@ -1,0 +1,1783 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).">
+      
+      
+        <meta name="author" content="J. Emmanuel Johnson">
+      
+      
+      
+        <link rel="prev" href="../02_objects/">
+      
+      
+        <link rel="next" href="../../../api/reference/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.3">
+    
+    
+      
+        <title>III — Mapping onto the phases - plumax</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#part-iii-mapping-the-objects-onto-the-three-phases" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="plumax" class="md-header__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            plumax
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              III — Mapping onto the phases
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="teal" data-md-color-accent="teal"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../design/" class="md-tabs__link">
+          
+  
+  
+  Design
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Theory
+
+        </a>
+      </li>
+    
+  
+
+    
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../api/reference/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  API Reference
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../changelog/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Changelog
+
+      </a>
+    </li>
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="plumax" class="md-nav__button md-logo" aria-label="plumax" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    plumax
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jejjohnson/plumax" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jejjohnson/plumax
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Design
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Design
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap & Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/00_prerequisites/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prerequisites
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/01_tier1_gaussian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier I — Gaussian family
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/02_tier2_lagrangian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier II — Lagrangian
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/03_tier3_eulerian/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier III — Eulerian FV
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/04_rtm_stack/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RTM stack
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/05_tier4_coupled/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier IV — Coupled E2E
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tier V — Population
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Tier V — Population
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06_tier5_population/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06a_instantaneous/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.A — Instantaneous
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06b_point_process/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.B — Point process
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06c_persistency/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.C — Persistency
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/06d_total_emission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    V.D — Total emission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Theory
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Theory
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_1" id="__nav_3_1_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inventory from detections
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Inventory from detections
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01_problem/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    I — The problem & the data
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02_objects/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    II — Mathematical objects
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    III — Mapping onto the phases
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    III — Mapping onto the phases
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#iii-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.1 Phase A — Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.2 Phase B — Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.3 Phase C — Estimation of rates and total
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.4 Scale summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.5 The assumptions carrying the structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../api/reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#iii-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.1 Phase A — Discovery
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.2 Phase B — Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.3 Phase C — Estimation of rates and total
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.4 Scale summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III.5 The assumptions carrying the structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="part-iii-mapping-the-objects-onto-the-three-phases">Part III — Mapping the objects onto the three phases<a class="headerlink" href="#part-iii-mapping-the-objects-onto-the-three-phases" title="Permanent link">&para;</a></h1>
+<p>Each phase gets the same four headings: <strong>what is random</strong>, the <strong>object</strong> from <a href="../02_objects/">Part II</a> that describes it, the <strong>data</strong> it consumes, and what falls out.</p>
+<h2 id="iii-1">III.1 Phase A — Discovery<a class="headerlink" href="#iii-1" title="Permanent link">&para;</a></h2>
+<dl>
+<dt><strong>What is random</strong></dt>
+<dd>Locations of sources not in the database</dd>
+<dt><strong>Object</strong></dt>
+<dd>Thinned log-Gaussian Cox process (<a href="../02_objects/#ii-7">§II.7</a> + <a href="../02_objects/#ii-9">§II.9</a>)</dd>
+<dt><strong>Data</strong></dt>
+<dd>Fine-imager scenes over searched cells; the infrastructure database; the bottom-up inventory, converted into the GP mean <span class="arithmatex">\(m_g\)</span> (below)</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">From a bottom-up inventory to <span class="arithmatex">\(m_g\)</span></p>
+<p>A bottom-up product is an emission density <span class="arithmatex">\(h(x)\)</span> in <span class="arithmatex">\(\mathrm{kg\,h^{-1}\,km^{-2}}\)</span>; <span class="arithmatex">\(m_g\)</span> is the mean of <span class="arithmatex">\(g = \log\lambda\)</span>, a log <em>source</em> density in <span class="arithmatex">\(\mathrm{km^{-2}}\)</span>. Convert in two steps: match expected emission, then correct for the log-normal mean,</p>
+<div class="arithmatex">\[
+\mathbb{E}[\lambda(x)] = \frac{h(x)}{s_0 \int u\,\rho(\mathrm{d}u)},
+\qquad
+m_g(x) = \log \mathbb{E}[\lambda(x)] - \tfrac12\,k_g(x,x).
+\]</div>
+<p>This needs a finite-mean <span class="arithmatex">\(\rho\)</span>, such as the tempered <abbr title="Generalised Gamma process">GGP</abbr> (<span class="arithmatex">\(\tau &gt; 0\)</span>).</p>
+</div>
+<p>Discovery counts <strong>sources</strong>, so it needs a finite number of them. Keep <span class="arithmatex">\(\lambda\)</span> as the <abbr title="Completely random measure">CRM</abbr> base measure of <a href="../02_objects/#ii-4">§II.4</a> (the same one <a href="#iii-3">§III.3</a> integrates against), and give each source two marks: its <strong>on-state</strong> rate <span class="arithmatex">\(s_0 u\)</span>, with Lévy measure <span class="arithmatex">\(\rho(\mathrm{d}u)\)</span>, and its persistence <span class="arithmatex">\(\pi\)</span>, with conditional distribution <span class="arithmatex">\(G(\mathrm{d}\pi \mid u)\)</span>. Count only sources above a size floor <span class="arithmatex">\(u_{\mathrm{floor}}\)</span> (well below <span class="arithmatex">\(s_{\min}/s_0\)</span>). Their count intensity and normalised rate distribution are</p>
+<div class="arithmatex">\[
+\lambda_{\ge}(\mathrm{d}x) = R\,\lambda(\mathrm{d}x),
+\qquad
+f(\mathrm{d}u) = \frac{\rho(\mathrm{d}u)\,\mathbf{1}[u \ge u_{\mathrm{floor}}]}{R},
+\qquad
+R = \rho\bigl([u_{\mathrm{floor}}, \infty)\bigr).
+\]</div>
+<p>A source at <span class="arithmatex">\(x\)</span> with marks <span class="arithmatex">\((u, \pi)\)</span>, covered by clear scenes <span class="arithmatex">\(i = 1, \dots, n\)</span> so far, is detected at least once with probability</p>
+<div class="arithmatex">\[
+p_{\mathrm{camp}}(x,u,\pi) = 1 - \mathbb{E}\!\left[\prod_{i=1}^{n} \bigl(1 - Z_i\,p_i(x,u)\bigr)\right],
+\]</div>
+<p>where <span class="arithmatex">\(Z_i \in \{0,1\}\)</span> is the source's on/off state at scene <span class="arithmatex">\(i\)</span> (with <span class="arithmatex">\(\mathbb{E}[Z_i] = \pi\)</span>), and <span class="arithmatex">\(p_i(x,u)\)</span> is scene <span class="arithmatex">\(i\)</span>'s <abbr title="Probability of detection">POD</abbr> (<a href="../02_objects/#ii-9-2">§II.9.2</a>; it varies with wind, viewing geometry, and retrieval sensitivity). The expectation runs over the joint state model of <a href="#iii-2">§III.2</a>, and the answer depends on it:</p>
+<ul>
+<li><strong>Independent Bernoulli states</strong> (scenes far apart relative to the on/off timescale): <span class="arithmatex">\(1 - \prod_i (1 - \pi\,p_i)\)</span>, which is <span class="arithmatex">\(1 - (1 - \pi\,p)^{n}\)</span> for identical scenes.</li>
+<li><strong>A state that persists through the whole campaign</strong> (a long-lived leak): <span class="arithmatex">\(\pi\,\bigl[1 - \prod_i (1 - p_i)\bigr]\)</span>, which can be far smaller.</li>
+</ul>
+<p>Using the independent formula for a strongly correlated source overstates discovery and understates the missed-emission correction. Its mark average is <span class="arithmatex">\(\bar p(x) = \iint p_{\mathrm{camp}}(x,u,\pi)\,G(\mathrm{d}\pi \mid u)\,f(\mathrm{d}u)\)</span>.</p>
+<div class="admonition abstract">
+<p class="admonition-title">The central identity</p>
+<p>By the (marked) thinning theorem, on a searched cell <span class="arithmatex">\(A\)</span>, <strong>conditional on the intensity</strong> <span class="arithmatex">\(\lambda\)</span>:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+N_{\mathrm{det}}(A) \mid \lambda &amp;\sim \mathrm{Poisson}\!\left(\int_A \bar p(x)\,\lambda_{\ge}(\mathrm{d}x) + \Lambda_{\mathrm{fp}}(A)\right),\\
+N_{\mathrm{miss}}(A) \mid \lambda &amp;\sim \mathrm{Poisson}\!\left(\int_A \bigl(1-\bar p(x)\bigr)\,\lambda_{\ge}(\mathrm{d}x)\right),
+\qquad \text{independent given } \lambda
+\end{aligned}
+\]</div>
+<p><span class="arithmatex">\(\Lambda_{\mathrm{fp}}(A)\)</span> is the expected number of false positives in <span class="arithmatex">\(A\)</span>: the clutter process of <a href="../02_objects/#ii-9-3">§II.9.3</a>, superposed on the real detections. Omitting it lets false plumes inflate the inferred source density and the undiscovered population. When individual detections matter, carry latent real/clutter labels instead.</p>
+<p>Under the <abbr title="Log-Gaussian Cox process">LGCP</abbr>, <span class="arithmatex">\(\lambda\)</span> is random, and marginally the two counts are <strong>dependent</strong> through it. That dependence is exactly what lets detections (and empty searched cells) inform the posterior over <span class="arithmatex">\(\lambda\)</span>, and hence the expected number missed. Write the likelihood conditionally on <span class="arithmatex">\(\lambda\)</span> and integrate over <span class="arithmatex">\(\lambda\)</span>; never factor the marginal.</p>
+</div>
+<p>So the posterior over <span class="arithmatex">\(\lambda\)</span> updates from <strong>both</strong> detections <strong>and</strong> searched-but-empty cells, and the expected number still undiscovered (above the floor) is</p>
+<div class="arithmatex">\[
+\int_A \bigl(1 - \bar p(x)\bigr)\,\lambda_{\ge}(\mathrm{d}x)
+\]</div>
+<p>computable, not guessed.</p>
+<div class="admonition warning">
+<p class="admonition-title">Why the floor</p>
+<p>With the infinite-activity priors of <a href="../02_objects/#ii-4">§II.4</a>, <span class="arithmatex">\(R \to \infty\)</span> as <span class="arithmatex">\(u_{\mathrm{floor}} \to 0\)</span>: the missed source <strong>count</strong> is infinite, even though the missed <strong>mass</strong> is finite. Counting questions (Phase A) therefore need the floor. Mass questions (the search objective below, and Phase C in <a href="#iii-3">§III.3</a>) integrate against <span class="arithmatex">\(\lambda\,\rho\)</span> directly, with no floor and no factor <span class="arithmatex">\(R\)</span>.</p>
+</div>
+<p><strong>Search strategy falls out.</strong> The next cell to image is the one maximising the posterior expected <em>inventory</em> emission that is still undiscovered <strong>and</strong> that the next image would detect,</p>
+<div class="arithmatex">\[
+s_0\,\mathbb{E}\!\left[\int_A \int_0^\infty\!\!\int_0^1 \pi u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,\pi\,p_{\mathrm{next}}(x,u)\;G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]
+\]</div>
+<p>Here <span class="arithmatex">\(\pi u\)</span> weights each source by its time-averaged contribution, not its on-state rate, and <span class="arithmatex">\(\pi\,p_{\mathrm{next}}\)</span> is the chance the next scene catches it on and detects it. Keeping <span class="arithmatex">\(\pi\)</span> inside one integral preserves the dependence between past misses and the next detection, which share the same <span class="arithmatex">\(\pi\)</span>; averaging them over <span class="arithmatex">\(\pi\)</span> separately would misrank intermittent bright sources against persistent faint ones. The objective weights high posterior density (Cox correlation from neighbours) against what the instrument can actually see.</p>
+<pre class="mermaid"><code>flowchart LR
+    prior["LGCP prior&lt;br/&gt;on λ"] --&gt; scene["image cell A"]
+    scene --&gt;|"detections + empty searched cells"| post["posterior on λ&lt;br/&gt;(neighbours move via k_g)"]
+    post --&gt;|"argmax expected undiscovered emission"| scene</code></pre>
+<details class="example" open="open">
+<summary>Running example</summary>
+<p>Choose the floor so that <span class="arithmatex">\(\lambda_{\ge}(A_1) \approx 15\)</span>, the count of <a href="../02_objects/#ii-3">§II.3</a>. With <span class="arithmatex">\(\bar p \approx 0.3\)</span>, the prior mean of detections is <span class="arithmatex">\(0.3 \times 15 = 4.5\)</span>. After one clear fine-imager scene over <span class="arithmatex">\(A_1\)</span> detecting source 1: <span class="arithmatex">\(N_{\mathrm{obs}}(A_1) = 1\)</span> against that prior mean of 4.5 detectable, so the posterior <span class="arithmatex">\(\lambda(A_1)\)</span> drops; the Cox prior propagates milder drops to every cell correlated with <span class="arithmatex">\(A_1\)</span>. <span class="arithmatex">\(A_2\)</span> and <span class="arithmatex">\(A_4\)</span> get no direct likelihood term because they are unsearched, but they still move through the kernel: <span class="arithmatex">\(A_2\)</span> and <span class="arithmatex">\(A_3\)</span>, both adjacent to <span class="arithmatex">\(A_1\)</span>, by similar amounts, and the diagonal <span class="arithmatex">\(A_4\)</span> by less. Expected undiscovered in <span class="arithmatex">\(A_1 \approx (1 - \bar p)\,\hat\lambda_{\ge}(A_1)\)</span> with mark-averaged <span class="arithmatex">\(\bar p \approx 0.3\)</span>.</p>
+</details>
+<h2 id="iii-2">III.2 Phase B — Monitoring<a class="headerlink" href="#iii-2" title="Permanent link">&para;</a></h2>
+<dl>
+<dt><strong>What is random</strong></dt>
+<dd>The on/off state and timing of <em>known</em> sources</dd>
+<dt><strong>Object</strong></dt>
+<dd>Per-site Beta–Bernoulli persistence (<a href="../02_objects/#ii-4-4">§II.4.4</a>), a temporal point process of initiations (<a href="../02_objects/#ii-10-2">§II.10.2</a>), or an on/off switching process (<a href="../02_objects/#ii-10-4">§II.10.4</a>), observed through the thinned clock (<a href="../02_objects/#ii-9-3">§II.9.3</a>, <a href="../02_objects/#ii-10-6">§II.10.6</a>)</dd>
+<dt><strong>Data</strong></dt>
+<dd>The sequence of (overpass, cloud, detected, rate) for each known site</dd>
+</dl>
+<p><strong>Model choice by physics.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Physical behaviour</th>
+<th>Model</th>
+<th>Key parameter</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>scheduled venting</td>
+<td>renewal</td>
+<td><span class="arithmatex">\(h\)</span> peaked at 7 d</td>
+</tr>
+<tr>
+<td>leak until repair</td>
+<td>two-state (semi-)Markov switching (<a href="../02_objects/#ii-10-4">§II.10.4</a>)</td>
+<td>on-state duration = repair time</td>
+</tr>
+<tr>
+<td>clustered distinct initiations (upsets, cascades)</td>
+<td>Hawkes</td>
+<td><span class="arithmatex">\(\varphi\)</span> decaying over days</td>
+</tr>
+<tr>
+<td>random operations</td>
+<td>Beta–Bernoulli</td>
+<td><span class="arithmatex">\(\pi_k\)</span></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition danger">
+<p class="admonition-title">The identifiability warning</p>
+<p>With <span class="arithmatex">\(n\)</span> overpasses, <span class="arithmatex">\(n_{\mathrm{clear}}\)</span> clear, <span class="arithmatex">\(n_{\mathrm{det}}\)</span> detections at site <span class="arithmatex">\(k\)</span>:</p>
+<div class="arithmatex">\[
+\frac{n_{\mathrm{det}}}{n_{\mathrm{clear}}} \ \text{ estimates } \ \pi_k \cdot p(x_k, s_k),
+\quad \text{not } \pi_k
+\]</div>
+<p>Use the controlled-release detection curve to divide out <span class="arithmatex">\(p\)</span>; otherwise report the product and say so. When the <abbr title="Probability of detection">POD</abbr> varies by scene, do not divide by one curve: fit each clear scene's detection <span class="arithmatex">\(y_i\)</span> as <span class="arithmatex">\(\mathrm{Bernoulli}\bigl(\pi_k\,p_i(x_k, s_k)\bigr)\)</span>, or, under independent states, use the moment estimate <span class="arithmatex">\(\hat\pi_k = \sum_i y_i / \sum_i p_i\)</span>.</p>
+</div>
+<details class="example" open="open">
+<summary>Running example — source 3</summary>
+<p>10 overpasses, 8 clear, 3 detections at <span class="arithmatex">\(\approx 400\ \mathrm{kg\,h^{-1}}\)</span>. The detection curve gives <span class="arithmatex">\(p_i(400\ \mathrm{kg\,h^{-1}}) \approx 0.9\)</span> in every clear scene, so the moment estimate is</p>
+<div class="arithmatex">\[
+\hat\pi_3 \approx \frac{\sum_i y_i}{\sum_i p_i} = \frac{3}{8 \times 0.9} \approx 0.42
+\]</div>
+<p>against a truth of 0.3. The discrepancy is sampling noise on 8 scenes, and a <span class="arithmatex">\(\mathrm{Beta}(1,1)\)</span> prior gives a 90 % interval of roughly <span class="arithmatex">\((0.15, 0.7)\)</span>. Renewal structure would tighten this if the blowdowns are regular.</p>
+</details>
+<h2 id="iii-3">III.3 Phase C — Estimation of rates and total<a class="headerlink" href="#iii-3" title="Permanent link">&para;</a></h2>
+<dl>
+<dt><strong>What is random</strong></dt>
+<dd>The on-state rates <span class="arithmatex">\(s_k\)</span>, the diffuse density <span class="arithmatex">\(e(x)\)</span>, and their sums</dd>
+<dt><strong>Object</strong></dt>
+<dd>The full measure <span class="arithmatex">\(\mu = \mu_{\mathrm{pt}} + \mu_{\mathrm{df}}\)</span> with a heavy-tailed <abbr title="Completely random measure">CRM</abbr> prior on <span class="arithmatex">\(\mu_{\mathrm{pt}}\)</span> (<a href="../02_objects/#ii-4-3">§II.4.3</a>), a log-GP prior on <span class="arithmatex">\(e\)</span> (<a href="../02_objects/#ii-6">§II.6</a>), and the per-plume observation model (<a href="../02_objects/#ii-8-2">§II.8.2</a>, <a href="../02_objects/#ii-9-3">§II.9.3</a>)</dd>
+</dl>
+<div class="admonition abstract">
+<p class="admonition-title">Decomposition of the basin total</p>
+<p>Time-averaged, over the sources that exist:</p>
+<div class="arithmatex">\[
+\bar\mu(S)
+= \underbrace{\sum_{k\ \mathrm{detected}} \pi_k s_k}_{\text{(i) monitored points}}
++ \underbrace{\sum_{k\ \mathrm{undetected}} \pi_k s_k}_{\text{(ii) undiscovered points}}
++ \underbrace{\int_S e(x)\,\mathrm{d}x}_{\text{(iii) diffuse}}
+\]</div>
+<p>This is an identity between <strong>random</strong> quantities: all three terms are uncertain, and the object to report is the posterior of the whole sum.</p>
+</div>
+<p>Term (ii) is a sum over sources nobody has seen, with the marks <span class="arithmatex">\((u, \pi)\)</span> and campaign detection probability <span class="arithmatex">\(p_{\mathrm{camp}}\)</span> of <a href="#iii-1">§III.1</a>. By marked thinning, given <span class="arithmatex">\(\lambda\)</span> the undetected sources form a Poisson process with intensity <span class="arithmatex">\(\bigl(1 - p_{\mathrm{camp}}\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\)</span>, independent of the detected ones. Campbell's theorem then gives its first two moments:</p>
+<div class="arithmatex">\[
+\begin{aligned}
+\mathbb{E}\bigl[\text{(ii)} \mid \lambda\bigr] &amp;= s_0 \int_S \int_0^\infty\!\!\int_0^1 \pi u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x),\\
+\mathrm{Var}\bigl[\text{(ii)} \mid \lambda\bigr] &amp;= s_0^2 \int_S \int_0^\infty\!\!\int_0^1 (\pi u)^2\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x).
+\end{aligned}
+\]</div>
+<p>The posterior over <span class="arithmatex">\(\lambda\)</span> adds its own spread on top. Never report (i) + (iii) plus a point value for (ii): that silently drops the Poisson/<abbr title="Completely random measure">CRM</abbr> variance of everything below the detection limit.</p>
+<p>Detection depends on both marks. Sources 2 and 4 have <span class="arithmatex">\(p \approx 0\)</span> and fall entirely into (ii). Source 3 is intermittent but bright: with <span class="arithmatex">\(p_i \approx 0.9\)</span> in each of 8 clear scenes, <span class="arithmatex">\(1 - (1 - 0.3 \times 0.9)^{8} \approx 0.92\)</span>, so it is almost surely found, even though its time-averaged <span class="arithmatex">\(123\ \mathrm{kg\,h^{-1}}\)</span> is near the threshold. Collapsing it to one averaged rate would wrongly place it in (ii).</p>
+<p>Each term has its own uncertainty:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">(i) Monitored points</label><label for="__tabbed_1_2">(ii) Undiscovered points</label><label for="__tabbed_1_3">(iii) Diffuse</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Per-plume rate noise <span class="arithmatex">\(\eta_k\)</span> (log-normal, tens of percent) <span class="arithmatex">\(\times\)</span> persistence uncertainty from <a href="#iii-2">§III.2</a>.</p>
+</div>
+<div class="tabbed-block">
+<p>Spans <strong>all</strong> rates, each weighted by <span class="arithmatex">\(1 - p_{\mathrm{camp}}\)</span>. In well-covered cells it is dominated by the tail of <span class="arithmatex">\(\rho\)</span> below <span class="arithmatex">\(s_{\min}\)</span>. This is where the choice of Gamma versus generalised Gamma changes the answer by a large factor, and the only handle on it is bottom-up knowledge of small-source rates.</p>
+<p>Above the threshold, <span class="arithmatex">\(1 - p_{\mathrm{camp}}\)</span> stays positive wherever coverage is thin or persistence is low: an intermittent super-emitter in a rarely imaged cell can be missed and dominate the missing mass. Never truncate (ii) at <span class="arithmatex">\(s_{\min}\)</span>.</p>
+</div>
+<div class="tabbed-block">
+<p>From the coarse-mapper stack; scales at best as <span class="arithmatex">\(\sigma_r/\sqrt{n_{\mathrm{clear}}}\)</span>, and hits a floor under temporally correlated errors (<a href="../02_objects/#ii-8-3">§II.8.3</a>).</p>
+</div>
+</div>
+</div>
+<details class="example" open="open">
+<summary>Running example</summary>
+<p>The toy basin contains only the four listed sources, so its true (ii) is exactly sources 2 and 4. A real basin also has a tail of smaller sources, and the estimate of (ii) always includes one.</p>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Truth (<span class="arithmatex">\(\mathrm{kg\,h^{-1}}\)</span>)</th>
+<th>Estimate (<span class="arithmatex">\(\mathrm{kg\,h^{-1}}\)</span>)</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(i) monitored</td>
+<td><span class="arithmatex">\(0.9\cdot 120 + 0.3\cdot 410 = 231\)</span></td>
+<td><span class="arithmatex">\(\approx 108 + 167 = 275\)</span>, <span class="arithmatex">\(\pm\approx 30\,\%\)</span> per source</td>
+<td>source 3 from its <a href="#iii-2">§III.2</a> estimate <span class="arithmatex">\(0.42 \times 400\)</span>; source 1 held at its true value for brevity</td>
+</tr>
+<tr>
+<td>(ii) undiscovered</td>
+<td><span class="arithmatex">\(35 + 60 = 95\)</span></td>
+<td>posterior of the missed-source sum over all rates, weighted by <span class="arithmatex">\(1 - p_{\mathrm{camp}}\)</span> (here mostly the tail below <span class="arithmatex">\(100\ \mathrm{kg\,h^{-1}}\)</span>)</td>
+<td>matches 95 only if the prior's missed mass happens to be right</td>
+</tr>
+<tr>
+<td>(iii) diffuse</td>
+<td><span class="arithmatex">\(400\)</span></td>
+<td><span class="arithmatex">\(\approx 400 \pm 60\)</span></td>
+<td>30-day mapper stack</td>
+</tr>
+<tr>
+<td><strong>total</strong></td>
+<td><strong>726</strong></td>
+<td><span class="arithmatex">\(\approx 675 + \text{(ii)}\)</span></td>
+<td><strong>(ii) is set by the prior, not the data</strong>; (i) is high by sampling noise on 8 scenes</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid"><code>%%{init: {"themeVariables": {"pie1": "#00695c", "pie2": "#26a69a", "pie3": "#80cbc4", "pie4": "#b2dfdb", "pie5": "#ffb74d", "pieStrokeColor": "#ffffff", "pieOuterStrokeColor": "#9e9e9e", "pieTitleTextColor": "#8a8a8a", "pieLegendTextColor": "#8a8a8a", "pieSectionTextColor": "#ffffff"}}}%%
+pie showData title Where the true 726 kg/h comes from
+    "(i) monitored points" : 231
+    "(ii) undiscovered points" : 95
+    "(iii) diffuse" : 400</code></pre>
+</details>
+<p><strong>Attribution.</strong> When two fine-imager plumes are near each other, DP/Pitman–Yor (<a href="../02_objects/#ii-5">§II.5</a>) decides "one source or two", with assignment weights built from each candidate's observation rate <span class="arithmatex">\(\pi_k\,p(x_k, s_k)\)</span>, not its emission fraction (see the warning in <a href="../02_objects/#ii-5">§II.5</a>). Pitman–Yor is the safer choice given the heavy tail.</p>
+<div class="admonition tip">
+<p class="admonition-title">In <code>plumax</code></p>
+<p>The population-level machinery for this phase (<abbr title="Thinned marked temporal point process">TMTPP</abbr>, <abbr title="Probability of detection">POD</abbr>-corrected totals, the missing-mass paradox) is laid out in <a href="../../../design/06d_total_emission/">Tier V.D — Total emission estimation</a>.</p>
+</div>
+<h2 id="iii-4">III.4 Scale summary<a class="headerlink" href="#iii-4" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>point (atom)</th>
+<th>area (density)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>object</strong></td>
+<td><span class="arithmatex">\(\mu_{\mathrm{pt}} = \sum_k s_k\delta_{x_k}\)</span></td>
+<td><span class="arithmatex">\(\mu_{\mathrm{df}} = \int e\,\mathrm{d}x\)</span></td>
+</tr>
+<tr>
+<td><strong>rate prior</strong></td>
+<td><abbr title="Completely random measure">CRM</abbr> (Gamma / <abbr title="Generalised Gamma process">GGP</abbr>)</td>
+<td>log-GP on <span class="arithmatex">\(e\)</span></td>
+</tr>
+<tr>
+<td><strong>persistence prior</strong></td>
+<td>persistence marks <span class="arithmatex">\(\pi_k\)</span> (Beta–Bernoulli / Beta process)</td>
+<td>— (persistent)</td>
+</tr>
+<tr>
+<td><strong>seen by</strong></td>
+<td>fine imager, 1 scene</td>
+<td>coarse mapper, stack</td>
+</tr>
+<tr>
+<td><strong>detection</strong></td>
+<td>threshold on peak</td>
+<td>averaging, <span class="arithmatex">\(1/\sqrt{n}\)</span></td>
+</tr>
+<tr>
+<td><strong>time</strong></td>
+<td>sampled: <span class="arithmatex">\(\pi_k s_k\)</span></td>
+<td>averaged: persistent</td>
+</tr>
+<tr>
+<td><strong>phase</strong></td>
+<td>A, B, C</td>
+<td>C</td>
+</tr>
+<tr>
+<td><strong>fails when</strong></td>
+<td>extent <span class="arithmatex">\(\gtrsim \Delta x\)</span></td>
+<td>extent <span class="arithmatex">\(\lesssim \Delta x\)</span></td>
+</tr>
+</tbody>
+</table>
+<h2 id="iii-5">III.5 The assumptions carrying the structure<a class="headerlink" href="#iii-5" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">#</th>
+<th>Assumption</th>
+<th>Fails when</th>
+<th>Repaired by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">1</td>
+<td><em>Independence across disjoint regions</em> (<a href="../02_objects/#ii-2">§II.2</a>)</td>
+<td>shared geology</td>
+<td>Cox process (<a href="../02_objects/#ii-7">§II.7</a>)</td>
+</tr>
+<tr>
+<td style="text-align: center;">2</td>
+<td><em>Memorylessness in time</em> (<a href="../02_objects/#ii-10-2">§II.10.2</a>, Poisson)</td>
+<td>persistent leaks, schedules, clustered upsets</td>
+<td>on/off switching (leaks), renewal (schedules), Hawkes (clustered initiations)</td>
+</tr>
+<tr>
+<td style="text-align: center;">3</td>
+<td><em>Point/area is fixed</em></td>
+<td>always: it is relative to <span class="arithmatex">\(\Delta x\)</span> (<a href="../02_objects/#ii-8-1">§II.8.1</a>)</td>
+<td>model at the fine scale and coarsen, never the reverse</td>
+</tr>
+<tr>
+<td style="text-align: center;">4</td>
+<td><em>Overpasses are a fair sample of source state</em> (<a href="../02_objects/#ii-8-3">§II.8.3</a>)</td>
+<td>operations correlate with local overpass time</td>
+<td>no fix from data alone</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition quote">
+<p class="admonition-title">The identifiability warning that runs through all three phases</p>
+<p>The data see only products (<span class="arithmatex">\(p\lambda\)</span>, <span class="arithmatex">\(\pi_k p\)</span>, <span class="arithmatex">\(\int u\,p(u)\,\rho(\mathrm{d}u)\)</span>), and <strong>everything below the detection limit rests on calibration done outside the model.</strong></p>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+  <script>var tabs=__md_get("__tabs");if(Array.isArray(tabs))e:for(var set of document.querySelectorAll(".tabbed-set")){var labels=set.querySelector(".tabbed-labels");for(var tab of tabs)for(var label of labels.getElementsByTagName("label"))if(label.innerText.trim()===tab){var input=document.getElementById(label.htmlFor);input.checked=!0;continue e}}</script>
+
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+    
+      
+      <nav class="md-footer__inner md-grid" aria-label="Footer" >
+        
+          
+          <a href="../02_objects/" class="md-footer__link md-footer__link--prev" aria-label="Previous: II — Mathematical objects">
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+            </div>
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Previous
+              </span>
+              <div class="md-ellipsis">
+                II — Mathematical objects
+              </div>
+            </div>
+          </a>
+        
+        
+          
+          <a href="../../../api/reference/" class="md-footer__link md-footer__link--next" aria-label="Next: API Reference">
+            <div class="md-footer__title">
+              <span class="md-footer__direction">
+                Next
+              </span>
+              <div class="md-ellipsis">
+                API Reference
+              </div>
+            </div>
+            <div class="md-footer__button md-icon">
+              
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+            </div>
+          </a>
+        
+      </nav>
+    
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.top", "content.code.copy", "content.code.annotate", "content.tabs.link", "content.tooltips", "navigation.footer", "toc.follow"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+        <script src="../../../javascripts/mathjax.js"></script>
+      
+        <script src="https://unpkg.com/mathjax@3.2.2/es5/tex-mml-chtml.js"></script>
+      
+    
+  </body>
+</html>
