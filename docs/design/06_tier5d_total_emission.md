@@ -6,18 +6,21 @@ This is the **inventory-grade output** of `plumax` — the number that gets repo
 
 ---
 
-## The missing-mass paradox {#vd-paradox}
+(vd-paradox)=
+## The missing-mass paradox
 
 The full Monte Carlo proof is in `methane_pod/notebooks/03_missing_mass_paradox`. The result, in one sentence:
 
-!!! important "The paradox"
-    A POD-thinned plume catalog simultaneously **overestimates the average emission rate** (because it oversamples big leaks) and **underestimates the total emitted mass** (because it misses many small leaks).
+:::{important} The paradox
+A POD-thinned plume catalog simultaneously **overestimates the average emission rate** (because it oversamples big leaks) and **underestimates the total emitted mass** (because it misses many small leaks).
+:::
 
 These two biases pull in opposite directions, but they don't cancel — averaging the wrong thing over the wrong sample size gives you the wrong total. The corrected estimator has to model the thinning explicitly.
 
 ---
 
-## The corrected total-mass estimator {#vd-corrected-estimator}
+(vd-corrected-estimator)=
+## The corrected total-mass estimator
 
 Given a TMTPP fit (Tier V.B) with posterior $(\lambda, f, P_d)$:
 
@@ -47,7 +50,8 @@ The two errors *compound* rather than cancel: the regional total is undercounted
 
 ---
 
-## Posterior over total mass {#vd-posterior}
+(vd-posterior)=
+## Posterior over total mass
 
 With NUTS samples $(\lambda^{(s)}, f^{(s)}, P_d^{(s)})$, the posterior over $M_\text{total}(T)$ is:
 
@@ -59,10 +63,12 @@ Reported as posterior median + 95% credible interval. Both integrals are tractab
 
 ---
 
-## Validation strategy {#vd-validation}
+(vd-validation)=
+## Validation strategy
 
-!!! important "Most important validation in the tier"
-    Without these, the estimator is just a number.
+:::{important} Most important validation in the tier
+Without these, the estimator is just a number.
+:::
 
 - **MC ground truth (bias direction).** Reproduce the qualitative result of the paradox notebook: simulate a known $(\lambda^{*}, f^{*}, P_d^{*})$, compute $M_\text{true}$ exactly, and check that the corrected estimator recovers $M_\text{true}$ while $M_\text{naive}$ is biased low.
 - **MC ground truth (calibration).** Across 1000 replicates of the previous test, the 95% credible interval on $M_\text{total}$ should contain $M_\text{true}$ ~95% of the time.
@@ -71,7 +77,8 @@ Reported as posterior median + 95% credible interval. Both integrals are tractab
 
 ---
 
-## Module layout {#vd-modules}
+(vd-modules)=
+## Module layout
 
 *Tier V.D module layout — concern, target module, status.*
 
@@ -85,7 +92,8 @@ Reported as posterior median + 95% credible interval. Both integrals are tractab
 
 ---
 
-## Multi-satellite fusion (Tier V.D extension) {#vd-multi-satellite-fusion}
+(vd-multi-satellite-fusion)=
+## Multi-satellite fusion (Tier V.D extension)
 
 For a region observed by $K$ satellites, each with its own POD, the unified detection probability is:
 
@@ -95,21 +103,27 @@ $$
 
 This is the "any satellite saw it" probability. Folds into the TMTPP likelihood as a single replacement of $P_d$ with $P_d^{\cup}$. Adds one strong assumption: detections by different satellites are conditionally independent given the leak size — defensible at the population level, possibly violated for clustered super-emitters.
 
-!!! attention "Open: union vs. categorical mark"
-    Whether to model **which** satellite detected each event (categorical mark) or just the union. The first gives more information per event but doubles the number of POD parameters.
+:::{attention} Open: union vs. categorical mark
+Whether to model **which** satellite detected each event (categorical mark) or just the union. The first gives more information per event but doubles the number of POD parameters.
+:::
 
 ---
 
-## Open questions {#vd-open-questions}
+(vd-open-questions)=
+## Open questions
 
-!!! attention "Mass vs. mass-rate"
-    $M_\text{total}(T)$ is mass. Most published inventories report mass-rate (Tg / yr). The conversion is $M_\text{total} / T$, but $T$ for a satellite catalog is fuzzy — what's the effective observing time when satellites overpass intermittently? Document the convention.
+:::{attention} Mass vs. mass-rate
+$M_\text{total}(T)$ is mass. Most published inventories report mass-rate (Tg / yr). The conversion is $M_\text{total} / T$, but $T$ for a satellite catalog is fuzzy — what's the effective observing time when satellites overpass intermittently? Document the convention.
+:::
 
-!!! attention "Spatial aggregation"
-    Currently temporal-only. Aggregating $M_\text{total}$ over a basin requires either a spatial point process (cleaner) or stratifying the sources by facility class and combining (operational shortcut). v1: stratification; v2: spatial CGS / Cox process.
+:::{attention} Spatial aggregation
+Currently temporal-only. Aggregating $M_\text{total}$ over a basin requires either a spatial point process (cleaner) or stratifying the sources by facility class and combining (operational shortcut). v1: stratification; v2: spatial CGS / Cox process.
+:::
 
-!!! attention "POD parameter sources"
-    Per-satellite POD parameters can come from (a) fits in `methane_pod` on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
+:::{attention} POD parameter sources
+Per-satellite POD parameters can come from (a) fits in `methane_pod` on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
+:::
 
-!!! attention "Reporting cadence"
-    Inventories are annual; satellites are daily-ish. How do we smooth the $M_\text{total}$ time series? Rolling 30-day window? Bayesian time-series prior on $\lambda(t)$?
+:::{attention} Reporting cadence
+Inventories are annual; satellites are daily-ish. How do we smooth the $M_\text{total}$ time series? Rolling 30-day window? Bayesian time-series prior on $\lambda(t)$?
+:::

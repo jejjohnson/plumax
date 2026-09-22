@@ -1,20 +1,36 @@
-site_name: plumax
-site_description: Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX).
+# ---------------------------------------------------------------------------
+# MkDocs builds ONLY the API reference, which is deployed as the `/reference/`
+# subtree of the MyST site. Prose, design docs, and theory pages are built by
+# mystmd from `docs/myst.yml`. See `docs/README.md` for the split and the
+# rationale.
+#
+# mkdocstrings publishes a Sphinx-compatible `objects.inv` into `site/`, and
+# that inventory is what lets the MyST prose cross-reference into these pages.
+# ---------------------------------------------------------------------------
+site_name: plumax API reference
+site_description: API reference for plumax — generated from Google-style docstrings.
 site_author: J. Emmanuel Johnson
 repo_url: https://github.com/jejjohnson/plumax
 repo_name: jejjohnson/plumax
 
+docs_dir: docs/api
+site_dir: site
+
+# The prose pages live in the MyST half of the site, so links to them point
+# outside `docs_dir` by design. The assembled-site link checker in
+# `scripts/build_docs.py` validates them instead — across both halves, which
+# neither tool can do on its own.
+validation:
+  links:
+    unrecognized_links: ignore
+    absolute_links: ignore
+
 theme:
   name: material
   features:
-    - navigation.tabs
     - navigation.sections
     - navigation.top
     - content.code.copy
-    - content.code.annotate
-    - content.tabs.link
-    - content.tooltips
-    - navigation.footer
     - toc.follow
   palette:
     - scheme: default
@@ -38,62 +54,47 @@ plugins:
           paths: [src]
           options:
             docstring_style: google
+            docstring_section_style: table
             show_source: true
             show_root_heading: true
-  - mkdocs-jupyter:
-      execute: false
-      ignore_h1_titles: true
+            show_root_full_path: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            show_signature_annotations: true
+            separate_signature: true
+            members_order: source
+            merge_init_into_class: true
+            heading_level: 2
+            filters: ["!^_"]
 
 nav:
-  - Home: index.md
-  - Design:
-      - Roadmap & Architecture: design/index.md
-      - Prerequisites: design/00_prerequisites.md
-      - Tier I — Gaussian family: design/01_tier1_gaussian.md
-      - Tier II — Lagrangian: design/02_tier2_lagrangian.md
-      - Tier III — Eulerian FV: design/03_tier3_eulerian.md
-      - RTM stack: design/04_rtm_stack.md
-      - Tier IV — Coupled E2E: design/05_tier4_coupled.md
-      - Tier V — Population:
-          - Overview: design/06_tier5_population.md
-          - V.A — Instantaneous: design/06a_instantaneous.md
-          - V.B — Point process: design/06b_point_process.md
-          - V.C — Persistency: design/06c_persistency.md
-          - V.D — Total emission: design/06d_total_emission.md
-  - Theory:
-      - Inventory from detections:
-          - Overview: theory/inventory/index.md
-          - I — The problem & the data: theory/inventory/01_problem.md
-          - II — Mathematical objects: theory/inventory/02_objects.md
-          - III — Mapping onto the phases: theory/inventory/03_phases.md
-  - API Reference: api/reference.md
-  - Changelog: changelog.md
+  - Overview: index.md
+  - Tier 0 — Meteorology: met.md
+  - Tier I — Gaussian:
+      - Gaussian plume: gauss_plume.md
+      - Gaussian puff: gauss_puff.md
+  - Tier II — Lagrangian: lagrangian.md
+  - Tier III — Eulerian FV: les_fvm.md
+  - Tier IV — Coupled: coupled.md
+  - Tier V — Population: population.md
+  - RTM stack:
+      - HITRAN LUTs: hapi_lut.md
+      - Radiative transfer: radtran.md
+      - Matched filter: matched_filter.md
+  - Assimilation: assimilation.md
+  - pipekit integration:
+      - Operators: operators.md
+      - Adapters: adapters.md
 
 markdown_extensions:
-  - abbr
   - admonition
-  - def_list
-  - footnotes
-  - pymdownx.emoji:
-      emoji_index: !!python/name:material.extensions.emoji.twemoji
-      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.arithmatex:
       generic: true
   - pymdownx.highlight:
       anchor_linenums: true
-  - pymdownx.superfences:
-      custom_fences:
-        - name: mermaid
-          class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_code_format
-  - pymdownx.tabbed:
-      alternate_style: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
   - pymdownx.details
-  - pymdownx.snippets:
-      base_path: ["."]
-      auto_append:
-        - docs/.snippets/abbreviations.md
-  - pymdownx.mark
   - attr_list
   - md_in_html
   - tables

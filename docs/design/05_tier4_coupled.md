@@ -16,9 +16,11 @@ Tier IV is **assembly + multi-instrument fusion**, not new modelling: it compose
 
 ---
 
-## (1) Simple model — composed forward over multiple instruments {#tier4-simple-model}
+(tier4-simple-model)=
+## (1) Simple model — composed forward over multiple instruments
 
-### Per-instrument forward {#tier4-per-instrument-forward}
+(tier4-per-instrument-forward)=
+### Per-instrument forward
 
 For a single instrument $\text{inst}$:
 
@@ -31,13 +33,14 @@ $$
 $$
 
 - $\text{transport}(Q(t), x_0, \text{met})$ — Tier I, II, or III. **$Q(t)$ is time-resolved**, not a static rate (see §3 below).
-- $\mathbf{c}_\text{bg}$ — regional background, with prior from the [emission inventory loader](00_prerequisites.md#prereqs-emission-inventory).
+- $\mathbf{c}_\text{bg}$ — regional background, with prior from the [emission inventory loader](#prereqs-emission-inventory).
 - $\mathbf{A}_\text{inst}$, $\mathbf{R}_{\text{retr},\text{inst}}$ — per-instrument from the [RTM stack](04_rtm_stack.md) or directly from the L2 product.
 - $\text{bias}_\text{inst} \sim \mathcal{N}(0, \sigma^{2}_\text{inst})$ — per-instrument additive bias, **first-class state element**. Documented inter-instrument biases are $O(\pm 10$ ppb); ignoring them double-counts agreement.
 - $\mathbf{R}_{\text{repr},\text{inst}}$ — representation error (model-vs-pixel-footprint mismatch); rises with terrain complexity.
 - $\mathbf{R}_{\text{align},\text{inst}}$ — temporal misalignment error (overpass at $t_\text{inst}$ vs. modelled state at $t$).
 
-### State vector — full enumeration {#tier4-state-vector}
+(tier4-state-vector)=
+### State vector — full enumeration
 
 Single-overpass coupled inference works in a state space far larger than just $(Q, x_0, t_0)$:
 
@@ -56,7 +59,8 @@ $$
 
 with trans-dimensional $K = n_\text{sources}$ (basin case). Single-source single-instrument is the sanity-check special case, not the operational target.
 
-### Multi-instrument fusion {#tier4-multi-instrument-fusion}
+(tier4-multi-instrument-fusion)=
+### Multi-instrument fusion
 
 The joint observation operator is a **list-of-forwards** keyed on `instrument_id`, not a single forward:
 
@@ -67,10 +71,12 @@ $$
 
 Each $\mathbf{H}_\text{inst}$ carries its own AK, footprint, native resolution, observation time, and quality-flag schema (see [s5p_tropomi,emit,carbon_mapper,ghgsat]).
 
-!!! important "Don't pre-regrid to a common resolution"
-    Pre-regridding loses information; do the AK + footprint averaging at native resolution per instrument, fuse at the likelihood level.
+:::{important} Don't pre-regrid to a common resolution
+Pre-regridding loses information; do the AK + footprint averaging at native resolution per instrument, fuse at the likelihood level.
+:::
 
-### Spatiotemporal alignment — $Q(t)$ as a stochastic process {#tier4-q-of-t}
+(tier4-q-of-t)=
+### Spatiotemporal alignment — $Q(t)$ as a stochastic process
 
 Different satellites overpass at different times. With a static $Q$ the coupled forward implies the same source state at every overpass — wrong for intermittent/leak emissions and wrong over multi-day windows.
 
@@ -95,9 +101,11 @@ The point: **don't try to ship the most complex tier first.** Each upgrade repla
 
 ---
 
-## (2) Model-based inference {#tier4-inference}
+(tier4-inference)=
+## (2) Model-based inference
 
-### End-to-end gradient — honest cost {#tier4-gradient}
+(tier4-gradient)=
+### End-to-end gradient — honest cost
 
 $$
 \nabla_{\mathbf{x}} J \;=\; \nabla_{\mathbf{x}}\!\left[\, \sum_\text{inst} \tfrac{1}{2}\lVert \mathbf{H}_\text{inst}(\mathbf{x}) - \mathbf{y}_\text{inst} \rVert^{2}_{\mathbf{R}_\text{inst}} \;+\; \tfrac{1}{2}\lVert \mathbf{x} - \mathbf{x}_b \rVert^{2}_{\mathbf{B}} \right]
@@ -105,10 +113,12 @@ $$
 
 JAX autodiff propagates through transport + RTM jointly — no chain rule by hand. **Cost is non-trivial:** each gradient call runs transport + RTM for every instrument's $\mathbf{H}_\text{inst}$. For Tier III + HAPI that's seconds-to-minutes per call; emulator-based inference (Step 4) is the operational path.
 
-!!! caution "'JAX gives you gradients for free' is a half-truth"
-    The gradient is automatic, but the *forward cost per gradient step* dominates wall time. Budget accordingly.
+:::{caution} 'JAX gives you gradients for free' is a half-truth
+The gradient is automatic, but the *forward cost per gradient step* dominates wall time. Budget accordingly.
+:::
 
-### Cost function {#tier4-cost}
+(tier4-cost)=
+### Cost function
 
 Three terms:
 
@@ -125,8 +135,9 @@ $\mathbf{B}$ carries the structured priors from §1 (lognormal $Q$, met-tight $\
 
 Per-instrument quality flags from the RTM stack flow into the coupled forward. **Default policy:** flagged pixels contribute zero log-likelihood (mask multiplier in $\mathbf{R}^{-1}$).
 
-!!! caution "Don't drop flagged pixels silently"
-    Keep masks visible in diagnostics so the effective per-instrument observation count is auditable.
+:::{caution} Don't drop flagged pixels silently
+Keep masks visible in diagnostics so the effective per-instrument observation count is auditable.
+:::
 
 ### Posterior covariance
 
@@ -138,7 +149,8 @@ Three paths, mirroring Tier III:
 
 Posterior export to Tier V.A is via the same adapter pattern as Tiers I/II/III.
 
-### Trans-dimensional $n_\text{sources}$ {#tier4-trans-dim}
+(tier4-trans-dim)=
+### Trans-dimensional $n_\text{sources}$
 
 $K = n_\text{sources}$ is itself unknown. Three options:
 
@@ -150,18 +162,21 @@ v1: max-K with masking ($K_\text{max} = 10$ per basin tile). Promote to RJMCMC w
 
 ---
 
-## (3) Model emulator — coupled vs. stacked {#tier4-emulator}
+(tier4-emulator)=
+## (3) Model emulator — coupled vs. stacked
 
 Two architectural choices:
 
-### Stacked emulators (tier-modular) {#tier4-stacked-emulator}
+(tier4-stacked-emulator)=
+### Stacked emulators (tier-modular)
 
 Compose Tier-N transport emulator + RTM emulator at runtime.
 
 - **Pros:** any emulator can be swapped independently; intermediate $c(\mathbf{x},t)$ is materialised for diagnostics; modular validation chains directly into Steps 3/4 of each parent tier.
 - **Cons:** two emulator calls per forward; no joint training signal.
 
-### Coupled emulator (single network) {#tier4-coupled-emulator}
+(tier4-coupled-emulator)=
+### Coupled emulator (single network)
 
 $$
 g_\phi : (\text{met fields},\, \text{source params},\, \text{instrument metadata}) \;\longmapsto\; \text{simulated multi-instrument overpass tensor}
@@ -177,12 +192,14 @@ $$
 
 Both should exist; the coupled emulator is validated against the stacked composition before deployment.
 
-### Training-data budget {#tier4-active-learning}
+(tier4-active-learning)=
+### Training-data budget
 
 "Millions of pairs" naively needs $O(10^{6})$ transport+RTM simulations. For Tier III + HAPI that's CPU-years on a single machine.
 
-!!! important "Active learning is mandatory"
-    Sample sequentially, prioritise loss-residual hot spots and operationally important tails (sun-glint, high AOD, low PBL, multi-source basins). Reaches operational accuracy with $O(10^{5})$ or fewer simulations.
+:::{important} Active learning is mandatory
+Sample sequentially, prioritise loss-residual hot spots and operationally important tails (sun-glint, high AOD, low PBL, multi-source basins). Reaches operational accuracy with $O(10^{5})$ or fewer simulations.
+:::
 
 ### Domain randomization
 
@@ -190,7 +207,8 @@ Sample the joint $(\text{met regime}, \text{source configuration}, \text{scene c
 
 ---
 
-## (4) Emulator-based inference {#tier4-emu-inference}
+(tier4-emu-inference)=
+## (4) Emulator-based inference
 
 Use the coupled (or stacked) emulator in EKI ([`filterax`](https://github.com/jejjohnson/filterax)) or gradient-based inversion. Real-time capable.
 
@@ -199,7 +217,8 @@ Use the coupled (or stacked) emulator in EKI ([`filterax`](https://github.com/je
 
 ---
 
-## (5) Amortized inference (predictor) {#tier4-amortized}
+(tier4-amortized)=
+## (5) Amortized inference (predictor)
 
 $$
 f_\theta : \bigl(\, \{(\text{instrument\_id}, \mathbf{y}_\text{inst}, \mathbf{A}_\text{inst}, \text{mask}_\text{inst}, \text{footprint}_\text{inst})\},\;
@@ -237,7 +256,8 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 
 ---
 
-## (6) Improve {#tier4-improve}
+(tier4-improve)=
+## (6) Improve
 
 - **Active learning loop.** Flag high-uncertainty scenes for targeted follow-up (e.g. trigger a GHGSat tasking based on a TROPOMI alert; [ghgsat,s5p_tropomi]). Posterior entropy from the predictor is the natural trigger metric.
 - **Joint met + source posterior.** Currently we condition on met with tight priors; instead infer $p(Q, \bar{u}, \theta_\text{wind}, \dots \mid \mathbf{y})$ jointly with a looser met prior. WRF becomes informative prior, not hard constraint. Critical for remote regions where reanalysis is poor.
@@ -247,7 +267,8 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 
 ---
 
-## Module layout (proposed) {#tier4-modules}
+(tier4-modules)=
+## Module layout (proposed)
 
 *Tier IV proposed module layout — step, concern, target module, status.*
 
@@ -277,7 +298,8 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 
 ---
 
-## Validation strategy {#tier4-validation}
+(tier4-validation)=
+## Validation strategy
 
 - **Composition correctness.** Apply identity AK, identity RTM, single-instrument list → coupled forward should equal the bare transport forward. Cheap, catches plumbing bugs.
 - **Linear-conditional-Gaussian limit.** Tier I + linear AK + Gaussian noise → conditional posterior $p(Q \mid x_0, \bar{u}, \theta_\text{wind}, \mathbf{c}_\text{bg})$ is closed-form via [`gaussx`](https://github.com/jejjohnson/gaussx). Compare end-to-end JAX inversion to the closed-form result. (Note: only $Q$ is linear; the joint over $(x_0, \bar{u}, \dots)$ is nonlinear — phrase the test as conditional, not joint.)
@@ -290,31 +312,41 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 
 ---
 
-## Open questions {#tier4-open-questions}
+(tier4-open-questions)=
+## Open questions
 
-!!! attention "Tiering at inference time"
-    Should the user choose the transport tier, or should the predictor figure it out (e.g. choose Tier I for stationary winds, Tier II for turbulent regimes)? Probably the former for v1 — explicit is safer; predictor-side dispatch as v2.
+:::{attention} Tiering at inference time
+Should the user choose the transport tier, or should the predictor figure it out (e.g. choose Tier I for stationary winds, Tier II for turbulent regimes)? Probably the former for v1 — explicit is safer; predictor-side dispatch as v2.
+:::
 
-!!! attention "Trans-dimensional posterior — RJMCMC vs. masked-K"
-    v1 commitment is masked-K ($K_\text{max} = 10$). When does basin saturation force the upgrade to RJMCMC? Operationally: when >5% of overpasses saturate $K_\text{max}$.
+:::{attention} Trans-dimensional posterior — RJMCMC vs. masked-K
+v1 commitment is masked-K ($K_\text{max} = 10$). When does basin saturation force the upgrade to RJMCMC? Operationally: when >5% of overpasses saturate $K_\text{max}$.
+:::
 
-!!! attention "$Q(t)$ parameterisation"
-    OU process is the simplest non-trivial choice; GP with Matérn-3/2 is more flexible but slower. v1: OU; v2: hierarchical kernel choice.
+:::{attention} $Q(t)$ parameterisation
+OU process is the simplest non-trivial choice; GP with Matérn-3/2 is more flexible but slower. v1: OU; v2: hierarchical kernel choice.
+:::
 
-!!! attention "Cross-instrument bias structure"
-    Flat per-instrument Gaussian (v1), per-(instrument, basin) (v1.5), per-(instrument, basin, season) (v2). Promotion driven by residual diagnostics on real-data benchmark.
+:::{attention} Cross-instrument bias structure
+Flat per-instrument Gaussian (v1), per-(instrument, basin) (v1.5), per-(instrument, basin, season) (v2). Promotion driven by residual diagnostics on real-data benchmark.
+:::
 
-!!! attention "Training-data budget"
-    Coupled-emulator training cost is operationally prohibitive without active learning. Open: target $O(10^{5})$ simulations with sequential design vs. $O(10^{6})$ uniform — confirm the active-learning factor in pilot.
+:::{attention} Training-data budget
+Coupled-emulator training cost is operationally prohibitive without active learning. Open: target $O(10^{5})$ simulations with sequential design vs. $O(10^{6})$ uniform — confirm the active-learning factor in pilot.
+:::
 
-!!! attention "Coupled vs. stacked emulator default"
-    Stacked for development. Coupled for deployment. Open: at what predictor latency budget does coupled become required? Likely when overall pipeline must respond <1 s to an alert trigger.
+:::{attention} Coupled vs. stacked emulator default
+Stacked for development. Coupled for deployment. Open: at what predictor latency budget does coupled become required? Likely when overall pipeline must respond <1 s to an alert trigger.
+:::
 
-!!! attention "What goes into 'operational'?"
-    This is the line between research artefact and product. Need to decide: SLA on inference latency, supported scene types, failure modes, monitoring. Probably outside scope of `plumax` itself — that's `plumax-deploy` or similar.
+:::{attention} What goes into 'operational'?
+This is the line between research artefact and product. Need to decide: SLA on inference latency, supported scene types, failure modes, monitoring. Probably outside scope of `plumax` itself — that's `plumax-deploy` or similar.
+:::
 
-!!! attention "Posterior summaries"
-    A full distribution over all state elements is unwieldy for downstream consumers. Canonical 1-page summary: per-source mode + 68/95% credible region + entropy budget + per-instrument bias posterior + activity flag. Pin the schema before Tier V.A starts consuming.
+:::{attention} Posterior summaries
+A full distribution over all state elements is unwieldy for downstream consumers. Canonical 1-page summary: per-source mode + 68/95% credible region + entropy budget + per-instrument bias posterior + activity flag. Pin the schema before Tier V.A starts consuming.
+:::
 
-!!! attention "Quality-flag aggregation"
-    Mask flagged pixels (default), or down-weight via inflated $\mathbf{R}$? Open: empirical comparison on real data.
+:::{attention} Quality-flag aggregation
+Mask flagged pixels (default), or down-weight via inflated $\mathbf{R}$? Open: empirical comparison on real data.
+:::

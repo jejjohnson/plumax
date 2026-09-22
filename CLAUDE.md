@@ -10,7 +10,7 @@ dispersion forward models and methane-retrieval operators, built on JAX
 the carrier-agnostic `Operator` primitives from
 [`pipekit`](https://github.com/jejjohnson/pipekit) and plugs into data
 assimilation via the `pipekit_cycle` protocols. Built with Python 3.12+,
-uv, pytest, and MkDocs.
+uv, pytest, mystmd, and MkDocs.
 
 The architecture is organised as a five-tier **data-driven modeling
 cycle** (simple model → model-based inference → emulator → emulator-based
@@ -27,7 +27,8 @@ make format               # Auto-fix: ruff format . && ruff check --fix .
 make lint                 # Lint code: ruff check .
 make typecheck            # Type check: ty check src/plumax
 make precommit            # Run pre-commit on all files
-make docs-serve           # Local docs server
+make docs                 # Build both doc halves, assemble into public/, verify links
+make docs-serve           # Build, then serve the assembled site at :8000
 ```
 
 ### Running a single test
@@ -88,10 +89,35 @@ public API is re-exported through `src/plumax/__init__.py`.
 
 ## Documentation
 
-- Design / roadmap pages live in `docs/design/` and render under the
-  **Design** nav section (MkDocs Material).
-- Example notebooks live in `docs/notebooks/` as jupytext percent-format
-  `.py` files; see `.github/instructions/docs-examples.instructions.md`.
+The docs are built by **two tools** and deployed as one site — see
+`docs/README.md` for the full rationale.
+
+| Half | Tool | Source | Deployed at |
+|---|---|---|---|
+| Prose — home, design roadmap, theory | mystmd | `docs/*.md`, `docs/design/`, `docs/theory/` (toc in `docs/myst.yml`) | `/` |
+| API reference | MkDocs + mkdocstrings | `docs/api/` | `/reference/` |
+
+`scripts/build_docs.py` (`make docs`) serves the freshly built `site/` on
+port 8910 so mystmd can read its `objects.inv`, rewrites those localhost
+URLs to `/reference/`, and fails if any internal link in the assembled site
+— including across the two halves — does not resolve. Its pure functions
+are covered by `tests/test_build_docs.py`. mystmd is a Node CLI:
+`npm install -g mystmd`.
+
+- **Prose is MyST Markdown**, not MkDocs-Material syntax: `:::{note}` /
+  `::::{tab-set}` / `:::{dropdown}` directives, `(label)=` before a heading
+  for anchors, and `[text](#label)` to link to it from any page (labels are
+  project-global, so keep them unique).
+- **Link to the API** with the `xref:` protocol:
+  ``[`simulate_plume`](xref:api#plumax.gauss_plume.simulate_plume)``.
+  A target missing from the inventory fails `myst build --strict`.
+- **URLs are flat**: mystmd derives a page's URL from its basename, minus
+  any leading `NN_` prefix, so keep basenames unique across the prose tree.
+- A new public sub-package needs a page in `docs/api/` and an entry in the
+  `nav` of `mkdocs.yml`.
+- Example notebooks are executed `.ipynb` files in `docs/notebooks/`, listed
+  in the `toc` of `docs/myst.yml`; see
+  `.github/instructions/docs-examples.instructions.md`.
 
 ## Coding Conventions
 

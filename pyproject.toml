@@ -120,13 +120,16 @@ typecheck = [
     "ty>=0.0.29",
 ]
 docs = [
+    # The prose half of the site is built by mystmd, a Node CLI installed with
+    # `npm install -g mystmd` rather than through uv. See docs/README.md.
+    # MkDocs here builds only the API reference, whose `objects.inv` is what
+    # lets the MyST prose cross-reference into it.
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5",
     # pygments 2.20.0 + pymdownx crash on code fences containing blank lines
     # inside docstrings (html.escape on a None filename); 2.19.x is fine.
     "pygments<2.20",
     "mkdocstrings[python]>=0.25",
-    "mkdocs-jupyter>=0.24",
     "jupytext>=1.16",
     "ipykernel>=6.29",
 ]

@@ -24,7 +24,7 @@ inference are natural substitutions rather than rewrites:
 5. **Amortized inference** — a predictor that learns the posterior map.
 6. **Improve** — upgrade any component; the previous step is its ground truth.
 
-See the [Roadmap & Architecture](design/index.md) for the full tier
+See the [Roadmap & Architecture](design/roadmap.md) for the full tier
 breakdown (Gaussian → Lagrangian → Eulerian → Coupled E2E → Population).
 
 ## Installation
@@ -59,9 +59,11 @@ ds = simulate_plume(
 ds["column_concentration"].plot()
 ```
 
+See [`simulate_plume`](xref:api#plumax.gauss_plume.simulate_plume) in the API reference for every parameter.
+
 ## Links
 
-- [Roadmap & Architecture](design/index.md)
-- [API Reference](api/reference.md)
+- [Roadmap & Architecture](design/roadmap.md)
+- [API Reference](xref:api#plumax)
 - [Changelog](changelog.md)
 - [GitHub](https://github.com/jejjohnson/plumax)

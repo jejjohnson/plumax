@@ -17,7 +17,8 @@ Each section introduces **exactly one new idea** and names the phase it serves.
 
 ---
 
-## II.1 Regions and measures — and the point/area split *(all phases)* {#ii-1}
+(ii-1)=
+## II.1 Regions and measures — and the point/area split *(all phases)*
 
 Region
 :   $A \subset S$ is any subset you could draw on a map.
@@ -26,7 +27,7 @@ Pairwise disjoint
 :   $A_1,\dots,A_n$ with $A_i \cap A_j = \varnothing$ for $i \neq j$. Adjacent cells: disjoint. A cell and the basin containing it: not.
 
 Partition
-:   Pairwise-disjoint regions whose union is $S$. The $2 \times 2$ grid of [§I.5](01_problem.md#i-5 "The running example") is one.
+:   Pairwise-disjoint regions whose union is $S$. The $2 \times 2$ grid of [§I.5](#i-5 "The running example") is one.
 
 Measure
 :   $m$ assigns to each region $A$ a number $m(A) \ge 0$ with $m(\varnothing) = 0$ and additivity over pairwise-disjoint regions:
@@ -41,56 +42,63 @@ Measure
 Point mass
 :   $\delta_x(A) = 1$ if $x \in A$, else $0$.
 
-!!! abstract "The point/area split rests on a theorem about measures"
-    Any (σ-finite) emission measure decomposes **uniquely** into three parts:[^lebesgue]
+:::{important} The point/area split rests on a theorem about measures
+Any (σ-finite) emission measure decomposes **uniquely** into three parts:[^lebesgue]
 
-    $$
-    \mu = \mu_{\mathrm{atomic}} + \mu_{\mathrm{ac}} + \mu_{\mathrm{sc}}
-    $$
+$$
+\mu = \mu_{\mathrm{atomic}} + \mu_{\mathrm{ac}} + \mu_{\mathrm{sc}}
+$$
 
-    atoms at points, an absolutely continuous part with a density over area, and a singular-continuous remainder (mass on a curve such as a pipeline). As a **modelling choice** we fold $\mu_{\mathrm{sc}}$ into whichever of the other two suits the instrument, and work with the two-part representation
+atoms at points, an absolutely continuous part with a density over area, and a singular-continuous remainder (mass on a curve such as a pipeline). As a **modelling choice** we fold $\mu_{\mathrm{sc}}$ into whichever of the other two suits the instrument, and work with the two-part representation
 
-    $$
-    \mu(A) = \mu_{\mathrm{pt}}(A) + \mu_{\mathrm{df}}(A)
-    $$
+$$
+\mu(A) = \mu_{\mathrm{pt}}(A) + \mu_{\mathrm{df}}(A)
+$$
 
-    $$
-    \mu_{\mathrm{pt}}(A) = \sum_{k:\,x_k \in A} s_k
-    \qquad\text{(point sources: atoms at } x_k \text{ with weights } s_k\text{)}
-    $$
+$$
+\mu_{\mathrm{pt}}(A) = \sum_{k:\,x_k \in A} s_k
+\qquad\text{(point sources: atoms at } x_k \text{ with weights } s_k\text{)}
+$$
 
-    $$
-    \mu_{\mathrm{df}}(A) = \int_A e(x)\,\mathrm{d}x
-    \qquad\text{(area sources: a flux density } e(x) \text{ in } \mathrm{kg\,h^{-1}\,km^{-2}}\text{)}
-    $$
+$$
+\mu_{\mathrm{df}}(A) = \int_A e(x)\,\mathrm{d}x
+\qquad\text{(area sources: a flux density } e(x) \text{ in } \mathrm{kg\,h^{-1}\,km^{-2}}\text{)}
+$$
 
-    Once $\mu_{\mathrm{sc}}$ has been folded in, this split is an approximation we chose, not a unique decomposition.
+Once $\mu_{\mathrm{sc}}$ has been folded in, this split is an approximation we chose, not a unique decomposition.
+:::
 
-???+ example "Running example"
-    $$
-    \begin{aligned}
-    \mu_{\mathrm{pt}}(A_1) &= 120 & \mu_{\mathrm{df}}(A_1) &= 0\\
-    \mu_{\mathrm{pt}}(A_2) &= 35 & \mu_{\mathrm{df}}(A_2) &= 400 \ \text{(field } D)\\
-    \mu_{\mathrm{pt}}(A_3) &= 410 & \mu_{\mathrm{df}}(A_3) &= 0\\
-    \mu_{\mathrm{pt}}(A_4) &= 60 & \mu_{\mathrm{df}}(A_4) &= 0\\[4pt]
-    \mu(S) &= 625 + 400 = 1025\ \mathrm{kg\,h^{-1}} & &\text{(instantaneous, all on)}
-    \end{aligned}
-    $$
+:::{hint} Running example
+:class: dropdown
+:open:
+$$
+\begin{aligned}
+\mu_{\mathrm{pt}}(A_1) &= 120 & \mu_{\mathrm{df}}(A_1) &= 0\\
+\mu_{\mathrm{pt}}(A_2) &= 35 & \mu_{\mathrm{df}}(A_2) &= 400 \ \text{(field } D)\\
+\mu_{\mathrm{pt}}(A_3) &= 410 & \mu_{\mathrm{df}}(A_3) &= 0\\
+\mu_{\mathrm{pt}}(A_4) &= 60 & \mu_{\mathrm{df}}(A_4) &= 0\\[4pt]
+\mu(S) &= 625 + 400 = 1025\ \mathrm{kg\,h^{-1}} & &\text{(instantaneous, all on)}
+\end{aligned}
+$$
+:::
 
 **Why the split matters for modelling.** Atoms are described by a *point process* ([§II.3](#ii-3)–[§II.5](#ii-5)). A density $e(x)$ is a *field* ([§II.6](#ii-6)). They are different random objects and get different priors. Everything else in this section is organised around that fact.
 
 [^lebesgue]: The Lebesgue decomposition, with respect to area, into atomic, absolutely continuous, and singular-continuous parts.
 
-## II.2 Randomising the inventory *(all phases)* {#ii-2}
+(ii-2)=
+## II.2 Randomising the inventory *(all phases)*
 
 **Random measure.** Before looking at data, the number, locations, rates, and density are unknown. A random measure is a random variable whose *value* is an entire measure; for each fixed $A$, $\mu(A)$ is an ordinary positive random variable.
 
 **Complete randomness — the one structural assumption.** $\mu$ is *completely random* if for any pairwise-disjoint $A_1,\dots,A_n$, the totals $\mu(A_1),\dots,\mu(A_n)$ are mutually independent. Learning $A_1$ tells you nothing about $A_2$.
 
-!!! warning "Critical note"
-    Physically false for adjacent cells (shared geology, operators, gathering lines). We keep the assumption because it makes the building blocks tractable; [§II.7](#ii-7 "The Cox process") repairs it.
+:::{warning} Critical note
+Physically false for adjacent cells (shared geology, operators, gathering lines). We keep the assumption because it makes the building blocks tractable; [§II.7](#ii-7 "The Cox process") repairs it.
+:::
 
-## II.3 Counting point sources — the Poisson process *(Phase A)* {#ii-3}
+(ii-3)=
+## II.3 Counting point sources — the Poisson process *(Phase A)*
 
 Ignore rates. $N(A)$ is a *Poisson process with intensity measure $\lambda$* if
 
@@ -99,14 +107,18 @@ Ignore rates. $N(A)$ is a *Poisson process with intensity measure $\lambda$* if
 
 With density: $\lambda(A) = \int_A \lambda(x)\,\mathrm{d}x$, $\lambda(x)$ in $\mathrm{km^{-2}}$. **Homogeneous:** $\lambda$ constant. **Inhomogeneous:** high over active fields, $\approx 0$ over rangeland.
 
-???+ example "Running example"
-    Suppose $\lambda(x) = 0.05\ \mathrm{km^{-2}}$ over active acreage, $0.002\ \mathrm{km^{-2}}$ elsewhere. $A_1$ ($400\ \mathrm{km^2}$, mostly active) has $\lambda(A_1) \approx 15$: we expect about 15 point sources there, standard deviation $\approx 4$.
+:::{hint} Running example
+:class: dropdown
+:open:
+Suppose $\lambda(x) = 0.05\ \mathrm{km^{-2}}$ over active acreage, $0.002\ \mathrm{km^{-2}}$ elsewhere. $A_1$ ($400\ \mathrm{km^2}$, mostly active) has $\lambda(A_1) \approx 15$: we expect about 15 point sources there, standard deviation $\approx 4$.
 
-    Our four "true" sources are the ones large enough to matter; the Poisson prior also expects many tiny ones (see [§II.4](#ii-4)).
+Our four "true" sources are the ones large enough to matter; the Poisson prior also expects many tiny ones (see [§II.4](#ii-4)).
+:::
 
 $N$ is itself a completely random measure: the case where every atom weighs 1.
 
-## II.4 Attaching rates — the completely random measure *(Phase C)* {#ii-4}
+(ii-4)=
+## II.4 Attaching rates — the completely random measure *(Phase C)*
 
 Work with **dimensionless marks** $u_k = s_k/s_0$, so that the physical rate is $s_k = s_0 u_k$. Treat the pairs $(x_k, u_k)$ as a Poisson process on $S \times (0,\infty)$ with intensity
 
@@ -142,11 +154,13 @@ flowchart LR
     CRM -->|"ρ on (0,1)"| B["Beta process<br/>§II.4.4"]
 ```
 
-### II.4.1 Poisson process {#ii-4-1}
+(ii-4-1)=
+### II.4.1 Poisson process
 
 $\rho = \delta_1$. Every atom weighs 1; $\mu_{\mathrm{pt}}(A)/s_0 = N(A)$. A prior over **counts**.
 
-### II.4.2 Gamma process — inventory prior with light tails {#ii-4-2}
+(ii-4-2)=
+### II.4.2 Gamma process — inventory prior with light tails
 
 Take a prior inventory $H$ ($\mathrm{kg\,h^{-1}}$ per region, e.g. from a bottom-up product) and set $\lambda(\mathrm{d}x) = H(\mathrm{d}x)/s_0$ and $\rho(\mathrm{d}u) = u^{-1}e^{-u}\,\mathrm{d}u$. Then
 
@@ -156,14 +170,19 @@ $$
 \mathbb{E}[\mu_{\mathrm{pt}}(A)] = H(A)
 $$
 
-???+ example "Running example"
-    $H(A_3) = 500\ \mathrm{kg\,h^{-1}}$ gives $\mu_{\mathrm{pt}}(A_3)/s_0 \sim \mathrm{Gamma}(500, 1)$: mean 500, standard deviation $\approx 22\ \mathrm{kg\,h^{-1}}$. The true 410 sits $(500 - 410)/22 \approx 4$ standard deviations below the mean: this prior all but rules the truth out.
+:::{hint} Running example
+:class: dropdown
+:open:
+$H(A_3) = 500\ \mathrm{kg\,h^{-1}}$ gives $\mu_{\mathrm{pt}}(A_3)/s_0 \sim \mathrm{Gamma}(500, 1)$: mean 500, standard deviation $\approx 22\ \mathrm{kg\,h^{-1}}$. The true 410 sits $(500 - 410)/22 \approx 4$ standard deviations below the mean: this prior all but rules the truth out.
+:::
 
-!!! warning "Critical notes"
-    - **Rate $= 1$ forces $\mathrm{Var} = \mathbb{E}\cdot s_0$**, which is arbitrary. Add a dispersion $\theta_d$ (shape $H/(\theta_d s_0)$, rate $1/\theta_d$).
-    - **The $e^{-u}$ tail forbids super-emitters.** A prior standard deviation of $22\ \mathrm{kg\,h^{-1}}$ on a cell whose true content is dominated by one $410\ \mathrm{kg\,h^{-1}}$ source is overconfident about the wrong thing.
+:::{warning} Critical notes
+- **Rate $= 1$ forces $\mathrm{Var} = \mathbb{E}\cdot s_0$**, which is arbitrary. Add a dispersion $\theta_d$ (shape $H/(\theta_d s_0)$, rate $1/\theta_d$).
+- **The $e^{-u}$ tail forbids super-emitters.** A prior standard deviation of $22\ \mathrm{kg\,h^{-1}}$ on a cell whose true content is dominated by one $410\ \mathrm{kg\,h^{-1}}$ source is overconfident about the wrong thing.
+:::
 
-### II.4.3 Generalised Gamma — inventory prior with super-emitters {#ii-4-3}
+(ii-4-3)=
+### II.4.3 Generalised Gamma — inventory prior with super-emitters
 
 $$
 \rho(\mathrm{d}u) \propto u^{-1-\sigma} e^{-\tau u}\,\mathrm{d}u,
@@ -178,10 +197,14 @@ Power-law body, exponential cut-off at scale $1/\tau$.
 | $\tau \to 0$ | pure $\sigma$-stable law: infinite mean, **too heavy** |
 | $\sigma \in (0,1),\ \tau > 0$ | tempered stable: heavy body, finite mean. **Use this.** |
 
-???+ example "Running example"
-    Source 3 is 66 % of $\mu_{\mathrm{pt}}(S)$. A Gamma prior calls that an outlier; a tempered-stable prior with $\sigma \approx 0.5$ expects exactly this shape.
+:::{hint} Running example
+:class: dropdown
+:open:
+Source 3 is 66 % of $\mu_{\mathrm{pt}}(S)$. A Gamma prior calls that an outlier; a tempered-stable prior with $\sigma \approx 0.5$ expects exactly this shape.
+:::
 
-### II.4.4 Beta process — persistence prior *(Phase B)* {#ii-4-4}
+(ii-4-4)=
+### II.4.4 Beta process — persistence prior *(Phase B)*
 
 $$
 \rho(\mathrm{d}\pi) = c\, \pi^{-1}(1-\pi)^{c-1}\,\mathrm{d}\pi \ \text{ on } (0,1),
@@ -192,37 +215,38 @@ Every atom is now a **probability** $\pi_k \in (0,1)$: the fraction of time sour
 
 | | src 1 | src 2 | src 3 | src 4 |
 |---|:---:|:---:|:---:|:---:|
-| pass 1 | :material-circle: | :material-circle: | :material-circle-outline: | :material-circle: |
-| pass 2 | :material-circle: | :material-circle: | :material-circle: | :material-circle: |
-| pass 3 | :material-circle: | :material-circle: | :material-circle-outline: | :material-circle: |
-| pass 4 | :material-circle-outline: | :material-circle: | :material-circle-outline: | :material-circle: |
-| pass 5 | :material-circle: | :material-circle: | :material-circle: | :material-circle: |
+| pass 1 | ● | ● | ○ | ● |
+| pass 2 | ● | ● | ● | ● |
+| pass 3 | ● | ● | ○ | ● |
+| pass 4 | ○ | ● | ○ | ● |
+| pass 5 | ● | ● | ● | ● |
 | **true $\pi_k$** | **0.9** | **1.0** | **0.3** | **1.0** |
 
 The overpass $\times$ source matrix $Z$ (filled = on, hollow = off) is the *feature allocation*; $c$ controls how many sources are persistent versus flickering. Integrating out the $\pi_k$ gives the IBP on $Z$.[^ibp]
 
-**Known candidate sites — the finite version.** When the infrastructure database supplies candidate coordinates $c_1,\dots,c_J$, there is nothing nonparametric about *those*: model each with $Z_j \sim \mathrm{Bernoulli}(\pi_j)$, $\pi_j \sim \mathrm{Beta}(a,b)$. Sources *not* in the database (unknown-unknowns) need **one marked process**: locations from the Poisson/Cox process ([§II.3](#ii-3), [§II.7](#ii-7)), with each atom carrying its own persistence mark $\pi_k \sim G(\mathrm{d}\pi \mid u_k)$. This is the construction used in [§III.1](03_phases.md#iii-1).
+**Known candidate sites — the finite version.** When the infrastructure database supplies candidate coordinates $c_1,\dots,c_J$, there is nothing nonparametric about *those*: model each with $Z_j \sim \mathrm{Bernoulli}(\pi_j)$, $\pi_j \sim \mathrm{Beta}(a,b)$. Sources *not* in the database (unknown-unknowns) need **one marked process**: locations from the Poisson/Cox process ([§II.3](#ii-3), [§II.7](#ii-7)), with each atom carrying its own persistence mark $\pi_k \sim G(\mathrm{d}\pi \mid u_k)$. This is the construction used in [§III.1](#iii-1).
 
-!!! warning "Don't stack a Beta process on a separate location process"
-    A Beta process generates its own atoms through $B_0$. Drawn independently of a Poisson/Cox location process, its atoms almost surely never coincide with the source locations on a continuous domain, so the persistence weights attach to nothing. Either mark the location process, as above, or use the Beta process *as* the location process, with $B_0$ carrying the spatial intensity.
+:::{warning} Don't stack a Beta process on a separate location process
+A Beta process generates its own atoms through $B_0$. Drawn independently of a Poisson/Cox location process, its atoms almost surely never coincide with the source locations on a continuous domain, so the persistence weights attach to nothing. Either mark the location process, as above, or use the Beta process *as* the location process, with $B_0$ carrying the spatial intensity.
+:::
 
-<div class="grid" markdown>
-
-!!! success "Known-unknowns → Phase B"
-    - sites $c_j$ **given**
-    - state $Z_j$ random
-    - finite Beta–Bernoulli
-
-!!! question "Unknown-unknowns → Phase A"
-    - sites **random**
-    - state *and* site random
-    - Poisson/Cox process with persistence marks
-
-</div>
+::::{grid} 1 1 2 2
+:::{card} Known-unknowns → Phase B
+- sites $c_j$ **given**
+- state $Z_j$ random
+- finite Beta–Bernoulli
+:::
+:::{card} Unknown-unknowns → Phase A
+- sites **random**
+- state *and* site random
+- Poisson/Cox process with persistence marks
+:::
+::::
 
 [^ibp]: Griffiths & Ghahramani's Indian Buffet Process: the exchangeable distribution over binary feature matrices with an unbounded number of columns.
 
-## II.5 Fractions and attribution — normalisation *(Phase C)* {#ii-5}
+(ii-5)=
+## II.5 Fractions and attribution — normalisation *(Phase C)*
 
 If $0 < \mu_{\mathrm{pt}}(S) < \infty$, then $G(A) = \mu_{\mathrm{pt}}(A)/\mu_{\mathrm{pt}}(S)$ is the fraction of the basin's point total from $A$. For the Gamma process, ratios of independent Gammas are Dirichlet, so for any partition:
 
@@ -232,33 +256,39 @@ $$
 
 This is the **Dirichlet process** $\mathrm{DP}(H/s_0)$: its base measure is the dimensionless $H/s_0$, whose total mass $H(S)/s_0$ is the concentration.
 
-???+ example "Running example"
-    $H = (500, 150, 500, 200)\ \mathrm{kg\,h^{-1}}$ gives fractions centred on $(0.37, 0.11, 0.37, 0.15)$.
+:::{hint} Running example
+:class: dropdown
+:open:
+$H = (500, 150, 500, 200)\ \mathrm{kg\,h^{-1}}$ gives fractions centred on $(0.37, 0.11, 0.37, 0.15)$.
+:::
 
 *Attribution reading.* Each detected plume is assigned to a source.
 
-=== "Dirichlet process"
+::::{tab-set}
+:::{tab-item} Dirichlet process
+The number of distinct sources is unbounded and grows like $\log n$ with $n$ plumes; a source already holding many plumes attracts the next (rich-get-richer).
+:::
+:::{tab-item} Pitman–Yor
+$\mathrm{PY}(\sigma, \theta_{\mathrm{PY}})$ makes the count grow like $n^\sigma$, via stick-breaking:
 
-    The number of distinct sources is unbounded and grows like $\log n$ with $n$ plumes; a source already holding many plumes attracts the next (rich-get-richer).
+$$
+V_k \sim \mathrm{Beta}(1-\sigma,\ \theta_{\mathrm{PY}} + k\sigma),
+\qquad
+\pi_k = V_k \prod_{j<k}(1 - V_j)
+$$
 
-=== "Pitman–Yor"
-
-    $\mathrm{PY}(\sigma, \theta_{\mathrm{PY}})$ makes the count grow like $n^\sigma$, via stick-breaking:
-
-    $$
-    V_k \sim \mathrm{Beta}(1-\sigma,\ \theta_{\mathrm{PY}} + k\sigma),
-    \qquad
-    \pi_k = V_k \prod_{j<k}(1 - V_j)
-    $$
-
-    with $\sigma = 0$ recovering the DP.
+with $\sigma = 0$ recovering the DP.
+:::
+::::
 
 Attribution matters when two plumes in one fine-imager scene could come from one source or two.
 
-!!! warning "Emission fractions are not clustering weights"
-    The weights of $G$ are emission fractions $s_k/\mu_{\mathrm{pt}}(S)$. A detection catalog does not sample sources in that proportion: source $k$ appears at a rate of roughly $\pi_k\,p(x_k, s_k)$ per clear scene, set by persistence, exposure, and POD. For plume-to-source assignment, use mixture weights built from those observation rates (or condition the assignment likelihood on them). Use the DP/PY only as the prior over *how many* sources there are, not as the law of which source the next plume comes from.
+:::{warning} Emission fractions are not clustering weights
+The weights of $G$ are emission fractions $s_k/\mu_{\mathrm{pt}}(S)$. A detection catalog does not sample sources in that proportion: source $k$ appears at a rate of roughly $\pi_k\,p(x_k, s_k)$ per clear scene, set by persistence, exposure, and POD. For plume-to-source assignment, use mixture weights built from those observation rates (or condition the assignment likelihood on them). Use the DP/PY only as the prior over *how many* sources there are, not as the law of which source the next plume comes from.
+:::
 
-## II.6 Fields — for concentrations *and* for area sources *(Phases A, C)* {#ii-6}
+(ii-6)=
+## II.6 Fields — for concentrations *and* for area sources *(Phases A, C)*
 
 Three quantities in this problem are **fields**, not measures:
 
@@ -283,17 +313,20 @@ $$
 
 with $k$ positive semi-definite. Consistency is automatic.
 
-=== "Concentration field"
+:::::{tab-set}
+::::{tab-item} Concentration field
+:::{hint} Running example
+$f(x)$ with $k(x,x') = \sigma_f^2 \exp(-\lVert x - x'\rVert/\ell)$, $\sigma_f = 15$ ppb, $\ell = 20$ km. Pixels 10 km apart correlate at $e^{-0.5} \approx 0.61$. The posterior mean given scattered retrievals is kriging.
+:::
+::::
+::::{tab-item} Area source
+:::{hint} Running example
+$\log e(x) \sim \mathcal{GP}$ with mean $\log(2\ \mathrm{kg\,h^{-1}\,km^{-2}})$ inside $D$, correlation length 5 km. Then $\mu_{\mathrm{df}}(A) = \int_A e(x)\,\mathrm{d}x$ is a *derived* random measure: additive, but built from a field.
 
-    !!! example "Running example"
-        $f(x)$ with $k(x,x') = \sigma_f^2 \exp(-\lVert x - x'\rVert/\ell)$, $\sigma_f = 15$ ppb, $\ell = 20$ km. Pixels 10 km apart correlate at $e^{-0.5} \approx 0.61$. The posterior mean given scattered retrievals is kriging.
-
-=== "Area source"
-
-    !!! example "Running example"
-        $\log e(x) \sim \mathcal{GP}$ with mean $\log(2\ \mathrm{kg\,h^{-1}\,km^{-2}})$ inside $D$, correlation length 5 km. Then $\mu_{\mathrm{df}}(A) = \int_A e(x)\,\mathrm{d}x$ is a *derived* random measure: additive, but built from a field.
-
-        Its prior is log-normal-ish, not Gamma. That is fine: $\mu_{\mathrm{df}}$ and $\mu_{\mathrm{pt}}$ are different objects and the total $\mu = \mu_{\mathrm{pt}} + \mu_{\mathrm{df}}$ is simply their sum.
+Its prior is log-normal-ish, not Gamma. That is fine: $\mu_{\mathrm{df}}$ and $\mu_{\mathrm{pt}}$ are different objects and the total $\mu = \mu_{\mathrm{pt}} + \mu_{\mathrm{df}}$ is simply their sum.
+:::
+::::
+:::::
 
 **Beyond Gaussian.**
 
@@ -305,7 +338,8 @@ Wishart process
 
 [^kolmogorov]: The Kolmogorov extension theorem.
 
-## II.7 Composing field and point process — the Cox process *(Phase A)* {#ii-7}
+(ii-7)=
+## II.7 Composing field and point process — the Cox process *(Phase A)*
 
 Repair [§II.2](#ii-2 "Complete randomness")'s independence assumption: let the source density be a random field,
 
@@ -329,14 +363,19 @@ $$
 
 positive wherever $k_g > 0$, as it is everywhere for the usual exponential, Matérn, and squared-exponential kernels, and negative where a kernel with negative lobes has $k_g < 0$. This is the LGCP, and it is the natural *discovery* prior: **more detections in $A_1$ than its search effort predicts** raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched, and fewer lower it. The update depends on the count relative to its expectation, because the Poisson likelihood pairs the observed points with the integrated-intensity penalty $-\int p\,\lambda$.
 
-???+ example "Running example"
-    With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$. Because this exponential kernel is positive, $A_3$ moves in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](03_phases.md#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
+:::{hint} Running example
+:class: dropdown
+:open:
+With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$. Because this exponential kernel is positive, $A_3$ moves in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
+:::
 
-## II.8 Scale — coarsening, transport, and averaging *(all phases)* {#ii-8}
+(ii-8)=
+## II.8 Scale — coarsening, transport, and averaging *(all phases)*
 
-This is where [§I.2](01_problem.md#i-2)'s "point versus area depends on the instrument" becomes mathematics.
+This is where [§I.2](#i-2)'s "point versus area depends on the instrument" becomes mathematics.
 
-### II.8.1 Spatial coarsening {#ii-8-1}
+(ii-8-1)=
+### II.8.1 Spatial coarsening
 
 Define the coarsening operator for pixel size $\Delta x$:
 
@@ -350,9 +389,9 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 1. **Coarsening forgets the atomic/diffuse split.** $\mu(P_j) = \mu_{\mathrm{pt}}(P_j) + \mu_{\mathrm{df}}(P_j)$ is one number; a pixel containing twenty $20\ \mathrm{kg\,h^{-1}}$ pads is indistinguishable from a pixel with $400\ \mathrm{kg\,h^{-1}}$ of diffuse flux.
 2. **A point source is an atom *relative to $\Delta x$*.** Source $k$ is "point" for an instrument if its physical extent $\ll \Delta x$ *and* it is the dominant contributor to $\mu(P_j)$ for its pixel; otherwise it is part of an aggregate.
 
-<div class="grid" markdown>
-
-```text title="Fine Δx (0.03 km)"
+::::{grid} 1 1 2 2
+:::{card} Fine Δx (0.03 km)
+```text
 +---+---+---+---+
 |   | o |   |   |   atoms resolve,
 +---+---+---+---+   each in its
@@ -360,8 +399,9 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 +---+---+---+---+
 → point-process model
 ```
-
-```text title="Coarse Δx (7 km)"
+:::
+:::{card} Coarse Δx (7 km)
+```text
 +---------------+
 |  o    o       |   atoms merge
 |     ::::::    |   with diffuse
@@ -369,22 +409,27 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 +---------------+
 → field model of C_Δ μ
 ```
+:::
+::::
 
-</div>
+:::{hint} Running example
+:class: dropdown
+:open:
+The coarse mapper's 7 km pixel over the north-east of $A_2$ contains source 2 ($35\ \mathrm{kg\,h^{-1}}$) and roughly a quarter of field $D$ ($100\ \mathrm{kg\,h^{-1}}$): $C_\Delta\mu \approx 135\ \mathrm{kg\,h^{-1}}$ for that pixel, and the mapper cannot tell the two apart. The fine imager *resolves* source 2 geometrically (its footprint would be a compact plume), but at $35\ \mathrm{kg\,h^{-1}}$ it is below the $\approx 100\ \mathrm{kg\,h^{-1}}$ detection limit, so it goes **undetected** ([§II.9.2](#ii-9-2)); field $D$ produces no plume at all. Resolution and detection are different properties.
+:::
 
-???+ example "Running example"
-    The coarse mapper's 7 km pixel over the north-east of $A_2$ contains source 2 ($35\ \mathrm{kg\,h^{-1}}$) and roughly a quarter of field $D$ ($100\ \mathrm{kg\,h^{-1}}$): $C_\Delta\mu \approx 135\ \mathrm{kg\,h^{-1}}$ for that pixel, and the mapper cannot tell the two apart. The fine imager *resolves* source 2 geometrically (its footprint would be a compact plume), but at $35\ \mathrm{kg\,h^{-1}}$ it is below the $\approx 100\ \mathrm{kg\,h^{-1}}$ detection limit, so it goes **undetected** ([§II.9.2](#ii-9-2)); field $D$ produces no plume at all. Resolution and detection are different properties.
+:::{tip} Modelling consequence
+At the coarse scale, model $C_\Delta\mu$ directly as a *gridded field* (e.g. a GP on log pixel totals) and let the point/area decomposition live at the fine scale only. The two scales are linked by linearity,
 
-!!! tip "Modelling consequence"
-    At the coarse scale, model $C_\Delta\mu$ directly as a *gridded field* (e.g. a GP on log pixel totals) and let the point/area decomposition live at the fine scale only. The two scales are linked by linearity,
+$$
+C_\Delta(\mu_{\mathrm{pt}} + \mu_{\mathrm{df}}) = C_\Delta\mu_{\mathrm{pt}} + C_\Delta\mu_{\mathrm{df}},
+$$
 
-    $$
-    C_\Delta(\mu_{\mathrm{pt}} + \mu_{\mathrm{df}}) = C_\Delta\mu_{\mathrm{pt}} + C_\Delta\mu_{\mathrm{df}},
-    $$
+so a fine-scale posterior can always be coarsened for comparison with the mapper, **never the reverse**.
+:::
 
-    so a fine-scale posterior can always be coarsened for comparison with the mapper, **never the reverse**.
-
-### II.8.2 Atmospheric transport — the field-side observation operator {#ii-8-2}
+(ii-8-2)=
+### II.8.2 Atmospheric transport — the field-side observation operator
 
 The satellite does not retrieve $\mu$; it retrieves the raw column $y(x) = \mathrm{XCH_4}(x)$. The link is a transport operator
 
@@ -393,17 +438,19 @@ y(x) = (\mathcal{T}\mu)(x) + f_{\mathrm{bg}}(x) + \varepsilon_r(x),
 \qquad \varepsilon_r \sim \mathcal{N}(0, \sigma_r^2)
 $$
 
-where $\mathcal{T}$ convolves emissions with a plume kernel driven by wind $U$, and $f_{\mathrm{bg}}$ is background. The enhancement product of [§I.4](01_problem.md#i-4) has the background already removed, $f = y - f_{\mathrm{bg}} = \mathcal{T}\mu + \varepsilon_r$. Model one or the other, never $f_{\mathrm{bg}}$ twice.
+where $\mathcal{T}$ convolves emissions with a plume kernel driven by wind $U$, and $f_{\mathrm{bg}}$ is background. The enhancement product of [§I.4](#i-4) has the background already removed, $f = y - f_{\mathrm{bg}} = \mathcal{T}\mu + \varepsilon_r$. Model one or the other, never $f_{\mathrm{bg}}$ twice.
 
 - For a single atom, $\mathcal{T}(s_k\delta_{x_k})$ is a **compact plume** of peak enhancement roughly $\propto s_k/U$.
 - For a diffuse patch, $\mathcal{T}\mu_{\mathrm{df}}$ is a **broad, low enhancement**.
 
 Per-plume rate estimation (IME and cross-sectional methods) is the local inversion of $\mathcal{T}$ for one atom; it returns a noisy $s_k\eta_k$ with $\eta_k$ log-normal ([§II.9.3](#ii-9-3)). In `plumax` the forward side of $\mathcal{T}$ is the Tier I–III dispersion models ([Gaussian plume/puff](../../design/01_tier1_gaussian.md), [Eulerian FV](../../design/03_tier3_eulerian.md)).
 
-!!! warning "Critical note"
-    If $\mathcal{T}$ conserves mass (a spatially invariant kernel, no loss, and a domain large enough to contain the plumes), then a point source and an equal-total diffuse patch produce enhancements with the same **integral** but very different **peak**. Linearity alone does not give this; varying winds, finite domains, loss, and retrieval sensitivity can all break it, but the peak contrast survives. Detection thresholds act on the peak. That is why $p(x,s)$ in [§II.9](#ii-9) is a property of point sources, and why area sources are found by *averaging* ([§II.8.3](#ii-8-3)), not by single-scene thresholding.
+:::{warning} Critical note
+If $\mathcal{T}$ conserves mass (a spatially invariant kernel, no loss, and a domain large enough to contain the plumes), then a point source and an equal-total diffuse patch produce enhancements with the same **integral** but very different **peak**. Linearity alone does not give this; varying winds, finite domains, loss, and retrieval sensitivity can all break it, but the peak contrast survives. Detection thresholds act on the peak. That is why $p(x,s)$ in [§II.9](#ii-9) is a property of point sources, and why area sources are found by *averaging* ([§II.8.3](#ii-8-3)), not by single-scene thresholding.
+:::
 
-### II.8.3 Temporal scale — averaging and sampling {#ii-8-3}
+(ii-8-3)=
+### II.8.3 Temporal scale — averaging and sampling
 
 Two time scales matter: the instrument revisit $\Delta t$, and the source's own on/off timescale.
 
@@ -415,35 +462,47 @@ $$
 
 This is the quantity an inventory wants; $s_k$ (the on-state rate) is what a single fine-imager scene measures.
 
-=== "Averaging area sources"
+:::::{tab-set}
+::::{tab-item} Averaging area sources
+Retrieval noise $\sigma_r$ averages down as $1/\sqrt{n}$ over $n$ clear overpasses while a persistent diffuse enhancement does not, so area sources emerge from stacks that no single scene shows. The coarse mapper's daily revisit is what makes this work: 30 clear days gives noise $\approx \sigma_r/\sqrt{30} \approx 2$ ppb against a field-$D$ enhancement of a few ppb.
 
-    Retrieval noise $\sigma_r$ averages down as $1/\sqrt{n}$ over $n$ clear overpasses while a persistent diffuse enhancement does not, so area sources emerge from stacks that no single scene shows. The coarse mapper's daily revisit is what makes this work: 30 clear days gives noise $\approx \sigma_r/\sqrt{30} \approx 2$ ppb against a field-$D$ enhancement of a few ppb.
+The $1/\sqrt{n}$ law assumes **independent, zero-mean** errors. Errors shared across scenes (background subtraction, calibration, transport) give a stack variance of $\mathbf{1}^{\mathsf T}\Sigma\,\mathbf{1}/n^2$, which approaches a nonzero floor, so treat $2$ ppb as a lower bound unless the temporal error covariance $\Sigma$ is carried through.
+::::
+::::{tab-item} Sampling intermittent point sources
+The fine imager at $\Delta t = 5$ d *samples* $Z_k(t)$. If overpass times are independent of the source's state, the fraction of "on" scenes is an unbiased estimate of $\pi_k$.
 
-    The $1/\sqrt{n}$ law assumes **independent, zero-mean** errors. Errors shared across scenes (background subtraction, calibration, transport) give a stack variance of $\mathbf{1}^{\mathsf T}\Sigma\,\mathbf{1}/n^2$, which approaches a nonzero floor, so treat $2$ ppb as a lower bound unless the temporal error covariance $\Sigma$ is carried through.
+:::{danger} Sampling bias
+If they are not (overpass at 10:30 local, blowdowns scheduled mornings) the estimate is biased and **no amount of data fixes it**.
+:::
+::::
+:::::
 
-=== "Sampling intermittent point sources"
+:::{hint} Running example — source 3
+:class: dropdown
+:open:
+$s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten fine-imager overpasses, eight clear, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$ (the same sequence as [§III.2](#iii-2)). The raw fraction $3/8$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.42$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 167\ \mathrm{kg\,h^{-1}}$ against a truth of 123. The gap is sampling noise on eight scenes ([§III.2](#iii-2) gives the interval), and the estimate is unbiased only *if* the overpasses are a fair sample of the source's schedule.
+:::
 
-    The fine imager at $\Delta t = 5$ d *samples* $Z_k(t)$. If overpass times are independent of the source's state, the fraction of "on" scenes is an unbiased estimate of $\pi_k$.
+(ii-9)=
+## II.9 Observing point sources — thinning and the full operator *(Phases A, B)*
 
-    !!! danger "Sampling bias"
-        If they are not (overpass at 10:30 local, blowdowns scheduled mornings) the estimate is biased and **no amount of data fixes it**.
-
-???+ example "Running example — source 3"
-    $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten fine-imager overpasses, eight clear, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$ (the same sequence as [§III.2](03_phases.md#iii-2)). The raw fraction $3/8$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.42$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 167\ \mathrm{kg\,h^{-1}}$ against a truth of 123. The gap is sampling noise on eight scenes ([§III.2](03_phases.md#iii-2) gives the interval), and the estimate is unbiased only *if* the overpasses are a fair sample of the source's schedule.
-
-## II.9 Observing point sources — thinning and the full operator *(Phases A, B)* {#ii-9}
-
-### II.9.1 Thinning {#ii-9-1}
+(ii-9-1)=
+### II.9.1 Thinning
 
 **Definition.** Given a point process $N$ with points $\{x_k\}$ and a retention function $p: S \to [0,1]$, keep each $x_k$ independently with probability $p(x_k)$. The kept points form $N_{\mathrm{obs}}$.
 
-!!! abstract "Thinning theorem"
-    If $N$ is Poisson with intensity $\lambda$, then $N_{\mathrm{obs}}$ is Poisson with intensity $p\lambda$, and the kept and discarded points are **independent** Poisson processes.
+:::{important} Thinning theorem
+If $N$ is Poisson with intensity $\lambda$, then $N_{\mathrm{obs}}$ is Poisson with intensity $p\lambda$, and the kept and discarded points are **independent** Poisson processes.
+:::
 
-???+ example "Running example"
-    $\lambda(A_1) \approx 15$, $p \approx 0.3$ over $A_1$ on a given day, so $N_{\mathrm{obs}}(A_1) \sim \mathrm{Poisson}(4.5)$ and the undetected $\sim \mathrm{Poisson}(10.5)$, independent.
+:::{hint} Running example
+:class: dropdown
+:open:
+$\lambda(A_1) \approx 15$, $p \approx 0.3$ over $A_1$ on a given day, so $N_{\mathrm{obs}}(A_1) \sim \mathrm{Poisson}(4.5)$ and the undetected $\sim \mathrm{Poisson}(10.5)$, independent.
+:::
 
-### II.9.2 Rate-dependent thinning and the detection limit {#ii-9-2}
+(ii-9-2)=
+### II.9.2 Rate-dependent thinning and the detection limit
 
 Let the detection probability depend on the rate, writing $p(x,u)$ for a source at $x$ with rate $s = s_0 u$. A CRM with intensity $\lambda(\mathrm{d}x)\rho(\mathrm{d}u)$ is observed as
 
@@ -457,8 +516,9 @@ $$
 \int_0^\infty p(u)\,\rho(\mathrm{d}u) < \infty .
 $$
 
-!!! warning "The detection curve must vanish fast enough near zero"
-    For an infinite-activity $\rho$ (Gamma, generalised Gamma), a logistic curve in the *linear* rate has $p(0) > 0$, so $\int p\,\rho$ diverges and the model "observes" infinitely many sources. Use a hard cutoff, or a curve in $\log u$ whose decay near $0$ beats the blow-up of $\rho$.
+:::{warning} The detection curve must vanish fast enough near zero
+For an infinite-activity $\rho$ (Gamma, generalised Gamma), a logistic curve in the *linear* rate has $p(0) > 0$, so $\int p\,\rho$ diverges and the model "observes" infinitely many sources. Use a hard cutoff, or a curve in $\log u$ whose decay near $0$ beats the blow-up of $\rho$.
+:::
 
 Under that condition:
 
@@ -471,10 +531,14 @@ Under that condition:
 
     This is the below-detection-limit gap, in one line.
 
-???+ example "Running example"
-    Fine imager, $s_{\min} \approx 100\ \mathrm{kg\,h^{-1}}$: sources 2 and 4 (35, 60) are essentially invisible; sources 1 and 3 are visible when on. Observable point total $\approx 530$ of $625\ \mathrm{kg\,h^{-1}}$ instantaneous, and a *further* factor of $\pi_k$ once averaged.
+:::{hint} Running example
+:class: dropdown
+:open:
+Fine imager, $s_{\min} \approx 100\ \mathrm{kg\,h^{-1}}$: sources 2 and 4 (35, 60) are essentially invisible; sources 1 and 3 are visible when on. Observable point total $\approx 530$ of $625\ \mathrm{kg\,h^{-1}}$ instantaneous, and a *further* factor of $\pi_k$ once averaged.
+:::
 
-### II.9.3 The full observation operator for point sources {#ii-9-3}
+(ii-9-3)=
+### II.9.3 The full observation operator for point sources
 
 ```mermaid
 flowchart TD
@@ -506,14 +570,17 @@ Each stage preserves Poisson-ness (thinning theorem; displacement theorem; super
 2. **Dimension-changing.**
 3. **Not invertible.** Only the *product* of the four thinning probabilities with $\lambda$ is identifiable. Separating "source off", "not overhead", "cloudy", and "too small" requires each $p$ calibrated *outside* the data: controlled releases, orbit files, cloud masks.
 
-!!! danger "Critical consequence for Phase B"
-    An intermittency estimate $\hat\pi_k$ with no detection model is an estimate of $\pi_k \cdot p(x_k, s_k) \cdot p_{\mathrm{cloud}}$, **not** of $\pi_k$.
+:::{danger} Critical consequence for Phase B
+An intermittency estimate $\hat\pi_k$ with no detection model is an estimate of $\pi_k \cdot p(x_k, s_k) \cdot p_{\mathrm{cloud}}$, **not** of $\pi_k$.
+:::
 
-## II.10 Time *(Phases B, C)* {#ii-10}
+(ii-10)=
+## II.10 Time *(Phases B, C)*
 
 Nothing above required $X$ to be spatial. Time adds **order**.
 
-### II.10.1 Cumulative view — subordinators {#ii-10-1}
+(ii-10-1)=
+### II.10.1 Cumulative view — subordinators
 
 Model discrete releases at $t_k$ with masses $m_k$ [kg]:
 
@@ -525,7 +592,8 @@ $M$ is always nondecreasing. It is a *subordinator* (independent, stationary inc
 
 Renewal, Hawkes, and time-varying intensities ([§II.10.2](#ii-10-2)) break the assumption, and then $M(t)$ is not a subordinator.
 
-### II.10.2 Conditional intensity — history dependence {#ii-10-2}
+(ii-10-2)=
+### II.10.2 Conditional intensity — history dependence
 
 $$
 \lambda^*(t) = \lim_{\mathrm{d}t \to 0} \frac{P(\text{event in } [t, t+\mathrm{d}t) \mid \mathcal{H}_t)}{\mathrm{d}t} \quad [\mathrm{d^{-1}}]
@@ -533,32 +601,32 @@ $$
 
 Poisson: $\lambda^*$ ignores $\mathcal{H}_t$ (memoryless). Others:
 
-=== "Renewal"
+::::{tab-set}
+:::{tab-item} Renewal
+$$
+\lambda^*(t) = h(t - t_{\mathrm{last}})
+$$
 
-    $$
-    \lambda^*(t) = h(t - t_{\mathrm{last}})
-    $$
+Regular schedules (blowdowns every $\approx 7$ d) are **under-dispersed** relative to Poisson.
+:::
+:::{tab-item} Hawkes
+$$
+\lambda^*(t) = \lambda_0 + \sum_{t_i < t} \varphi(t - t_i),
+\qquad \varphi \ge 0,\ \int\varphi < 1
+$$
 
-    Regular schedules (blowdowns every $\approx 7$ d) are **under-dispersed** relative to Poisson.
+Each emission *initiation* raises the near-term rate of new, distinct initiations: a process upset that triggers follow-on venting, or cascading equipment failures.
 
-=== "Hawkes"
+A single leak that stays on until repair is **not** a Hawkes process. It is one initiation followed by an on-state duration, modelled with the switching process of [§II.10.4](#ii-10-4). Repeat satellite detections of the same leak are observations of that state, not new events.
+:::
+:::{tab-item} Cox in time
+$$
+\log\lambda(t) \sim \mathcal{GP}
+$$
 
-    $$
-    \lambda^*(t) = \lambda_0 + \sum_{t_i < t} \varphi(t - t_i),
-    \qquad \varphi \ge 0,\ \int\varphi < 1
-    $$
-
-    Each emission *initiation* raises the near-term rate of new, distinct initiations: a process upset that triggers follow-on venting, or cascading equipment failures.
-
-    A single leak that stays on until repair is **not** a Hawkes process. It is one initiation followed by an on-state duration, modelled with the switching process of [§II.10.4](#ii-10-4). Repeat satellite detections of the same leak are observations of that state, not new events.
-
-=== "Cox in time"
-
-    $$
-    \log\lambda(t) \sim \mathcal{GP}
-    $$
-
-    The temporal analogue of [§II.7](#ii-7).
+The temporal analogue of [§II.7](#ii-7).
+:::
+::::
 
 One likelihood covers all:
 
@@ -566,10 +634,12 @@ $$
 \log L = \sum_i \log\lambda^*(t_i) - \int_0^{T_{\mathrm{end}}} \lambda^*(t)\,\mathrm{d}t
 $$
 
-!!! warning "Critical note"
-    Space has no order, so no $\lambda^*$. Spatial clustering uses a latent field ([§II.7](#ii-7)); temporal clustering may use explicit triggering.
+:::{warning} Critical note
+Space has no order, so no $\lambda^*$. Spatial clustering uses a latent field ([§II.7](#ii-7)); temporal clustering may use explicit triggering.
+:::
 
-### II.10.3 GPs in time are SDEs — the Kalman link {#ii-10-3}
+(ii-10-3)=
+### II.10.3 GPs in time are SDEs — the Kalman link
 
 Matérn GPs over $t$ with **half-integer** smoothness $\nu = p + \tfrac12$ are exactly linear SDEs with a $(p+1)$-dimensional state. General $\nu$ has no finite state-space form. The simplest case, $\nu = \tfrac12$, with $W$ standard Brownian motion:
 
@@ -581,10 +651,12 @@ $$
 
 (Ornstein–Uhlenbeck). For these kernels GP smoothing becomes a Kalman filter + smoother, $O(n)$. Squared-exponential kernels (and Matérn with non-half-integer $\nu$) get no exact such structure, only approximations.
 
-!!! info
-    The background prior in a Kalman/4D-Var system is a GP in disguise. See the `plumax.assimilation` scaffolding and [pipekit-cycle](https://github.com/jejjohnson/pipekit) for the data-assimilation side.
+:::{note}
+The background prior in a Kalman/4D-Var system is a GP in disguise. See the `plumax.assimilation` scaffolding and [pipekit-cycle](https://github.com/jejjohnson/pipekit) for the data-assimilation side.
+:::
 
-### II.10.4 Space × time {#ii-10-4}
+(ii-10-4)=
+### II.10.4 Space × time
 
 $X = S \times T$. Kernels are separable ($k_S \cdot k_T$) or non-separable; the advective kernel depends on the displacement $x - x' - \mathbf{v}(t - t')$ with velocity vector $\mathbf{v} = 86.4\,\mathbf{U}\ \mathrm{km\,d^{-1}}$, a plume carried by the wind in the wind's direction. Per-source rate functions $s_k(t)$: the continuous-time version of [§II.4.4](#ii-4-4) is a two-state Markov (or semi-Markov, for non-exponential durations) switching process. This is the right model for a leak that stays on until repair: the on-state duration is the repair time.
 
@@ -597,10 +669,12 @@ stateDiagram-v2
     on --> off: switch-off rate
 ```
 
-### II.10.5 Clustering over time {#ii-10-5}
+(ii-10-5)=
+### II.10.5 Clustering over time
 
 Dependent DP: stick-breaking with time-varying $V_k(t)$, so attribution fractions drift smoothly instead of being re-estimated monthly.
 
-### II.10.6 The observation clock is a thinned point process {#ii-10-6}
+(ii-10-6)=
+### II.10.6 The observation clock is a thinned point process
 
 Overpass times form a point process on $T$ (deterministic per satellite, near-Poisson for a constellation), thinned by cloud. That is the "clock" and "clear sky" stages of [§II.9.3](#ii-9-3), seen from the time axis.

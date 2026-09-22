@@ -86,7 +86,8 @@ def compute_footprint(
     Args:
         receptor_location: ``(x, y, z)`` receptor coordinates [m].
         turbulence: Turbulence model.
-        domain_x / domain_y: ``(start, stop, n_cells)`` for the surface grid.
+        domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
+        domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
         wind: Forward mean-wind field ``t -> (u, v, w)``; integration reverses
             it internally and samples it on the receptor clock (see
             ``receptor_time``).

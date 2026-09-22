@@ -14,11 +14,12 @@ The fixed [forward interface](#prereqs-forward-interface) is the contract that t
 
 ---
 
-## 1 · Forcing — meteorology {#prereqs-met}
+(prereqs-met)=
+## 1 · Forcing — meteorology
 
 ### Reanalysis-agnostic met reader
 
-**Met forcing has a many-to-one interface.** WRF is the highest-fidelity option (you control resolution, microphysics, nesting) and is the industry baseline, but ERA5 / MERRA-2 / HRRR / GEOS-FP are all valid forcing sources. The `MetField` PyTree is the abstraction; the WRF reader is one concrete loader.
+**Met forcing has a many-to-one interface.** WRF is the highest-fidelity option (you control resolution, microphysics, nesting) and is the industry baseline, but ERA5 / MERRA-2 / HRRR / GEOS-FP are all valid forcing sources. The [`MetField`](xref:api#plumax.met.MetField) PyTree is the abstraction; the WRF reader is one concrete loader.
 
 - **Sources (priority order):**
   - WRF-ARW NetCDF (`wrfout_d0X_*.nc`) — primary.
@@ -32,7 +33,8 @@ The fixed [forward interface](#prereqs-forward-interface) is the contract that t
 
 PBL height is **not optional** — Tier I plume rise, Tier II trajectory reflection, and Tier IV column partitioning all depend on it. WRF emits it as a diagnostic (`PBLH`); ERA5 has `blh`. Carry it as a first-class field on `MetField`, not buried inside a derived helper.
 
-### Pasquill–Gifford stability classifier {#prereqs-pasquill-gifford}
+(prereqs-pasquill-gifford)=
+### Pasquill–Gifford stability classifier
 
 Maps surface observations (wind speed, cloud cover, time-of-day, solar elevation) to PG stability class A–F. Used by Gaussian-tier $\sigma_y$, $\sigma_z$ parameterizations.
 
@@ -40,13 +42,15 @@ Maps surface observations (wind speed, cloud cover, time-of-day, solar elevation
 - Output: per-grid-cell stability class as int (0–5) or one-hot.
 - Status: partially implemented in [`gauss_plume/dispersion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/dispersion.py).
 
-!!! warning "Sunset note"
-    PG is Tier-I scaffolding. Once Tier II/III are operational, MO similarity supersedes it.
+:::{warning} Sunset note
+PG is Tier-I scaffolding. Once Tier II/III are operational, MO similarity supersedes it.
 
-    **Why:** PG is a categorical proxy for surface-layer turbulence; once we resolve the surface layer with MO theory, the categorical buckets add nothing.
-    **How to apply:** Don't add features to PG beyond what Tier I needs.
+**Why:** PG is a categorical proxy for surface-layer turbulence; once we resolve the surface layer with MO theory, the categorical buckets add nothing.
+**How to apply:** Don't add features to PG beyond what Tier I needs.
+:::
 
-### Monin–Obukhov similarity {#prereqs-mo-similarity}
+(prereqs-mo-similarity)=
+### Monin–Obukhov similarity
 
 Surface-layer wind and turbulence profiles. Provides $\sigma_y(x)$ and $\sigma_z(x)$ as functions of downwind distance, friction velocity $u_*$, Obukhov length $L$, and surface roughness $z_0$.
 
@@ -55,7 +59,8 @@ Surface-layer wind and turbulence profiles. Provides $\sigma_y(x)$ and $\sigma_z
 
 ---
 
-## 2 · Static surface fields {#prereqs-static}
+(prereqs-static)=
+## 2 · Static surface fields
 
 These are time-invariant geophysical fields. Distinct enough from dynamic met to deserve their own loader, but they live alongside `MetField` (typically broadcast against the time axis).
 
@@ -73,19 +78,22 @@ These are time-invariant geophysical fields. Distinct enough from dynamic met to
 
 ---
 
-## 3 · Geometry {#prereqs-geometry}
+(prereqs-geometry)=
+## 3 · Geometry
 
-### Coordinate transforms {#prereqs-coordinate-transforms}
+(prereqs-coordinate-transforms)=
+### Coordinate transforms
 
 - `lat/lon ↔ local Cartesian` (UTM or local tangent plane). Use `pyproj` for the heavy lifting; wrap in a JAX-compatible `LocalFrame` PyTree so frame metadata travels with the data.
 - `pressure ↔ geometric height` via hydrostatic balance + WRF temperature profile.
 - `time` normalized to UTC throughout; never mix in local time downstream.
 
-!!! important "Critical constraint — `pyproj` is not JAX-traceable"
-    The convention is *compute once, carry as static metadata*: build the `LocalFrame` outside `jax.jit`, pass it as a static argument or as part of an `equinox.Module` with non-array fields.
+:::{important} Critical constraint — `pyproj` is not JAX-traceable
+The convention is *compute once, carry as static metadata*: build the `LocalFrame` outside `jax.jit`, pass it as a static argument or as part of an `equinox.Module` with non-array fields.
 
-    **Why:** `pyproj` calls into PROJ via Python; it can't be traced by JAX, so any attempt to compute the frame inside `jit` will fail or silently fall back to host execution.
-    **How to apply:** document this constraint on every transform helper; if the transform must run inside `jit`, wrap in `jax.pure_callback` (see [open questions](#prereqs-open-questions)).
+**Why:** `pyproj` calls into PROJ via Python; it can't be traced by JAX, so any attempt to compute the frame inside `jit` will fail or silently fall back to host execution.
+**How to apply:** document this constraint on every transform helper; if the transform must run inside `jit`, wrap in `jax.pure_callback` (see [open questions](#prereqs-open-questions)).
+:::
 
 ### Time and calendar
 
@@ -93,9 +101,11 @@ UTC throughout — but enforce it. A small `Timestamp` PyTree (`epoch_seconds: i
 
 ---
 
-## 4 · Inversion priors {#prereqs-priors}
+(prereqs-priors)=
+## 4 · Inversion priors
 
-### Background emission inventory $q_a$ {#prereqs-emission-inventory}
+(prereqs-emission-inventory)=
+### Background emission inventory $q_a$
 
 Every Bayesian inversion (Tiers I–IV, Step 2) uses a prior $q_a$ over the source field. Naming a single source matters because results are sensitive to it.
 
@@ -106,9 +116,11 @@ Every Bayesian inversion (Tiers I–IV, Step 2) uses a prior $q_a$ over the sour
 
 ---
 
-## 5 · Observation side {#prereqs-observation}
+(prereqs-observation)=
+## 5 · Observation side
 
-### L1 / L2 ingest {#prereqs-l1-l2-ingest}
+(prereqs-l1-l2-ingest)=
+### L1 / L2 ingest
 
 Symmetric to the met reader. Parses raw satellite products into the shared `Observations` PyTree.
 
@@ -116,7 +128,8 @@ Symmetric to the met reader. Parses raw satellite products into the shared `Obse
 - **Output:** `Observations` PyTree (radiance or column XCH₄ + lat/lon footprint + time + per-pixel uncertainty + quality mask + AK).
 - **Status:** ☐ not started — the satellite catalog describes the *targets*; the ingest layer is the missing implementation.
 
-### Averaging-kernel operator {#prereqs-ak-operator}
+(prereqs-ak-operator)=
+### Averaging-kernel operator
 
 Applies the satellite averaging kernel to a model column:
 
@@ -131,7 +144,8 @@ where $\mathbf{x}$ is the model state (CH₄ mixing-ratio profile), $\mathbf{x}_
 
 ---
 
-## Fixed forward interface {#prereqs-forward-interface}
+(prereqs-forward-interface)=
+## Fixed forward interface
 
 All four tiers implement the same shape:
 
@@ -145,7 +159,8 @@ def forward(params: Params, met: MetField) -> Observations:
     """
 ```
 
-### `MetField` schema {#prereqs-metfield-schema}
+(prereqs-metfield-schema)=
+### `MetField` schema
 
 The single most-shared object in `plumax`. Concrete fields, units, and conventions:
 
@@ -181,7 +196,8 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 ---
 
-## Module layout {#prereqs-modules}
+(prereqs-modules)=
+## Module layout
 
 *Module-level breakdown — concern, target module, status, downstream blockers.*
 
@@ -203,7 +219,8 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 ---
 
-## Validation strategy {#prereqs-validation}
+(prereqs-validation)=
+## Validation strategy
 
 - **Met reader:** round-trip — read a WRF file, re-grid to the analysis grid, integrate column mass, compare to direct WRF column integration. Should agree to floating-point precision. **CI fixture:** pin a small synthetic `wrfout` (~1 MB, 5×5×10×3) under `tests/fixtures/met/` so the test runs without external downloads.
 - **Reanalysis parity:** load the same time window from WRF and ERA5, regrid both to a coarse common grid, compare column-mean wind speed. Should agree to within climatological variability — confirms the loaders share conventions.
@@ -215,28 +232,37 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 
 ---
 
-## Open questions {#prereqs-open-questions}
+(prereqs-open-questions)=
+## Open questions
 
-!!! attention "Met grid resolution"
-    Do we keep WRF native or always re-grid to a fixed analysis grid? Trade-off: native preserves physics fidelity, fixed simplifies cross-tier comparison. **Leaning:** fixed analysis grid for inversion; native for forward-only diagnostics.
+:::{attention} Met grid resolution
+Do we keep WRF native or always re-grid to a fixed analysis grid? Trade-off: native preserves physics fidelity, fixed simplifies cross-tier comparison. **Leaning:** fixed analysis grid for inversion; native for forward-only diagnostics.
+:::
 
-!!! attention "Temporal interpolation policy"
-    Met is hourly; satellite overpass is instantaneous; satellite footprints span minutes. Commit to one of: (a) snapshot at nearest hour, (b) piecewise-linear between hours, (c) advect tracers with sub-hourly interpolated wind. Tier I tolerates (a); Tier II–III need at least (b); high-fidelity work needs (c). **Default:** (b), with (c) as an opt-in.
+:::{attention} Temporal interpolation policy
+Met is hourly; satellite overpass is instantaneous; satellite footprints span minutes. Commit to one of: (a) snapshot at nearest hour, (b) piecewise-linear between hours, (c) advect tracers with sub-hourly interpolated wind. Tier I tolerates (a); Tier II–III need at least (b); high-fidelity work needs (c). **Default:** (b), with (c) as an opt-in.
+:::
 
-!!! attention "Ensemble met / UQ propagation"
-    Honest UQ requires that met itself carries an ensemble axis (WRF ensemble, ERA5 EDA). Either commit (carry `ensemble_dim` on `MetField`, `vmap` the forward over it) or flag as out-of-scope for v1. **Leaning:** scaffold the axis now (cheap), populate later.
+:::{attention} Ensemble met / UQ propagation
+Honest UQ requires that met itself carries an ensemble axis (WRF ensemble, ERA5 EDA). Either commit (carry `ensemble_dim` on `MetField`, `vmap` the forward over it) or flag as out-of-scope for v1. **Leaning:** scaffold the axis now (cheap), populate later.
+:::
 
-!!! attention "`pyproj` traceability"
-    `pyproj` is not JAX-traceable. The convention is "build frame outside jit, carry as static metadata" — but this needs a documented pattern with one canonical example. Open: do we wrap `pyproj` calls in a `jax.pure_callback` for the rare case where the transform must run inside `jit`?
+:::{attention} `pyproj` traceability
+`pyproj` is not JAX-traceable. The convention is "build frame outside jit, carry as static metadata" — but this needs a documented pattern with one canonical example. Open: do we wrap `pyproj` calls in a `jax.pure_callback` for the rare case where the transform must run inside `jit`?
+:::
 
-!!! attention "Multi-instrument AK"
-    Single `Instrument` registry returning $(\mathbf{A}, \mathbf{x}_a, \mathbf{h})$ keyed by instrument name. Decision affects how Tier IV multi-pass fusion is structured.
+:::{attention} Multi-instrument AK
+Single `Instrument` registry returning $(\mathbf{A}, \mathbf{x}_a, \mathbf{h})$ keyed by instrument name. Decision affects how Tier IV multi-pass fusion is structured.
+:::
 
-!!! attention "Off-grid sources"
-    Should the source location be snapped to the analysis grid, or do we carry it as continuous lat/lon with bilinear injection? Affects gradient sharpness in 4D-Var.
+:::{attention} Off-grid sources
+Should the source location be snapped to the analysis grid, or do we carry it as continuous lat/lon with bilinear injection? Affects gradient sharpness in 4D-Var.
+:::
 
-!!! attention "`coordax` adoption"
-    `MetField` is a near-perfect fit for a `coordax.Dataset`. Commit to it, or keep raw PyTrees for Step-1 simplicity? **Leaning:** `coordax` everywhere — the dimension naming pays for itself by Tier II.
+:::{attention} `coordax` adoption
+`MetField` is a near-perfect fit for a `coordax.Dataset`. Commit to it, or keep raw PyTrees for Step-1 simplicity? **Leaning:** `coordax` everywhere — the dimension naming pays for itself by Tier II.
+:::
 
-!!! attention "Inventory provenance"
-    EDGAR / GFEI / EPA disagree by ~factor 2 in well-studied basins. Which is the default $q_a$, and how do we expose the choice as a configurable rather than a hard-coded prior?
+:::{attention} Inventory provenance
+EDGAR / GFEI / EPA disagree by ~factor 2 in well-studied basins. Which is the default $q_a$, and how do we expose the choice as a configurable rather than a hard-coded prior?
+:::
