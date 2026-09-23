@@ -134,6 +134,12 @@ docs = [
     "ipykernel>=6.29",
     # Executes notebooks for docs/notebooks (see the docs-examples instructions).
     "nbconvert>=7.16.6",
+    # matplotlib + watermark used by the example notebooks during local
+    # re-execution. The guarded watermark cell in each notebook no-ops
+    # if the package is missing, but installing it here lets the version
+    # readout actually print under `nbconvert --execute`.
+    "matplotlib>=3.10",
+    "watermark>=2.6.0",
 ]
 
 [build-system]

@@ -11,7 +11,7 @@ The tractable parametric core of the TMTPP event-rate model:
 
 A full log-Gaussian Cox process (LGCP) is out of scope for v1; it is the
 natural next kernel when clustering is environmentally driven (see
-``docs/design/06b_point_process.md``).
+``docs/design/06_tier5b_point_process.md``).
 """
 
 from __future__ import annotations
