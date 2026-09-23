@@ -196,7 +196,9 @@ def build_forward(
     inversion fast and the twin experiment exactly reproducible.
 
     Args:
-        domain_x / domain_y / domain_z: ``(min, max, n_interior)`` per axis.
+        domain_x: ``(min, max, n_interior)`` along x.
+        domain_y: ``(min, max, n_interior)`` along y.
+        domain_z: ``(min, max, n_interior)`` along z.
         save_times: Observation/integration times [s], shape ``(n_t,)``.
         source_location: ``(x, y, z)`` release point [m].
         uniform_wind: Constant ``(u, v, w)`` [m/s].
@@ -519,7 +521,8 @@ def solve_4dvar(
         problem: The assembled 4D-Var problem.
         initial_source: Optional first-guess emission signal ``S₀`` (defaults to
             the prior mean, i.e. ``χ₀ = 0``).
-        rtol / atol: Optimiser tolerances.
+        rtol: Relative optimiser tolerance.
+        atol: Absolute optimiser tolerance.
         max_steps: Maximum optimiser iterations.
         solver: Optional optimistix minimiser (defaults to ``optx.LBFGS``).
         compute_posterior: When ``True``, also evaluate the Gauss-Newton Laplace

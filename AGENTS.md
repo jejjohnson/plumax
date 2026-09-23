@@ -147,16 +147,21 @@ Plans and design documents go in `.plans/` (gitignored, never committed). If a p
 
 ## Documentation
 
-This repo uses **MkDocs + Material + mkdocstrings + mkdocs-jupyter** for documentation.
+The docs are built by **two tools** and deployed as one site (see `docs/README.md`):
+**mystmd** builds the prose (home page, design roadmap, theory) from `docs/myst.yml`,
+and **MkDocs + mkdocstrings** builds the API reference from `docs/api/`, mounted at `/reference/`.
 
-- **Build locally**: `make docs-serve` (or `uv run --group docs mkdocs serve`)
-- **Build static site**: `make docs` (or `uv run --group docs mkdocs build`)
-- **Deploy to GitHub Pages**: `make docs-deploy` (or `uv run --group docs mkdocs gh-deploy --force`)
-- **Auto-deploy**: the `pages.yml` workflow deploys automatically on every push to `main`
+- **Build + verify**: `make docs` (runs `scripts/build_docs.py`: both builds, assembly into `public/`, and a link check across both halves)
+- **Preview**: `make docs-serve` (build, then serve `public/` at :8000)
+- **Validate only**: `make docs-check` (no themed HTML; no network needed for the theme)
+- **API only**: `make docs-api`
+- **Auto-deploy**: the `pages.yml` workflow deploys on every push to `main`; `docs.yml` builds and link-checks every PR
+
+mystmd is a Node CLI: `npm install -g mystmd`. Prose pages are **MyST Markdown** (`:::{note}`, `::::{tab-set}`, `(label)=`), not MkDocs-Material syntax.
 
 When writing docstrings, use **Google style** (enforced by `mkdocstrings` config).
 
-Notebooks in `docs/` may be stored as `.ipynb` files or as `jupytext`-paired `.py` files.
+Example notebooks are executed `.ipynb` files listed in the `toc` of `docs/myst.yml`; see `.github/instructions/docs-examples.instructions.md`.
 
 ## Commit Messages
 

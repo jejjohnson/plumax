@@ -8,9 +8,11 @@ the inference, emulator and predictor steps (2–5) are proposed below.
 
 ---
 
-## (1) Simple model {#tier2-simple-model}
+(tier2-simple-model)=
+## (1) Simple model
 
-### Stochastic dynamics — Markov-1 Langevin {#tier2-langevin}
+(tier2-langevin)=
+### Stochastic dynamics — Markov-1 Langevin
 
 Operational LPDMs (FLEXPART, STILT, HYSPLIT) use **Markov-1**: a Langevin equation on particle *velocity*, then position from velocity. We commit to Markov-1 because it's required for near-source super-emitter work and for non-stationary turbulence:
 
@@ -21,13 +23,14 @@ $$
 \end{aligned}
 $$
 
-- $\mathbf{u}(\mathbf{x},t)$ — mean wind from the [met field](00_prerequisites.md#prereqs-met) (WRF / ERA5 / HRRR).
+- $\mathbf{u}(\mathbf{x},t)$ — mean wind from the [met field](#prereqs-met) (WRF / ERA5 / HRRR).
 - $\mathbf{v}$ — turbulent velocity perturbation, the actual stochastic state.
 - $\mathbf{a}, \mathbf{b}$ — drift and diffusion coefficients constructed from the Reynolds-stress tensor $\sigma_{ij}(\mathbf{x},t)$ and Lagrangian timescale $\tau_L(\mathbf{x},t)$. Reference: [thomson1987], [wilson1996] (well-mixed condition).
-- $\sigma_{ij}, \tau_L$ come from MO similarity ([monin1954]) parameterised by $(u_*, L_\text{Obukhov}, z_0)$ plus WRF TKE — see [MO prereqs](00_prerequisites.md#prereqs-mo-similarity).
+- $\sigma_{ij}, \tau_L$ come from MO similarity ([monin1954]) parameterised by $(u_*, L_\text{Obukhov}, z_0)$ plus WRF TKE — see [MO prereqs](#prereqs-mo-similarity).
 
-!!! important "Markov-0 is not the model"
-    Markov-0 (random-displacement on position only) is **not** the model; it shows up as the well-mixed limit at long $\Delta t$. Don't bake Markov-0 into the API as a "fast option" — implement the well-mixed limit explicitly when needed.
+:::{important} Markov-0 is not the model
+Markov-0 (random-displacement on position only) is **not** the model; it shows up as the well-mixed limit at long $\Delta t$. Don't bake Markov-0 into the API as a "fast option" — implement the well-mixed limit explicitly when needed.
+:::
 
 ### Sub-grid wind interpolation
 
@@ -48,7 +51,8 @@ Higher-order Milstein only if convergence diagnostics flag bias. $\Delta t$ is a
 - **Forward mode:** release $N$ particles from the source, track concentration by binning particle density on the analysis grid.
 - **Backward mode (footprint):** release receptors backward in time → **source–receptor sensitivity matrix** $\mathbf{F}$. The FLEXPART/STILT paradigm and the workhorse of regional-scale inversions ([stohl2005flexpart]).
 
-### Footprint definition (formal) {#tier2-footprint}
+(tier2-footprint)=
+### Footprint definition (formal)
 
 For a receptor $r$ and a candidate source cell $s$:
 
@@ -62,7 +66,8 @@ For an overpass with $n_\text{obs}$ columns and $n_\text{grid}$ candidate source
 
 ---
 
-## (2) Model-based inference {#tier2-inference}
+(tier2-inference)=
+## (2) Model-based inference
 
 ### Forward model with observation operator
 
@@ -74,10 +79,11 @@ $$
 
 - $\mathbf{F}\mathbf{q}$ gives a 3D concentration field from the source vector.
 - $\mathrm{col}_z$ collapses to an XCH₄ column.
-- $\mathbf{A}$ applies the satellite [averaging kernel](00_prerequisites.md#prereqs-ak-operator); see (eq-ak-operator).
+- $\mathbf{A}$ applies the satellite [averaging kernel](#prereqs-ak-operator); see (eq-ak-operator).
 - $\mathbf{c}_\text{bg}$ is the regional background — mandatory, not optional. Same critique as Tier I: predicted enhancement vs. absolute-column observation must be reconciled day-1.
 
-### Likelihood model {#tier2-likelihood}
+(tier2-likelihood)=
+### Likelihood model
 
 $$
 \boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{R}), \qquad \mathbf{R} \;=\; \mathbf{R}_\text{retr} + \mathbf{R}_\text{repr}
@@ -87,7 +93,8 @@ $$
 - $\mathbf{R}_\text{repr}$ — **representation error**: model-vs-observation footprint mismatch. Typically 1–5 ppb diagonal addition; rises with terrain complexity and at coarse-instrument boundaries. Don't omit — naive $\mathbf{R} = \mathbf{R}_\text{retr}$ overweights observations and produces overconfident posteriors.
 - Block-diagonal across overpasses; cross-overpass correlation only if observation times are within met decorrelation scale (~hours).
 
-### Prior on $\mathbf{q}$ — spatially correlated, sign-constrained {#tier2-prior}
+(tier2-prior)=
+### Prior on $\mathbf{q}$ — spatially correlated, sign-constrained
 
 The prior is the regularizer; it's *the* methodological choice in regional inversions.
 
@@ -95,17 +102,19 @@ The prior is the regularizer; it's *the* methodological choice in regional inver
 
 | Choice | Form | Notes |
 | --- | --- | --- |
-| Mean $\mathbf{q}_a$ | from [emission inventory](00_prerequisites.md#prereqs-emission-inventory) ([crippa2023edgar,scarpelli2022gfei,maasakkers2023ghgi]) | prior median per cell |
+| Mean $\mathbf{q}_a$ | from [emission inventory](#prereqs-emission-inventory) ([crippa2023edgar,scarpelli2022gfei,maasakkers2023ghgi]) | prior median per cell |
 | Covariance $\mathbf{B}$ | Matérn-3/2 with correlation length $\ell \in [5, 50]$ km | smooth posterior; $\ell$ tuned by posterior diagnostics or hierarchical |
 | Positivity | $\log \mathbf{q} \sim \mathcal{N}(\log \mathbf{q}_a, \mathbf{B}_{\log})$ (lognormal) | non-negative emissions; conjugate variant: NNLS / projected-gradient on Gaussian $\mathbf{q}$ |
 
-!!! important "Diagonal $\mathbf{B}$ is wrong"
-    Diagonal $\mathbf{B}$ produces wildly noisy spatial posteriors. Always carry spatial correlation.
+:::{important} Diagonal $\mathbf{B}$ is wrong
+Diagonal $\mathbf{B}$ produces wildly noisy spatial posteriors. Always carry spatial correlation.
 
-    **Why:** an inversion with diagonal prior covariance has no smoothing scale, so unresolved structure goes into single-cell spikes.
-    **How to apply:** use a Matérn-3/2 (or any spatial kernel with a real correlation length); calibrate $\ell$ by posterior diagnostics.
+**Why:** an inversion with diagonal prior covariance has no smoothing scale, so unresolved structure goes into single-cell spikes.
+**How to apply:** use a Matérn-3/2 (or any spatial kernel with a real correlation length); calibrate $\ell$ by posterior diagnostics.
+:::
 
-### Gaussian–Gaussian closed form (linear-in-log) {#tier2-gaussian-closed-form}
+(tier2-gaussian-closed-form)=
+### Gaussian–Gaussian closed form (linear-in-log)
 
 When the lognormal is linearised around $\log \mathbf{q}_a$ (fine for moderate enhancements over the prior), the posterior is closed form:
 
@@ -128,7 +137,8 @@ with $\tilde{\mathbf{F}} = \operatorname{diag}(\mathbf{q}_a)\, \mathbf{F}$ (the 
 
 ---
 
-## (3) Model emulator {#tier2-emulator}
+(tier2-emulator)=
+## (3) Model emulator
 
 The Lagrangian model becomes expensive at large $N$ particles or when running ensembles for met-uncertainty propagation.
 
@@ -138,7 +148,8 @@ The Lagrangian model becomes expensive at large $N$ particles or when running en
 
 ---
 
-## (4) Emulator-based inference {#tier2-emu-inference}
+(tier2-emu-inference)=
+## (4) Emulator-based inference
 
 Replace $\mathbf{F}$ with the emulated footprint in the linear inversion. Enables:
 
@@ -148,7 +159,8 @@ Replace $\mathbf{F}$ with the emulated footprint in the linear inversion. Enable
 
 ---
 
-## (5) Amortized inference (predictor) {#tier2-amortized}
+(tier2-amortized)=
+## (5) Amortized inference (predictor)
 
 $$
 f_\theta : (\mathbf{y}_\text{multiscale}, \text{met}_\text{context}, \text{instrument\_id}) \;\longmapsto\; p(\log \mathbf{q}(\mathbf{x}) \mid \mathbf{y}, \text{met})
@@ -167,21 +179,24 @@ When fusing across instruments, each observation tensor carries its own AK and f
 - Posterior over $\log \mathbf{q}(\mathbf{x})$ is a *spatial field* — natural fit for a conditional flow over images.
 - Context conditioning via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox) — same pattern as Tier I.
 
-!!! caution "`gauss_flows` is currently 1D-only"
-    Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.
+:::{caution} `gauss_flows` is currently 1D-only
+Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.
+:::
 
 ---
 
-## (6) Improve {#tier2-improve}
+(tier2-improve)=
+## (6) Improve
 
 - **Multi-layer met fields.** Move from 2D footprints to 3D trajectories through stacked WRF layers — necessary when emissions span the inversion layer or when the source PBL is poorly mixed.
 - **Chemical loss during transport.** $\mathrm{d}c/\mathrm{d}t = -k_\text{OH}\, c$ along trajectories. For CH₄ over <1 day, loss is negligible (~0.5%/day); for CO it's significant.
-- **Met uncertainty propagation.** Run the trajectory ensemble across $N_\text{met}$ WRF / ERA5 ensemble realisations → uncertainty in $\mathbf{F}$ propagated through to source posterior. Hooks into the `MetField.ensemble_dim` from the [prereqs schema](00_prerequisites.md#prereqs-metfield-schema).
+- **Met uncertainty propagation.** Run the trajectory ensemble across $N_\text{met}$ WRF / ERA5 ensemble realisations → uncertainty in $\mathbf{F}$ propagated through to source posterior. Hooks into the `MetField.ensemble_dim` from the [prereqs schema](#prereqs-metfield-schema).
 - **Hierarchical $\mathbf{B}$ correlation length.** Promote $\ell$ in the Matérn prior to a hyperparameter with its own posterior — let the data choose the regularisation scale.
 
 ---
 
-## Module layout (proposed) {#tier2-modules}
+(tier2-modules)=
+## Module layout (proposed)
 
 *Tier II proposed module layout — step, concern, target module, status.*
 
@@ -206,7 +221,8 @@ When fusing across instruments, each observation tensor carries its own AK and f
 
 ---
 
-## Validation strategy {#tier2-validation}
+(tier2-validation)=
+## Validation strategy
 
 - **Particle integration — zero-turbulence limit.** With $\mathbf{b} \to \mathbf{0}$, trajectories must follow streamlines exactly. Compare to streamline integration of the same wind field.
 - **Mass conservation.** In the no-deposition, closed-domain limit, total particle-seconds in the domain must be conserved to floating-point precision over the integration window. Standard LPDM regression test.
@@ -219,31 +235,41 @@ When fusing across instruments, each observation tensor carries its own AK and f
 
 ---
 
-## Open questions {#tier2-open-questions}
+(tier2-open-questions)=
+## Open questions
 
-!!! attention "Time discretisation $\Delta t$"
-    Operational floor for SDE convergence in non-stationary PBL turbulence? Initial guess: $\Delta t = \min(\tau_L / 5,\, 60\,\text{s})$. Needs benchmarking against Markov-1 well-mixed-condition tests.
+:::{attention} Time discretisation $\Delta t$
+Operational floor for SDE convergence in non-stationary PBL turbulence? Initial guess: $\Delta t = \min(\tau_L / 5,\, 60\,\text{s})$. Needs benchmarking against Markov-1 well-mixed-condition tests.
+:::
 
-!!! attention "Positivity strategy"
-    Lognormal prior on $\mathbf{q}$ (smooth, conjugate when linearised) vs. NNLS on Gaussian $\mathbf{q}$ (cheap, but biased near zero) vs. reflected-Gaussian MCMC (exact, slow). v1: lognormal; revisit if posterior contracts hard at zero on real data.
+:::{attention} Positivity strategy
+Lognormal prior on $\mathbf{q}$ (smooth, conjugate when linearised) vs. NNLS on Gaussian $\mathbf{q}$ (cheap, but biased near zero) vs. reflected-Gaussian MCMC (exact, slow). v1: lognormal; revisit if posterior contracts hard at zero on real data.
+:::
 
-!!! attention "Representativeness error magnitude"
-    $\mathbf{R}_\text{repr}$ diagonal: 1 ppb (well-resolved) to 5 ppb (coarse satellite over rough terrain). Open: hierarchical fit to data, or pre-tabulated by (instrument, terrain class)?
+:::{attention} Representativeness error magnitude
+$\mathbf{R}_\text{repr}$ diagonal: 1 ppb (well-resolved) to 5 ppb (coarse satellite over rough terrain). Open: hierarchical fit to data, or pre-tabulated by (instrument, terrain class)?
+:::
 
-!!! attention "Number of particles — measured, not guessed"
-    Replace the $N=10^5$ / $N=10^3$ guess with the convergence test above. Operational target: posterior moments stable within 5% as $N \to 2N$.
+:::{attention} Number of particles — measured, not guessed
+Replace the $N=10^5$ / $N=10^3$ guess with the convergence test above. Operational target: posterior moments stable within 5% as $N \to 2N$.
+:::
 
-!!! attention "Random seed handling"
-    Treat the forward as a noisy oracle (averaged over seeds) or fix one seed and treat result as deterministic? **Leaning:** fix-seed for inference (deterministic gradients); average-seed only for final-report posterior summarisation.
+:::{attention} Random seed handling
+Treat the forward as a noisy oracle (averaged over seeds) or fix one seed and treat result as deterministic? **Leaning:** fix-seed for inference (deterministic gradients); average-seed only for final-report posterior summarisation.
+:::
 
-!!! attention "Footprint storage / compression"
-    Sparse CSR storage handles the 90%+ zeros, but cross-receptor footprints share spatial structure — low-rank factorisation ($\mathbf{F} \approx \mathbf{U} \mathbf{V}^{\top}$ with $r \ll n_\text{obs}$) might compress further. Open: empirical rank vs. accuracy trade-off on real data.
+:::{attention} Footprint storage / compression
+Sparse CSR storage handles the 90%+ zeros, but cross-receptor footprints share spatial structure — low-rank factorisation ($\mathbf{F} \approx \mathbf{U} \mathbf{V}^{\top}$ with $r \ll n_\text{obs}$) might compress further. Open: empirical rank vs. accuracy trade-off on real data.
+:::
 
-!!! attention "Backward vs. forward — refined"
-    Two distinct reasons backward dominates inversion: (a) $n_\text{source}$ is unknown a priori (the original "you're inferring it"), and (b) backward gives a sparse $\mathbf{F}^{\top}$ *per receptor* that's trivially parallelisable and storage-friendly. The cost ratio $O(n_\text{obs} N)$ vs. $O(n_\text{source} N)$ is secondary.
+:::{attention} Backward vs. forward — refined
+Two distinct reasons backward dominates inversion: (a) $n_\text{source}$ is unknown a priori (the original "you're inferring it"), and (b) backward gives a sparse $\mathbf{F}^{\top}$ *per receptor* that's trivially parallelisable and storage-friendly. The cost ratio $O(n_\text{obs} N)$ vs. $O(n_\text{source} N)$ is secondary.
+:::
 
-!!! attention "Coarse-instrument representation"
-    TROPOMI 5 km vs inversion grid 1 km — observation operator must include footprint-weighted spatial averaging. Open: handle as a deterministic averaging operator on $\mathrm{col}_z(\mathbf{F}\mathbf{q})$, or as a stochastic representation kernel inside $\mathbf{R}_\text{repr}$?
+:::{attention} Coarse-instrument representation
+TROPOMI 5 km vs inversion grid 1 km — observation operator must include footprint-weighted spatial averaging. Open: handle as a deterministic averaging operator on $\mathrm{col}_z(\mathbf{F}\mathbf{q})$, or as a stochastic representation kernel inside $\mathbf{R}_\text{repr}$?
+:::
 
-!!! attention "Spatial correlation length $\ell$ in $\mathbf{B}$"
-    Default 10 km, but real basins have stronger correlation along pipeline corridors. Open: anisotropic Matérn with corridor-aligned anisotropy, or hierarchical $\ell$?
+:::{attention} Spatial correlation length $\ell$ in $\mathbf{B}$
+Default 10 km, but real basins have stronger correlation along pipeline corridors. Open: anisotropic Matérn with corridor-aligned anisotropy, or hierarchical $\ell$?
+:::

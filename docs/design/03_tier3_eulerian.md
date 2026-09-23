@@ -6,9 +6,11 @@ This is the **gold-standard physics tier**: full mass conservation, arbitrary wi
 
 ---
 
-## (1) Simple model {#tier3-simple-model}
+(tier3-simple-model)=
+## (1) Simple model
 
-### Conservation equation {#tier3-conservation}
+(tier3-conservation)=
+### Conservation equation
 
 Operational implementations carry **mixing ratio** $c$ (kg/kg), not mass density, because that's what the satellite observes and what WRF couples to. The conservation form is then:
 
@@ -16,24 +18,27 @@ $$
 \partial_{t} (\rho c) \;+\; \nabla\cdot(\rho \mathbf{u}\, c) \;=\; \nabla\cdot(\rho \mathbf{K} \nabla c) \;+\; S(\mathbf{x},t) \;-\; \lambda\, \rho\, c
 $$
 
-with $\rho(\mathbf{x},t)$ the dry-air density from the [met field](00_prerequisites.md#prereqs-metfield-schema). When $\rho$ is approximately constant over the integration window (typical at fixed altitude in a regional basin) this reduces to the textbook $\partial_t c + \nabla\cdot(\mathbf{u}\, c) = \nabla\cdot(\mathbf{K}\nabla c) + S - \lambda c$. Commit to the full $\rho$-weighted form for any work crossing significant pressure-altitude variation.
+with $\rho(\mathbf{x},t)$ the dry-air density from the [met field](#prereqs-metfield-schema). When $\rho$ is approximately constant over the integration window (typical at fixed altitude in a regional basin) this reduces to the textbook $\partial_t c + \nabla\cdot(\mathbf{u}\, c) = \nabla\cdot(\mathbf{K}\nabla c) + S - \lambda c$. Commit to the full $\rho$-weighted form for any work crossing significant pressure-altitude variation.
 
 - $\mathbf{u}(\mathbf{x},t)$ — wind from WRF / ERA5 / HRRR.
-- $\mathbf{K}(\mathbf{x},t)$ — eddy diffusivity. Commit to **K-theory from MO similarity** in the PBL ($K_z \approx \kappa\, u_*\, z (1 - z/L)$ with stability correction; [monin1954,stull1988]) plus **Smagorinsky** in the free troposphere. Source: [MO prereqs](00_prerequisites.md#prereqs-mo-similarity) + WRF TKE.
+- $\mathbf{K}(\mathbf{x},t)$ — eddy diffusivity. Commit to **K-theory from MO similarity** in the PBL ($K_z \approx \kappa\, u_*\, z (1 - z/L)$ with stability correction; [monin1954,stull1988]) plus **Smagorinsky** in the free troposphere. Source: [MO prereqs](#prereqs-mo-similarity) + WRF TKE.
 - $S(\mathbf{x},t)$ — source field, **the unknown we invert for**. Per-cell, time-resolved.
 - $\lambda$ — first-order chemical loss. Negligible for CH₄ at <1-day scales; included for portability to CO/HCHO.
 
-### Initial and boundary conditions {#tier3-bcs}
+(tier3-bcs)=
+### Initial and boundary conditions
 
 Both are **load-bearing** for inversion accuracy and currently underspecified in operational code:
 
-!!! important "Initial conditions"
-    Long inversion windows (>24 h) need realistic ICs; otherwise spin-up corrupts early observations.
+:::{important} Initial conditions
+Long inversion windows (>24 h) need realistic ICs; otherwise spin-up corrupts early observations.
 
-    **Default:** a 48-hour spin-up from a CAMS / GEOS-Chem global background, or jointly invert $c(0)$ alongside $S$ (adds $c_b(0)$ background term to the cost — see [Inference](#tier3-inference)).
+**Default:** a 48-hour spin-up from a CAMS / GEOS-Chem global background, or jointly invert $c(0)$ alongside $S$ (adds $c_b(0)$ background term to the cost — see [Inference](#tier3-inference)).
+:::
 
-!!! important "Lateral BCs"
-    Inflow from a coarser global model (CAMS, GEOS-Chem) is uncertain. Lateral-BC error is a known systematic in regional inversions; standard fix is to jointly invert per-face BC scaling factors $\alpha_\text{face} \sim \mathcal{N}(1, 0.1^2)$ and absorb the bias into the source posterior covariance. Document on the `boundary.py` API.
+:::{important} Lateral BCs
+Inflow from a coarser global model (CAMS, GEOS-Chem) is uncertain. Lateral-BC error is a known systematic in regional inversions; standard fix is to jointly invert per-face BC scaling factors $\alpha_\text{face} \sim \mathcal{N}(1, 0.1^2)$ and absorb the bias into the source posterior covariance. Document on the `boundary.py` API.
+:::
 
 ### Spatial / temporal discretisation
 
@@ -47,7 +52,8 @@ Cell-centred FV with flux-limited advection via `finitevolX`; explicit RK or IME
 
 ---
 
-## (2) Model-based inference {#tier3-inference}
+(tier3-inference)=
+## (2) Model-based inference
 
 ### Forward observation operator
 
@@ -57,9 +63,10 @@ $$
 \mathbf{y}_t \;=\; \mathbf{A}_t\, \mathrm{col}_z\!\bigl(c(S, c_0, t)\bigr) \;+\; \mathbf{c}_\text{bg} \;+\; \boldsymbol{\varepsilon}_t
 $$
 
-$\mathbf{H}_t \coloneqq \mathbf{A}_t \cdot \mathrm{col}_z(\cdot)$ is the observation operator at time $t$. The 4D-Var cost below uses $\mathbf{H}_t$; the column + AK implementation is shared with [Tier I](01_tier1_gaussian.md#tier1-column-ak) and [the prereqs](00_prerequisites.md#prereqs-ak-operator).
+$\mathbf{H}_t \coloneqq \mathbf{A}_t \cdot \mathrm{col}_z(\cdot)$ is the observation operator at time $t$. The 4D-Var cost below uses $\mathbf{H}_t$; the column + AK implementation is shared with [Tier I](#tier1-column-ak) and [the prereqs](#prereqs-ak-operator).
 
-### 4D-Var cost — three terms {#tier3-cost}
+(tier3-cost)=
+### 4D-Var cost — three terms
 
 $$
 J(S, c_0) \;=\; \tfrac{1}{2}\lVert S - S_b \rVert^{2}_{\mathbf{B}}
@@ -69,7 +76,8 @@ $$
 
 Three terms — source background, IC background, and **time-summed** observation mismatch. The IC term drops out only if you commit to a long warm-up that pins $c(0)$. Treating observations as a single instantaneous mismatch (no time index) is incompatible with multi-hour assimilation windows.
 
-### Likelihood model {#tier3-likelihood}
+(tier3-likelihood)=
+### Likelihood model
 
 $$
 \boldsymbol{\varepsilon}_t \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_t), \qquad \mathbf{R}_t \;=\; \mathbf{R}_{\text{retr},t} + \mathbf{R}_{\text{repr},t}
@@ -79,7 +87,8 @@ $$
 - $\mathbf{R}_{\text{repr},t}$ — representation error (model-vs-observation footprint mismatch). Diagonal addition; rises with terrain complexity and at coarse-instrument boundaries. **Don't omit** — naive $\mathbf{R} = \mathbf{R}_\text{retr}$ overweights observations and produces overconfident posteriors.
 - Block-diagonal across overpasses; cross-time correlation only within met decorrelation scale.
 
-### Prior on $S$ — spatially correlated, sign-constrained {#tier3-prior}
+(tier3-prior)=
+### Prior on $S$ — spatially correlated, sign-constrained
 
 Same structure as Tier II:
 
@@ -87,15 +96,17 @@ Same structure as Tier II:
 
 | Choice | Form | Notes |
 | --- | --- | --- |
-| Mean $S_b$ | from [emission inventory](00_prerequisites.md#prereqs-emission-inventory) | EDGAR / GFEI / EPA per-cell median |
+| Mean $S_b$ | from [emission inventory](#prereqs-emission-inventory) | EDGAR / GFEI / EPA per-cell median |
 | Covariance $\mathbf{B}$ | Matérn-3/2, $\ell \in [5, 50]$ km | spatial regulariser; $\ell$ tuneable or hierarchical |
 | Positivity | $\log S \sim \mathcal{N}(\log S_b, \mathbf{B}_{\log})$ (lognormal) | non-negative emissions; conjugate when linearised |
 | BC scaling | per-face $\alpha \sim \mathcal{N}(1, 0.1^{2})$ | absorbs lateral-BC bias |
 
-!!! important "Diagonal $\mathbf{B}$ is wrong"
-    Diagonal $\mathbf{B}$ produces wildly noisy spatial posteriors. Always carry spatial correlation.
+:::{important} Diagonal $\mathbf{B}$ is wrong
+Diagonal $\mathbf{B}$ produces wildly noisy spatial posteriors. Always carry spatial correlation.
+:::
 
-### Adjoint {#tier3-adjoint}
+(tier3-adjoint)=
+### Adjoint
 
 The adjoint of the transport equation (backward in time, conservative form) is:
 
@@ -105,7 +116,8 @@ $$
 
 The $\nabla\cdot(\mathbf{u}\,\lambda)$ term is **conservative** (matches the forward $\nabla\cdot(\mathbf{u}\,c)$); the doc previously had $\mathbf{u}\cdot\nabla\lambda$, which is equivalent only for divergence-free $\mathbf{u}$ and is incorrect for compressible WRF winds. JAX computes the discretised adjoint exactly via reverse-mode autodiff through the FV solver — no hand-derived adjoint code, no separate adjoint-correctness derivation. The mathematical form above is for *reading*, not implementation.
 
-### Incremental 4D-Var (the operational default) {#tier3-incremental}
+(tier3-incremental)=
+### Incremental 4D-Var (the operational default)
 
 Linearise around the current iterate $S^k$, solve the linear inner minimisation, update outer iterate:
 
@@ -115,7 +127,8 @@ $$
 
 $J_\text{lin}$ uses the **tangent linear** of the FV solver, trivially built via `jax.linearize`. Inner solves are quadratic in $\delta S$ → CG or Lanczos via [`gaussx`](https://github.com/jejjohnson/gaussx). Cuts cost by 1–2 orders of magnitude vs. fully-nonlinear 4D-Var. **This is the default**; full nonlinear is a sanity check.
 
-### Control-variable transform {#tier3-control-transform}
+(tier3-control-transform)=
+### Control-variable transform
 
 Direct optimisation in $S$-space with $\mathbf{B}^{-1}$ is infeasible — $\mathbf{B}$ for a $200 \times 200$ grid is $40000^{2} \approx 10^{9}$ entries. Standard fix:
 
@@ -141,7 +154,8 @@ For a $200 \times 200$ grid, 24-hour assimilation window, with incremental 4D-Va
 
 ---
 
-## (3) Model emulator {#tier3-emulator}
+(tier3-emulator)=
+## (3) Model emulator
 
 Full 3D FV transport is expensive: $O(N^{3})$ state, repeated time integration. Emulator is **essential** here, not optional like at Tier I.
 
@@ -162,19 +176,22 @@ Most satellite inversion needs only the column-integrated XCH₄, not the 3D fie
 - **Active-learning over uniform climatology binning.** Sample WRF / ERA5 climatology adaptively — the emulator's residual error map drives where to run the next FV simulation. Reaches operational accuracy with 100–300 runs vs. ~1000 for uniform sampling.
 - Sample met conditions from the **operational distribution** (facility locations of interest, overpass times) rather than a uniform-bin climatology — same critique as Tier II's emulator.
 
-### Emulator adjoint must be calibrated {#tier3-emulator-adjoint}
+(tier3-emulator-adjoint)=
+### Emulator adjoint must be calibrated
 
 Backprop through a trained emulator gives *some* gradient — whether it matches the true PDE adjoint is empirical.
 
-!!! important "Hard validation requirement"
-    Emulator-autodiff gradients vs. FV-autodiff gradients on a held-out set should agree to $<5\%$ relative error in operator norm.
+:::{important} Hard validation requirement
+Emulator-autodiff gradients vs. FV-autodiff gradients on a held-out set should agree to $<5\%$ relative error in operator norm.
 
-    **Why:** if not, the inversion built on Step 4 is biased even when forward predictions look fine — the emulator passes a forward-only acceptance check but breaks the gradient that 4D-Var depends on.
-    **How to apply:** include the gradient-residual test in [validation](#tier3-validation) as a hard gate, not a "nice to have".
+**Why:** if not, the inversion built on Step 4 is biased even when forward predictions look fine — the emulator passes a forward-only acceptance check but breaks the gradient that 4D-Var depends on.
+**How to apply:** include the gradient-residual test in [validation](#tier3-validation) as a hard gate, not a "nice to have".
+:::
 
 ---
 
-## (4) Emulator-based inference {#tier3-emu-inference}
+(tier3-emu-inference)=
+## (4) Emulator-based inference
 
 Replace the FV integrator with the FNO / neural ODE in the 4D-Var loop:
 
@@ -185,7 +202,8 @@ Replace the FV integrator with the FNO / neural ODE in the 4D-Var loop:
 
 ---
 
-## (5) Amortized inference (predictor) {#tier3-amortized}
+(tier3-amortized)=
+## (5) Amortized inference (predictor)
 
 $$
 f_\theta : (\mathbf{y}_{t_1, \dots, t_n},\, \mathbf{u}_{1:T},\, \text{instrument\_id}) \;\longmapsto\; p(\log S(\mathbf{x},t) \mid \mathbf{y}, \mathbf{u})
@@ -209,7 +227,8 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 
 ---
 
-## (6) Improve {#tier3-improve}
+(tier3-improve)=
+## (6) Improve
 
 - **Multi-species coupling.** Add CO and CO₂ tracers; their source ratios constrain CH₄ source attribution (e.g. fossil vs. agricultural).
 - **Adaptive grid refinement.** Refine near sources, coarsen elsewhere. `finitevolX` may need primitives for this.
@@ -219,7 +238,8 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 
 ---
 
-## Module layout {#tier3-modules}
+(tier3-modules)=
+## Module layout
 
 *Tier III module layout — step, concern, target module, status.*
 
@@ -252,7 +272,8 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 
 ---
 
-## Validation strategy {#tier3-validation}
+(tier3-validation)=
+## Validation strategy
 
 - **1D diffusion.** Initial Dirac → at time $t$, solution is Gaussian with variance $2Kt$. Check $L^2$ error vs. analytical.
 - **1D advection.** Cosine pulse advected at constant $u$ → after one period, recover initial condition. Tests upwind / flux-limiter consistency.
@@ -262,38 +283,48 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
   - With sources, no deposition: $\Delta \int c\, \mathrm{d}V = \iint S\, \mathrm{d}V\, \mathrm{d}t$ summed over the window.
   - With deposition: include $-\lambda \int c\, \mathrm{d}V\, \mathrm{d}t$ term.
 - **Adjoint correctness.** JAX `vjp` of the discrete forward should satisfy $\langle \mathbf{F}\mathbf{u}, \mathbf{v}\rangle = \langle \mathbf{u}, \mathbf{F}^{\top} \mathbf{v}\rangle$ for random $\mathbf{u}, \mathbf{v}$. Cheap, catches differentiation bugs.
-- **Tier I limit.** For a single point source in a uniform wind with constant $\mathbf{K}$, the steady-state FV solution should match the [Gaussian-plume formula](01_tier1_gaussian.md#tier1-gaussian-plume) at downwind distances much greater than the grid spacing.
+- **Tier I limit.** For a single point source in a uniform wind with constant $\mathbf{K}$, the steady-state FV solution should match the [Gaussian-plume formula](#tier1-gaussian-plume) at downwind distances much greater than the grid spacing.
 - **Emulator-adjoint calibration.** Emulator-autodiff gradients vs. FV-autodiff gradients on a held-out met set, $<5\%$ relative error in operator norm. **Hard test** — failure means Step 4 inversion is biased.
 - **Emulator OOD generalization.** Train on one met regime (e.g. summer Permian), evaluate on another (winter Permian, or a different basin). Resists overfit-to-training-distribution.
 - **Real-data benchmark.** Compare 4D-Var output to existing CAMS / GEOS-Chem-Adjoint inversions on a published time window (e.g. [maasakkers2023ghgi,jacob2022quantifying] Permian inversions). Posterior credible interval should overlap the published estimate. Without this, the inversion is a synthetic exercise.
 
 ---
 
-## Open questions {#tier3-open-questions}
+(tier3-open-questions)=
+## Open questions
 
-!!! attention "Choice of advection scheme"
-    Upwind is robust but diffusive; WENO is sharp but stencil-heavy. Default for `les_fvm` is currently flux-limited; document the choice and the cell-Péclet floor where it stops being mass-conservative.
+:::{attention} Choice of advection scheme
+Upwind is robust but diffusive; WENO is sharp but stencil-heavy. Default for `les_fvm` is currently flux-limited; document the choice and the cell-Péclet floor where it stops being mass-conservative.
+:::
 
-!!! attention "Adjoint memory / checkpointing"
-    Long windows mean the forward state must be re-derived (recompute) or stored (memory) for backprop. Standard fix: Griewank-style binomial checkpointing. Open: pick the checkpointing strategy and benchmark against `equinox.internal.scan_checkpointed` or hand-rolled.
+:::{attention} Adjoint memory / checkpointing
+Long windows mean the forward state must be re-derived (recompute) or stored (memory) for backprop. Standard fix: Griewank-style binomial checkpointing. Open: pick the checkpointing strategy and benchmark against `equinox.internal.scan_checkpointed` or hand-rolled.
+:::
 
-!!! attention "Lateral BC scaling — fit per face or per edge cell?"
-    Per-face is parsimonious (4 scalars); per-edge-cell is flexible but underdetermined. v1: per-face Gaussian; v2: per-face Matérn along the boundary.
+:::{attention} Lateral BC scaling — fit per face or per edge cell?
+Per-face is parsimonious (4 scalars); per-edge-cell is flexible but underdetermined. v1: per-face Gaussian; v2: per-face Matérn along the boundary.
+:::
 
-!!! attention "IC initialisation"
-    Long warm-up (48 h from CAMS) vs. joint IC inversion (more parameters but no spin-up bias). **Leaning:** joint inversion when budget allows, warm-up for scaling tests.
+:::{attention} IC initialisation
+Long warm-up (48 h from CAMS) vs. joint IC inversion (more parameters but no spin-up bias). **Leaning:** joint inversion when budget allows, warm-up for scaling tests.
+:::
 
-!!! attention "Emulator long-term stability"
-    Neural ODEs notoriously drift. Use truncated BPTT during training, or train with multi-step rollouts? Initial bias: multi-step rollout with ramped horizon.
+:::{attention} Emulator long-term stability
+Neural ODEs notoriously drift. Use truncated BPTT during training, or train with multi-step rollouts? Initial bias: multi-step rollout with ramped horizon.
+:::
 
-!!! attention "Data-assimilation window length"
-    Longer windows = more constraint per source state but worse linearisation; shorter = faster but more drift between updates. Tunable per use case; document the trade-off.
+:::{attention} Data-assimilation window length
+Longer windows = more constraint per source state but worse linearisation; shorter = faster but more drift between updates. Tunable per use case; document the trade-off.
+:::
 
-!!! attention "GPU vs. CPU defaults"
-    `les_fvm` runs on both via JAX. At what grid size does GPU pay off? Worth a benchmark notebook to anchor user expectations — initial guess: GPU dominant above $200 \times 200$.
+:::{attention} GPU vs. CPU defaults
+`les_fvm` runs on both via JAX. At what grid size does GPU pay off? Worth a benchmark notebook to anchor user expectations — initial guess: GPU dominant above $200 \times 200$.
+:::
 
-!!! attention "Posterior covariance method"
-    Default to Laplace (cheapest) or Gauss–Newton Hessian (more accurate)? En4D-Var only when posterior is non-Gaussian. Open: criterion for promoting to ensemble.
+:::{attention} Posterior covariance method
+Default to Laplace (cheapest) or Gauss–Newton Hessian (more accurate)? En4D-Var only when posterior is non-Gaussian. Open: criterion for promoting to ensemble.
+:::
 
-!!! attention "Hierarchical Matérn length-scale"
-    Promote $\ell$ to a hyperparameter, or fix per-basin from a pilot inversion? Tier V.A consumes the posterior — hierarchical adds another integration but gives honest UQ.
+:::{attention} Hierarchical Matérn length-scale
+Promote $\ell$ to a hyperparameter, or fix per-basin from a pilot inversion? Tier V.A consumes the posterior — hierarchical adds another integration but gives honest UQ.
+:::

@@ -7,7 +7,7 @@
 - **Core stack**: JAX, NumPyro, diffrax/equinox, xarray
 - **Layout**: `src/` layout (`src/plumax/`)
 - **Testing**: pytest
-- **Docs**: MkDocs + Material + mkdocstrings + mkdocs-jupyter
+- **Docs**: mystmd (prose) + MkDocs Material/mkdocstrings (API reference), assembled by `scripts/build_docs.py`
 
 ## Build & Test Commands
 
@@ -18,7 +18,7 @@ make lint        # Lint code (ruff check)
 make format      # Format code (ruff format + ruff check --fix)
 make typecheck   # Type check (ty check)
 make precommit   # Run pre-commit on all files
-make docs-serve  # Serve docs locally
+make docs-serve  # Build + serve the docs site locally
 ```
 
 ## Before Every Commit — Mandatory Checklist
@@ -47,7 +47,7 @@ uv run --group typecheck ty check src/plumax
 |------|---------|
 | `src/plumax/` | Main package source code |
 | `tests/` | Test suite |
-| `docs/` | Documentation (MkDocs) |
+| `docs/` | Documentation (mystmd prose + MkDocs API in `docs/api/`) |
 | `notebooks/` | Jupyter notebooks |
 | `scripts/` | Example scripts |
 
@@ -69,7 +69,7 @@ Bad: "You should add validation here"
 Good: "Add validation here. Proposed implementation:"
 ```python
 if value < 0:
-    raise ValueError('Value must be non-negative')
+    raise ValueError("Value must be non-negative")
 ```
 
 ### Simplicity First

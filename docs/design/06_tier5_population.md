@@ -8,23 +8,25 @@ This tier sits **above** the per-event physics tiers. Tiers I–IV answer *"what
 - *Forecasting:* "For a given facility class, when will the next emission event happen, and how big will it be?"
 - *Bias diagnosis:* "How biased is the per-overpass average rate when satellites only see the big leaks?"
 
-Inventory and forecasting are **co-equal products** of Tier V — not just totals. The inverted intensity $\lambda(t)$ directly powers operational forecasts (dispatch windows, occurrence probabilities); see [Persistency](06c_persistency.md).
+Inventory and forecasting are **co-equal products** of Tier V — not just totals. The inverted intensity $\lambda(t)$ directly powers operational forecasts (dispatch windows, occurrence probabilities); see [Persistency](06_tier5c_persistency.md).
 
 Sub-pages:
 
-- [Instantaneous emission estimation](06a_instantaneous.md) — single-overpass $Q$; the cross-tier interface that turns per-event posteriors into mark likelihoods.
-- [Point process model (TMTPP)](06b_point_process.md) — the generative foundation: temporal intensity $\lambda(t)$, marks $f(Q)$, and detection thinning $P_d(\cdot)$.
-- [Persistency](06c_persistency.md) — operational forecasts from inverted $\lambda(t)$: wait times, dispatch windows, occurrence probabilities.
-- [Total emission estimation](06d_total_emission.md) — the missing-mass paradox and POD-corrected regional/national totals.
+- [Instantaneous emission estimation](06_tier5a_instantaneous.md) — single-overpass $Q$; the cross-tier interface that turns per-event posteriors into mark likelihoods.
+- [Point process model (TMTPP)](06_tier5b_point_process.md) — the generative foundation: temporal intensity $\lambda(t)$, marks $f(Q)$, and detection thinning $P_d(\cdot)$.
+- [Persistency](06_tier5c_persistency.md) — operational forecasts from inverted $\lambda(t)$: wait times, dispatch windows, occurrence probabilities.
+- [Total emission estimation](06_tier5d_total_emission.md) — the missing-mass paradox and POD-corrected regional/national totals.
 
-!!! tip "Mathematical background"
-    [From Satellite Detections to a Methane Inventory](../theory/inventory/index.md) builds the random objects used here (Poisson and Cox processes, completely random measures, thinning, temporal point processes) from first principles, with one worked Permian example.
+:::{tip} Mathematical background
+[From Satellite Detections to a Methane Inventory](../theory/inventory/inventory.md) builds the random objects used here (Poisson and Cox processes, completely random measures, thinning, temporal point processes) from first principles, with one worked Permian example.
+:::
 
 ---
 
-## TMTPP foundations — the three-term log-likelihood {#tier5-loglik}
+(tier5-loglik)=
+## TMTPP foundations — the three-term log-likelihood
 
-The full population log-likelihood has three terms (derived in [06b](06b_point_process.md); foundations in [daley2003,daleyVereJones2008]):
+The full population log-likelihood has three terms (derived in [06b](06_tier5b_point_process.md); foundations in [daley2003,daleyVereJones2008]):
 
 $$
 \log L \;=\; \underbrace{\sum_{i \in \mathcal{D}} \log p(\text{detected}_i \mid f, \lambda, P_d)}_{\text{mark contribution}}
@@ -34,7 +36,8 @@ $$
 
 The third term is what makes $\lambda$ and $P_d$ jointly identifiable — without it the two trade off.
 
-### Mark contribution and the soft-observation framing {#tier5-mark-contribution}
+(tier5-mark-contribution)=
+### Mark contribution and the soft-observation framing
 
 The per-event posterior from Tiers I–IV is a **soft observation** of the (unknown) true mark $Q_i$. This is the same Bayesian-deconvolution / errors-in-variables structure used in measurement-error regression. The per-event mark contribution is:
 
@@ -50,17 +53,19 @@ $$
 
 with $\pi_\text{per-event}(Q)$ the **per-event prior** used at Tier I–IV. The ratio $f / \pi_\text{per-event}$ is the importance weight that re-points the per-event posterior at the population mark distribution.
 
-!!! important "Importance correction is mandatory"
-    **Without this re-weighting the population fit double-counts the per-event prior** — biased posterior on $f$, biased total-mass estimate.
+:::{important} Importance correction is mandatory
+**Without this re-weighting the population fit double-counts the per-event prior** — biased posterior on $f$, biased total-mass estimate.
 
-    **Why:** the per-event posterior already absorbs $\pi_\text{per-event}$; using its samples directly under $f$ multiplies the prior in. The IS ratio is the standard fix.
-    **How to apply:** every per-event posterior consumed by the population fit must carry its prior log-density; the importance weight is computed at fit time.
+**Why:** the per-event posterior already absorbs $\pi_\text{per-event}$; using its samples directly under $f$ multiplies the prior in. The IS ratio is the standard fix.
+**How to apply:** every per-event posterior consumed by the population fit must carry its prior log-density; the importance weight is computed at fit time.
+:::
 
-This is the central math of cross-tier inference. Currently the prototype in `methane_pod.fitting` summarises per-event posteriors to point estimates before the population fit, side-stepping the importance correction. Formalising this is the v1 deliverable for [`06a_instantaneous.md`](06a_instantaneous.md).
+This is the central math of cross-tier inference. Currently the prototype in `methane_pod.fitting` summarises per-event posteriors to point estimates before the population fit, side-stepping the importance correction. Formalising this is the v1 deliverable for [`06_tier5a_instantaneous.md`](06_tier5a_instantaneous.md).
 
 ---
 
-## How the cycle adapts at population scale {#tier5-cycle}
+(tier5-cycle)=
+## How the cycle adapts at population scale
 
 The six-step cycle still applies, but the objects change:
 
@@ -79,14 +84,17 @@ The six-step cycle still applies, but the objects change:
 
 **Varying-coefficient POD:** $P_d$ parameters indexed by $(\text{basin}, \text{season}, \text{scene class})$ with hierarchical shrinkage to the global POD. Captures regional / seasonal detection differences without inflating parameter count.
 
-!!! tip "Tier V doesn't re-derive physics"
-    The Tier V "forward model" is a *generative process for events*, not a PDE for fields. Mass conservation, advection, etc. are inherited from Tiers I–IV through the per-event posteriors — Tier V does not re-derive them.
+:::{tip} Tier V doesn't re-derive physics
+The Tier V "forward model" is a *generative process for events*, not a PDE for fields. Mass conservation, advection, etc. are inherited from Tiers I–IV through the per-event posteriors — Tier V does not re-derive them.
+:::
 
 ---
 
-## Cross-tier interface — the load-bearing contract {#tier5-cross-tier}
+(tier5-cross-tier)=
+## Cross-tier interface — the load-bearing contract
 
-### Payload schema {#tier5-payload-schema}
+(tier5-payload-schema)=
+### Payload schema
 
 Every per-event posterior consumed by Tier V must carry:
 
@@ -102,28 +110,32 @@ Every per-event posterior consumed by Tier V must carry:
 | `x0_posterior` | $(\boldsymbol{\mu}_{xy}, \boldsymbol{\Sigma}_{xy})$ | for spatial Cox-process upgrade |
 | `quality` | dict | confidence flags from the Tier I–IV quality bitmask |
 
-### Independence assumption — the v1 caveat {#tier5-independence-caveat}
+(tier5-independence-caveat)=
+### Independence assumption — the v1 caveat
 
 The factorised likelihood above assumes detections at different overpasses are independent. Two overpasses of the *same physical leak* (e.g. GHGSat then TROPOMI two days later) violate this.
 
-!!! caution "v1 caveat — known bias direction"
-    **Bias direction:** ignoring the dependence inflates effective sample size → posterior on $f$ is over-concentrated.
+:::{caution} v1 caveat — known bias direction
+**Bias direction:** ignoring the dependence inflates effective sample size → posterior on $f$ is over-concentrated.
 
-    **v1:** assumes independence and screens at the catalog stage (collapse near-coincident detections to one event by spatial-temporal clustering).
-    **v2:** promotes to a hierarchical model with per-source latent state shared across overpasses — same machinery as Tier IV's $Q(t)$ stochastic process but at the population level.
+**v1:** assumes independence and screens at the catalog stage (collapse near-coincident detections to one event by spatial-temporal clustering).
+**v2:** promotes to a hierarchical model with per-source latent state shared across overpasses — same machinery as Tier IV's $Q(t)$ stochastic process but at the population level.
+:::
 
 ---
 
-## Validation strategy {#tier5-validation}
+(tier5-validation)=
+## Validation strategy
 
 - **Population SBC.** Generate $(\lambda^{*}, f^{*}, P_d^{*})$, simulate the full thinned-and-marked catalog with a synthetic per-event posterior layer, fit, check rank statistics across all hyperparameters. The Tier V analogue of Tier-I synthetic recovery.
 - **Importance-weight ESS diagnostic.** Per detection $i$, the IS estimator's effective sample size $\operatorname{ESS}_i = (\sum_s w_s)^{2} / \sum_s w_s^{2}$ is a health metric. Low ESS (e.g. $< S/10$) signals that the per-event posterior is far from the population mark distribution; the population fit is unreliable for that event. Report the ESS distribution as a fit diagnostic.
 - **Per-event-prior swap-out.** Refit the population using a different per-event prior at Tier I–IV (re-run Tiers I–IV with $\pi_\text{per-event} = \operatorname{LogNormal}(0, 2)$ instead of the inventory-anchored prior). The population posterior on $f$ should not move beyond IS noise. If it does, the importance correction is mis-implemented.
-- **Real-data benchmark.** Compare corrected total emission for a well-studied basin (Permian) to published bottom-up inventories ([epa_ghgi,scarpelli2020sectoral], GHGRP) and top-down inverse-modelling estimates ([maasakkers2023ghgi,jacob2022quantifying], Sherwin et al.) — see [06d](06d_total_emission.md).
+- **Real-data benchmark.** Compare corrected total emission for a well-studied basin (Permian) to published bottom-up inventories ([epa_ghgi,scarpelli2020sectoral], GHGRP) and top-down inverse-modelling estimates ([maasakkers2023ghgi,jacob2022quantifying], Sherwin et al.) — see [06d](06_tier5d_total_emission.md).
 
 ---
 
-## Module layout — depend on `methane_pod`, don't absorb it {#tier5-modules}
+(tier5-modules)=
+## Module layout — depend on `methane_pod`, don't absorb it
 
 `plumax` depends on the standalone `methane_pod` package (pinned `methane_pod >= 0.1, < 0.2` for v1); the population-scale code is not re-implemented. Rationale:
 
@@ -154,7 +166,8 @@ The `plumax.population` subpackage exists with the v1 core (`catalog`, `size_dis
 
 ---
 
-## Connection to Tier III — spatial structure {#tier5-tier3-link}
+(tier5-tier3-link)=
+## Connection to Tier III — spatial structure
 
 Tier III's distributed source field $S(\mathbf{x},t)$ is **exactly a spatial inhomogeneous Poisson rate** at the population level — temporally aggregated, this *is* the spatial intensity of a Cox process over emission events. The v2 spatial extension of Tier V is the same mathematical object Tier III already inverts at the per-event timescale, just averaged over a longer horizon. The two tiers should share the parameterisation: a Matérn GP prior on $\log S(\mathbf{x},t)$ plays the role of both Tier III's source-field prior and Tier V.v2's spatial Cox-process intensity.
 
@@ -162,7 +175,8 @@ This isn't a coincidence — it's why `plumax`'s tier structure works: the same 
 
 ---
 
-## Status snapshot {#tier5-status}
+(tier5-status)=
+## Status snapshot
 
 - **Theory.** TMTPP foundations and the missing-mass paradox are written up in the standalone `methane_pod` notebooks (`01_mttpp_theory`, `03_missing_mass_paradox`); porting them into `docs/notebooks/` is part of [#106](https://github.com/jejjohnson/plumax/issues/106).
 - **`methane_pod` library:** ☐ **not in tree** (2026-09-15) — intensity, POD, paradox simulator and NUTS fitter exist as a standalone library but `src/plumax/src/methane_pod/` does not exist in this repository. Adopting `xtremax.point_processes` for the generative layer and landing the methane-domain primitives under `plumax.population` is [#106](https://github.com/jejjohnson/plumax/issues/106) and blocks the rest of Tier V. What neither library has is the importance-weighted soft-observation mark likelihood — that stays [#108](https://github.com/jejjohnson/plumax/issues/108).
@@ -173,22 +187,29 @@ This isn't a coincidence — it's why `plumax`'s tier structure works: the same 
 
 ---
 
-## Open questions {#tier5-open-questions}
+(tier5-open-questions)=
+## Open questions
 
-!!! attention "Per-event independence — quantitative bias"
-    v1 assumption. Bias direction is known (over-concentration on $f$). Open: order-of-magnitude — for a basin with ~30% multi-instrument coincidences, how much does the posterior over-contract? Pilot study needed.
+:::{attention} Per-event independence — quantitative bias
+v1 assumption. Bias direction is known (over-concentration on $f$). Open: order-of-magnitude — for a basin with ~30% multi-instrument coincidences, how much does the posterior over-contract? Pilot study needed.
+:::
 
-!!! attention "Multi-satellite POD aggregation"
-    Either $P_d^{\cup}(Q) = 1 - \prod_k (1 - P_d^{k}(Q))$ (independent detection chances) or marginalise over which satellite actually looked (categorical mark). The two are not equivalent. v1: union; v2: categorical when per-satellite attribution matters for inventory.
+:::{attention} Multi-satellite POD aggregation
+Either $P_d^{\cup}(Q) = 1 - \prod_k (1 - P_d^{k}(Q))$ (independent detection chances) or marginalise over which satellite actually looked (categorical mark). The two are not equivalent. v1: union; v2: categorical when per-satellite attribution matters for inventory.
+:::
 
-!!! attention "Non-Poisson clustering"
-    Real super-emitters cluster (compressor cycles, equipment lifecycle). Two upgrade paths: (a) **Hawkes / self-exciting kernel** when clustering is event-driven; (b) **Cox process with stochastic intensity** (latent OU on $\log \lambda$) when clustering is environmentally driven. Pick by basin diagnostic.
+:::{attention} Non-Poisson clustering
+Real super-emitters cluster (compressor cycles, equipment lifecycle). Two upgrade paths: (a) **Hawkes / self-exciting kernel** when clustering is event-driven; (b) **Cox process with stochastic intensity** (latent OU on $\log \lambda$) when clustering is environmentally driven. Pick by basin diagnostic.
+:::
 
-!!! attention "Spatial structure"
-    Currently temporal-only. Spatial extension via Cox process over wells is the natural v2 (and ties to Tier III, see above). Open: H3 hex-resolution-7 vs. continuous Matérn-GP intensity — operational vs. physical fidelity trade-off.
+:::{attention} Spatial structure
+Currently temporal-only. Spatial extension via Cox process over wells is the natural v2 (and ties to Tier III, see above). Open: H3 hex-resolution-7 vs. continuous Matérn-GP intensity — operational vs. physical fidelity trade-off.
+:::
 
-!!! attention "Forecasting horizon"
-    [Persistency](06c_persistency.md) gives wait-time forecasts. Open: how far out does the forecast remain useful? Likely instrument-cadence-dependent (TROPOMI daily vs. GHGSat tasked).
+:::{attention} Forecasting horizon
+[Persistency](06_tier5c_persistency.md) gives wait-time forecasts. Open: how far out does the forecast remain useful? Likely instrument-cadence-dependent (TROPOMI daily vs. GHGSat tasked).
+:::
 
-!!! attention "Hierarchy depth for varying-coefficient POD"
-    Three levels (global → basin → season) is tractable; four (+ scene class) starts to over-parameterise. Open: which factor matters most, by ELPD / WAIC.
+:::{attention} Hierarchy depth for varying-coefficient POD
+Three levels (global → basin → season) is tractable; four (+ scene class) starts to over-parameterise. Open: which factor matters most, by ELPD / WAIC.
+:::

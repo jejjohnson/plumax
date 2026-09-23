@@ -80,7 +80,7 @@ git clone https://github.com/jejjohnson/plumax.git
 cd plumax
 make install      # uv sync --all-groups + pre-commit hooks
 make test         # run tests
-make docs-serve   # preview docs locally
+make docs-serve   # build + preview docs locally (needs `npm install -g mystmd`)
 ```
 
 ```python
@@ -122,7 +122,7 @@ print(ds)
 | `make test-cov` | Run tests with the 80% coverage gate |
 | `make lint` / `make format` | Lint / format with ruff (entire repo) |
 | `make typecheck` | Type-check `src/plumax` with ty |
-| `make docs-serve` | Preview the docs site locally |
+| `make docs` / `make docs-serve` | Build (and preview) the docs site: mystmd prose + MkDocs API reference |
 
 The pre-commit checklist (tests, `ruff check .`, `ruff format --check .`,
 `ty check src/plumax`) must pass before every commit. See

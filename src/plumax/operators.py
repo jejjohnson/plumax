@@ -102,7 +102,9 @@ class GaussianPuff(Operator):
 
     Args:
         stability_class: Pasquill stability class ``'A'``–``'F'``.
-        domain_x / domain_y / domain_z: ``(start, stop, n_points)`` per axis.
+        domain_x: ``(start, stop, n_points)`` along x.
+        domain_y: ``(start, stop, n_points)`` along y.
+        domain_z: ``(start, stop, n_points)`` along z.
         time_array: Output times [s].
         release_frequency: Puff release frequency [Hz].
         scheme: Dispersion scheme, ``'pg'`` (default) or ``'briggs'``.
@@ -199,7 +201,9 @@ class LagrangianDispersion(Operator):
     Args:
         turbulence: A turbulence model (e.g.
             :class:`~plumax.lagrangian.HomogeneousTurbulence`).
-        domain_x / domain_y / domain_z: ``(start, stop, n_cells)`` per axis.
+        domain_x: ``(start, stop, n_cells)`` along x.
+        domain_y: ``(start, stop, n_cells)`` along y.
+        domain_z: ``(start, stop, n_cells)`` along z.
         n_particles: Ensemble size.
         t_end: Integration horizon [s].
         dt: Time step [s].

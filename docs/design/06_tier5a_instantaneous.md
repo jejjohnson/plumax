@@ -2,13 +2,15 @@
 
 **Question:** Given one satellite overpass with a detected plume, what is the posterior over the source's instantaneous emission rate $Q$?
 
-This sub-page is the **glue** between the per-event physics tiers (I–IV) and the population tier (V). It defines the formal interface that turns a per-event posterior into evidence for the population-scale fit. The cross-tier payload schema is pinned in the [Tier V index](06_tier5_population.md#tier5-cross-tier); this page formalises how each payload is converted into a mark-likelihood contribution.
+This sub-page is the **glue** between the per-event physics tiers (I–IV) and the population tier (V). It defines the formal interface that turns a per-event posterior into evidence for the population-scale fit. The cross-tier payload schema is pinned in the [Tier V index](#tier5-cross-tier); this page formalises how each payload is converted into a mark-likelihood contribution.
 
 ---
 
-## Two regimes of "instantaneous Q" {#va-two-regimes}
+(va-two-regimes)=
+## Two regimes of "instantaneous Q"
 
-### A. Full-physics posterior (Tier I / II / III output) {#va-regime-fullphysics}
+(va-regime-fullphysics)=
+### A. Full-physics posterior (Tier I / II / III output)
 
 When you have radiance / column data and the wind field, run the per-event inversion described in Tier I (or II / III for richer transport):
 
@@ -18,7 +20,8 @@ $$
 
 This is the **gold-standard per-event evidence** — calibrated, with proper UQ, accounting for wind, transport, and instrument noise. Both $L_i(Q)$ and the prior $\pi_\text{per-event}(Q)$ are exposed downstream because the population fit needs to **divide out** the prior (see [§ Mark likelihood](#va-mark-likelihood) below).
 
-### B. Catalog $Q$ with wind-source consistency rescaling {#va-regime-catalog}
+(va-regime-catalog)=
+### B. Catalog $Q$ with wind-source consistency rescaling
 
 For published plume catalogs (IMEO, Carbon Mapper alerts [carbon_mapper], Tanager monthly reports, GHGSat releases [ghgsat,jervis2021ghgsat]), what's available is typically a single point estimate of $Q$ (mass flux, t/h or kg/s) per detection plus a per-event uncertainty estimate.
 
@@ -30,8 +33,9 @@ $$
 
 with $U_\text{target}$ from a single agreed-upon reanalysis (default: ERA5).
 
-!!! caution "Re-multiplying by $U_\text{target}$ is *not* a proxy for missing physics"
-    It's a consistency correction across heterogeneous catalogs. Don't claim it adds information; it removes inconsistency.
+:::{caution} Re-multiplying by $U_\text{target}$ is *not* a proxy for missing physics
+It's a consistency correction across heterogeneous catalogs. Don't claim it adds information; it removes inconsistency.
+:::
 
 **Per-event uncertainty** comes from controlled-release calibration. Sherwin et al. (2024) report 1σ log-scale errors per instrument:
 
@@ -44,14 +48,16 @@ with $U_\text{target}$ from a single agreed-upon reanalysis (default: ERA5).
 | EMIT ([emit]) | ~0.30 |
 | Tanager ([carbon_mapper]) | ~0.30 |
 
-!!! caution "Don't reuse the TROPOMI default"
-    Catalogs that report ±50% are reporting the TROPOMI default; don't assume it for other instruments.
+:::{caution} Don't reuse the TROPOMI default
+Catalogs that report ±50% are reporting the TROPOMI default; don't assume it for other instruments.
+:::
 
 ---
 
-## Mark likelihood — importance-weighted Monte Carlo {#va-mark-likelihood}
+(va-mark-likelihood)=
+## Mark likelihood — importance-weighted Monte Carlo
 
-The TMTPP mark-likelihood contribution at detection $i$ is (see [Tier V index § TMTPP foundations](06_tier5_population.md#tier5-loglik)):
+The TMTPP mark-likelihood contribution at detection $i$ is (see [Tier V index § TMTPP foundations](#tier5-loglik)):
 
 $$
 p(\text{detected}_i \mid f, \lambda, P_d) \;=\; \int P_d(Q)\, L_i(Q)\, f(Q)\, \mathrm{d}Q
@@ -65,10 +71,12 @@ $$
 
 The ratio $f / \pi_\text{per-event}$ is the importance weight that re-points the per-event posterior at the population mark distribution.
 
-!!! important "Without re-weighting, the population fit double-counts the prior"
-    Posterior on $f$ becomes biased; downstream total-mass estimates inherit the bias.
+:::{important} Without re-weighting, the population fit double-counts the prior
+Posterior on $f$ becomes biased; downstream total-mass estimates inherit the bias.
+:::
 
-### Three implementation regimes — with importance correction in each {#va-three-regimes}
+(va-three-regimes)=
+### Three implementation regimes — with importance correction in each
 
 *Mark-integration regimes by per-event posterior representation.*
 
@@ -80,7 +88,8 @@ The ratio $f / \pi_\text{per-event}$ is the importance weight that re-points the
 
 Each row evaluates the **same** $P_d \cdot f / \pi$ integrand; the only difference is the per-event posterior representation.
 
-### Regime selection rule {#va-regime-rule}
+(va-regime-rule)=
+### Regime selection rule
 
 ```python
 def pick_regime(per_event: PosteriorPayload, mark_class: type[MarkDistribution]) -> Regime:
@@ -101,7 +110,8 @@ Operational rule:
 
 ---
 
-## Detection-floor and non-detection — explicit handling {#va-detection-floor}
+(va-detection-floor)=
+## Detection-floor and non-detection — explicit handling
 
 ### Detected events with posterior mass below the threshold
 
@@ -121,7 +131,8 @@ The catalog ingestion module owns the distinction between "non-detect" and "nois
 
 ---
 
-## Multi-source per overpass {#va-multi-source}
+(va-multi-source)=
+## Multi-source per overpass
 
 Tier I Step 6 (RJMCMC), Tier IV §1 ($K = n_\text{sources}$ first-class), and Tier V index all assume $K > 1$ is supported. The mark-likelihood contribution at a multi-source overpass is a product over sources, assuming **within-overpass independence**:
 
@@ -131,9 +142,10 @@ $$
 
 Per-event payload for $K_i > 1$ is a list of $K_i$ sub-payloads, each with its own samples / summary / prior. v2 relaxes within-overpass independence — sources sharing a met realisation have correlated marks.
 
-### Per-event payload schema (full) {#va-payload-schema}
+(va-payload-schema)=
+### Per-event payload schema (full)
 
-Pinned in the [Tier V index](06_tier5_population.md#tier5-payload-schema); reproduced here for the implementation cycle:
+Pinned in the [Tier V index](#tier5-payload-schema); reproduced here for the implementation cycle:
 
 ```python
 @dataclass
@@ -155,7 +167,8 @@ class SourcePayload:
 
 ---
 
-## Catalog ingestion — heterogeneous sources {#va-catalog-ingest}
+(va-catalog-ingest)=
+## Catalog ingestion — heterogeneous sources
 
 Per-source ingestion adapters because schemas, units, wind sources, and quality conventions differ:
 
@@ -170,13 +183,15 @@ Per-source ingestion adapters because schemas, units, wind sources, and quality 
 
 Each ingestion adapter normalises to the internal `PerEventPayload`, applies wind-source consistency rescaling against $U_\text{ERA5}$, and emits a unified catalog with explicit provenance fields.
 
-### De-duplication {#va-dedup}
+(va-dedup)=
+### De-duplication
 
-Same physical leak detected by multiple satellites → multiple catalog rows. v1's independence assumption (see [Tier V index § Independence assumption](06_tier5_population.md#tier5-independence-caveat)) requires **de-duplication before the population fit**. Default rule: spatial-temporal clustering with thresholds $(\Delta d \leq 5\text{ km}, \Delta t \leq 12\text{ h})$. Multi-instrument detections of the same cluster either collapse to one event with a fused per-event payload (preferred, when posteriors are compatible) or to the highest-confidence detection (fallback).
+Same physical leak detected by multiple satellites → multiple catalog rows. v1's independence assumption (see [Tier V index § Independence assumption](#tier5-independence-caveat)) requires **de-duplication before the population fit**. Default rule: spatial-temporal clustering with thresholds $(\Delta d \leq 5\text{ km}, \Delta t \leq 12\text{ h})$. Multi-instrument detections of the same cluster either collapse to one event with a fused per-event payload (preferred, when posteriors are compatible) or to the highest-confidence detection (fallback).
 
 ---
 
-## Module layout {#va-modules}
+(va-modules)=
+## Module layout
 
 *Tier V.A module layout — concern, target module, status.*
 
@@ -201,7 +216,8 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 
 ---
 
-## Validation strategy {#va-validation}
+(va-validation)=
+## Validation strategy
 
 - **Round trip on synthetic releases.** Generate a known $Q^{*}$, run Tier I forward → noisy observation → Tier I inversion → check $Q^{*}$ sits in the reported credible region. Standard sanity check.
 - **Importance-correction round trip.** Generate per-event posteriors using one prior $\pi_\text{per-event} = \operatorname{LogNormal}(0, 1.5)$; run the population fit. Re-run with $\pi_\text{per-event} = \operatorname{LogNormal}(0, 0.5)$ (informative). The recovered population posterior on $f$ should not move beyond IS noise. **Failure here means the importance correction is mis-implemented** — single most diagnostic test.
@@ -214,19 +230,25 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 
 ---
 
-## Open questions {#va-open-questions}
+(va-open-questions)=
+## Open questions
 
-!!! attention "Within-overpass multi-source dependence"
-    v1 assumes independence within an overpass; v2 needs per-overpass shared met latent. When does the bias matter? Probably only when multiple sources are close enough that the same wind realisation drives both plumes.
+:::{attention} Within-overpass multi-source dependence
+v1 assumes independence within an overpass; v2 needs per-overpass shared met latent. When does the bias matter? Probably only when multiple sources are close enough that the same wind realisation drives both plumes.
+:::
 
-!!! attention "De-duplication thresholds"
-    $(5\text{ km}, 12\text{ h})$ is a starting point. Open: tune empirically per basin (Permian wells are denser than Marcellus); per-instrument footprint sets the spatial floor.
+:::{attention} De-duplication thresholds
+$(5\text{ km}, 12\text{ h})$ is a starting point. Open: tune empirically per basin (Permian wells are denser than Marcellus); per-instrument footprint sets the spatial floor.
+:::
 
-!!! attention "Gaussian-summary closed form for non-power-law $f$"
-    Power-law + lognormal evidence is closed-form via Gauss–Hermite. Other operational mark families (Pareto, gamma, mixture-of-lognormals) need either tabulated quadrature or numerical integration. Open: which families are in the v1 mark catalog?
+:::{attention} Gaussian-summary closed form for non-power-law $f$
+Power-law + lognormal evidence is closed-form via Gauss–Hermite. Other operational mark families (Pareto, gamma, mixture-of-lognormals) need either tabulated quadrature or numerical integration. Open: which families are in the v1 mark catalog?
+:::
 
-!!! attention "Per-event payload storage cost"
-    Full posterior samples at $S = 10^{4} \times 8\text{ bytes} \times 4\text{ fields} \times 10^{6}\text{ events} \approx 320$ GB national catalog. Is the Gaussian summary good enough at population scale, or do we need on-the-fly resampling from per-event flow representations?
+:::{attention} Per-event payload storage cost
+Full posterior samples at $S = 10^{4} \times 8\text{ bytes} \times 4\text{ fields} \times 10^{6}\text{ events} \approx 320$ GB national catalog. Is the Gaussian summary good enough at population scale, or do we need on-the-fly resampling from per-event flow representations?
+:::
 
-!!! attention "Catalog provenance audit"
-    Each catalog row should carry the wind source, the IME-method variant, and the retrieval algorithm. Currently most catalogs are sparse on this. Open: a strict ingestion mode that rejects rows without provenance vs. a permissive mode that fills with defaults.
+:::{attention} Catalog provenance audit
+Each catalog row should carry the wind source, the IME-method variant, and the retrieval algorithm. Currently most catalogs are sparse on this. Open: a strict ingestion mode that rejects rows without provenance vs. a permissive mode that fills with defaults.
+:::

@@ -6,9 +6,11 @@ This is the **operational layer** — what an LDAR (Leak Detection and Repair) c
 
 ---
 
-## The four operational metrics {#vc-four-metrics}
+(vc-four-metrics)=
+## The four operational metrics
 
-### 1. Expected wait time $\mathbb{E}[\Delta t \mid t_0]$ {#vc-wait-time}
+(vc-wait-time)=
+### 1. Expected wait time $\mathbb{E}[\Delta t \mid t_0]$
 
 How long after time $t_0$ until the next event?
 
@@ -24,7 +26,8 @@ For a diurnal source, vastly different at noon vs. midnight.
 
 **Operational use.** Dispatch decisions: arrive during a high-$\lambda$ window and the next event is imminent (worth waiting); arrive during a low-$\lambda$ window and you'd waste hours. Drives MARS-style dispatch suppression during dormant cycles.
 
-### 2. Probability of occurrence $\mathbb{P}\!\bigl(N(t_1, t_2) \geq 1\bigr)$ {#vc-occurrence}
+(vc-occurrence)=
+### 2. Probability of occurrence $\mathbb{P}\!\bigl(N(t_1, t_2) \geq 1\bigr)$
 
 What's the chance of at least one event in $[t_1, t_2]$?
 
@@ -38,7 +41,8 @@ $$
 
 **Operational use.** "Wrench-turning" probability. If a maintenance window is 4 hours, what's the chance the leak shows itself during that window? Drives whether to schedule the visit.
 
-### 3. Conditional intensity given prior detection $\lambda(t \mid t_\text{prev})$ {#vc-conditional-intensity}
+(vc-conditional-intensity)=
+### 3. Conditional intensity given prior detection $\lambda(t \mid t_\text{prev})$
 
 For a source with a known recent detection at $t_\text{prev}$, what's the posterior intensity going forward?
 
@@ -52,7 +56,8 @@ $$
 
 **Operational use.** Prioritisation: a source with a recent detection is *more* likely to repeat-emit in the next 24 h. Re-task a high-resolution satellite (GHGSat [ghgsat], Carbon Mapper [carbon_mapper]) on top of a TROPOMI alert [s5p_tropomi].
 
-### 4. Cumulative event count $\mathbb{E}[N(0, T)]$ and credible bounds {#vc-cumulative-count}
+(vc-cumulative-count)=
+### 4. Cumulative event count $\mathbb{E}[N(0, T)]$ and credible bounds
 
 Expected number of events in $[0, T]$, with credible interval from the posterior on $\lambda$.
 
@@ -66,7 +71,8 @@ $$
 
 ---
 
-## API shape {#vc-api}
+(vc-api)=
+## API shape
 
 A thin wrapper around `methane_pod.intensity`:
 
@@ -93,7 +99,8 @@ The metric functions take an intensity callable (any of the 13 `equinox` modules
 
 ---
 
-## Module layout {#vc-modules}
+(vc-modules)=
+## Module layout
 
 *Tier V.C module layout — concern, target module, status.*
 
@@ -108,7 +115,8 @@ The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few
 
 ---
 
-## Validation strategy {#vc-validation}
+(vc-validation)=
+## Validation strategy
 
 - **Homogeneous limit.** For constant $\lambda$, all four metrics have closed-form formulas; the implementation should match to machine precision.
 - **MC self-consistency.** Sample $n$ event times from a known $\lambda(t)$ via thinning, compute the empirical wait time / occurrence frequency, compare to the closed-form metric. Tests both the metric implementation and the simulator.
@@ -117,16 +125,21 @@ The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few
 
 ---
 
-## Open questions {#vc-open-questions}
+(vc-open-questions)=
+## Open questions
 
-!!! attention "What's 'the' intensity?"
-    A point estimate (posterior mean) or the full posterior over $\lambda$ parameters? Operational dashboards may want the former; researchers want the latter. The API returns posterior samples by default; downstream summarisation is the caller's choice.
+:::{attention} What's 'the' intensity?
+A point estimate (posterior mean) or the full posterior over $\lambda$ parameters? Operational dashboards may want the former; researchers want the latter. The API returns posterior samples by default; downstream summarisation is the caller's choice.
+:::
 
-!!! attention "Hawkes vs Poisson default"
-    Hawkes is more physically faithful for super-emitters but doubles the parameter count and complicates the wait-time integral. Default to Poisson with a Hawkes opt-in?
+:::{attention} Hawkes vs Poisson default
+Hawkes is more physically faithful for super-emitters but doubles the parameter count and complicates the wait-time integral. Default to Poisson with a Hawkes opt-in?
+:::
 
-!!! attention "Cross-source independence"
-    Persistency metrics are per-source. Aggregating up to "expected events across a basin in 24h" requires the spatial / population point process from Tier V.B's open questions. Out of scope for v1.
+:::{attention} Cross-source independence
+Persistency metrics are per-source. Aggregating up to "expected events across a basin in 24h" requires the spatial / population point process from Tier V.B's open questions. Out of scope for v1.
+:::
 
-!!! attention "Action thresholds"
-    Wait-time and occurrence probability become operational only with a threshold (e.g. "dispatch if $\mathbb{P}(\text{occur}) > 0.7$"). Where do thresholds live? Probably in the dashboard, not in `plumax` core.
+:::{attention} Action thresholds
+Wait-time and occurrence probability become operational only with a threshold (e.g. "dispatch if $\mathbb{P}(\text{occur}) > 0.7$"). Where do thresholds live? Probably in the dashboard, not in `plumax` core.
+:::

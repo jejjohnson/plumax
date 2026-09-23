@@ -10,9 +10,11 @@ This is the **first tier to build to completion** (all six steps), because:
 
 ---
 
-## (1) Simple model {#tier1-simple-model}
+(tier1-simple-model)=
+## (1) Simple model
 
-### Gaussian plume (steady-state, continuous source) {#tier1-gaussian-plume}
+(tier1-gaussian-plume)=
+### Gaussian plume (steady-state, continuous source)
 
 $$
 c(x',y',z) \;=\; \frac{Q}{2\pi \, \sigma_y \, \sigma_z \, \bar{u}}
@@ -32,12 +34,13 @@ The primed coordinates $(x', y')$ are the source-aligned frame: $x'$ is downwind
 - $H_\text{stack}$ — physical stack height
 - $\Delta h(F_b, F_m, \bar{u}, \text{stability})$ — Briggs plume rise from buoyancy/momentum fluxes ([briggs1973]); $H_\text{eff} = H_\text{stack} + \Delta h$
 - $\bar{u}$, $\theta_\text{wind}$ — wind speed and direction (from met, with uncertainty — see [Inference](#tier1-inference))
-- $\sigma_y(x'), \sigma_z(x')$ — crosswind/vertical spread; PG-class lookup ([pasquill1961,turner1970]) for v1, MO-similarity ([monin1954,stull1988]) for v2 (see [prereqs](00_prerequisites.md#prereqs-mo-similarity))
+- $\sigma_y(x'), \sigma_z(x')$ — crosswind/vertical spread; PG-class lookup ([pasquill1961,turner1970]) for v1, MO-similarity ([monin1954,stull1988]) for v2 (see [prereqs](#prereqs-mo-similarity))
 - $L$ — PBL capping height (from met)
 
 For methane super-emitter inversions where stack height is poorly known, $H_\text{eff}$ is part of what you infer; for known facilities $H_\text{stack}$ is fixed and only $\Delta h$ is computed.
 
-### Gaussian puff (time-varying, episodic source) {#tier1-gaussian-puff}
+(tier1-gaussian-puff)=
+### Gaussian puff (time-varying, episodic source)
 
 $$
 c(\mathbf{x}, t) \;=\; \sum_{k} \frac{Q_k}{(2\pi)^{3/2} \sigma^{3}}
@@ -46,7 +49,8 @@ $$
 
 Each puff $k$ advects with the wind and diffuses independently — handles intermittent / burst-mode releases that violate the steady-state assumption.
 
-### From $c(x,y,z)$ to a satellite-comparable observation {#tier1-column-ak}
+(tier1-column-ak)=
+### From $c(x,y,z)$ to a satellite-comparable observation
 
 The forward used by inference is **not** $c(x,y,z)$ directly. It's:
 
@@ -56,7 +60,7 @@ $$
 
 - **Column integrate:** the satellite sees a column-integrated enhancement, not a single altitude.
 - **Background $c_\text{bg}(x,y)$:** the regional background (typically ~1900 ppb for CH₄). **Not optional** — without it the model predicts the *enhancement above background*, which is what $c$ actually is, but the satellite delivers absolute column densities. Either subtract $c_\text{bg}$ from $y_\text{obs}$ upstream, or jointly model it. Either way, it's day-1 infrastructure, not a Step-6 upgrade.
-- **Averaging kernel $\mathbf{A}$:** the satellite-product AK from the [prereqs](00_prerequisites.md#prereqs-ak-operator); see (eq-ak-operator). Required when comparing to L2 XCH₄ products. Skip it only when working with a flat-AK assumption (rare and worth flagging).
+- **Averaging kernel $\mathbf{A}$:** the satellite-product AK from the [prereqs](#prereqs-ak-operator); see (eq-ak-operator). Required when comparing to L2 XCH₄ products. Skip it only when working with a flat-AK assumption (rare and worth flagging).
 
 ### Extended Gaussian (AERMOD-style)
 
@@ -64,11 +68,13 @@ Adds terrain corrections (plume rise over hills, beyond Briggs), building downwa
 
 ---
 
-## (2) Model-based inference {#tier1-inference}
+(tier1-inference)=
+## (2) Model-based inference
 
 The plume is analytical, so the full forward $H : (Q, x_0, H_\text{eff}, \bar{u}, \theta_\text{wind}, \dots) \to y_\text{model}(x,y)$ is differentiable via JAX end-to-end (column integration + AK included).
 
-### Likelihood model {#tier1-likelihood}
+(tier1-likelihood)=
+### Likelihood model
 
 $$
 y_\text{obs}(x,y) \;=\; y_\text{model}(x,y) + \varepsilon(x,y), \qquad
@@ -79,16 +85,18 @@ $$
 - **Heavy-tail variant:** Student-$t$ with $\nu \approx 5$ for retrievals near the detection floor where outliers dominate (TROPOMI single-pass [s5p_tropomi], EMIT off-axis [emit]).
 - **Mask:** quality-flag mask from the L2 product is passed through as an indicator weight on the likelihood — flagged pixels contribute zero log-likelihood.
 
-!!! caution "Likelihood is load-bearing"
-    The likelihood is load-bearing for MCMC convergence. Don't leave it to "default Gaussian" silently — diagnose the residual distribution per instrument before defaulting.
+:::{caution} Likelihood is load-bearing
+The likelihood is load-bearing for MCMC convergence. Don't leave it to "default Gaussian" silently — diagnose the residual distribution per instrument before defaulting.
+:::
 
-### Priors {#tier1-priors}
+(tier1-priors)=
+### Priors
 
 *Tier I prior specifications by parameter.*
 
 | Parameter | Prior | Rationale |
 | --- | --- | --- |
-| $Q$ | $\operatorname{LogNormal}(\mu_Q, \sigma_Q)$ with $\mu_Q$ from the [emission inventory](00_prerequisites.md#prereqs-emission-inventory) prior, $\sigma_Q \approx 1.0$ | positive, heavy-tail; matches inventory uncertainty |
+| $Q$ | $\operatorname{LogNormal}(\mu_Q, \sigma_Q)$ with $\mu_Q$ from the [emission inventory](#prereqs-emission-inventory) prior, $\sigma_Q \approx 1.0$ | positive, heavy-tail; matches inventory uncertainty |
 | $x_0$ | $\mathcal{N}(\text{facility}_\text{lat,lon}, \sigma_{x_0})$ with $\sigma_{x_0} \approx$ sub-pixel | facility location is known, sub-pixel uncertainty for cluster vs. point |
 | $H_\text{eff}$ | $\operatorname{Uniform}(H_\text{stack},\, H_\text{stack} + \Delta h_\text{max})$ or $\mathcal{N}(H_\text{stack} + \Delta h_\text{briggs},\, \sigma_H)$ | depends on whether stack height is known |
 | $\bar{u}$ | $\mathcal{N}(\bar{u}_\text{met}, \sigma_{\bar{u},\text{met}})$ — **tight prior from met** | $\bar{u}$ is data, not a free parameter |
@@ -101,7 +109,8 @@ $$
 - **MCMC:** NumPyro NUTS over $(Q, x_0, H_\text{eff}, \bar{u}, \theta_\text{wind}, c_\text{bg})$ jointly. Forward pass is ~µs, so 10k samples is seconds. Keep $\bar{u}$, $\theta_\text{wind}$ as inference variables (with tight met priors) so their posterior contracts can be diagnosed downstream.
 - **Linear-Gaussian special case:** if observations are linear in $c$ (column-integrated XCH₄ with a fixed AK) and only $Q$ is free with all geometry fixed, the posterior over $Q$ is analytically tractable — exact Bayesian inversion via [`gaussx`](https://github.com/jejjohnson/gaussx). Useful as a sanity check on the NUTS implementation.
 
-### $Q / \bar{u}$ identifiability — corrected {#tier1-q-ubar-identifiability}
+(tier1-q-ubar-identifiability)=
+### $Q / \bar{u}$ identifiability — corrected
 
 The classic statement is "$Q$ and $\bar{u}$ enter only as $Q/\bar{u}$, so they're degenerate in a single transect" [varon2018quantifying]. This is true only if $\bar{u}$ has a flat prior. In production, **the tight met-derived prior on $\bar{u}$ resolves the degeneracy**: the posterior $p(Q \mid y, \bar{u}_\text{met}, \sigma_{\bar{u},\text{met}})$ contracts as long as $\sigma_{\bar{u},\text{met}} / \bar{u}_\text{met} \ll \sigma_Q / Q_\text{prior}$. The "need two crosswind transects" claim is a special case for fully-free $\bar{u}$ and should not be the default reading.
 
@@ -111,10 +120,12 @@ This is the **first working end-to-end inverse pipeline.** Build it here, valida
 
 ---
 
-## (3) Model emulator {#tier1-emulator}
+(tier1-emulator)=
+## (3) Model emulator
 
-!!! tip "Emulator is optional at Tier I"
-    The Gaussian plume is cheap enough that an emulator is **optional** at this tier. Skip in production, but build it as a training exercise for the emulator infrastructure that Tier III will need.
+:::{tip} Emulator is optional at Tier I
+The Gaussian plume is cheap enough that an emulator is **optional** at this tier. Skip in production, but build it as a training exercise for the emulator infrastructure that Tier III will need.
+:::
 
 - **Input:** $(Q, x_0, H_\text{eff}, \bar{u}, \theta_\text{wind}, \text{stability\_class}, L)$ — the *raw* inputs, not the evaluated $\sigma$ profiles. The emulator should learn the $\sigma$ functional too; otherwise you're benchmarking interpolation, not modelling.
 - **Output:** $y_\text{model}(x,y)$ on the satellite-pixel grid (post column-integration, post AK).
@@ -123,7 +134,8 @@ This is the **first working end-to-end inverse pipeline.** Build it here, valida
 
 ---
 
-## (4) Emulator-based inference {#tier1-emu-inference}
+(tier1-emu-inference)=
+## (4) Emulator-based inference
 
 Same inference loop as Step 2, but the forward pass is the neural network. Required validation:
 
@@ -134,7 +146,8 @@ If those pass for Tier I, the same diagnostics apply unchanged at Tier III.
 
 ---
 
-## (5) Amortized inference (predictor) {#tier1-amortized}
+(tier1-amortized)=
+## (5) Amortized inference (predictor)
 
 Train a **summary network + posterior network** mapping observation patches directly to the source posterior:
 
@@ -142,7 +155,8 @@ $$
 f_\theta : (y_\text{patch}, \text{context}) \;\longmapsto\; p(Q, x_0, H_\text{eff} \mid y_\text{patch}, \text{context})
 $$
 
-### Input shape — commit to a 2D patch {#tier1-patch}
+(tier1-patch)=
+### Input shape — commit to a 2D patch
 
 $y_\text{patch}$ is a fixed-size 2D image patch of column XCH₄ enhancement (background-subtracted) centred on the facility candidate, plus per-pixel uncertainty and quality-mask channels. Concretely:
 
@@ -162,8 +176,9 @@ modulated = FiLM(summary, context)    # per-feature γ(context)·summary + β(co
 posterior = NPE_head(modulated)       # conditional flow over (Q, x₀, H_eff)
 ```
 
-!!! important "Always condition on context"
-    Without context conditioning the predictor has to relearn met-dependent behaviour from scratch, which is wasteful and well-documented to fail near regime boundaries (stable vs. unstable PBL, low vs. high wind speed).
+:::{important} Always condition on context
+Without context conditioning the predictor has to relearn met-dependent behaviour from scratch, which is wasteful and well-documented to fail near regime boundaries (stable vs. unstable PBL, low vs. high wind speed).
+:::
 
 ### Architecture options
 
@@ -175,16 +190,18 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 
 ---
 
-## (6) Improve {#tier1-improve}
+(tier1-improve)=
+## (6) Improve
 
-- **PG → MO $\sigma$ swap.** Replace PG lookup tables for $\sigma_y, \sigma_z$ with MO-similarity-derived functions parameterised by $(u_*, L_\text{Obukhov}, z_0)$ from the [prereqs](00_prerequisites.md#prereqs-mo-similarity). Closer to physics, continuous in stability, and the right pre-step for tier-II validation.
+- **PG → MO $\sigma$ swap.** Replace PG lookup tables for $\sigma_y, \sigma_z$ with MO-similarity-derived functions parameterised by $(u_*, L_\text{Obukhov}, z_0)$ from the [prereqs](#prereqs-mo-similarity). Closer to physics, continuous in stability, and the right pre-step for tier-II validation.
 - **Multi-source.** Real basins host 5–50 simultaneous emitters [frankenberg2016airborne,jacob2022quantifying]. This is **not** an array-shape change — the inference becomes a *mixture model with unknown component count*, requiring reversible-jump MCMC (RJMCMC) or a Dirichlet-process prior over source count. Plan for this from the start: the posterior interface that Tier V.A consumes must handle variable-$K$ per overpass.
 - **Learned $\sigma$ from LES.** Train a small NN against LES output to learn stability-dependent $\sigma$ functions that go beyond MO. Slot in as a swap-in for either PG or MO $\sigma$. Useful for super-emitter regimes that LES has resolved better than empirical fits.
 - **Distributed-source field $Q(\mathbf{x})$.** Replace point source with a spatial source field — opens the door to Tier II/III for spatially extended emissions. At Tier I this is just a sum of point sources sharing met context; the multi-source mixture (above) is the same code path with finer support.
 
 ---
 
-## Module layout {#tier1-modules}
+(tier1-modules)=
+## Module layout
 
 *Tier I module layout — step, concern, target module, status.*
 
@@ -200,8 +217,8 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | 2 | Likelihoods + priors | `gauss_plume.likelihoods` | ☐ [#84](https://github.com/jejjohnson/plumax/issues/84) |
 | 2 | Plume MAP/MCMC | [`gauss_plume/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ |
 | 2 | Puff inference | [`gauss_puff/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/inference.py) | ✓ |
-| 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06a_instantaneous.md)) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| 3 | Plume emulator | `gauss_plume.emulator` | — skipped: model is cheap (see [cycle](index.md#cycle-overview)) |
+| 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06_tier5a_instantaneous.md)) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 3 | Plume emulator | `gauss_plume.emulator` | — skipped: model is cheap (see [cycle](#cycle-overview)) |
 | 4 | Emulator-based MCMC | wired in `inference.py` once emulator exists | — skipped with Step 3 |
 | 5 | NPE / flow predictor | `gauss_plume.predictor` | ☐ [#87](https://github.com/jejjohnson/plumax/issues/87) |
 | 5 | Context-conditioning layer | uses `pyrox.nn` FiLM/hypernet primitives | external dep |
@@ -210,7 +227,8 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 
 ---
 
-## Validation strategy {#tier1-validation}
+(tier1-validation)=
+## Validation strategy
 
 - **Forward model — mass flux conservation.** Integrate **mass flux** $\int\!\!\int c \, u_\perp \, \mathrm{d}A$ through a transverse plane downwind of the source, compare to $Q$. Should be exact in the no-deposition, unbounded-domain limit. (Common bug: integrating $\int\!\!\int c \, \mathrm{d}A$ instead — that's mass per unit wind speed, dimensionally wrong.)
 - **Ground reflection consistency.** Set $H = 0$; the two image-source terms must collapse to a single Gaussian with doubled prefactor. Catches sign/index bugs in the image sum.
@@ -230,31 +248,40 @@ $$
 
 ---
 
-## Aggregating across overpasses {#tier1-aggregation}
+(tier1-aggregation)=
+## Aggregating across overpasses
 
-The MAP / MCMC posterior $p(Q \mid \text{overpass})$ produced here is the **per-event evidence** consumed by the population layer. See [Tier V.A — Instantaneous emission estimation](06a_instantaneous.md) for the formal interface that turns this posterior into a mark likelihood for the TMTPP fit, and [Tier V.D — Total emission estimation](06d_total_emission.md) for why per-overpass averages systematically misrepresent regional totals.
+The MAP / MCMC posterior $p(Q \mid \text{overpass})$ produced here is the **per-event evidence** consumed by the population layer. See [Tier V.A — Instantaneous emission estimation](06_tier5a_instantaneous.md) for the formal interface that turns this posterior into a mark likelihood for the TMTPP fit, and [Tier V.D — Total emission estimation](06_tier5d_total_emission.md) for why per-overpass averages systematically misrepresent regional totals.
 
 The multi-source extension (Step 6) makes this interface variable-$K$ per overpass — the V.A adapter must handle that.
 
-## Open questions {#tier1-open-questions}
+(tier1-open-questions)=
+## Open questions
 
-!!! attention "Coordinate frame for the puff cloud"
-    Carry puff centroids in lat/lon (general but slower) or in a local frame anchored to the source (fast but breaks for puffs that travel far)?
+:::{attention} Coordinate frame for the puff cloud
+Carry puff centroids in lat/lon (general but slower) or in a local frame anchored to the source (fast but breaks for puffs that travel far)?
+:::
 
-!!! attention "Time-varying wind in the plume model"
-    Strictly the steady-state plume assumes constant $(\bar{u}, \theta_\text{wind})$. For ~30-min satellite overpasses winds rotate; do we time-slice (multiple steady-state plumes), advect with hourly met (piecewise-stationary), or jump straight to puff?
+:::{attention} Time-varying wind in the plume model
+Strictly the steady-state plume assumes constant $(\bar{u}, \theta_\text{wind})$. For ~30-min satellite overpasses winds rotate; do we time-slice (multiple steady-state plumes), advect with hourly met (piecewise-stationary), or jump straight to puff?
+:::
 
-!!! attention "Non-Gaussian noise"
-    Detection-floor effects mean observation noise is heavy-tailed at low concentration. Default Student-$t$ with $\nu \approx 5$ for predictor training (Step 5); does heteroscedastic Gaussian suffice for MCMC at moderate-to-high SNR? Open until SBC results across SNR regimes are in.
+:::{attention} Non-Gaussian noise
+Detection-floor effects mean observation noise is heavy-tailed at low concentration. Default Student-$t$ with $\nu \approx 5$ for predictor training (Step 5); does heteroscedastic Gaussian suffice for MCMC at moderate-to-high SNR? Open until SBC results across SNR regimes are in.
+:::
 
-!!! attention "Identifiability — quantitative target"
-    Sherwin et al. (2024) report that ~3 overpasses with varied wind direction give $\operatorname{CV}(Q) < 50\%$ on isolated super-emitters. Adopt this as the operational target: the inference is "good enough" when 3-overpass $\operatorname{CV}(Q) \leq 50\%$, single-overpass $\operatorname{CV}(Q) \leq 100\%$ (with tight met prior). Document on the inference docstring.
+:::{attention} Identifiability — quantitative target
+Sherwin et al. (2024) report that ~3 overpasses with varied wind direction give $\operatorname{CV}(Q) < 50\%$ on isolated super-emitters. Adopt this as the operational target: the inference is "good enough" when 3-overpass $\operatorname{CV}(Q) \leq 50\%$, single-overpass $\operatorname{CV}(Q) \leq 100\%$ (with tight met prior). Document on the inference docstring.
+:::
 
-!!! attention "PG sunset timing"
-    When do we deprecate PG $\sigma_y, \sigma_z$? Either (a) immediately swap to MO once the prereq lands, or (b) keep PG as a v1 default and add MO as opt-in. **Leaning (b)** — PG matches the historic literature and gives a stable baseline.
+:::{attention} PG sunset timing
+When do we deprecate PG $\sigma_y, \sigma_z$? Either (a) immediately swap to MO once the prereq lands, or (b) keep PG as a v1 default and add MO as opt-in. **Leaning (b)** — PG matches the historic literature and gives a stable baseline.
+:::
 
-!!! attention "Multi-source prior on $K$"
-    RJMCMC needs a prior on source count. $\operatorname{Poisson}(\lambda_K)$ with $\lambda_K \sim 5$ (typical basin)? Geometric? Open — depends on basin and inventory coverage.
+:::{attention} Multi-source prior on $K$
+RJMCMC needs a prior on source count. $\operatorname{Poisson}(\lambda_K)$ with $\lambda_K \sim 5$ (typical basin)? Geometric? Open — depends on basin and inventory coverage.
+:::
 
-!!! attention "Background $c_\text{bg}$ model"
-    GP residual on top of a regional climatology, or a simple per-tile constant? GP is "right" but slows MCMC; per-tile is fast but has bias near the source. v1: per-tile; v2: GP.
+:::{attention} Background $c_\text{bg}$ model
+GP residual on top of a regional climatology, or a simple per-tile constant? GP is "right" but slows MCMC; per-tile is fast but has bias near the source. v1: per-tile; v2: GP.
+:::

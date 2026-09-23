@@ -90,7 +90,9 @@ def simulate_lagrangian(
         source_location: ``(x, y, z)`` source coordinates [m], ``z ≥ 0``.
         turbulence: Turbulence model (e.g.
             :class:`~plumax.lagrangian.turbulence.HomogeneousTurbulence`).
-        domain_x / domain_y / domain_z: ``(start, stop, n_cells)`` per axis.
+        domain_x: ``(start, stop, n_cells)`` along x.
+        domain_y: ``(start, stop, n_cells)`` along y.
+        domain_z: ``(start, stop, n_cells)`` along z.
         n_particles: Number of particles in the ensemble.
         t_end: Integration horizon [s].
         dt: Time step [s].
