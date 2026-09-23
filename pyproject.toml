@@ -132,6 +132,8 @@ docs = [
     "mkdocstrings[python]>=0.25",
     "jupytext>=1.16",
     "ipykernel>=6.29",
+    # Executes notebooks for docs/notebooks (see the docs-examples instructions).
+    "nbconvert>=7.16.6",
 ]
 
 [build-system]

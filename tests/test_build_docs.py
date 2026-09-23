@@ -179,6 +179,20 @@ class TestVerifyLinks:
         assert len(problems) == 1
         assert "missing anchor" in problems[0]
 
+    def test_flags_a_missing_same_page_anchor(self, tmp_path: Path) -> None:
+        self.build_site(tmp_path, {"index.html": '<a href="#missing">x</a>'})
+        problems = build_docs.verify_links(tmp_path)
+        assert problems == ["index.html: missing anchor -> #missing"]
+
+    def test_accepts_same_page_anchors_and_bare_hash(self, tmp_path: Path) -> None:
+        self.build_site(
+            tmp_path,
+            {
+                "index.html": '<h2 id="here">H</h2><a href="#here">x</a><a href="#">top</a>'
+            },
+        )
+        assert build_docs.verify_links(tmp_path) == []
+
     def test_accepts_anchors_declared_by_name(self, tmp_path: Path) -> None:
         self.build_site(
             tmp_path,
@@ -189,14 +203,12 @@ class TestVerifyLinks:
         )
         assert build_docs.verify_links(tmp_path) == []
 
-    def test_ignores_external_and_same_page_links(self, tmp_path: Path) -> None:
+    def test_ignores_external_links(self, tmp_path: Path) -> None:
         self.build_site(
             tmp_path,
             {
                 "index.html": (
-                    '<a href="https://example.com/x">e</a>'
-                    '<a href="mailto:a@b.c">m</a>'
-                    '<a href="#top">t</a>'
+                    '<a href="https://example.com/x">e</a><a href="mailto:a@b.c">m</a>'
                 )
             },
         )

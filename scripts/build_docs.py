@@ -274,7 +274,13 @@ def verify_links(root: Path, base_url: str = "") -> list[str]:
             continue
         rel = page.relative_to(root)
         for href in _collect(page).hrefs:
-            if not href or href.startswith(("http://", "https://", "mailto:", "#")):
+            if not href or href.startswith(("http://", "https://", "mailto:")):
+                continue
+            if href.startswith("#"):
+                # Same-page link: the anchor must exist on this page. A bare
+                # "#" is the conventional back-to-top target, not an anchor.
+                if len(href) > 1 and href[1:] not in ids_cache[page]:
+                    problems.append(f"{rel}: missing anchor -> {href}")
                 continue
             if base_url and href.startswith(f"{base_url}/"):
                 href = href[len(base_url) :]

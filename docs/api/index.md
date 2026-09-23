@@ -4,7 +4,7 @@ Each forward model is its own sub-package, importable directly:
 
 ```python
 from plumax.gauss_plume import simulate_plume
-from plumax.les_fvm import ...
+from plumax.les_fvm import simulate_eulerian_dispersion
 ```
 
 The pages follow the modelling tiers of the
