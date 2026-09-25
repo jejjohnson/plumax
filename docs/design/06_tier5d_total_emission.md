@@ -9,7 +9,7 @@ This is the **inventory-grade output** of `plumax` — the number that gets repo
 (vd-paradox)=
 ## The missing-mass paradox
 
-The full Monte Carlo proof is in `methane_pod/notebooks/03_missing_mass_paradox`. The result, in one sentence:
+The full Monte Carlo proof is in the [missing-mass paradox notebook](../notebooks/population/01_missing_mass_paradox.ipynb). The result, in one sentence:
 
 :::{important} The paradox
 A POD-thinned plume catalog simultaneously **overestimates the average emission rate** (because it oversamples big leaks) and **underestimates the total emitted mass** (because it misses many small leaks).
@@ -84,8 +84,8 @@ Without these, the estimator is just a number.
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Missing-mass MC simulator | `plumax.population.paradox` (from `methane_pod.paradox`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
-| Posterior fit | `plumax.population.fitting` (from `methane_pod.fitting`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106); real data needs [#111](https://github.com/jejjohnson/plumax/issues/111) |
+| Missing-mass MC simulator | `plumax.population.paradox` | ✓ in tree |
+| Posterior fit | `plumax.population.fitting` | ✓ in tree (synthetic data); real data needs [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | $M_\text{total}$ estimator + uncertainty | `plumax.population.totals` | ☐ [#113](https://github.com/jejjohnson/plumax/issues/113) |
 | Per-satellite calibration loader | `plumax.population.pod.load_pod_calibrations` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Multi-satellite fusion | `plumax.population.pod.pod_union` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
@@ -121,7 +121,7 @@ Currently temporal-only. Aggregating $M_\text{total}$ over a basin requires eith
 :::
 
 :::{attention} POD parameter sources
-Per-satellite POD parameters can come from (a) fits in `methane_pod` on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
+Per-satellite POD parameters can come from (a) fits with `plumax.population.fitting` on a held-out catalog, (b) published values from [varon2018quantifying] / Cusworth et al., or (c) joint inference with the population. Each has trade-offs around identifiability.
 :::
 
 :::{attention} Reporting cadence
