@@ -23,6 +23,8 @@ project:
     - name: J. Emmanuel Johnson
   references:
     api: http://127.0.0.1:8910/
+  bibliography:
+    - references.bib
   # Hover tooltips wherever these appear in the prose.
   abbreviations:
     CRM: Completely random measure
@@ -41,6 +43,17 @@ project:
     SDE: Stochastic differential equation
     SDEs: Stochastic differential equations
     ppb: Parts per billion
+    HITRAN: High-resolution transmission molecular absorption database
+    HAPI: HITRAN Application Programming Interface
+    LUT: Look-up table
+    LUTs: Look-up tables
+    SRF: Spectral response function
+    SWIR: Short-wave infrared
+    PSAS: Physical-space statistical analysis system
+    PSI: Point-source imager
+    AFM: Area-flux mapper
+    MARS: Methane Alert and Response System
+    IMEO: International Methane Emissions Observatory
   toc:
     - file: index.md
     - title: Design
@@ -65,13 +78,55 @@ project:
             - file: theory/inventory/01_inventory_problem.md
             - file: theory/inventory/02_inventory_objects.md
             - file: theory/inventory/03_inventory_phases.md
+        - title: Forward models
+          children:
+            - file: theory/gauss_plume/00_gaussian_plume_derivation.md
+            - file: theory/gauss_puff/00_gaussian_puff_derivation.md
+            - file: theory/les_fvm/00_eulerian_dispersion_derivation.md
+        - title: Radiative transfer & retrieval
+          children:
+            - file: theory/hapi_lut/00_hapi_lut_derivation.md
+            - file: theory/matched_filter/00_mf_derivation.md
+            - file: theory/assimilation/00_variational_derivation.md
         - title: Source population (TMTPP)
           children:
             - file: theory/population/01_mttpp_theory.md
             - file: theory/population/02_intensity_zoo.md
             - file: theory/population/03_persistency.md
+        - file: theory/satellites.md
+        - file: theory/equations.md
     - title: Notebooks
       children:
+        - title: Gaussian plume
+          children:
+            - file: notebooks/gauss_plume/01_gaussian_plume_forward.ipynb
+            - file: notebooks/gauss_plume/02_plume_emission_rate_estimation.ipynb
+            - file: notebooks/gauss_plume/03_plume_state_estimation.ipynb
+        - title: Gaussian puff
+          children:
+            - file: notebooks/gauss_puff/01_gaussian_puff_forward.ipynb
+            - file: notebooks/gauss_puff/02_puff_emission_rate_estimation.ipynb
+            - file: notebooks/gauss_puff/03_puff_state_estimation.ipynb
+        - title: Eulerian FV
+          children:
+            - file: notebooks/les_fvm/01_eulerian_dispersion_l2.ipynb
+            - file: notebooks/les_fvm/03_puff_vs_eulerian.ipynb
+        - title: HITRAN LUTs
+          children:
+            - file: notebooks/hapi_lut/01_hapi_lut_ch4.ipynb
+            - file: notebooks/hapi_lut/02_hapi_lut_multigas.ipynb
+            - file: notebooks/hapi_lut/03_beers_law_with_lut.ipynb
+        - title: Radiative transfer
+          children:
+            - file: notebooks/radtran/04_srf_band_integration.ipynb
+            - file: notebooks/radtran/05_matched_filter_retrieval.ipynb
+        - title: Matched filter
+          children:
+            - file: notebooks/matched_filter/01_mf_vs_3dvar.ipynb
+            - file: notebooks/matched_filter/02_covariance_flavours.ipynb
+        - title: Assimilation
+          children:
+            - file: notebooks/assimilation/06_variational_methane_retrieval.ipynb
         - title: Source population
           children:
             - file: notebooks/population/01_missing_mass_paradox.ipynb

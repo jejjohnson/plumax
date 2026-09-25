@@ -4,7 +4,7 @@ This project's documentation is built by **two tools**, deployed as one site.
 
 | Half | Tool | Source | Deployed at |
 |---|---|---|---|
-| Prose — home, design roadmap, theory | [mystmd](https://mystmd.org) | `docs/*.md`, `docs/design/`, `docs/theory/` | `/` |
+| Prose — home, design roadmap, theory, notebooks | [mystmd](https://mystmd.org) | `docs/*.md`, `docs/design/`, `docs/theory/`, `docs/notebooks/` | `/` |
 | API reference | MkDocs + mkdocstrings | `docs/api/` | `/reference/` |
 
 Build both and assemble them with:
@@ -61,6 +61,12 @@ jupyter-matplotlib stylesheets from CDNs at view time. Without network access
 in the *browser*, maths renders doubled — KaTeX ships an accessibility MathML
 copy that its stylesheet is responsible for hiding. That is a viewing
 artefact, not a build problem.
+
+## Citations
+
+`docs/references.bib` is registered as `project.bibliography` in `docs/myst.yml`.
+Cite from any MyST page with ``{cite:p}`key` `` or ``{cite:t}`key` ``; an unknown
+key fails `myst build --strict`.
 
 ## Cross-references from prose into the API
 
