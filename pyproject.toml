@@ -117,7 +117,7 @@ lint = [
     "ruff>=0.15.10",
 ]
 typecheck = [
-    "ty>=0.0.29",
+    "ty>=0.0.30",
 ]
 docs = [
     # The prose half of the site is built by mystmd, a Node CLI installed with
