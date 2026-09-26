@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/jejjohnson/plumax/compare/v0.1.1...v0.1.2) (2026-09-26)
+
+
+### Features
+
+* roadmap status refresh, pinned git dependencies, and the MetField wrfout loader ([#116](https://github.com/jejjohnson/plumax/issues/116)) ([46fd747](https://github.com/jejjohnson/plumax/commit/46fd74721150a4dbc9ca8aa492a169a8a8b515ec))
+* tier V.B: Intensity, POD, and paradox modules with theory & notebooks ([#125](https://github.com/jejjohnson/plumax/issues/125)) ([7419a9e](https://github.com/jejjohnson/plumax/commit/7419a9ec35ad9db7a934757d32354ffd58e681e1))
+
 ## [0.1.1](https://github.com/jejjohnson/plumax/compare/v0.1.0...v0.1.1) (2026-08-19)
 
 
