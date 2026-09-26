@@ -169,7 +169,7 @@ Most satellite inversion needs only the column-integrated XCH₄, not the 3D fie
 - **Graph-network operator.** Right structural fit for unstructured analysis grids and basin-scoped problems.
 - **Fourier Neural Operator (FNO).** Resolution-agnostic and natural fit with `spectraldiffx` philosophy — **but** assumes translation invariance in the kernel. Works well for periodic / homogeneous problems; breaks for urban basins with terrain. Use only when translation invariance is plausible.
 - **Neural ODE.** $c(t+\Delta t) = f_\theta(c(t), \mathbf{u}(t))$ iterated. Simple but suffers from long-horizon drift.
-- **Reduced-order model (ROM).** POD on simulation snapshots → low-rank basis; learn projected dynamics via Galerkin or DMD. Great when dynamics live on a low-dim manifold.
+- **Reduced-order model (ROM).** Proper orthogonal decomposition on simulation snapshots → low-rank basis; learn projected dynamics via Galerkin or DMD. Great when dynamics live on a low-dim manifold.
 
 ### Training data
 

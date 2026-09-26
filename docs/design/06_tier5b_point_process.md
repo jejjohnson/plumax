@@ -2,7 +2,7 @@
 
 **Generative model:** events arrive in time according to an intensity $\lambda(t)$, each carries a mark $Q \sim f(Q)$, and each is observed with probability $P_d(Q; \text{satellite})$. The "thinned marked temporal point process" (TMTPP) is the mathematical object on which everything else at Tier V is built — see [daley2003,daleyVereJones2008] for foundations.
 
-The full mathematical derivation lives in `methane_pod/notebooks/01_mttpp_theory`. This page gives the architectural view: the components, their interfaces, and where they plug into the rest of `plumax`.
+The full mathematical derivation lives in the [TMTPP theory page](../theory/population/01_mttpp_theory.md). This page gives the architectural view: the components, their interfaces, and where they plug into the rest of `plumax`.
 
 :::{tip} Units convention
 Everything in SI internally — $Q$ in kg/s, time in seconds. Catalog ingestion ([06a](06_tier5a_instantaneous.md)) normalises to SI; rendering layers convert to operational units (t/h, kg/h) on display.
@@ -42,7 +42,7 @@ $$
 \log \lambda(t) \;\sim\; \mathcal{GP}(\mu, K) \qquad \text{(log-Gaussian Cox process; environmentally-driven clustering)}
 $$
 
-13 deterministic / Hawkes kernels currently implemented in `methane_pod.intensity`; LGCP is the v1.5 next kernel — it's the natural model when clustering is environmental rather than self-exciting.
+13 deterministic kernels currently implemented in `plumax.population.intensity` (catalogued in the [intensity zoo](../theory/population/02_intensity_zoo.md)); LGCP is the v1.5 next kernel — it's the natural model when clustering is environmental rather than self-exciting.
 
 Each kernel is an `equinox.Module` exposing the same `__call__(t) → λ` and `sample_priors()` interface. Adding a new kernel is a one-file PR.
 
@@ -82,7 +82,7 @@ $$
 where $Q_{50}$ is the leak size at which detection probability is 0.5 and $k$ controls the steepness.
 
 :::{caution} Hill ≠ logistic-on-log-Q
-**This is *not* the same as a logistic on $\log Q$** — Hill is rational in $Q$, logistic is sigmoidal in $\log Q$. Doc previously listed "logistic"; the operational convention is Hill. (`methane_pod.pod_functions` currently implements both; the population fitter should default to Hill.)
+**This is *not* the same as a logistic on $\log Q$** — Hill is rational in $Q$, logistic is sigmoidal in $\log Q$. Doc previously listed "logistic"; the operational convention is Hill. (`plumax.population.pod` currently implements both; the population fitter should default to Hill.)
 :::
 
 (vb-pod-calibration)=
@@ -97,7 +97,7 @@ $$
 
 This is the middle ground between (a) hard-coding published values (biased when those are uncertain) and (b) full joint inference (cleanest but identifiability concern with $\lambda$). v2 promotes to joint inference when basin data warrants.
 
-10 POD models currently in `methane_pod.pod_functions`, described visually in `05_pod_gallery`. Variants:
+10 POD models currently in `plumax.population.pod`, described visually in the [POD gallery](../notebooks/population/03_pod_gallery.ipynb). Variants:
 
 - **Hill** — operational standard.
 - **Varying-coefficient Hill** — $Q_{50} = g(\text{albedo}, \text{SZA}, \text{scene class})$.
@@ -140,7 +140,7 @@ $$
 \;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
 $$
 
-This is the form implemented in the standalone `methane_pod.fitting.pod_powerlaw_model` (to be rebuilt on `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess` under [#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it's safe to use.
+This is the form implemented in `plumax.population.fitting.pod_powerlaw_model` (to be rebuilt on `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess` under [#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it's safe to use.
 
 (vb-numerical-stability)=
 ### Numerical stability of the integrated thinned-rate term
@@ -197,16 +197,16 @@ Both have library support; the choice is driven by the scientific question, not 
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Intensity registry — deterministic + Hawkes | `plumax.population.intensity` (from `methane_pod.intensity`, 13 kernels) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| Intensity registry — deterministic + Hawkes | `plumax.population.intensity` (13 kernels) | 🚧 — deterministic kernels in tree; Hawkes ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) |
 | Intensity registry — log-Gaussian Cox process | `plumax.population.point_process.fit_lgcp` | ☐ v1.5 [#115](https://github.com/jejjohnson/plumax/issues/115) |
-| Mark registry | `plumax.population.marks` | ☐ [#109](https://github.com/jejjohnson/plumax/issues/109) — power-law only (inline in `methane_pod.fitting`); lognormal, lognormal-Pareto, mixture-of-lognormals pending |
-| POD models $P_d(\cdot)$ (Hill + variants) | `plumax.population.pod` (from `methane_pod.pod_functions`, 10 models) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| Mark registry | `plumax.population.marks` | ☐ [#109](https://github.com/jejjohnson/plumax/issues/109) — power-law only (inline in `plumax.population.fitting`); lognormal, lognormal-Pareto, mixture-of-lognormals pending |
+| POD models $P_d(\cdot)$ (Hill + variants) | `plumax.population.pod` (10 models) | ✓ in tree (logistic / probit / cloglog GLM family) |
 | POD time-of-day binning (v1 time-varying POD) | `plumax.population.pod.InstrumentPOD.tod_bins` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | POD continuous $P_d(Q, t)$ (v2) | `plumax.population.pod.continuous_t` | ☐ v2 |
 | Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
-| TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` (from `methane_pod.fitting`) | ☐ not in tree — [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree; `xtremax` `ThinningProcess` rebuild ☐ [#106](https://github.com/jejjohnson/plumax/issues/106) |
 | TMTPP likelihood — full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) — consumes [`population.importance`](#va-modules) |
 | Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
 | Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) — beyond the existing kernels |
