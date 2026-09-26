@@ -73,6 +73,7 @@ project:
             - file: design/06_tier5d_total_emission.md
     - title: Theory
       children:
+        - file: theory/end_to_end_retrieval_to_persistency.md
         - file: theory/inventory/inventory.md
           children:
             - file: theory/inventory/01_inventory_problem.md

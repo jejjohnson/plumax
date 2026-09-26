@@ -2,6 +2,8 @@
 
 **Forward model:** transport + RTM + multi-instrument fusion, from source parameters all the way to simulated radiances across multiple satellites simultaneously. This is the full operational pipeline.
 
+For where this stage slots into the operational pipeline, see the [end-to-end walkthrough, Stage 3](../theory/end_to_end_retrieval_to_persistency.md#e2e-stage3-fusion).
+
 ```text
 Source params (Q_{1:K}(t), x₀_{1:K}, t₀_{1:K},  ū, θ_wind, c_bg, α_BC, …)
        ↓  [Tier I/II/III transport]

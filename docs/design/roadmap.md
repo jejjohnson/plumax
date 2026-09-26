@@ -9,32 +9,37 @@ This page is the **index** for the architecture roadmap. The detail for each tie
 (cycle-overview)=
 ## The Data-Driven Modeling Cycle
 
-Every tier in `plumax` follows the same loop:
+The architecture has **two axes**:
+
+- The **inference axis** (vertical) is a fixed *six-step loop* — the same recipe at every tier.
+- The **complexity axis** (horizontal) is the *forward-model fidelity* — Tier I analytic → Tier V population.
+
+Every column runs the **same** six steps; what changes left-to-right is how complex the model behind each step is. Step 6 — *improve* — is the move that walks you one column to the right.
 
 ```text
-┌─────────────────────────────────────────────────────────────────┐
-│   (1) Simple Model                                              │
-│       ↓                                                         │
-│   (2) Model-Based Inference                                     │
-│       ↓                                                         │
-│   (3) Model Emulator          ← skip if model is cheap          │
-│       ↓                                                         │
-│   (4) Emulator-Based Inference                                  │
-│       ↓                                                         │
-│   (5) Amortized Inference (Predictor)                           │
-│       ↓                                                         │
-│   (6) Improve  ───────────────────────────────────────────────┐ │
-│       ↑         upgrade model / data / emulator / posterior   │ │
-│       └───────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
+                    MODEL COMPLEXITY  ─────────────────────────────────────────────▶
+                    Tier I         Tier II        Tier III       Tier IV        Tier V
+                    Gaussian       Lagrangian     Eulerian FV    Coupled + RTM  Population
+                    (analytic)     (stoch. ODE)   (adv–diff PDE) (multi-inst)   (point proc.)
+  ┌──────────────────────────────────────────────────────────────────────────────────────────┐
+1 │ Simple model    plume / puff   particles      adv–diff PDE   transport+RTM  λ(t), f(Q), Pd  │
+2 │ Model inference MAP / MCMC     footprint inv  4D-Var         joint fusion   NUTS population │
+3 │ Emulator        skip (cheap)   footprint NN   FNO/neural-ODE coupled net    flow over post. │
+4 │ Emu. inference  —              EKI            PDE-free 4DVar EKI / gradient SVI             │
+5 │ Amortized       Q-predictor    traj-pred.     field-pred.    overpass → Q   basin → λ, tot  │
+6 │ Improve ────────┴──────────────┴──────────────┴──────────────┴──────────────┘  ▲ climb a tier
+  └───────────────────────────────────────────────────────────────── same six steps ──────────┘
+    ▲ INFERENCE AXIS
 ```
 
-- Step 1 gives you a **generative story** — a known mathematical structure you can simulate from.
-- Step 2 gives you **ground truth inference** — slow but exact, used to validate everything downstream.
-- Step 3 makes Step 2 **tractable at scale** — replace the expensive forward model with a fast surrogate.
-- Step 4 is Step 2 again, but now running in seconds instead of hours.
-- Step 5 collapses the inference loop entirely — the predictor learns the posterior map directly.
-- Step 6 closes the loop — every component is independently upgradable, with the previous step as ground truth.
+Read **down** a column for one tier's full cycle; read **across** a row to watch a single step grow in complexity tier-to-tier. The point the diagram makes: this is *not* a single linear "model → amortized predictor" pipeline. **Each of the six steps is itself swappable for a more complex model**, and "improve" (Step 6) is structured — it picks one component (a richer forward model, a higher tier, more data, a better posterior family) and re-enters the loop with the previous step (or tier) as ground truth.
+
+- **Step 1 — Simple Model** gives you a **generative story** — a known mathematical structure you can simulate from.
+- **Step 2 — Model-Based Inference** gives you **ground-truth inference** — slow but exact, used to validate everything downstream.
+- **Step 3 — Model Emulator** makes Step 2 **tractable at scale** — replace the expensive forward model with a fast surrogate (skip if the model is already cheap).
+- **Step 4 — Emulator-Based Inference** is Step 2 again, but now running in seconds instead of hours.
+- **Step 5 — Amortized Inference (Predictor)** collapses the inference loop entirely — the predictor learns the posterior map directly.
+- **Step 6 — Improve** closes the loop — every component is independently upgradable, and the complexity axis tells you *which* component to upgrade and *how* to validate it.
 
 ---
 
@@ -54,6 +59,8 @@ Every tier in `plumax` follows the same loop:
 | V | Population & forecasting (TMTPP) | Stochastic point process | Aggregate per-event posteriors → wait times, totals | [Tier V — Population](06_tier5_population.md) (and [V.A](06_tier5a_instantaneous.md), [V.B](06_tier5b_point_process.md), [V.C](06_tier5c_persistency.md), [V.D](06_tier5d_total_emission.md)) |
 
 The build order is roughly: **Prerequisites → Tier I → RTM stack (parallel) → Tier II → Tier III → Tier IV → Tier V.** RTM is independent of transport tier, so it can be developed in parallel by a different person without coordination cost. Tier V depends on at least Tier I being usable end-to-end (per-event posteriors are the input), but does not need Tiers II–IV — it can launch with Tier I posteriors and absorb richer ones later.
+
+For how the tiers compose into a single operational pipeline — from a satellite radiance all the way to a leak-recurrence forecast — see the [end-to-end retrieval → persistency walkthrough](../theory/end_to_end_retrieval_to_persistency.md).
 
 ---
 
@@ -77,7 +84,7 @@ WRF provides met forcing and benchmark concentration fields. `plumax` learns to 
 :::
 
 :::{important} 5. Improvement is structured
-Step 6 is not vague iteration. Each improvement targets a specific component — better physics, more training data, richer posterior family, tighter observation operator — and the cycle structure tells you which component to upgrade and how to validate it.
+Step 6 is not vague iteration. Each improvement targets a specific component — better physics, more training data, richer posterior family, tighter observation operator — and the cycle structure (which row) and the complexity axis (which column) together tell you which component to upgrade and how to validate it.
 :::
 
 ---
