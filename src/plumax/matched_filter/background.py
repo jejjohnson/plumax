@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 import gaussx as gx
+import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
@@ -197,15 +198,15 @@ def estimate_cov_lowrank(
     *,
     rank: int,
     tikhonov: float,
-    random_state: int | None = 0,
+    random_state: int | jax.Array | None = 0,
     n_oversamples: int = 10,
     mask: np.ndarray | None = None,
     rank_rtol: float = 1e-10,
 ) -> LinearOperator:
     """Low-rank + Tikhonov covariance: ``Σ = λI + V D Vᵀ``.
 
-    Uses scikit-learn's randomised :class:`~sklearn.decomposition.TruncatedSVD`
-    (Halko–Martinsson–Tropp) to find the top ``rank`` spectral directions of
+    Uses :func:`gaussx.randomized_svd` (Halko–Martinsson–Tropp, JAX, 5 power
+    iterations) to find the top ``rank`` spectral directions of
     the sample covariance. Returned as a :class:`gaussx.LowRankUpdate` so that
     :func:`gaussx.solve` routes through the Woodbury identity — the MF
     precompute cost is ``O(n_bands · rank + rank³)`` instead of
@@ -219,15 +220,15 @@ def estimate_cov_lowrank(
         Background mean. If ``None``, subtracts the sample mean.
     rank
         Number of leading components to keep. Clamped to
-        ``min(rank, n_samples, n_bands) - 1`` because ``TruncatedSVD``
-        requires ``n_components < n_features``.
+        ``min(rank, n_samples - 1, n_bands - 1)``.
     tikhonov
         Diagonal floor ``λ > 0`` — ensures strict PD.
     random_state
-        Seed for the randomised SVD.
+        Seed for the randomised SVD: an ``int`` (converted with
+        ``jax.random.key``), a JAX PRNG key, or ``None`` (seed 0).
     n_oversamples
         Extra random directions for the Halko sampling — higher is slower but
-        better-conditioned. sklearn's default is 10.
+        better-conditioned.
     mask
         Boolean exclude-pixels mask; flagged pixels (e.g. a detected plume) are
         dropped before the SVD so ``Σ`` reflects background only.
@@ -245,40 +246,66 @@ def estimate_cov_lowrank(
     Xc = X - mu
     n_samples, n_bands = Xc.shape
     rank = max(1, min(int(rank), n_samples - 1, n_bands - 1))
-    from sklearn.decomposition import TruncatedSVD
-
-    svd = TruncatedSVD(
-        n_components=rank,
-        algorithm="randomized",
-        n_oversamples=n_oversamples,
-        random_state=random_state,
+    key = _as_key(random_state)
+    # Same MLE normalization s_i² / n_samples as the empirical / LedoitWolf /
+    # OAS paths in this module (using n_samples - 1 here would make
+    # matched_filter_snr and detection_threshold depend on the estimator).
+    V, d = lowrank_factors(
+        jnp.asarray(Xc), rank, n_oversamples=n_oversamples, n_power_iter=5, key=key
     )
-    # TruncatedSVD(X) returns the top-k singular values s_i(X). We use MLE
-    # normalization s_i² / n_samples for the covariance eigenvalues so this
-    # path matches the sklearn EmpiricalCovariance / LedoitWolf / OAS paths
-    # in this module (all of which divide by n_samples). Using the unbiased
-    # (n_samples - 1) normalization here would have made matched_filter_snr
-    # and detection_threshold dependent on *which* estimator was chosen.
-    svd.fit(Xc)
-    V = svd.components_  # shape (rank, n_bands), rows are right singular vectors
-    s = svd.singular_values_  # shape (rank,)
-    d = (s**2) / max(n_samples, 1)
+    V, d = np.asarray(V), np.asarray(d)
     diag = jnp.asarray(tikhonov * np.ones(n_bands, dtype=float))
     # Rank-deficiency guard: drop near-zero eigen-directions so the Woodbury
     # capacitance stays finite. If none survive (e.g. a constant scene), Σ is
     # just the strictly-PD Tikhonov floor λI.
     d_max = float(d.max()) if d.size else 0.0
     keep = d > rank_rtol * d_max if d_max > 0.0 else np.zeros(d.shape, dtype=bool)
-    V, d = V[keep], d[keep]
+    V, d = V[:, keep], d[keep]
     if d.size == 0:
         return lx.DiagonalLinearOperator(diag)
     # λ I + U diag(d) Uᵀ via the gaussx SVD constructor (auto-inferred
     # symmetric/PSD tags, orthonormal-factor solve path).
-    U = jnp.asarray(V.T)  # (n_bands, n_kept) — spectral directions as columns
+    U = jnp.asarray(V)  # (n_bands, n_kept) — spectral directions as columns
     return gx.svd_low_rank_plus_diag(diag, U, jnp.asarray(d), U)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _as_key(random_state: int | jax.Array | None) -> jax.Array:
+    if random_state is None:
+        random_state = 0
+    if isinstance(random_state, (int, np.integer)):
+        return jax.random.key(int(random_state))
+    return random_state
+
+
+def _lowrank_factors(
+    Xc: Float[Array, "N B"],
+    rank: int,
+    *,
+    n_oversamples: int = 10,
+    n_power_iter: int = 5,
+    key: jax.Array,
+) -> tuple[Float[Array, "B r"], Float[Array, " r"]]:
+    """Jittable randomised-SVD core: ``(V, d)`` of centred samples ``Xc``.
+
+    ``V`` is ``(n_bands, rank)`` (right singular vectors as columns) and
+    ``d = s² / n_samples`` the MLE covariance eigenvalues.
+    """
+    _, sv, Vt = gx.randomized_svd(
+        lx.MatrixLinearOperator(Xc),
+        rank,
+        oversample=n_oversamples,
+        n_power_iter=n_power_iter,
+        key=key,
+    )
+    return Vt.T, sv**2 / Xc.shape[0]
+
+
+lowrank_factors = jax.jit(
+    _lowrank_factors, static_argnames=("rank", "n_oversamples", "n_power_iter")
+)
 
 
 def _flatten_cube(cube: Float[Array, "H W B"] | np.ndarray) -> np.ndarray:

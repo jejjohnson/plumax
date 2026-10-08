@@ -17,7 +17,7 @@ resolution-markers = [
 ]
 
 [manifest]
-overrides = [{ name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }]
+overrides = [{ name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5" }]
 
 [[package]]
 name = "appnope"
@@ -680,8 +680,8 @@ wheels = [
 
 [[package]]
 name = "gaussx"
-version = "0.0.25"
-source = { git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9#58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }
+version = "0.6.5"
+source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5#12ff91a68da2886478e9b3a1d0d4c0745d74ca41" }
 dependencies = [
     { name = "einx" },
     { name = "equinox" },
@@ -690,6 +690,7 @@ dependencies = [
     { name = "jaxtyping" },
     { name = "lineax" },
     { name = "matfree" },
+    { name = "optimistix" },
 ]
 
 [[package]]
@@ -1883,7 +1884,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -1945,7 +1946,7 @@ requires-dist = [
     { name = "diffrax", specifier = ">=0.6" },
     { name = "equinox", specifier = ">=0.11" },
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=58e90a68aa240bed1e0117d88fcd5b2813dadcb9" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5" },
     { name = "hitran-api", marker = "extra == 'hapi'" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },

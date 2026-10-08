@@ -96,3 +96,16 @@ def test_lowrank_rejects_zero_regularization():
     samples = np.random.default_rng(3).standard_normal((10, 5))
     with pytest.raises(ValueError, match="regularization"):
         build_lowrank_background(samples=samples, rank=2, regularization=0.0)
+
+
+def test_lowrank_randomized_path_matches_full_svd():
+    rng = np.random.default_rng(0)
+    # rank=3 < 0.5 * min(200, 40) -> randomized; rank=25 -> full SVD.
+    V = np.linalg.qr(rng.standard_normal((40, 3)))[0]
+    samples = rng.standard_normal((200, 3)) * [5.0, 3.0, 2.0] @ V.T
+    samples = samples + 0.01 * rng.standard_normal((200, 40))
+    centred = samples - samples.mean(axis=0)
+    _, S, Vt = np.linalg.svd(centred, full_matrices=False)
+    B = build_lowrank_background(samples=samples, rank=3, regularization=1e-3)
+    ref = (Vt[:3].T * (S[:3] ** 2 / 199)) @ Vt[:3] + 1e-3 * np.eye(40)
+    np.testing.assert_allclose(np.asarray(B.as_matrix()), ref, rtol=1e-3, atol=1e-3)

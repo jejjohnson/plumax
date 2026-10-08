@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import gaussx as gx
+import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
@@ -128,6 +129,7 @@ def build_lowrank_background(
     samples: np.ndarray,
     rank: int,
     regularization: float = 1e-6,
+    random_state: int = 0,
 ) -> LinearOperator:
     """Estimate ``B`` from a stack of state samples and wrap as ``λI + U D Uᵀ``.
 
@@ -142,6 +144,9 @@ def build_lowrank_background(
     regularization : float
         Diagonal floor ``λ`` so the resulting operator is strictly PD even
         when ``samples`` is rank-deficient. Must be > 0.
+    random_state : int
+        Seed for :func:`gaussx.randomized_svd`, used when
+        ``rank < 0.5 * min(n_samples, n_state)`` (otherwise a full SVD runs).
 
     Returns
     -------
@@ -161,9 +166,19 @@ def build_lowrank_background(
     if regularization <= 0.0:
         raise ValueError("build_lowrank_background: `regularization` must be > 0.")
     centred = samples - samples.mean(axis=0, keepdims=True)
-    _, S, Vt = np.linalg.svd(centred, full_matrices=False)
-    S_k = S[:rank]
-    V_k = Vt[:rank]
+    if rank < 0.5 * min(n_samples, n_state):
+        # Few components wanted: randomized range finder, O(rank) passes over
+        # the samples instead of a full O(N·n·min(N,n)) SVD.
+        _, S_k, V_k = gx.randomized_svd(
+            lx.MatrixLinearOperator(jnp.asarray(centred)),
+            rank,
+            n_power_iter=5,
+            key=jax.random.key(random_state),
+        )
+    else:
+        _, S, Vt = np.linalg.svd(centred, full_matrices=False)
+        S_k = S[:rank]
+        V_k = Vt[:rank]
     U = jnp.asarray(V_k.T)  # (n_state, rank)
     d = jnp.asarray(S_k**2 / max(n_samples - 1, 1))
     base = lx.DiagonalLinearOperator(
