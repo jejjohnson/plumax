@@ -16,6 +16,7 @@ from plumax.matched_filter.background import (
     estimate_cov_lowrank,
     estimate_cov_shrunk,
     estimate_mean,
+    lowrank_factors,
 )
 
 
@@ -164,3 +165,57 @@ def test_rank_deficient_scene_finite(rng):
     assert np.all(np.isfinite(x))
     dense = np.asarray(cov_op.as_matrix())
     np.testing.assert_allclose(x, np.linalg.solve(dense, np.asarray(rhs)), atol=1e-6)
+
+
+def _synthetic_hyperspectral(rng, n=2000, B=60, k=8):
+    """Decaying-spectrum cube: well-separated top-k plus small isotropic noise."""
+    V = np.linalg.qr(rng.standard_normal((B, k)))[0]
+    s = 10.0 * 0.6 ** np.arange(k)
+    X = rng.standard_normal((n, k)) * s @ V.T + 0.05 * rng.standard_normal((n, B))
+    return X - X.mean(axis=0)
+
+
+def _max_principal_angle(A, B):
+    sv = np.linalg.svd(A.T @ B, compute_uv=False)
+    return float(np.arccos(np.clip(sv.min(), -1.0, 1.0)))
+
+
+def test_lowrank_factors_match_exact_svd_and_beat_sklearn(rng):
+    from sklearn.decomposition import TruncatedSVD
+
+    k = 5
+    Xc = _synthetic_hyperspectral(rng)
+    n = Xc.shape[0]
+    _, s_ex, Vt_ex = np.linalg.svd(Xc, full_matrices=False)
+    d_ex, V_ex = s_ex[:k] ** 2 / n, Vt_ex[:k].T
+
+    V, d = lowrank_factors(jnp.asarray(Xc), k, key=jax.random.key(0))
+    V, d = np.asarray(V), np.asarray(d)
+    np.testing.assert_allclose(d, d_ex, rtol=1e-2)
+    ang_gx = _max_principal_angle(V, V_ex)
+    assert ang_gx < 1e-3
+
+    sk = TruncatedSVD(n_components=k, algorithm="randomized", n_iter=5, random_state=0)
+    sk.fit(Xc)
+    ang_sk = _max_principal_angle(sk.components_.T, V_ex)
+    err_gx = np.max(np.abs(d / d_ex - 1))
+    err_sk = np.max(np.abs(sk.singular_values_**2 / n / d_ex - 1))
+    assert ang_gx <= ang_sk + 1e-6
+    assert err_gx <= err_sk + 1e-6
+
+
+def test_lowrank_factors_jittable_and_estimate_accepts_key(rng):
+    Xc = _synthetic_hyperspectral(rng, n=300, B=20, k=3)
+    f = jax.jit(lambda X, key: lowrank_factors(X, 3, key=key))
+    V, d = f(jnp.asarray(Xc), jax.random.key(1))
+    assert V.shape == (20, 3) and d.shape == (3,)
+    cube = Xc.reshape(300, 1, 20)
+    a = np.asarray(
+        estimate_cov_lowrank(cube, rank=3, tikhonov=1e-3, random_state=4).as_matrix()
+    )
+    b = np.asarray(
+        estimate_cov_lowrank(
+            cube, rank=3, tikhonov=1e-3, random_state=jax.random.key(4)
+        ).as_matrix()
+    )
+    np.testing.assert_allclose(a, b)

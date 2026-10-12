@@ -57,7 +57,7 @@ dependencies = [
     # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires;
     # >= 0.0.25 for `symmetrize`, a reverse-mode-differentiable `safe_cholesky`,
     # and the state-space layer (MaternSDE / MarkovGaussian) Tier IV builds on.
-    "gaussx>=0.0.25",
+    "gaussx>=0.6.5",
     # optimistix powers the variational retrieval module (assimilation):
     # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
     "optimistix>=0.0.10",
@@ -88,19 +88,18 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # rev. Force the whole graph onto plumax's gaussx (the pattern somax uses);
 # every symbol those two packages import still exists at this rev.
 override-dependencies = [
-    "gaussx @ git+https://github.com/jejjohnson/gaussx@58e90a68aa240bed1e0117d88fcd5b2813dadcb9",
+    "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.5",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 # Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
 # unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
-# release commit); gaussx is pinned one commit past v0.0.25 because the
-# MarkovGaussian / UDL state-space layer landed there untagged.
+# release commit); gaussx is pinned to the v0.6.5 tag.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "58e90a68aa240bed1e0117d88fcd5b2813dadcb9" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 
 [dependency-groups]
 dev = [
