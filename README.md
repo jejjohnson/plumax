@@ -36,7 +36,7 @@ emulation and amortized inference are natural substitutions, not rewrites:
 | I | Gaussian plume / puff | analytical | `gauss_plume`, `gauss_puff` |
 | II | Lagrangian particle / footprint | stochastic ODE | _planned_ |
 | III | Eulerian finite-volume PDE | PDE | `les_fvm` |
-| — | Radiative transfer (parallel track) | multi-physics | `hapi_lut`, `radtran`, `matched_filter` |
+| — | Radiative transfer (parallel track) | multi-physics | [radtrax](https://github.com/jejjohnson/radtrax) |
 | IV | Coupled transport + RTM | end-to-end | _planned_ |
 | V | Population & forecasting (TMTPP) | point process | _planned_ |
 
@@ -59,16 +59,7 @@ renders under the **Design** tab of the docs site.
   via [`finitevolX`](https://github.com/jejjohnson/finitevolX): WENO5
   horizontal advection, K-theory diffusion, per-face boundary conditions,
   `diffrax`-compatible time stepping.
-- **`hapi_lut`** — HITRAN line-by-line Voigt absorption LUTs plus a
-  single-layer Beer–Lambert forward model and its differential-ratio form.
-- **`radtran`** — band-integrated radiative transfer + matched-filter
-  retrieval; SRF as a linear operator (forward / Jacobian / adjoint), and
-  a structured low-rank covariance solve via
-  [`gaussx`](https://github.com/jejjohnson/gaussx) Woodbury dispatch.
-- **`matched_filter`** — hyperspectral matched-filter detection pipeline
-  (robust backgrounds, clustering, streaming).
-- **`assimilation`** — 3D/4D-Var cost / control / solve scaffolding on
-  `optimistix`.
+- Radiative transfer (HITRAN tables, the Beer–Lambert forward models, SRFs), the matched filter and the 3D-Var retrieval live in [radtrax](https://github.com/jejjohnson/radtrax); `coupled` composes the plume models with it.
 
 ---
 

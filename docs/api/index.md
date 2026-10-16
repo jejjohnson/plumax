@@ -9,9 +9,8 @@ from plumax.les_fvm import simulate_eulerian_dispersion
 
 The pages follow the modelling tiers of the
 [roadmap](https://jejjohnson.github.io/plumax/roadmap/). NumPyro inference
-submodules, and the `assimilation`, `matched_filter` and `radtran` packages,
-are imported lazily, so importing a forward model never pulls in their
-dependencies.
+submodules are imported lazily, so importing a forward model never pulls in
+NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in [radtrax](https://github.com/jejjohnson/radtrax).
 
 ## Modules
 
@@ -24,10 +23,6 @@ dependencies.
 | III | [Eulerian FV](les_fvm.md) | advection–diffusion on a C-grid |
 | IV | [Coupled](coupled.md) | multi-instrument source inversion |
 | V | [Population](population.md) | source populations and forecasting |
-| RTM | [HITRAN LUTs](hapi_lut.md) | cross-section LUTs, Beer–Lambert |
-| RTM | [Radiative transfer](radtran.md) | band-integrated RT, retrieval |
-| RTM | [Matched filter](matched_filter.md) | hyperspectral detection |
-| — | [Assimilation](assimilation.md) | 3D/4D-Var scaffolding |
 | — | [Operators](operators.md) · [Adapters](adapters.md) | `pipekit` integration |
 
 ## Package overview

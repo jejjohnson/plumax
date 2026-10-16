@@ -652,7 +652,7 @@ $$
 (Ornstein–Uhlenbeck). For these kernels GP smoothing becomes a Kalman filter + smoother, $O(n)$. Squared-exponential kernels (and Matérn with non-half-integer $\nu$) get no exact such structure, only approximations.
 
 :::{note}
-The background prior in a Kalman/4D-Var system is a GP in disguise. See the `plumax.assimilation` scaffolding and [pipekit-cycle](https://github.com/jejjohnson/pipekit) for the data-assimilation side.
+The background prior in a Kalman/4D-Var system is a GP in disguise. See the `radtrax.retrieval.var3d` scaffolding and [pipekit-cycle](https://github.com/jejjohnson/pipekit) for the data-assimilation side.
 :::
 
 (ii-10-4)=
