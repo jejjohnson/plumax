@@ -19,7 +19,7 @@ rate, with the per-instrument bias as a first-class state element:
   linear-conditional-Gaussian limit).
 - ``rtm`` — *additive* RTM-based observation operators that map the plume
   column enhancement → gas ``ΔVMR`` → band-integrated normalised radiance via
-  the :mod:`plumax.radtran` Beer–Lambert + SRF stack, as the build-order step
+  the :mod:`radtrax.slab` Beer–Lambert + SRF stack, as the build-order step
   toward L1-radiance fusion. Two complementary, well-known models:
   the exact nonlinear ``RadianceObservationOperator`` / ``radiance_response``
   (``L_norm = exp(-Δτ)``), and its tangent-linear counterpart

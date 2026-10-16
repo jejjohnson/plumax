@@ -534,6 +534,15 @@ wheels = [
 ]
 
 [[package]]
+name = "einops"
+version = "0.8.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/2c/77/850bef8d72ffb9219f0b1aac23fbc1bf7d038ee6ea666f331fa273031aa2/einops-0.8.2.tar.gz", hash = "sha256:609da665570e5e265e27283aab09e7f279ade90c4f01bcfca111f3d3e13f2827", size = 56261, upload-time = "2026-01-26T04:13:17.638Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2a/09/f8d8f8f31e4483c10a906437b4ce31bdf3d6d417b73fe33f1a8b59e34228/einops-0.8.2-py3-none-any.whl", hash = "sha256:54058201ac7087911181bfec4af6091bb59380360f069276601256a76af08193", size = 65638, upload-time = "2026-01-26T04:13:18.546Z" },
+]
+
+[[package]]
 name = "einx"
 version = "0.4.3"
 source = { registry = "https://pypi.org/simple" }
@@ -691,6 +700,18 @@ dependencies = [
     { name = "lineax" },
     { name = "matfree" },
     { name = "optimistix" },
+]
+
+[[package]]
+name = "geonnax"
+version = "0.0.9"
+source = { git = "https://github.com/jejjohnson/geonnax?tag=v0.0.9#fa126ca69ab17837c8cf83d2a88e91e9f24cb33c" }
+dependencies = [
+    { name = "einops" },
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "jax" },
+    { name = "jaxtyping" },
 ]
 
 [[package]]
@@ -1897,6 +1918,7 @@ dependencies = [
     { name = "numpy" },
     { name = "optimistix" },
     { name = "pipekit" },
+    { name = "radtrax" },
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "xarray" },
@@ -1957,6 +1979,7 @@ requires-dist = [
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
+    { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee" },
     { name = "scikit-learn", specifier = ">=1.3" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "xarray" },
@@ -2267,6 +2290,25 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c4/59/a5f38970f9bf07cee96128de79590bb354917914a9be11272cfc7ff26af0/pyzmq-27.1.0-cp314-cp314t-win32.whl", hash = "sha256:1f0b2a577fd770aa6f053211a55d1c47901f4d537389a034c690291485e5fe92", size = 587472, upload-time = "2025-09-08T23:08:58.18Z" },
     { url = "https://files.pythonhosted.org/packages/70/d8/78b1bad170f93fcf5e3536e70e8fadac55030002275c9a29e8f5719185de/pyzmq-27.1.0-cp314-cp314t-win_amd64.whl", hash = "sha256:19c9468ae0437f8074af379e986c5d3d7d7bfe033506af442e8c879732bedbe0", size = 661401, upload-time = "2025-09-08T23:08:59.802Z" },
     { url = "https://files.pythonhosted.org/packages/81/d6/4bfbb40c9a0b42fc53c7cf442f6385db70b40f74a783130c5d0a5aa62228/pyzmq-27.1.0-cp314-cp314t-win_arm64.whl", hash = "sha256:dc5dbf68a7857b59473f7df42650c621d7e8923fb03fa74a526890f4d33cc4d7", size = 575170, upload-time = "2025-09-08T23:09:01.418Z" },
+]
+
+[[package]]
+name = "radtrax"
+version = "0.0.0"
+source = { git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee#e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
+dependencies = [
+    { name = "equinox" },
+    { name = "gaussx" },
+    { name = "geonnax" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+    { name = "netcdf4" },
+    { name = "numpy" },
+    { name = "optimistix" },
+    { name = "scikit-learn" },
+    { name = "xarray" },
 ]
 
 [[package]]
