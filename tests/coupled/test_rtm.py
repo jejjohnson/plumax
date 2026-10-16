@@ -13,6 +13,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+from radtrax.instrument import SpectralResponseFunction
+from radtrax.slab import forward_nonlinear_normalized
 
 from plumax.coupled import (
     Instrument,
@@ -24,8 +26,6 @@ from plumax.coupled import (
     radiance_response,
     radiance_response_linear,
 )
-from plumax.radtran.forward import forward_nonlinear_normalized
-from plumax.radtran.srf import SpectralResponseFunction
 
 
 # ── fixtures (mirror tests/radtran/conftest.py — no HAPI / network) ────────────
