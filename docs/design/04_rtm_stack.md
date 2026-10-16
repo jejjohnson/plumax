@@ -58,7 +58,7 @@ SWIR aerosol scattering is the leading systematic for methane retrievals over br
 :::{important} HAPI is not JAX-traceable
 The architectural choice is explicit: pre-tabulate, then trace.
 
-- **Path A — pre-tabulate, JAX-trace.** HAPI generates $\sigma(\nu, T, p)$ lookup tables offline; runtime `forward.py` interpolates inside `jax.jit`. This is what [`hapi_lut/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/) already implements. Default for v1.
+- **Path A — pre-tabulate, JAX-trace.** HAPI generates $\sigma(\nu, T, p)$ lookup tables offline; runtime `forward.py` interpolates inside `jax.jit`. This is what [`hapi_lut/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/) already implements. Default for v1.
 - **Path B — `jax.pure_callback` with custom VJP.** Wrap HAPI calls in a callback when needed inside differentiable code. Use only for cross-section sensitivities not pre-tabulated.
 
 **Why:** `jax.jacobian` "exactly" works only on Path A; on Path B, the VJP is whatever you wrote. Document the chosen path on every forward-RT helper.
@@ -270,23 +270,25 @@ SBC is necessary but not sufficient — the *specific* requirement is that the p
 
 *RTM stack module layout — step, concern, target module, status.*
 
+The RTM stack moved to [radtrax](https://github.com/jejjohnson/radtrax) in plumax#133. The links below point at radtrax, and the planned `plumax.radtran.*` modules are radtrax's to build.
+
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/beers.py) | ✓ — two-way path consistency test tracked in [#99](https://github.com/jejjohnson/plumax/issues/99) |
-| 1 | LUT generator | [`hapi_lut/generator.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/generator.py) | ✓ |
-| 1 | LUT config | [`hapi_lut/config.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/config.py) | ✓ |
-| 1 | Multi-gas LUT | [`hapi_lut/multi.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/hapi_lut/multi.py) | ✓ |
+| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/tables.py) | ✓ — two-way path consistency test tracked in [#99](https://github.com/jejjohnson/plumax/issues/99) |
+| 1 | LUT generator | [`hapi_lut/generator.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/generator.py) | ✓ |
+| 1 | LUT config | [`hapi_lut/config.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/config.py) | ✓ |
+| 1 | Multi-gas LUT | [`hapi_lut/multi.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/multi.py) | ✓ |
 | 1 | Factorised LUT (gas × surf × scatt) | `plumax.hapi_lut.factorised` | ☐ [#99](https://github.com/jejjohnson/plumax/issues/99) |
-| 1 | Forward RTM | [`radtran/forward.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/forward.py) | 🚧 |
-| 1 | Spectral response (SRF) | [`radtran/srf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/srf.py) | ✓ |
-| 1 | Instrument model | [`radtran/instrument.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/instrument.py) | ✓ |
-| 1 | Background atmosphere | [`matched_filter/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/background.py) | ✓ |
-| 1 | Target gas spec | [`matched_filter/target.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/target.py) | ✓ |
+| 1 | Forward RTM | [`radtran/forward.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/slab/forward.py) | 🚧 |
+| 1 | Spectral response (SRF) | [`radtran/srf.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/instrument/srf.py) | ✓ |
+| 1 | Instrument model | [`radtran/instrument.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/instrument/psf.py) | ✓ |
+| 1 | Background atmosphere | [`matched_filter/background.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/background.py) | ✓ |
+| 1 | Target gas spec | [`matched_filter/target.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/target.py) | ✓ |
 | 1 | Surface model — SWIR (albedo / BRDF) | `plumax.radtran.surface_swir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
 | 1 | Surface model — TIR (emissivity) | `plumax.radtran.surface_tir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
 | 1 | Aerosol / scattering coupling (v2) | `plumax.radtran.scattering` | ☐ |
-| — | Matched filter (detection) | [`matched_filter/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/) | ✓ |
-| — | gaussx-based linear solve | [`matched_filter/core.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/core.py) | ✓ |
+| — | Matched filter (detection) | [`matched_filter/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/) | ✓ |
+| — | gaussx-based linear solve | [`matched_filter/core.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/core.py) | ✓ |
 | 2 | Optimal-estimation iterative loop | `plumax.radtran.retrieval` (`matched_filter/core.py` stays the one-shot linear matched-filter path) | ☐ [#96](https://github.com/jejjohnson/plumax/issues/96) |
 | 2 | Quality flags + screening | `plumax.radtran.quality` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
 | 2 | Information-content diagnostics | `plumax.radtran.diagnostics` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |

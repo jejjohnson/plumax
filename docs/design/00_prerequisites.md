@@ -139,7 +139,7 @@ $$
 
 where $\mathbf{x}$ is the model state (CH₄ mixing-ratio profile), $\mathbf{x}_a$ is the prior used in the L2 retrieval, $\mathbf{h}$ is the column-averaging weighting, and $\mathbf{A}$ is the satellite-product averaging kernel matrix. The construction follows the optimal-estimation framework of [rodgers2000]. Needed by Tiers II–IV when comparing to L2 XCH₄ products instead of L1 radiances.
 
-- Status: scaffold in [`assimilation/obs_operator.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/assimilation/obs_operator.py).
+- Status: scaffold in [`assimilation/obs_operator.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/var3d/obs_operator.py).
 - **Provider design:** one `Instrument` registry that returns $(\mathbf{A}, \mathbf{x}_a, \mathbf{h})$ keyed on instrument name. Single hook avoids per-tier branching.
 
 ---
@@ -213,7 +213,7 @@ This contract is what makes Step 6 ("upgrade any component") tractable: replace 
 | Time / Timestamp | `plumax.met.time` | ☐ [#79](https://github.com/jejjohnson/plumax/issues/79) | all tiers |
 | Emission inventory loader | `plumax.priors.inventory` | ☐ [#81](https://github.com/jejjohnson/plumax/issues/81) | Tier I–IV inversion priors |
 | L1/L2 ingest | `plumax.obs.ingest` | ☐ [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV (and any real-data work) |
-| AK operator | `plumax.assimilation.obs_operator` (radiance model) + `coupled.Instrument` (AK payload) | 🚧 — shared column + AK pipeline [#83](https://github.com/jejjohnson/plumax/issues/83); L2 ingest builds `Instrument`s [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV column-space comparison |
+| AK operator | `radtrax.retrieval.var3d.obs_operator` (radiance model) + `coupled.Instrument` (AK payload) | 🚧 — shared column + AK pipeline [#83](https://github.com/jejjohnson/plumax/issues/83); L2 ingest builds `Instrument`s [#80](https://github.com/jejjohnson/plumax/issues/80) | Tier IV column-space comparison |
 
 `plumax.met` now exists (the `MetField` container and the WRF loader); the remaining met concerns land beside them. `plumax.priors` and `plumax.obs` are still proposed. All eleven concerns are tracked under the Tier 0 epic [#69](https://github.com/jejjohnson/plumax/issues/69).
 
