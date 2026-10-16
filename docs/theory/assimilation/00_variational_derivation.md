@@ -102,7 +102,7 @@ $$
 \hat\varepsilon \;=\; \frac{(x - \mu)^\top \Sigma^{-1} t}{t^\top \Sigma^{-1} t}.
 $$ (eq-matched)
 
-So matched filter, narrow-band retrieval, and full 3D-Var are *the same equation* with progressively richer prior assumptions. The matched-filter implementation in [matched_filter.py](https://github.com/jejjohnson/plumax/blob/main/src/plumax/radtran/matched_filter.py) and the `gaussx`-backed variant in [gaussx_solve.py](https://github.com/jejjohnson/plumax/blob/main/src/plumax/radtran/gaussx_solve.py) drop out as the simplest case of the framework here.
+So matched filter, narrow-band retrieval, and full 3D-Var are *the same equation* with progressively richer prior assumptions. The matched filter in [matched_filter/core.py](https://github.com/jejjohnson/plumax/blob/main/src/plumax/matched_filter/core.py) drops out as the simplest case of the framework here.
 
 ## 4. Adjoint methods — four flavours
 

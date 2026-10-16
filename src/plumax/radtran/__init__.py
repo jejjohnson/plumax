@@ -1,4 +1,4 @@
-"""Band-integrated radiative transfer + matched-filter retrieval.
+"""Band-integrated radiative transfer.
 
 Bridges the line-by-line :mod:`plumax.hapi_lut` absorption-LUT
 family to the multispectral / hyperspectral retrieval world by providing:
@@ -11,16 +11,9 @@ family to the multispectral / hyperspectral retrieval world by providing:
   ``(radiance, Jacobian, transmittance)``.
 - :mod:`.nb_lut`         — pre-tabulated normalised-brightness LUT
   ``nB_b(ΔX)`` plus :func:`inject_plume` for scene-injection.
-- :mod:`.target`         — matched-filter target-spectrum constructors
-  (nonlinear + linearised).
-- :mod:`.background`     — robust trimmed-mean background and low-rank
-  covariance estimators (depends on :mod:`scipy.stats`).
-- :mod:`.matched_filter` — the core ``ε̂ = (x−μ)ᵀΣ⁻¹t / (tᵀΣ⁻¹t)``
-  at pixel and image scope, plus an SNR helper.
-- :mod:`.gaussx_solve` — structured-operator matched filter using
-  :mod:`gaussx`'s ``LowRankUpdate`` + Woodbury-backed ``solve``, for
-  hyperspectral retrievals where the ``O(n_bands³)`` dense inverse in
-  :mod:`.matched_filter` becomes the bottleneck.
+
+The matched filter (targets, background estimators and the score) lives in
+:mod:`plumax.matched_filter`.
 
 The input LUT is expected to be the :class:`xarray.Dataset` produced by
 :func:`plumax.hapi_lut.build_lut_dataset`.
@@ -30,9 +23,8 @@ Notes
 ``radtran`` is an aggregator: it re-exports symbols from its submodules but
 imports them *lazily* via :pep:`562`. This means
 
-- ``import plumax`` (which itself imports ``radtran``) does not
-  pull in :mod:`scipy` or :mod:`gaussx` until you actually touch
-  :mod:`.background` / :mod:`.gaussx_solve`.
+- ``import plumax`` (which itself imports ``radtran``) does not import
+  any submodule until you touch one of its names.
 - ``from plumax.radtran import build_nb_lut`` triggers exactly
   one submodule import (``radtran.nb_lut``) and stops there.
 - The ``__all__`` list still drives star-imports and IDE auto-complete,
@@ -73,31 +65,6 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "build_nb_lut": ("nb_lut", "build_nb_lut"),
     "lookup_nb": ("nb_lut", "lookup_nb"),
     "inject_plume": ("nb_lut", "inject_plume"),
-    # target-spectrum constructors
-    "target_spectrum_normalized_nonlinear": (
-        "target",
-        "target_spectrum_normalized_nonlinear",
-    ),
-    "target_spectrum_normalized_linear": (
-        "target",
-        "target_spectrum_normalized_linear",
-    ),
-    "target_bands": ("target", "target_bands"),
-    # background — pulls scipy on first use
-    "trimmed_mean_spectrum": ("background", "trimmed_mean_spectrum"),
-    "robust_lowrank_covariance": ("background", "robust_lowrank_covariance"),
-    # matched filter (numpy)
-    "matched_filter_pixel": ("matched_filter", "matched_filter_pixel"),
-    "matched_filter_image": ("matched_filter", "matched_filter_image"),
-    "matched_filter_snr": ("matched_filter", "matched_filter_snr"),
-    # gaussx-backed matched filter — pulls gaussx + jax on first use
-    "build_lowrank_covariance_operator": (
-        "gaussx_solve",
-        "build_lowrank_covariance_operator",
-    ),
-    "matched_filter_pixel_op": ("gaussx_solve", "matched_filter_pixel_op"),
-    "matched_filter_image_op": ("gaussx_solve", "matched_filter_image_op"),
-    "matched_filter_snr_op": ("gaussx_solve", "matched_filter_snr_op"),
 }
 
 
@@ -119,10 +86,6 @@ def __dir__() -> list[str]:  # IDE / dir() introspection sees the full surface
 
 
 if TYPE_CHECKING:  # static type checkers: see the symbols as if eagerly imported
-    from plumax.radtran.background import (
-        robust_lowrank_covariance,
-        trimmed_mean_spectrum,
-    )
     from plumax.radtran.config import (
         ATM_TO_PA,
         BOLTZMANN_J_PER_K,
@@ -140,20 +103,9 @@ if TYPE_CHECKING:  # static type checkers: see the symbols as if eagerly importe
         forward_taylor,
         forward_taylor_normalized,
     )
-    from plumax.radtran.gaussx_solve import (
-        build_lowrank_covariance_operator,
-        matched_filter_image_op,
-        matched_filter_pixel_op,
-        matched_filter_snr_op,
-    )
     from plumax.radtran.instrument import (
         GroundSamplingDistance,
         PointSpreadFunction,
-    )
-    from plumax.radtran.matched_filter import (
-        matched_filter_image,
-        matched_filter_pixel,
-        matched_filter_snr,
     )
     from plumax.radtran.nb_lut import (
         NBLookup,
@@ -162,11 +114,6 @@ if TYPE_CHECKING:  # static type checkers: see the symbols as if eagerly importe
         lookup_nb,
     )
     from plumax.radtran.srf import SpectralResponseFunction
-    from plumax.radtran.target import (
-        target_bands,
-        target_spectrum_normalized_linear,
-        target_spectrum_normalized_nonlinear,
-    )
 
 
 __all__ = sorted(_LAZY_EXPORTS)
