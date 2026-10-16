@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import jax.numpy as jnp
 import numpy as np
-
-from plumax.radtran.forward import forward_nonlinear_normalized
+from radtrax.slab import forward_nonlinear_normalized
 
 
 if TYPE_CHECKING:
