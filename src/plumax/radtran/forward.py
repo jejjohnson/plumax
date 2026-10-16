@@ -41,10 +41,9 @@ class ForwardResult:
     """Bundle of (radiance, Jacobian, transmittance) returned by the forward models.
 
     Using a frozen dataclass rather than a plain tuple gives the caller
-    named access — ``result.jacobian`` — which matters because several
-    functions in :mod:`plumax.radtran.target` and
-    :mod:`plumax.radtran.matched_filter` consume only the
-    Jacobian or only the transmittance.
+    named access — ``result.jacobian`` — which matters because callers such
+    as the matched-filter targets consume only the Jacobian or only the
+    transmittance.
 
     Attributes
     ----------
