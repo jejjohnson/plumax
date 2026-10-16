@@ -25,7 +25,9 @@ rate, with the per-instrument bias as a first-class state element:
   (``L_norm = exp(-Δτ)``), and its tangent-linear counterpart
   ``LinearisedRadianceOperator`` / ``radiance_response_linear`` (via
   ``linearise``), which is linear in ``Q`` and pure-JAX so it feeds gradient
-  -based and closed-form inversion. The scalar-AK path above is unchanged.
+  -based and closed-form inversion. ``LayeredRadianceOperator`` maps the column through
+  radtrax's layered ``ForwardModel`` instead of the slab, in JAX end to end, so
+  ``jax.grad`` with respect to ``Q`` runs through plume and radiance together. The scalar-AK path above is unchanged.
 
 Later build-order steps (Tier II/III transport + RTM, the ``Q(t)`` stochastic
 process, trans-dimensional source count, coupled emulator, operational
@@ -46,6 +48,7 @@ from plumax.coupled.forward import (
 from plumax.coupled.fusion import FusionPosterior, default_prior, fuse_observations
 from plumax.coupled.instrument import Instrument
 from plumax.coupled.rtm import (
+    LayeredRadianceOperator,
     LinearisedRadianceOperator,
     RadianceObservationOperator,
     column_mass_to_delta_vmr,
@@ -59,6 +62,7 @@ __all__ = [
     "CoupledForward",
     "FusionPosterior",
     "Instrument",
+    "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "PlumeSource",
     "RadianceObservationOperator",
