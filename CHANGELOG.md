@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/jejjohnson/plumax/compare/v0.1.2...v0.1.3) (2026-10-17)
+
+
+### Features
+
+* **background:** randomized SVD via gaussx ([#129](https://github.com/jejjohnson/plumax/issues/129)) ([63d59e4](https://github.com/jejjohnson/plumax/commit/63d59e438d10535def8249e4c5e16b8b67deb6dc))
+
 ## [0.1.2](https://github.com/jejjohnson/plumax/compare/v0.1.1...v0.1.2) (2026-09-26)
 
 
