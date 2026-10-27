@@ -348,8 +348,13 @@ class MoninObukhov(eqx.Module):
         u_centre = 0.5 * (u_lowest + u_west)
         # v_T = (v_{j−1/2} + v_{j+1/2}) / 2
         v_centre = 0.5 * (v_lowest + v_south)
-        # U = √(u_T² + v_T²)
-        wind_speed = jnp.sqrt(u_centre**2 + v_centre**2)
+        # U² = u_T² + v_T²
+        speed_squared = u_centre**2 + v_centre**2
+        # U = √(U²), with ∂U/∂u_T = ∂U/∂v_T = 0 at calm: √ has an infinite
+        # slope at 0, so take it of 1 there (the double-where trick)
+        is_calm = speed_squared == 0.0
+        safe_squared = jnp.where(is_calm, 1.0, speed_squared)
+        wind_speed = jnp.where(is_calm, 0.0, jnp.sqrt(safe_squared))
         temperature = field.temperature[:, 0]
         pressure = field.pressure[:, 0]
         # ρ = p / (R_d T)
