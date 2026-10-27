@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -207,6 +208,21 @@ def test_calm_columns_stay_finite(heat):
         assert np.all(np.isfinite(np.asarray(sigma))) and np.all(
             np.isfinite(np.asarray(tau))
         )
+
+
+@pytest.mark.parametrize("heat", [0.0, 100.0, -20.0])
+def test_calm_columns_have_finite_wind_gradients(heat):
+    calm = make_field(
+        u_of_z=lambda z: 0.0 * z, temperature_of_z=lambda z: 300.0 + 0.0 * z
+    )
+
+    def total_u_star(u, v):
+        field = eqx.tree_at(lambda f: (f.u, f.v), calm, (u, v))
+        return jnp.sum(MoninObukhov()(field, z0=Z0, sensible_heat_flux=heat).u_star)
+
+    grad_u, grad_v = jax.grad(total_u_star, argnums=(0, 1))(calm.u, calm.v)
+    assert np.all(np.isfinite(np.asarray(grad_u)))
+    assert np.all(np.isfinite(np.asarray(grad_v)))
 
 
 # ---- house-style quartet for the forward: property, gradient, transforms ----
