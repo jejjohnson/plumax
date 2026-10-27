@@ -127,6 +127,35 @@ def test_global_raster_wraps_at_the_antimeridian(tmp_path, grid):
     np.testing.assert_allclose(prior, F_BASIN, rtol=1e-12)
 
 
+def write_regional_across_antimeridian(path: Path) -> Path:
+    # centres 179, 180, 181 °E, which the reader stores as -180, -179, 179
+    lat = np.arange(-2.5, 3.0, 1.0)
+    lon = np.array([179.0, 180.0, 181.0])
+    flux = np.broadcast_to(np.array([1.0, 2.0, 3.0]) * F_BASIN, (lat.size, 3))
+    xr.Dataset(
+        {"fluxes": (("lat", "lon"), np.array(flux), {"units": "kg m-2 s-1"})},
+        coords={"lat": lat, "lon": lon},
+    ).to_netcdf(path)
+    return path
+
+
+def test_regional_raster_across_the_antimeridian(tmp_path):
+    path = write_regional_across_antimeridian(tmp_path / "pacific.nc")
+    small = make_grid(
+        (-5_000.0, 5_000.0, 10),
+        (-5_000.0, 5_000.0, 10),
+        (0.0, 100.0, 4),
+        dtype=jnp.float64,
+    )
+    # inside each of the three cells
+    for lon, level in ((179.0, 1.0), (-180.0, 2.0), (-179.0, 3.0)):
+        prior = load_inventory(path, frame=LocalFrame.at(0.0, lon), grid=small)
+        np.testing.assert_allclose(prior, level * F_BASIN, rtol=1e-12)
+    # far outside: the gap between -178.5° and 178.5° is not coverage
+    with pytest.raises(ValueError, match="beyond the inventory raster"):
+        load_inventory(path, frame=LocalFrame.at(0.0, -100.0), grid=small)
+
+
 def test_per_tile_background_is_the_tile_median():
     # Tile A (x < 10 km): 1880 ppb with one plume pixel; tile B: 1900 ppb.
     receptors = np.array(

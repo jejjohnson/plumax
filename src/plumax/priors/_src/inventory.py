@@ -43,9 +43,10 @@ def load_inventory(
            converts to kg m⁻² s⁻¹ with ascending lat and lon in [-180, 180).
         2. Lay an ``s × s`` lattice over every analysis cell and map it to
            lat/lon.
-        3. Look up the inventory cell holding each point (longitudes taken
-           modulo 360° on a global raster, which is periodic) and average
-           over each analysis cell's lattice.
+        3. Unwrap the raster's longitudes to start after their widest gap,
+           look up the inventory cell holding each point (longitudes modulo
+           360° from the first edge) and average over each analysis cell's
+           lattice.
 
     Args:
         path: Inventory NetCDF (one sector or a total).
@@ -61,7 +62,8 @@ def load_inventory(
 
     Raises:
         MissingExtraError: If the ``io`` extra (xrreader) is not installed.
-        DomainError: If a lattice point falls outside the inventory raster.
+        DomainError: If a lattice point falls outside the inventory raster,
+            or the raster's longitudes are unevenly spaced.
     """
     try:
         import xrreader
@@ -78,8 +80,8 @@ def load_inventory(
         flux = flux.isel(time=time_index)
     flux = flux.transpose("lat", "lon")
     lat_edges = _edges(flux["lat"].values)
-    lon_edges = _edges(flux["lon"].values)
-    flux_values = flux.values
+    lon_centres, flux_values = _unwrap_longitudes(flux["lon"].values, flux.values)
+    lon_edges = _edges(lon_centres)
 
     # --- sub-cell lattice ---
     x = np.asarray(grid.x, dtype=float)
@@ -94,10 +96,9 @@ def load_inventory(
     lat, lon = frame.to_latlon(lattice_x, lattice_y)
 
     # --- look up and average ---
-    if np.isclose(lon_edges[-1] - lon_edges[0], 360.0):
-        # a global raster is periodic: λ ← λ₀ + ((λ − λ₀) mod 360°), so a point
-        # past the last edge lands in the first cell instead of outside
-        lon = lon_edges[0] + np.mod(lon - lon_edges[0], 360.0)
+    # λ ← λ₀ + ((λ − λ₀) mod 360°): sample longitudes on the raster's
+    # unwrapped axis; a global raster then covers every point
+    lon = lon_edges[0] + np.mod(lon - lon_edges[0], 360.0)
     row = np.searchsorted(lat_edges, lat, side="right") - 1
     col = np.searchsorted(lon_edges, lon, side="right") - 1
     outside_rows = (row < 0) | (row >= lat_edges.size - 1)
@@ -113,6 +114,41 @@ def load_inventory(
         "(y [sy]) (x [sx]) -> y x", samples, sy=supersample, sx=supersample
     )
     return jnp.asarray(cell_mean, dtype=grid.x.dtype)
+
+
+def _unwrap_longitudes(
+    centres: Float[np.ndarray, " lon"], values: Float[np.ndarray, "lat lon"]
+) -> tuple[Float[np.ndarray, " lon"], Float[np.ndarray, "lat lon"]]:
+    """Start the longitude axis after its widest gap and make it increase.
+
+    The reader sorts longitudes in [-180, 180), which splits a regional raster
+    crossing the antimeridian (centres 179, 180, 181 become -180, -179, 179)
+    and leaves a false gap that edges built from the centres would cover. The
+    widest cyclic gap is where the raster really ends.
+
+    Raises:
+        DomainError: If the unwrapped axis is not evenly spaced.
+    """
+    n_lon = centres.size
+    if n_lon < 2:
+        return centres, values
+    # g_k = c_{k+1} − c_k, cyclically: the last gap closes through +360°
+    closed = einx.id("n, one -> (n + one)", centres, centres[:1] + 360.0)
+    gaps = np.diff(closed)
+    # the raster starts after its widest gap
+    start = (int(np.argmax(gaps)) + 1) % n_lon
+    order = (np.arange(n_lon) + start) % n_lon
+    rotated = centres[order]
+    # c'_k = c'_0 + ((c'_k − c'_0) mod 360°), increasing
+    unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
+    steps = np.diff(unwrapped)
+    if not np.allclose(steps, steps[0], rtol=1e-6):
+        raise DomainError(
+            "load_inventory: the inventory's longitudes are not evenly spaced "
+            "(a gap inside the raster)"
+        )
+    reordered = einx.get_at("lat [lon], k -> lat k", values, order)
+    return unwrapped, reordered
 
 
 def _edges(centres: Float[np.ndarray, " n"]) -> Float[np.ndarray, " n_edges"]:
