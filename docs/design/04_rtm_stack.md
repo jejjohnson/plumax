@@ -280,14 +280,14 @@ SBC is necessary but not sufficient — the *specific* requirement is that the p
 | 1 | Forward RTM | [`radtran/forward.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/forward.py) | 🚧 |
 | 1 | Spectral response (SRF) | [`radtran/srf.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/srf.py) | ✓ |
 | 1 | Instrument model | [`radtran/instrument.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/instrument.py) | ✓ |
-| 1 | Background atmosphere | [`radtran/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/background.py) | ✓ |
-| 1 | Target gas spec | [`radtran/target.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/target.py) | ✓ |
+| 1 | Background atmosphere | [`matched_filter/background.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/background.py) | ✓ |
+| 1 | Target gas spec | [`matched_filter/target.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/target.py) | ✓ |
 | 1 | Surface model — SWIR (albedo / BRDF) | `plumax.radtran.surface_swir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
 | 1 | Surface model — TIR (emissivity) | `plumax.radtran.surface_tir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
 | 1 | Aerosol / scattering coupling (v2) | `plumax.radtran.scattering` | ☐ |
-| — | Matched filter (detection) | [`radtran/matched_filter.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/matched_filter.py), [`matched_filter/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/) | ✓ |
-| — | gaussx-based linear solve | [`radtran/gaussx_solve.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/radtran/gaussx_solve.py) | ✓ |
-| 2 | Optimal-estimation iterative loop | `plumax.radtran.retrieval` (`gaussx_solve.py` stays the one-shot linear matched-filter path) | ☐ [#96](https://github.com/jejjohnson/plumax/issues/96) |
+| — | Matched filter (detection) | [`matched_filter/`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/) | ✓ |
+| — | gaussx-based linear solve | [`matched_filter/core.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/matched_filter/core.py) | ✓ |
+| 2 | Optimal-estimation iterative loop | `plumax.radtran.retrieval` (`matched_filter/core.py` stays the one-shot linear matched-filter path) | ☐ [#96](https://github.com/jejjohnson/plumax/issues/96) |
 | 2 | Quality flags + screening | `plumax.radtran.quality` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
 | 2 | Information-content diagnostics | `plumax.radtran.diagnostics` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
 | 2 | Posterior export → Tier IV | `OEResult` consumed by the coupled inversion | ☐ [#102](https://github.com/jejjohnson/plumax/issues/102) |

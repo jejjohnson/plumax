@@ -119,7 +119,6 @@ project:
         - title: Radiative transfer
           children:
             - file: notebooks/radtran/04_srf_band_integration.ipynb
-            - file: notebooks/radtran/05_matched_filter_retrieval.ipynb
         - title: Matched filter
           children:
             - file: notebooks/matched_filter/01_mf_vs_3dvar.ipynb

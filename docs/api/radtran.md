@@ -1,6 +1,6 @@
 # Radiative transfer
 
-Band-integrated Beer–Lambert forward model, normalised-brightness LUT, and matched-filter retrieval. **RTM stack.**
+Band-integrated Beer–Lambert forward model and normalised-brightness LUT. **RTM stack.**
 
 The package resolves its public names lazily (PEP 562), so they are documented here from the submodules that define them.
 
@@ -39,34 +39,6 @@ The package resolves its public names lazily (PEP 562), so they are documented h
 ## `instrument`
 
 ::: plumax.radtran.instrument
-    options:
-      show_root_heading: false
-      heading_level: 3
-
-## `target`
-
-::: plumax.radtran.target
-    options:
-      show_root_heading: false
-      heading_level: 3
-
-## `background`
-
-::: plumax.radtran.background
-    options:
-      show_root_heading: false
-      heading_level: 3
-
-## `matched_filter`
-
-::: plumax.radtran.matched_filter
-    options:
-      show_root_heading: false
-      heading_level: 3
-
-## `gaussx_solve`
-
-::: plumax.radtran.gaussx_solve
     options:
       show_root_heading: false
       heading_level: 3
