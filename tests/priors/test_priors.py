@@ -104,6 +104,29 @@ def test_grid_beyond_the_raster_raises(tmp_path, frame):
         load_inventory(write_inventory(tmp_path / "e.nc"), frame=frame, grid=huge)
 
 
+def test_global_raster_wraps_at_the_antimeridian(tmp_path, grid):
+    # centres -180 … 179: edges [-180.5, 179.5], so 179.75°E sits in the
+    # cell centred at -180°, past the last edge
+    lat = np.arange(-89.5, 90.0, 1.0)
+    lon = np.arange(-180.0, 180.0, 1.0)
+    flux = np.zeros((lat.size, lon.size))
+    flux[:, 0] = F_BASIN  # the cell centred at -180°
+    path = tmp_path / "global.nc"
+    xr.Dataset(
+        {"fluxes": (("lat", "lon"), flux, {"units": "kg m-2 s-1"})},
+        coords={"lat": lat, "lon": lon},
+    ).to_netcdf(path)
+    # a 1 km grid around 179.75°E stays within the -180° cell (179.5 – 180.5)
+    small = make_grid(
+        (-5_000.0, 5_000.0, 10),
+        (-5_000.0, 5_000.0, 10),
+        (0.0, 100.0, 4),
+        dtype=jnp.float64,
+    )
+    prior = load_inventory(path, frame=LocalFrame.at(0.0, 179.75), grid=small)
+    np.testing.assert_allclose(prior, F_BASIN, rtol=1e-12)
+
+
 def test_per_tile_background_is_the_tile_median():
     # Tile A (x < 10 km): 1880 ppb with one plume pixel; tile B: 1900 ppb.
     receptors = np.array(

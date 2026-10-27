@@ -43,8 +43,9 @@ def load_inventory(
            converts to kg m⁻² s⁻¹ with ascending lat and lon in [-180, 180).
         2. Lay an ``s × s`` lattice over every analysis cell and map it to
            lat/lon.
-        3. Look up the inventory cell holding each point and average over each
-           analysis cell's lattice.
+        3. Look up the inventory cell holding each point (longitudes taken
+           modulo 360° on a global raster, which is periodic) and average
+           over each analysis cell's lattice.
 
     Args:
         path: Inventory NetCDF (one sector or a total).
@@ -93,6 +94,10 @@ def load_inventory(
     lat, lon = frame.to_latlon(lattice_x, lattice_y)
 
     # --- look up and average ---
+    if np.isclose(lon_edges[-1] - lon_edges[0], 360.0):
+        # a global raster is periodic: λ ← λ₀ + ((λ − λ₀) mod 360°), so a point
+        # past the last edge lands in the first cell instead of outside
+        lon = lon_edges[0] + np.mod(lon - lon_edges[0], 360.0)
     row = np.searchsorted(lat_edges, lat, side="right") - 1
     col = np.searchsorted(lon_edges, lon, side="right") - 1
     outside_rows = (row < 0) | (row >= lat_edges.size - 1)
