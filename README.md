@@ -159,13 +159,14 @@ posterior = infer_emission_rate(                         # → {Q: (S,), b: (S,)
     stability_class="C",
     prior_mean=0.3,
     prior_std=0.3,
+    obs_noise_std=2e-7,
     num_warmup=300,
     num_samples=500,
 )
 
 # 𝔼[Q | o], √Var[Q | o]
 q = posterior["emission_rate"]                           # (S,)
-print(f"Q = {q.mean():.3f} ± {q.std():.3f} kg/s")        # → Q = 0.500 ± 0.001 kg/s
+print(f"Q = {q.mean():.4f} ± {q.std():.4f} kg/s")      # → Q = 0.5000 ± 0.0004 kg/s
 ```
 
 Swap `gauss_plume` for `gauss_puff` (time-varying wind), `lagrangian`
