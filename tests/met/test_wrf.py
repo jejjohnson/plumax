@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from plumax.errors import MissingVariableError
 from plumax.les_fvm import simulate_eulerian_dispersion, wind_field_from_callable
 from plumax.les_fvm.grid import make_grid
 from plumax.met import MetField, load_wrf, to_prescribed_wind
@@ -188,3 +189,72 @@ def test_missing_io_extra_names_it(synthetic_wrf, monkeypatch):
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     with pytest.raises(ImportError, match=r"plumax\[io\]"):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=ORIGIN)
+
+
+# A Permian Basin site; the synthetic WRF grid is laid out in its UTM zone.
+_SITE = (31.95, -102.15)
+_SW = (-2000.0, -1500.0)  # frame metres of the WRF south-west mass point
+
+
+@pytest.fixture(scope="module")
+def latlon_wrf(tmp_path_factory):
+    from plumax.met import LocalFrame
+    from tests.met.conftest import write_synthetic_wrfout
+
+    pytest.importorskip("pyproj")
+    frame = LocalFrame.at(*_SITE)
+    path = tmp_path_factory.mktemp("met") / "wrfout_latlon.nc"
+    return frame, write_synthetic_wrfout(path, latlon=(frame, *_SW))
+
+
+def test_frame_placement_matches_wrf_metres(latlon_wrf):
+    """A LocalFrame on the WRF grid's own axes reproduces placement by metres.
+
+    The analysis frame shares the WRF grid's UTM zone, so it differs from the
+    WRF grid only by a shift: frame-axis winds equal WRF's grid-relative ones,
+    and every field must match the metre-offset load. The wind path goes
+    through COSALPHA (earth-relative) and back through the frame's east/north
+    axes, so this checks both rotations.
+    """
+    from plumax.met import LocalFrame
+
+    frame, spec = latlon_wrf
+    lat0, lon0 = frame.to_latlon(_SW[0] + ORIGIN[0], _SW[1] + ORIGIN[1])
+    analysis = LocalFrame(float(lat0), float(lon0), frame.epsg)
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+
+    by_metres = load_wrf(spec.path, plume_grid=grid, origin=ORIGIN)
+    by_frame = load_wrf(spec.path, plume_grid=grid, origin=analysis)
+    for name in ("u", "v", "w", "temperature", "pressure", "pbl_height"):
+        np.testing.assert_allclose(
+            np.asarray(getattr(by_frame, name)),
+            np.asarray(getattr(by_metres, name)),
+            atol=1e-5,
+            rtol=1e-9,
+            err_msg=name,
+        )
+    assert by_frame.t0 == by_metres.t0
+
+
+def test_frame_placement_needs_latlon_and_rotation(synthetic_wrf, tmp_path):
+    from plumax.met import LocalFrame
+    from tests.met.conftest import write_synthetic_wrfout
+
+    pytest.importorskip("pyproj")
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+    frame = LocalFrame.at(*_SITE)
+    rotated_only = write_synthetic_wrfout(tmp_path / "rot.nc", alpha_deg=0.0)
+    with pytest.raises(MissingVariableError, match="XLAT / XLONG"):
+        load_wrf(rotated_only.path, plume_grid=grid, origin=frame)
+    with pytest.raises(MissingVariableError, match="COSALPHA / SINALPHA"):
+        load_wrf(synthetic_wrf.path, plume_grid=grid, origin=frame)
+
+
+def test_frame_outside_wrf_domain_raises(latlon_wrf):
+    from plumax.met import LocalFrame
+
+    _frame, spec = latlon_wrf
+    far = LocalFrame.at(_SITE[0] + 1.0, _SITE[1])  # ~110 km north
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+    with pytest.raises(ValueError, match="outside the source domain"):
+        load_wrf(spec.path, plume_grid=grid, origin=far)

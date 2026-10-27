@@ -70,6 +70,9 @@ dependencies = [
     # and the radiance adapter compose with the plume models (package
     # boundaries rule 2: plumax imports radtrax, never the reverse).
     "radtrax",
+    # einx writes reductions, gathers and rearranges with named axes (the
+    # house style's replacement for axis= / reshape / indexing tricks).
+    "einx>=0.4",
 ]
 
 [project.optional-dependencies]
@@ -77,7 +80,7 @@ dependencies = [
 inference = ["numpyro>=0.21"]
 # Readers: WRF (and, as Tier 0 grows, ERA5, L2 products and inventories)
 # through xrtoolz / xrreader, so the base install stays free of I/O stacks.
-io = ["xrtoolz", "xrtoolz-reader"]
+io = ["xrtoolz", "xrtoolz-reader", "pyproj"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
 
@@ -129,6 +132,9 @@ dev = [
     # pipekit-cycle is a *test-only* dep: the adapters satisfy its protocols
     # structurally, and the tests assert that conformance via isinstance.
     "pipekit-cycle",
+    # Runtime jaxtyping checks (tests/conftest.py) and property-based tests.
+    "beartype>=0.22",
+    "hypothesis>=6.100",
     # The `io` extra's readers, so the loader tests run in CI (which syncs
     # only this group).
     "xrtoolz",

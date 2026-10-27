@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 import xarray as xr
 
+from plumax.met.frames import LocalFrame
 from plumax.met.wrf import GRAVITY, P_REFERENCE, THETA_BASE
 
 
@@ -77,8 +78,17 @@ def write_synthetic_wrfout(
     dz: float = 20.0,
     with_xtime: bool = True,
     alpha_deg: float | None = None,
+    latlon: tuple[LocalFrame, float, float] | None = None,
 ) -> SyntheticWrf:
-    """Write a flat-terrain synthetic ``wrfout`` and return its analytic spec."""
+    """Write a flat-terrain synthetic ``wrfout`` and return its analytic spec.
+
+    With ``latlon = (frame, x_sw, y_sw)`` the WRF grid is laid out along
+    ``frame``'s axes with its south-west mass point at frame metres
+    ``(x_sw, y_sw)``: ``XLAT`` / ``XLONG`` come from ``frame`` and
+    ``COSALPHA`` / ``SINALPHA`` hold the true angle of the grid's x axis from
+    east, measured on the WGS 84 ellipsoid with :class:`pyproj.Geod` (an
+    independent check of the loader's own frame axes).
+    """
     z_stag = dz * np.arange(n_lev + 1, dtype=np.float64)
     z_mass = 0.5 * (z_stag[:-1] + z_stag[1:])
     x_mass = dx * np.arange(n_x, dtype=np.float64)
@@ -150,6 +160,20 @@ def write_synthetic_wrfout(
     )
     if not with_xtime:
         ds = ds.drop_vars("XTIME")
+    if latlon is not None:
+        from pyproj import Geod
+
+        frame, x_sw, y_sw = latlon
+        xx, yy = np.meshgrid(x_sw + x_mass, y_sw + y_mass)
+        lat, lon = frame.to_latlon(xx, yy)
+        lat1, lon1 = frame.to_latlon(xx + 1.0, yy)
+        azimuth, _, _ = Geod(ellps="WGS84").inv(lon, lat, lon1, lat1)
+        alpha = np.deg2rad(90.0 - azimuth)  # grid x from east, counter-clockwise
+        dims = ("Time", "south_north", "west_east")
+        ds["XLAT"] = (dims, np.broadcast_to(lat, (n_time, n_y, n_x)))
+        ds["XLONG"] = (dims, np.broadcast_to(lon, (n_time, n_y, n_x)))
+        ds["COSALPHA"] = (dims, np.broadcast_to(np.cos(alpha), (n_time, n_y, n_x)))
+        ds["SINALPHA"] = (dims, np.broadcast_to(np.sin(alpha), (n_time, n_y, n_x)))
     if alpha_deg is not None:  # map rotation; U/V above stay grid-relative
         alpha = np.full((n_time, n_y, n_x), np.deg2rad(alpha_deg))
         dims = ("Time", "south_north", "west_east")

@@ -24,3 +24,12 @@ import jax
 
 
 jax.config.update("jax_enable_x64", True)
+
+# Runtime shape and dtype checks for the packages written to the house style
+# (jaxtyping annotations checked by beartype). Installed before anything
+# imports them; the older subpackages are not covered yet.
+from jaxtyping import install_import_hook
+
+
+_TYPED_PACKAGES = ("plumax.met._src",)
+_type_check_hook = install_import_hook(_TYPED_PACKAGES, "beartype.beartype")
