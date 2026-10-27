@@ -194,7 +194,7 @@ class HannaTurbulence:
 
     To drive it from met rather than hand-typed scales, build it with
     :func:`plumax.met.hanna_turbulence_from` from a
-    :func:`plumax.met.surface_layer_from_met` diagnosis.
+    :class:`plumax.met.MoninObukhov` diagnosis.
 
     Attributes:
         u_star: Friction velocity ``u_*`` [m/s].

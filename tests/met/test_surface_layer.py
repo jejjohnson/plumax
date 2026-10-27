@@ -6,13 +6,14 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from plumax.les_fvm.grid import make_grid
 from plumax.met import (
     MetField,
+    MoninObukhov,
     hanna_turbulence_from,
     pbl_height_bulk_richardson,
-    surface_layer_from_met,
 )
 from plumax.met.surface_layer import (
     CP_DRY,
@@ -81,7 +82,7 @@ def test_neutral_limits_and_continuity():
 
 
 def test_neutral_is_the_log_law():
-    layer = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=0.0)
+    layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=0.0)
     z_ref = 0.5 * GRID.dz
     np.testing.assert_allclose(
         layer.u_star, KARMAN * 5.0 / np.log(z_ref / Z0), rtol=1e-12
@@ -92,7 +93,7 @@ def test_neutral_is_the_log_law():
 
 @pytest.mark.parametrize("heat", [200.0, -20.0])
 def test_fixed_point_satisfies_both_similarity_equations(heat):
-    layer = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=heat)
+    layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=heat)
     u_star = np.asarray(layer.u_star)
     inv_l = np.asarray(layer.inverse_obukhov_length)
     rho = 1.0e5 / (R_DRY * 300.0)
@@ -101,14 +102,16 @@ def test_fixed_point_satisfies_both_similarity_equations(heat):
         inv_l, -KARMAN * GRAVITY * heat / (rho * CP_DRY * 300.0 * u_star**3), rtol=1e-6
     )
     np.testing.assert_allclose(
-        u_star, friction_velocity(5.0, 0.5 * GRID.dz, Z0, inv_l), rtol=1e-6
+        u_star,
+        friction_velocity(jnp.asarray(5.0), 0.5 * GRID.dz, Z0, jnp.asarray(inv_l)),
+        rtol=1e-6,
     )
     assert np.all(np.sign(inv_l) == -np.sign(heat))  # heating → unstable
 
 
 def test_convective_velocity_scale():
     heat = 200.0
-    layer = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=heat)
+    layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=heat)
     rho = 1.0e5 / (R_DRY * 300.0)
     expected = (GRAVITY * heat * PBLH / (rho * CP_DRY * 300.0)) ** (1.0 / 3.0)
     np.testing.assert_allclose(layer.w_star, expected, rtol=1e-12)
@@ -117,7 +120,7 @@ def test_convective_velocity_scale():
 @pytest.mark.parametrize("heat", [0.0, -20.0, 200.0])
 def test_gradients_are_finite(heat):
     def total(h):
-        layer = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=h)
+        layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=h)
         return jnp.sum(layer.u_star + layer.inverse_obukhov_length + layer.w_star)
 
     assert np.isfinite(float(jax.grad(total)(jnp.asarray(heat))))
@@ -127,12 +130,12 @@ def test_gradients_are_finite(heat):
 
 
 def test_hanna_factory_regimes():
-    neutral = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=0.0)
+    neutral = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=0.0)
     turb = hanna_turbulence_from(WIND, neutral, it=0, iy=1, ix=2)
     assert turb.obukhov_length == 0.0  # Hanna's neutral branch
     assert turb.pbl_height == PBLH
 
-    convective = surface_layer_from_met(WIND, z0=Z0, sensible_heat_flux=200.0)
+    convective = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=200.0)
     turb = hanna_turbulence_from(WIND, convective, it=1, iy=0, ix=0)
     assert turb.obukhov_length < 0.0 and turb.w_star > 0.0
     sigma, tau = turb.at(jnp.array([10.0, 200.0, 600.0]))
@@ -176,7 +179,7 @@ def test_buoyancy_uses_actual_temperature_off_reference_pressure():
         temperature_of_z=lambda z: t + 0.0 * z,
         pressure=p,
     )
-    layer = surface_layer_from_met(field, z0=Z0, sensible_heat_flux=heat)
+    layer = MoninObukhov()(field, z0=Z0, sensible_heat_flux=heat)
     rho = p / (R_DRY * t)
     u_star = np.asarray(layer.u_star)
     np.testing.assert_allclose(
@@ -193,7 +196,7 @@ def test_calm_columns_stay_finite(heat):
     calm = make_field(
         u_of_z=lambda z: 0.0 * z, temperature_of_z=lambda z: 300.0 + 0.0 * z
     )
-    layer = surface_layer_from_met(calm, z0=Z0, sensible_heat_flux=heat)
+    layer = MoninObukhov()(calm, z0=Z0, sensible_heat_flux=heat)
     for value in (layer.u_star, layer.inverse_obukhov_length, layer.w_star):
         assert np.all(np.isfinite(np.asarray(value)))
     np.testing.assert_array_equal(layer.u_star, 0.0)
@@ -204,3 +207,43 @@ def test_calm_columns_stay_finite(heat):
         assert np.all(np.isfinite(np.asarray(sigma))) and np.all(
             np.isfinite(np.asarray(tau))
         )
+
+
+# ---- house-style quartet for the forward: property, gradient, transforms ----
+
+
+@settings(max_examples=100, deadline=None)
+@given(zeta=st.floats(-10.0, 5.0).filter(lambda z: abs(z) > 1e-6))
+def test_phi_identity_property(zeta):
+    for phi, psi in ((phi_m, psi_m), (phi_h, psi_h)):
+        z = jnp.asarray(zeta)
+        dpsi = jax.grad(psi)(z)
+        np.testing.assert_allclose(phi(z), 1.0 - z * dpsi, rtol=1e-9)
+
+
+@pytest.mark.parametrize("heat", [-20.0, 50.0, 200.0])
+def test_gradient_matches_central_differences(heat):
+    def friction(h):
+        layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=h)
+        return layer.u_star[0, 1, 1]
+
+    step = 1e-3
+    analytic = jax.jacrev(friction)(jnp.asarray(heat))
+    numeric = (friction(heat + step) - friction(heat - step)) / (2.0 * step)
+    np.testing.assert_allclose(analytic, numeric, rtol=1e-6)
+
+
+def test_eager_jit_and_vmap_agree_with_a_loop():
+    heats = jnp.array([-20.0, 0.0, 50.0, 200.0])
+    diagnose = lambda h: MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=h).u_star
+    looped = jnp.stack([diagnose(h) for h in heats])
+    np.testing.assert_allclose(jax.jit(diagnose)(heats[2]), looped[2], rtol=1e-12)
+    np.testing.assert_allclose(jax.vmap(diagnose)(heats), looped, rtol=1e-12)
+
+
+def test_iteration_count_is_validated():
+    from plumax.errors import PlumaxError
+
+    with pytest.raises(PlumaxError, match="n_iterations"):
+        MoninObukhov(n_iterations=0)
+    assert MoninObukhov().with_n_iterations(5).n_iterations == 5

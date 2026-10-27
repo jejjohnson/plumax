@@ -13,8 +13,8 @@ from numerical-weather-prediction output.
 - :class:`LocalFrame` — the analysis grid's metric frame on lat/lon (a
   UTM zone shifted to an origin); built and applied outside ``jit``.
 - :class:`TimeAxis` — seconds since ``t0`` ↔ UTC timestamps.
-- :func:`surface_layer_from_met` — Monin–Obukhov ``u*``, ``1/L``, ``w*``
-  (pure JAX) with the stability functions in :mod:`plumax.met.surface_layer`.
+- :class:`MoninObukhov` — Monin–Obukhov ``u*``, ``1/L``, ``w*`` (pure JAX),
+  with the stability functions in :mod:`plumax.met.surface_layer`.
 - :func:`pbl_height_bulk_richardson` / :func:`hanna_turbulence_from` —
   PBL height from the analysis profiles, and Tier II's Hanna turbulence
   built from the met.
@@ -29,7 +29,7 @@ from plumax.met.era5 import load_era5
 from plumax.met.field import MetField, to_prescribed_wind
 from plumax.met.frames import LocalFrame
 from plumax.met.pbl import hanna_turbulence_from, pbl_height_bulk_richardson
-from plumax.met.surface_layer import SurfaceLayer, surface_layer_from_met
+from plumax.met.surface_layer import MoninObukhov, SurfaceLayer
 from plumax.met.time import TimeAxis
 from plumax.met.wrf import load_wrf
 
@@ -37,12 +37,12 @@ from plumax.met.wrf import load_wrf
 __all__ = [
     "LocalFrame",
     "MetField",
+    "MoninObukhov",
     "SurfaceLayer",
     "TimeAxis",
     "hanna_turbulence_from",
     "load_era5",
     "load_wrf",
     "pbl_height_bulk_richardson",
-    "surface_layer_from_met",
     "to_prescribed_wind",
 ]

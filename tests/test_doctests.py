@@ -10,7 +10,9 @@ import pytest
 
 DOCTESTED_MODULES = (
     "plumax.met._src.frames",
+    "plumax.met._src.pbl",
     "plumax.met._src.regrid",
+    "plumax.met._src.surface_layer",
     "plumax.met._src.time",
 )
 
