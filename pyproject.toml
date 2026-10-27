@@ -117,12 +117,12 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", rev = "e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.9" }
-xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
-xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
-xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
-xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
-xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
-xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
 
 [dependency-groups]
 dev = [
