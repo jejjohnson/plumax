@@ -108,6 +108,15 @@ def load_era5(
         _require(sl, ("sp", "blh"), single_levels)
         if not np.array_equal(pl["time"].values, sl["time"].values):
             raise ValueError("load_era5: the two files cover different times")
+        if not (
+            np.array_equal(pl["lat"].values, sl["lat"].values)
+            and np.array_equal(pl["lon"].values, sl["lon"].values)
+        ):
+            raise ValueError(
+                "load_era5: the two files are on different lat/lon grids; request "
+                "both with the same `area` and `grid` so `sp` and `blh` line up "
+                "with the pressure levels"
+            )
         if times is not None:
             pl, sl = pl.isel(time=times), sl.isel(time=times)
         if pl.sizes["time"] == 0:
@@ -138,6 +147,14 @@ def load_era5(
         lat = pl["lat"].values
         lon = pl["lon"].values
         clock = TimeAxis.from_datetimes(pl["time"].values)
+
+    if _is_periodic(lon):
+        # Close the seam: append the first longitude column after the last,
+        # so points between the last column and 360° interpolate across it.
+        seam = lambda f: np.concatenate([f, f[..., :1]], axis=-1)
+        u_e, v_n, temperature, p, w, z, pblh = map(
+            seam, (u_e, v_n, temperature, p, w, z, pblh)
+        )
 
     points = stagger_points(
         plume_grid, frame, _regular_index_map(lat, lon, frame), loader="load_era5"
@@ -174,10 +191,18 @@ def _require_hypsometric_height():
 
 
 def _normalise(ds: xr.Dataset) -> xr.Dataset:
-    """CDS names → ``time`` / ``level`` / ``lat`` / ``lon``, lat ascending."""
+    """CDS names → ``time`` / ``level`` / ``lat`` / ``lon``, both axes ascending."""
     ds = ds.rename({k: v for k, v in _RENAMES.items() if k in ds.variables})
     drop = [c for c in ("number", "expver") if c in ds.coords and ds[c].ndim == 0]
-    return ds.drop_vars(drop).sortby("lat")
+    return ds.drop_vars(drop).sortby("lat").sortby("lon")
+
+
+def _is_periodic(lon: np.ndarray) -> bool:
+    """Whether a regular longitude axis wraps the globe (n · Δλ = 360°)."""
+    if lon.size < 2:
+        return False
+    step = float(lon[1] - lon[0])
+    return abs(lon.size * step - 360.0) < 1e-6 * 360.0
 
 
 def _require(ds: xr.Dataset, names: tuple[str, ...], path: str | Path) -> None:
@@ -190,20 +215,26 @@ def _regular_index_map(lat: np.ndarray, lon: np.ndarray, frame: LocalFrame):
     """Frame metres → fractional ``(i, j)`` on a regular ascending lat/lon grid.
 
     Longitudes are put in the file's convention ([0, 360) when its
-    longitudes exceed 180) before indexing; points outside the grid
-    come back NaN.
+    longitudes exceed 180) before indexing. On a global axis the index is
+    taken modulo 360° and may reach ``n`` (the seam column the loader
+    appends); elsewhere points outside the grid come back NaN.
     """
     d_lon = float(lon[1] - lon[0])
     d_lat = float(lat[1] - lat[0])
     wraps = bool(lon.max() > 180.0)
+    periodic = _is_periodic(lon)
+    i_max = lon.size if periodic else lon.size - 1
 
     def to_index(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         p_lat, p_lon = frame.to_latlon(x, y)
         if wraps:
             p_lon = np.mod(p_lon, 360.0)
-        i = (p_lon - lon[0]) / d_lon
+        offset = p_lon - lon[0]
+        if periodic:
+            offset = np.mod(offset, 360.0)
+        i = offset / d_lon
         j = (p_lat - lat[0]) / d_lat
-        inside = (i >= 0) & (i <= lon.size - 1) & (j >= 0) & (j <= lat.size - 1)
+        inside = (i >= 0) & (i <= i_max) & (j >= 0) & (j <= lat.size - 1)
         return np.where(inside, i, np.nan), np.where(inside, j, np.nan)
 
     return to_index

@@ -45,13 +45,19 @@ def blh(lon: np.ndarray) -> np.ndarray:
 
 
 def write_era5(
-    tmp: Path, *, lon: np.ndarray = LON, times: np.ndarray = TIMES
+    tmp: Path,
+    *,
+    lon: np.ndarray = LON,
+    times: np.ndarray = TIMES,
+    lat: np.ndarray = LAT,
+    sl_lon: np.ndarray | None = None,
 ) -> tuple[Path, Path]:
-    shape = (times.size, LEVELS.size, LAT.size, lon.size)
+    sl_lon = lon if sl_lon is None else sl_lon
+    shape = (times.size, LEVELS.size, lat.size, lon.size)
     coords = {
         "valid_time": times,
         "pressure_level": LEVELS,
-        "latitude": LAT,
+        "latitude": lat,
         "longitude": lon,
     }
     dims = tuple(coords)
@@ -65,16 +71,16 @@ def write_era5(
         coords=coords,
     )
     sl_dims = ("valid_time", "latitude", "longitude")
-    lon_wrapped = ((lon + 180.0) % 360.0) - 180.0
+    lon_wrapped = ((sl_lon + 180.0) % 360.0) - 180.0
     sl = xr.Dataset(
         {
-            "sp": (sl_dims, np.full((times.size, LAT.size, lon.size), P_SURFACE)),
+            "sp": (sl_dims, np.full((times.size, lat.size, sl_lon.size), P_SURFACE)),
             "blh": (
                 sl_dims,
-                np.broadcast_to(blh(lon_wrapped), (times.size, LAT.size, lon.size)),
+                np.broadcast_to(blh(lon_wrapped), (times.size, lat.size, sl_lon.size)),
             ),
         },
-        coords={k: coords[k] for k in sl_dims},
+        coords={**{k: coords[k] for k in sl_dims}, "longitude": sl_lon},
     )
     pl_path, sl_path = tmp / "era5_pl.nc", tmp / "era5_sl.nc"
     pl.to_netcdf(pl_path)
@@ -187,3 +193,35 @@ def test_time_slice_and_errors(tmp_path, frame, grid):
     far = LocalFrame.at(SITE[0] + 2.0, SITE[1])
     with pytest.raises(ValueError, match="outside the source domain"):
         load_era5(pl, sl, plume_grid=grid, frame=far)
+
+
+def test_global_grid_interpolates_across_the_seam(tmp_path):
+    """A 0–359° global axis must sample across 359°/0° like a -180–179° one."""
+    site = (5.0, -0.3)  # 0.3° west of Greenwich: between the 359° and 0° columns
+    seam_frame = LocalFrame.at(*site)
+    grid = make_grid(*DOMAIN, dtype=jnp.float64)
+    lat = np.array([6.0, 5.0, 4.0])
+    east = np.arange(0.0, 360.0, 1.0)  # global, periodic
+    centred = ((east + 180.0) % 360.0) - 180.0
+    order = np.argsort(centred)
+    a, b = tmp_path / "global", tmp_path / "centred"
+    a.mkdir()
+    b.mkdir()
+    across = load_era5(
+        *write_era5(a, lon=east, lat=lat), plume_grid=grid, frame=seam_frame
+    )
+    inside = load_era5(
+        *write_era5(b, lon=centred[order], lat=lat), plume_grid=grid, frame=seam_frame
+    )
+    for name in ("u", "v", "pressure", "pbl_height"):
+        np.testing.assert_allclose(
+            np.asarray(getattr(across, name)),
+            np.asarray(getattr(inside, name)),
+            rtol=1e-12,
+        )
+
+
+def test_single_levels_on_another_grid_are_rejected(tmp_path, frame, grid):
+    pl, sl = write_era5(tmp_path, sl_lon=LON + 0.125)
+    with pytest.raises(ValueError, match="different lat/lon grids"):
+        load_era5(pl, sl, plume_grid=grid, frame=frame)
