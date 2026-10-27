@@ -36,8 +36,8 @@ This operator deliberately returns a *band-integrated mean radiance* response
 and does **not** roll its own spectral covariance / whitening: when a spectral
 error covariance over bands is needed (matched-filter target construction,
 whitened radiance residuals), route it through the gaussx-backed
-background estimators in :mod:`plumax.matched_filter.background` and
-:func:`plumax.matched_filter.core.apply_pixel` (``gx.LowRankUpdate`` + Woodbury
+background estimators in :mod:`radtrax.retrieval.matched_filter.background` and
+:func:`radtrax.retrieval.matched_filter.core.apply_pixel` (``gx.LowRankUpdate`` + Woodbury
 ``gx.solve``) rather than a hand-rolled dense inverse.
 """
 

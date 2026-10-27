@@ -83,11 +83,6 @@ project:
             - file: theory/gauss_plume/00_gaussian_plume_derivation.md
             - file: theory/gauss_puff/00_gaussian_puff_derivation.md
             - file: theory/les_fvm/00_eulerian_dispersion_derivation.md
-        - title: Radiative transfer & retrieval
-          children:
-            - file: theory/hapi_lut/00_hapi_lut_derivation.md
-            - file: theory/matched_filter/00_mf_derivation.md
-            - file: theory/assimilation/00_variational_derivation.md
         - title: Source population (TMTPP)
           children:
             - file: theory/population/01_mttpp_theory.md
@@ -111,21 +106,6 @@ project:
           children:
             - file: notebooks/les_fvm/01_eulerian_dispersion_l2.ipynb
             - file: notebooks/les_fvm/03_puff_vs_eulerian.ipynb
-        - title: HITRAN LUTs
-          children:
-            - file: notebooks/hapi_lut/01_hapi_lut_ch4.ipynb
-            - file: notebooks/hapi_lut/02_hapi_lut_multigas.ipynb
-            - file: notebooks/hapi_lut/03_beers_law_with_lut.ipynb
-        - title: Radiative transfer
-          children:
-            - file: notebooks/radtran/04_srf_band_integration.ipynb
-        - title: Matched filter
-          children:
-            - file: notebooks/matched_filter/01_mf_vs_3dvar.ipynb
-            - file: notebooks/matched_filter/02_covariance_flavours.ipynb
-        - title: Assimilation
-          children:
-            - file: notebooks/assimilation/06_variational_methane_retrieval.ipynb
         - title: Source population
           children:
             - file: notebooks/population/01_missing_mass_paradox.ipynb

@@ -8,16 +8,6 @@ Sub-packages
 - ``les_fvm``      : Eulerian 3-D advection-diffusion on an Arakawa C-grid
                      (JAX + diffrax + finitevolX) for spatially-varying
                      wind fields and K-theory eddy diffusivity.
-- ``hapi_lut``     : HITRAN line-by-line absorption cross-section LUTs
-                     (HAPI + xarray) plus a Beer-Lambert forward model and
-                     the differential-ratio form for plume-enhancement
-                     retrievals. ``hitran-api`` is imported lazily.
-- ``radtran``      : Band-integrated Beer-Lambert forward model, normalised
-                     -brightness LUT, and matched-filter retrieval
-                     (multispectral / hyperspectral).
-- ``matched_filter``: hyperspectral matched-filter detection pipeline.
-- ``assimilation`` : 3D/4D-Var cost / control / solve scaffolding
-                     (``optimistix``); imported on demand.
 - ``met``          : gridded meteorology (``MetField``) on the ``les_fvm``
                      analysis grid, with a ``wrfout`` loader and the adapter
                      that feeds it to the Eulerian solver as wind.
@@ -35,11 +25,9 @@ from plumax import (
     coupled,
     gauss_plume,
     gauss_puff,
-    hapi_lut,
     les_fvm,
     met,
     population,
-    radtran,
 )
 
 
@@ -49,9 +37,7 @@ __all__ = [
     "coupled",
     "gauss_plume",
     "gauss_puff",
-    "hapi_lut",
     "les_fvm",
     "met",
     "population",
-    "radtran",
 ]
