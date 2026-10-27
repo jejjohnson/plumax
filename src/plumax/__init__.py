@@ -15,6 +15,8 @@ Sub-packages
                      as ``coupled.Instrument``s with observed enhancements.
 - ``priors``       : inventory prior mean on the analysis grid and the
                      per-tile observation background.
+- ``vetting``      : plume-candidate vetting on arrays (seeds, background
+                     pool, scene null) on radtrax's absorption-shape test.
 
 The ``operators`` and ``adapters`` modules expose the forward models as
 ``pipekit`` operators and ``pipekit_cycle`` protocol adapters respectively.
@@ -34,6 +36,7 @@ from plumax import (
     obs,
     population,
     priors,
+    vetting,
 )
 
 
@@ -48,4 +51,5 @@ __all__ = [
     "obs",
     "population",
     "priors",
+    "vetting",
 ]
