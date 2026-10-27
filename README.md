@@ -74,6 +74,19 @@ GeoStack's
 | mask, contour and measure a plume in an image | plumax `[geo]` — moving from geotoolz |
 | count events, model detection probability, extrapolate to a population | plumax (`population`) |
 
+## What it stands on
+
+plumax sits in GeoStack's GeoModels layer beside radtrax. It reaches down to
+two GeoNumerics packages for its solvers (finitevolX for the Eulerian grid,
+gaussx for every posterior covariance) and to pipekit for the `Operator`
+interface; nothing below imports it back.
+
+<p align="center"><img src="docs/assets/diagrams/plumax-deps.png" alt="plumax and its dependencies by GeoStack layer: in GeoModels, plumax depends on radtrax through coupled and adapters, and radtrax never imports plumax; in GeoNumerics, les_fvm uses finitevolX (with spectraldiffx underneath) and lagrangian and les_fvm use gaussx; in GeoStack, operators use pipekit, adapters satisfy pipekit-cycle in tests only, and geotoolz is a planned geo extra; in GeoML, xtremax is planned for population and geonnax arrives through radtrax; jax, equinox, diffrax, optimistix, lineax, numpyro, xarray and scipy are the third-party foundations" width="100%"></p>
+
+The full stack's graph, and the rules that keep it acyclic, live in GeoStack's
+[package boundaries](https://github.com/jejjohnson/geostack/blob/main/docs/geomodels/package_boundaries.md)
+page.
+
 ---
 
 ## One plume, end to end
@@ -288,9 +301,9 @@ make install      # uv sync --all-groups + pre-commit hooks
 The pre-commit checklist (tests, `ruff check .`, `ruff format --check .`,
 `ty check src/plumax`) must pass before every commit.
 
-The README diagram is an HTML source in
+The README diagrams are HTML sources in
 [`docs/assets/diagrams/`](docs/assets/diagrams) (the stack's shared
-stylesheet, one colour per question); edit the `.html` and re-render the PNG
+stylesheet, one colour per question); edit the `.html` and re-render the PNGs
 with `uv run --no-project --with playwright python docs/assets/diagrams/render.py`. See
 [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) for the full
 contributor and agent contract.
