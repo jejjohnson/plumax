@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`plumax` is a differentiable, probabilistic library of atmospheric plume
-dispersion forward models and methane-retrieval operators, built on JAX
+`plumax` is a differentiable, probabilistic library of plume transport
+forward models and source inversions for any passive tracer, built on JAX
 (JIT / vmap / autodiff) with NumPyro for Bayesian inference. It follows
 the carrier-agnostic `Operator` primitives from
 [`pipekit`](https://github.com/jejjohnson/pipekit) and plugs into data
