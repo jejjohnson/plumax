@@ -30,10 +30,15 @@ LON_BOX = (-102.2, -102.0)
 
 
 def write_inventory(
-    path: Path, *, units: str = "kg m-2 s-1", scale: float = 1.0
+    path: Path,
+    *,
+    units: str = "kg m-2 s-1",
+    scale: float = 1.0,
+    coord_dtype: type = np.float64,
 ) -> Path:
     lat = np.arange(31.05, 32.96, STEP)  # centres; edges on whole tenths
     lon = np.arange(-102.95, -101.04, STEP) + 360.0  # 0–360, as some files store it
+    lat, lon = lat.astype(coord_dtype), lon.astype(coord_dtype)
     lat_c, lon_c = np.meshgrid(lat, lon - 360.0, indexing="ij")
     inside = (
         (lat_c > LAT_BOX[0])
@@ -81,6 +86,13 @@ def test_basin_total_matches_geodesic_area(tmp_path, frame, grid):
     # Cells well inside the basin carry the full flux, cells far outside none.
     assert float(prior[30, 30]) == pytest.approx(F_BASIN, rel=1e-12)
     assert float(prior[0, 0]) == 0.0
+
+
+def test_float32_coordinates_are_not_a_gap(tmp_path, frame, grid):
+    # float32 0.1° centres near 258° step by 0.0999985 … 0.1000061
+    path = write_inventory(tmp_path / "f32.nc", coord_dtype=np.float32)
+    prior = load_inventory(path, frame=frame, grid=grid)
+    assert float(prior[30, 30]) == pytest.approx(F_BASIN, rel=1e-12)
 
 
 def test_gfei_units_are_converted_by_the_reader(tmp_path, frame, grid):

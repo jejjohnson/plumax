@@ -19,6 +19,10 @@ from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 
 
+#: Relative deviation of a longitude step from the median step taken as a gap.
+GAP_TOLERANCE: float = 1e-2
+
+
 def load_inventory(
     path: str | Path,
     *,
@@ -142,7 +146,9 @@ def _unwrap_longitudes(
     # c'_k = c'_0 + ((c'_k − c'_0) mod 360°), increasing
     unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
     steps = np.diff(unwrapped)
-    if not np.allclose(steps, steps[0], rtol=1e-6):
+    # a missing cell doubles a step; 1 % absorbs float32 coordinate roundoff
+    # (≈ 1e-5° at 180°, 1e-3 of a 0.01° step) and still catches it
+    if not np.allclose(steps, np.median(steps), rtol=GAP_TOLERANCE, atol=0.0):
         raise DomainError(
             "load_inventory: the inventory's longitudes are not evenly spaced "
             "(a gap inside the raster)"
