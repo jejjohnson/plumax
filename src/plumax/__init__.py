@@ -13,6 +13,8 @@ Sub-packages
                      that feeds it to the Eulerian solver as wind.
 - ``obs``          : satellite L2 methane products (TROPOMI, EMIT, GHGSat)
                      as ``coupled.Instrument``s with observed enhancements.
+- ``priors``       : inventory prior mean on the analysis grid and the
+                     per-tile observation background.
 
 The ``operators`` and ``adapters`` modules expose the forward models as
 ``pipekit`` operators and ``pipekit_cycle`` protocol adapters respectively.
@@ -31,6 +33,7 @@ from plumax import (
     met,
     obs,
     population,
+    priors,
 )
 
 
@@ -44,4 +47,5 @@ __all__ = [
     "met",
     "obs",
     "population",
+    "priors",
 ]
