@@ -46,6 +46,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import equinox as eqx
+import jax
 import jax.numpy as jnp
 import numpy as np
 from radtrax.slab import (
@@ -60,9 +62,12 @@ from plumax.lagrangian.inversion import _is_traced
 
 
 if TYPE_CHECKING:
-    import jax
     import xarray as xr
+    from jaxtyping import Array, Float
+    from radtrax import ForwardModel
+    from radtrax.atmosphere import AtmosphericState, ViewingGeometry
     from radtrax.instrument import SpectralResponseFunction
+    from radtrax.surface import Surface
 
     from plumax.coupled.instrument import Instrument
 
@@ -311,12 +316,125 @@ class RadianceObservationOperator:
         return self._band_integrate(self._forward_hr(dvmr).jacobian)
 
 
+class LayeredRadianceOperator(eqx.Module):
+    """Map a column-mass enhancement to band radiance through radtrax's layered model.
+
+    The JAX counterpart of :class:`RadianceObservationOperator`, on
+    :class:`radtrax.ForwardModel` instead of the single slab::
+
+        column mass m [kg/m²]  →  ΔX = m / M_CH₄ [mol/m²]
+            →  state.add_column(gas, ΔX, profile)  →  y = F(state, surface, geometry)
+
+    and, when ``normalise`` (the default), ``y(ΔX) / y(0)``, so zero
+    enhancement gives ones as the slab operator's normalised radiance does.
+    Every step is JAX, so ``jax.grad`` of a misfit flows through the plume
+    model and the radiative transfer together, and ``predict`` is a
+    ``jax.vmap`` over receptors. The layers remove the slab's error of
+    broadening every line at one pressure; with one layer on a table node,
+    an identity instrument and no shift it equals the slab operator.
+
+    Band values are divided after band integration, ``y_b(ΔX) / y_b(0)``,
+    which is what a sensor's ratio is. The slab operator instead integrates
+    ``exp(-Δτ)`` over each band, so with an SRF the two differ by the
+    background spectrum's weighting within the band.
+
+    Attributes:
+        model: The layered forward model (opacity, solver, instrument).
+        state: The background atmosphere; it must carry ``gas``.
+        surface: The surface reflectance.
+        geometry: Sun and sensor directions.
+        profile: The plume's relative weight per layer, ``(L,)``; ``None``
+            puts the whole enhancement in the bottom layer.
+        gas: The gas the plume adds.
+        normalise: Divide by the background band values ``y(0)``.
+
+    Examples:
+        >>> import jax.numpy as jnp
+        >>> from radtrax import ForwardModel
+        >>> from radtrax.atmosphere import ViewingGeometry, layers_from_levels
+        >>> from radtrax.instrument import BandInstrument
+        >>> from radtrax.solvers import BeerLambert
+        >>> from radtrax.spectroscopy import CrossSectionTable, TableOpacity
+        >>> from radtrax.surface import Lambertian
+        >>> nu = jnp.array([4300.0, 4300.1, 4300.2])
+        >>> table = CrossSectionTable(
+        ...     jnp.log(jnp.array([1e4, 1e5])),
+        ...     jnp.array([200.0, 300.0]),
+        ...     jnp.full((2, 2, 3), 1e-21),
+        ... )
+        >>> model = ForwardModel(
+        ...     TableOpacity(nu, {"CH4": table}),
+        ...     BeerLambert(),
+        ...     BandInstrument(nu, jnp.full((1, 3), 1 / 3)),
+        ... )
+        >>> atm = layers_from_levels(
+        ...     jnp.array([1e5, 5e4]),
+        ...     jnp.array([288.0, 255.0]),
+        ...     {"CH4": jnp.full(2, 1.9e-6)},
+        ... )
+        >>> op = LayeredRadianceOperator(
+        ...     model, atm, Lambertian(0.3), ViewingGeometry(1.0, 1.0)
+        ... )
+        >>> float(op.predict_single(0.0)[0])
+        1.0
+    """
+
+    model: ForwardModel
+    state: AtmosphericState
+    surface: Surface
+    geometry: ViewingGeometry
+    profile: Float[Array, " L"] | None = None
+    gas: str = eqx.field(static=True, default="CH4")
+    normalise: bool = eqx.field(static=True, default=True)
+
+    @property
+    def n_channels(self) -> int:
+        """Number of output channels per receptor (the instrument's bands)."""
+        return int(jax.eval_shape(self.predict_single, 0.0).shape[0])
+
+    def delta_column(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
+        """Column mass [kg/m²] → column enhancement ``ΔX`` [mol/m²]."""
+        return jnp.asarray(column_mass_kg_m2, dtype=float) / CH4_MOLAR_MASS_KG_PER_MOL
+
+    def predict_single(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
+        """Band values for one receptor, shape ``(n_channels,)``.
+
+        Args:
+            column_mass_kg_m2: Scalar column mass enhancement [kg/m²].
+
+        Returns:
+            ``y(ΔX) / y(0)`` when ``normalise``, else ``y(ΔX)``.
+        """
+        plume = self.state.add_column(
+            self.gas, self.delta_column(column_mass_kg_m2), self.profile
+        )
+        y = self.model(plume, self.surface, self.geometry)
+        if self.normalise:
+            y = y / self.model(self.state, self.surface, self.geometry)
+        return y
+
+    def predict(self, column_enhancement: jax.Array | np.ndarray) -> jax.Array:
+        """Per-receptor band values, shape ``(n_obs, n_channels)``.
+
+        Args:
+            column_enhancement: Per-receptor column mass enhancement [kg/m²],
+                shape ``(n_obs,)`` (e.g. ``Q · column_response``).
+        """
+        m = jnp.asarray(column_enhancement, dtype=float)
+        if m.ndim != 1:
+            raise ValueError(
+                "LayeredRadianceOperator.predict: `column_enhancement` must be "
+                f"1-D (n_obs,); got shape {m.shape}."
+            )
+        return jax.vmap(self.predict_single)(m)
+
+
 def radiance_response(
     source: PlumeSource,
     instrument: Instrument,
-    operator: RadianceObservationOperator,
+    operator: RadianceObservationOperator | LayeredRadianceOperator,
     emission_rate: jax.Array | float,
-) -> np.ndarray:
+) -> np.ndarray | jax.Array:
     """Per-receptor band radiances for one instrument under the RTM operator.
 
     The radiance-forward parallel to :func:`plumax.coupled.forward.predict_observation`:
@@ -339,15 +457,19 @@ def radiance_response(
             leave the instrument's ``averaging_kernel`` at its identity default;
             a non-identity AK is still applied to the column before the RTM (it
             then acts as a per-receptor column-scaling factor).
-        operator: The configured :class:`RadianceObservationOperator`.
+        operator: The configured :class:`RadianceObservationOperator`, or a
+            :class:`LayeredRadianceOperator`, with which the whole map from
+            ``Q`` to radiance is JAX and differentiable in ``Q``.
         emission_rate: Emission rate ``Q`` [kg/s] (scalar).
 
     Returns:
         Per-receptor normalised radiance, shape ``(n_obs, n_channels)``.
     """
+    response = column_response(source, instrument)
+    if isinstance(operator, LayeredRadianceOperator):
+        return operator.predict(jnp.asarray(emission_rate, dtype=float) * response)
     # Unit-Q column response is differentiable JAX; scale to the column mass and
     # hand concrete values to the NumPy-side RTM forward.
-    response = column_response(source, instrument)
     column_mass = np.asarray(emission_rate, dtype=float) * np.asarray(
         response, dtype=float
     )
@@ -416,14 +538,18 @@ class LinearisedRadianceOperator:
         return self.baseline[None, :] + m[:, None] * self.gain[None, :]
 
 
-def linearise(operator: RadianceObservationOperator) -> LinearisedRadianceOperator:
+def linearise(
+    operator: RadianceObservationOperator | LayeredRadianceOperator,
+) -> LinearisedRadianceOperator:
     """Build the :class:`LinearisedRadianceOperator` tangent to ``operator`` at 0.
 
     Evaluates the background radiance ``L_norm(0)`` and the analytic Jacobian
     ``J₀ = d(L_norm)/d(ΔVMR)|₀`` (both band-integrated through the operator's
     SRF), and folds in the constant ``d(ΔVMR)/d(mass)`` slope of
     :func:`column_mass_to_delta_vmr` to give the per-channel gain in column-mass
-    units. The result is exact to first order in the enhancement.
+    units. The result is exact to first order in the enhancement. For a
+    :class:`LayeredRadianceOperator` the gain is ``jax.jacfwd`` of its
+    ``predict_single`` at zero, already in column-mass units.
 
     Args:
         operator: The configured nonlinear RTM observation operator.
@@ -431,6 +557,12 @@ def linearise(operator: RadianceObservationOperator) -> LinearisedRadianceOperat
     Returns:
         The matching :class:`LinearisedRadianceOperator`.
     """
+    if isinstance(operator, LayeredRadianceOperator):
+        zero = jnp.asarray(0.0)
+        return LinearisedRadianceOperator(
+            baseline=operator.predict_single(zero),
+            gain=jax.jacfwd(operator.predict_single)(zero),
+        )
     baseline = jnp.asarray(operator.predict_single(0.0), dtype=float)
     jac_dvmr = jnp.asarray(operator.linearize_single(0.0), dtype=float)
     # d(ΔVMR)/d(mass): the conversion is linear, so its slope is ΔVMR at unit mass.
@@ -471,6 +603,7 @@ __all__ = [
     "AVOGADRO_PER_MOL",
     "CH4_MOLAR_MASS_KG_PER_MOL",
     "CM2_PER_M2",
+    "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "RadianceObservationOperator",
     "column_mass_to_delta_vmr",
