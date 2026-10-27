@@ -6,6 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from plumax.errors import MissingVariableError
 from plumax.les_fvm import simulate_eulerian_dispersion, wind_field_from_callable
 from plumax.les_fvm.grid import make_grid
 from plumax.met import MetField, load_wrf, to_prescribed_wind
@@ -243,9 +244,9 @@ def test_frame_placement_needs_latlon_and_rotation(synthetic_wrf, tmp_path):
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     frame = LocalFrame.at(*_SITE)
     rotated_only = write_synthetic_wrfout(tmp_path / "rot.nc", alpha_deg=0.0)
-    with pytest.raises(ValueError, match="XLAT / XLONG"):
+    with pytest.raises(MissingVariableError, match="XLAT / XLONG"):
         load_wrf(rotated_only.path, plume_grid=grid, origin=frame)
-    with pytest.raises(ValueError, match="COSALPHA / SINALPHA"):
+    with pytest.raises(MissingVariableError, match="COSALPHA / SINALPHA"):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=frame)
 
 

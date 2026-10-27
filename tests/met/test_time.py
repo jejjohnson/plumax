@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from hypothesis import given, strategies as st
 
 from plumax.met import TimeAxis
 
@@ -39,4 +40,19 @@ def test_iso_stamp_keeps_milliseconds():
     t0 = np.datetime64(axis.t0_iso.replace("_", "T"), "ms")
     np.testing.assert_array_equal(
         t0 + (axis.seconds * 1e3).astype("timedelta64[ms]"), axis.stamps
+    )
+
+
+@given(
+    offsets_ms=st.lists(st.integers(0, 10**10), min_size=1, max_size=20, unique=True)
+)
+def test_seconds_roundtrip_property(offsets_ms):
+    stamps = np.datetime64("2024-06-01T00:00:00.000") + np.sort(
+        np.array(offsets_ms, dtype="timedelta64[ms]")
+    )
+    axis = TimeAxis.from_datetimes(stamps)
+    np.testing.assert_array_equal(axis.stamps, stamps)
+    rebuilt = np.datetime64(axis.t0_iso.replace("_", "T"), "ms")
+    np.testing.assert_array_equal(
+        rebuilt + np.round(axis.seconds * 1e3).astype("timedelta64[ms]"), stamps
     )

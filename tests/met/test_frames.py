@@ -5,6 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from hypothesis import given, settings, strategies as st
 
 from plumax.les_fvm.grid import make_grid
 from plumax.met import LocalFrame
@@ -79,3 +80,35 @@ def test_grid_indices_inside_and_outside():
     i, j = frame.grid_indices(lat, lon, grid)
     np.testing.assert_array_equal(i, [0, 3, -1])
     np.testing.assert_array_equal(j, [1, 0, -1])
+
+
+# ---- properties -------------------------------------------------------------
+
+
+offsets_m = st.floats(min_value=-50_000.0, max_value=50_000.0)
+
+
+@settings(max_examples=50, deadline=None)
+@given(x=offsets_m, y=offsets_m)
+def test_roundtrip_property(x, y):
+    frame = LocalFrame.at(LAT0, LON0)
+    lat, lon = frame.to_latlon(x, y)
+    x2, y2 = frame.to_xy(lat, lon)
+    assert np.hypot(float(x2) - x, float(y2) - y) < 1e-3
+
+
+@settings(max_examples=50, deadline=None)
+@given(lat=st.floats(-60.0, 70.0), lon=st.floats(-179.0, 179.0))
+def test_east_north_axes_are_orthonormal_everywhere(lat, lon):
+    frame = LocalFrame.at(lat, lon)
+    east, north = frame.east_north_axes(lat, lon)
+    np.testing.assert_allclose(
+        [np.linalg.norm(east), np.linalg.norm(north)], 1.0, rtol=1e-9
+    )
+    # UTM is conformal: the axes stay perpendicular
+    assert abs(float(east @ north)) < 1e-5
+
+
+def test_config_roundtrip():
+    frame = LocalFrame.at(LAT0, LON0)
+    assert LocalFrame.from_config(frame.get_config()) == frame
