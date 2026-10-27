@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.0](https://github.com/jejjohnson/plumax/compare/v0.1.2...v0.2.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **met:** load_wrf needs `pip install 'plumax[io]'`, and an XTIME-only file now also needs the SIMULATION_START_DATE attribute (every wrfout carries Times).
+* plumax.radtran, plumax.hapi_lut, plumax.assimilation and plumax.matched_filter raise ImportError, and the package root no longer exports radtran or hapi_lut. Use radtrax.slab (forward models, constants, nB-LUT), radtrax.instrument (SpectralResponseFunction, PointSpreadFunction, GroundSamplingDistance), radtrax.spectroscopy.hitran and radtrax.spectroscopy.tables (HITRAN tables, Beer-Lambert on a table; install radtrax[hitran]), radtrax.retrieval.var3d and radtrax.retrieval.matched_filter. The plumax[hapi] extra is gone.
+* **radtran:** plumax.radtran no longer exports trimmed_mean_spectrum, robust_lowrank_covariance, matched_filter_pixel/_image/_snr, their _op variants, build_lowrank_covariance_operator or the target_* constructors; use plumax.matched_filter (background, core, target) instead.
+
+### Features
+
+* **background:** randomized SVD via gaussx ([#129](https://github.com/jejjohnson/plumax/issues/129)) ([63d59e4](https://github.com/jejjohnson/plumax/commit/63d59e438d10535def8249e4c5e16b8b67deb6dc))
+* **coupled:** plume-to-radiance through radtrax's layered ForwardModel ([#140](https://github.com/jejjohnson/plumax/issues/140)) ([919c995](https://github.com/jejjohnson/plumax/commit/919c9951b02e80ce12eee167577c08359de040dc))
+* depend on radtrax and re-point coupled ([#138](https://github.com/jejjohnson/plumax/issues/138)) ([b38a4d5](https://github.com/jejjohnson/plumax/commit/b38a4d5f8b4748284090e1c102e5f27c36b53e18))
+* **met:** load ERA5 onto a LocalFrame-placed analysis grid ([#148](https://github.com/jejjohnson/plumax/issues/148)) ([64defb7](https://github.com/jejjohnson/plumax/commit/64defb7720e3d40bd604ba0d7682da406e2c1409))
+* **met:** local UTM frame (LocalFrame), shared clock (TimeAxis), and WRF placement by lat/lon ([#147](https://github.com/jejjohnson/plumax/issues/147)) ([dd233fc](https://github.com/jejjohnson/plumax/commit/dd233fcf98ec18f15d37d449999f947c5d04790b))
+* **met:** read wrfout through xrtoolz behind a plumax[io] extra ([#146](https://github.com/jejjohnson/plumax/issues/146)) ([030c978](https://github.com/jejjohnson/plumax/commit/030c978cad3bccc5292b8703e4a7b6a78a959d6d)), closes [#69](https://github.com/jejjohnson/plumax/issues/69)
+* **met:** surface-layer similarity (Monin–Obukhov), bulk-Richardson PBL height, Hanna factory ([#149](https://github.com/jejjohnson/plumax/issues/149)) ([7d22111](https://github.com/jejjohnson/plumax/commit/7d221114914707827fd26d73dde059a963afe029))
+* **obs:** ingest TROPOMI, EMIT and GHGSat L2 into coupled.Instrument ([#150](https://github.com/jejjohnson/plumax/issues/150)) ([29af24c](https://github.com/jejjohnson/plumax/commit/29af24c584daa0085a6b781a8202be5290c0cdba))
+* **priors:** inventory prior mean on the analysis grid, per-tile background ([#151](https://github.com/jejjohnson/plumax/issues/151)) ([0c4b997](https://github.com/jejjohnson/plumax/commit/0c4b997b23a3a912d888519b68d008b2f4503c24))
+
+
+### Miscellaneous
+
+* **radtran:** retire radtran's matched-filter half in favour of matched_filter.core ([#137](https://github.com/jejjohnson/plumax/issues/137)) ([6e39aab](https://github.com/jejjohnson/plumax/commit/6e39aabe042e1242febd0948eb9f7c702547d8ee))
+* remove radtran, hapi_lut, assimilation and matched_filter (moved to radtrax) ([#139](https://github.com/jejjohnson/plumax/issues/139)) ([ebc9d75](https://github.com/jejjohnson/plumax/commit/ebc9d75b1432b960174a86de2f1f023ff037ba79))
+
 ## [0.1.2](https://github.com/jejjohnson/plumax/compare/v0.1.1...v0.1.2) (2026-09-26)
 
 
