@@ -13,17 +13,22 @@ to the gas's transmittance and ``D_norm``). Theory: the plume-vetting page.
 - `null`: `null_masks` and `null_pvalue`, rotated and translated copies of
   a candidate's mask off every candidate, and the candidate's p-value
   among their scores (#155).
+- `vet`: `vet_candidate` and `VettingResult`, one candidate vetted in one
+  call: seeds, pool, radtrax's pairs, ratio, fit and ``D_norm`` (#156).
 """
 
 from __future__ import annotations
 
 from plumax.vetting.null import null_masks, null_pvalue
 from plumax.vetting.seeds import background_pool, select_seeds
+from plumax.vetting.vet import VettingResult, vet_candidate
 
 
 __all__ = [
+    "VettingResult",
     "background_pool",
     "null_masks",
     "null_pvalue",
     "select_seeds",
+    "vet_candidate",
 ]

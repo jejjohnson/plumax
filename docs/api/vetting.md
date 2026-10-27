@@ -8,6 +8,16 @@ Errors are radtrax's public exception classes (`ParameterError`, `DegenerateInpu
     options:
       members: false
 
+## `vet` — one candidate
+
+::: plumax.vetting
+    options:
+      show_root_heading: false
+      heading_level: 3
+      members:
+        - vet_candidate
+        - VettingResult
+
 ## `seeds` — the seeds and the background pool
 
 ::: plumax.vetting
