@@ -199,6 +199,23 @@ def test_both_run_under_jit_with_static_k_grow_box(
     )
 
 
+def test_cap_percentile_may_be_traced_under_jit(
+    mf: np.ndarray, mask: np.ndarray
+) -> None:
+    # Only k and grow are static: a traced percentile must work (radtrax#263 review).
+    fn = jax.jit(select_seeds, static_argnames=("k", "grow"))
+    for p in (90.0, 99.0, 100.0):
+        np.testing.assert_array_equal(
+            fn(jnp.asarray(mf), jnp.asarray(mask), k=25, cap_percentile=p, grow=1),
+            select_seeds(mf, mask, k=25, cap_percentile=p, grow=1),
+        )
+    # Out of range when traced: eqx.error_if, as for the empty mask (EquinoxRuntimeError
+    # under eqx.filter_jit; jax.jit raises jax.errors.JaxRuntimeError instead).
+    traced = eqx.filter_jit(functools.partial(select_seeds, k=25, grow=1))
+    with pytest.raises(RuntimeError, match=r"cap_percentile must be in \(0, 100\]"):
+        traced(jnp.asarray(mf), jnp.asarray(mask), cap_percentile=jnp.asarray(0.0))
+
+
 def test_empty_inputs_fail_at_run_time_under_jit() -> None:
     mf = jnp.zeros((4, 4))
     empty = jnp.zeros((4, 4), dtype=bool)

@@ -29,7 +29,7 @@ def select_seeds(
     mask: Bool[ArrayLike, "H W"],
     *,
     k: int = 40,
-    cap_percentile: float = 99.0,
+    cap_percentile: Float[ArrayLike, ""] = 99.0,
     grow: int = 1,
 ) -> Bool[Array, "H W"]:
     """The ``k`` strongest matched-filter pixels of a candidate, grown inside it.
@@ -60,7 +60,9 @@ def select_seeds(
 
     Raises:
         ParameterError: If ``k < 1``, ``cap_percentile`` is outside
-            (0, 100] or ``grow < 0``.
+            (0, 100] or ``grow < 0``. ``k`` and ``grow`` are static under
+            ``jit``; ``cap_percentile`` may be traced, and then its range
+            check runs with ``eqx.error_if``, as the empty-mask check below.
         ShapeError: If ``mf`` is not 2-D or ``mask`` has another shape.
         DegenerateInputError: If the mask holds no pixel with a finite
             score. Under ``jit`` this check runs with ``eqx.error_if`` and
@@ -90,10 +92,7 @@ def select_seeds(
     """
     if k < 1:
         raise ParameterError(f"select_seeds: k must be >= 1, got {k}")
-    if not 0.0 < cap_percentile <= 100.0:
-        raise ParameterError(
-            f"select_seeds: cap_percentile must be in (0, 100], got {cap_percentile}"
-        )
+    cap_percentile = _check_percentile(cap_percentile)
     if grow < 0:
         raise ParameterError(f"select_seeds: grow must be >= 0, got {grow}")
     mf = jnp.asarray(mf)
@@ -215,6 +214,20 @@ def _check_image(
         raise ShapeError(
             f"{name}: {other_name} has shape {other.shape}, mf has {mf.shape}"
         )
+
+
+def _check_percentile(p: Float[ArrayLike, ""]) -> Float[Array, ""]:
+    """``p`` as an array, after failing outside (0, 100]: eagerly, or under ``jit``."""
+    p = jnp.asarray(p, dtype=float)
+    bad = ~((p > 0.0) & (p <= 100.0))
+    message = "select_seeds: cap_percentile must be in (0, 100]"
+    try:
+        out_of_range = bool(bad)
+    except (jax.errors.TracerBoolConversionError, jax.errors.ConcretizationTypeError):
+        return eqx.error_if(p, bad, message)
+    if out_of_range:
+        raise ParameterError(f"{message}, got {float(p)}")
+    return p
 
 
 def _require_any(mask: Bool[Array, "H W"], message: str) -> Bool[Array, "H W"]:
