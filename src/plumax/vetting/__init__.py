@@ -10,14 +10,20 @@ to the gas's transmittance and ``D_norm``). Theory: the plume-vetting page.
 
 - `seeds`: `select_seeds` and `background_pool`, a candidate's in-plume
   seeds and the background pool they are paired from (#154).
+- `null`: `null_masks` and `null_pvalue`, rotated and translated copies of
+  a candidate's mask off every candidate, and the candidate's p-value
+  among their scores (#155).
 """
 
 from __future__ import annotations
 
+from plumax.vetting.null import null_masks, null_pvalue
 from plumax.vetting.seeds import background_pool, select_seeds
 
 
 __all__ = [
     "background_pool",
+    "null_masks",
+    "null_pvalue",
     "select_seeds",
 ]
