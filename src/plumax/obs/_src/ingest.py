@@ -71,7 +71,7 @@ ToMass = Callable[[Float[np.ndarray, " pixel"]], Float[np.ndarray, " pixel"]]
 class ColumnObservation(eqx.Module):
     """One product's instrument and its observed enhancement.
 
-    Args:
+    Attributes:
         instrument: Receptors, scalar averaging kernel and retrieval variance,
             ready for ``CoupledForward``.
         enhancement: Observed column-mass enhancement ΔΩ [kg m⁻²], aligned
