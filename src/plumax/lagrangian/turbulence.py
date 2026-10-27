@@ -192,6 +192,10 @@ class HannaTurbulence:
     ∂σ_w²/∂z`` is non-zero — the inhomogeneous path that
     :class:`HomogeneousTurbulence` never exercises.
 
+    To drive it from met rather than hand-typed scales, build it with
+    :func:`plumax.met.hanna_turbulence_from` from a
+    :func:`plumax.met.surface_layer_from_met` diagnosis.
+
     Attributes:
         u_star: Friction velocity ``u_*`` [m/s].
         pbl_height: Boundary-layer height ``h`` [m].
