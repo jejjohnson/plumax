@@ -30,3 +30,13 @@ def test_rejects_empty_and_unsorted():
         TimeAxis.from_datetimes([])
     with pytest.raises(ValueError, match="strictly increasing"):
         TimeAxis.from_datetimes(STAMPS[::-1])
+
+
+def test_iso_stamp_keeps_milliseconds():
+    axis = TimeAxis.from_datetimes(["2024-06-01T00:00:00.250", "2024-06-01T00:00:01"])
+    assert axis.t0_iso == "2024-06-01_00:00:00.250"
+    # the stamp and the offsets reproduce the samples exactly
+    t0 = np.datetime64(axis.t0_iso.replace("_", "T"), "ms")
+    np.testing.assert_array_equal(
+        t0 + (axis.seconds * 1e3).astype("timedelta64[ms]"), axis.stamps
+    )

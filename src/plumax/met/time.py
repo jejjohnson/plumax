@@ -91,5 +91,12 @@ class TimeAxis:
 
     @property
     def t0_iso(self) -> str:
-        """``t0`` as ``YYYY-MM-DD_HH:MM:SS``, the stamp ``MetField.t0`` stores."""
-        return str(np.asarray(self.t0).astype("datetime64[s]")).replace("T", "_")
+        """``t0`` as ``YYYY-MM-DD_HH:MM:SS[.fff]``, the stamp ``MetField.t0`` stores.
+
+        Milliseconds are kept when ``t0`` has them, so ``t0_iso`` plus
+        ``seconds`` reproduces every sample time exactly.
+        """
+        ms = np.asarray(self.t0).astype("datetime64[ms]")
+        whole = ms.astype("datetime64[s]")
+        text = str(ms if ms != whole else whole)
+        return text.replace("T", "_")
