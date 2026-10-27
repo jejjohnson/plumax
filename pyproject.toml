@@ -107,7 +107,9 @@ override-dependencies = [
 # yet (rev = its main at the time of the switch); geonnax is radtrax's own git
 # dependency, which uv does not read from radtrax's sources.
 # xrtoolz (the `io` extra) is a workspace of six packages, none on PyPI; all
-# six are pinned to one rev of its main.
+# six are pinned to one rev. TEMPORARY: the rev is jejjohnson/xrtoolz#357's
+# head (xrreader.open_ch4_inventory, used by plumax.priors); move it to
+# xrtoolz main once that PR merges.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
@@ -115,12 +117,12 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", rev = "e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.9" }
-xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
-xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
-xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
-xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
-xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
-xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
+xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "4909761b98bda195084e0c3dd53cb97598b0e323" }
 
 [dependency-groups]
 dev = [
