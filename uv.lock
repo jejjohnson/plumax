@@ -2247,7 +2247,7 @@ requires-dist = [
     { name = "pyproj", marker = "extra == 'io'" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee" },
     { name = "scipy", specifier = ">=1.11" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?rev=5d475029af8100e4abf276580c8fd720ffb22478" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?rev=d326fdaaeb778b6f8006a1e24c590315601e3358" },
     { name = "xarray" },
     { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
     { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
@@ -2264,7 +2264,7 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-xdist", specifier = ">=3.5" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=5d475029af8100e4abf276580c8fd720ffb22478" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=d326fdaaeb778b6f8006a1e24c590315601e3358" },
     { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
     { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
 ]
@@ -3349,7 +3349,7 @@ wheels = [
 [[package]]
 name = "vardax"
 version = "0.1.12"
-source = { git = "https://github.com/jejjohnson/vardax?rev=5d475029af8100e4abf276580c8fd720ffb22478#5d475029af8100e4abf276580c8fd720ffb22478" }
+source = { git = "https://github.com/jejjohnson/vardax?rev=d326fdaaeb778b6f8006a1e24c590315601e3358#d326fdaaeb778b6f8006a1e24c590315601e3358" }
 dependencies = [
     { name = "diffrax" },
     { name = "equinox" },

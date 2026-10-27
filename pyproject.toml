@@ -131,7 +131,7 @@ geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 # (CallableObs jac= / materialise=, OI solver=, cov_solver=, linear-control
 # posterior, ThreeDVar.analyse);
 # move to the release tag once those merge.
-vardax = { git = "https://github.com/jejjohnson/vardax", rev = "5d475029af8100e4abf276580c8fd720ffb22478" }
+vardax = { git = "https://github.com/jejjohnson/vardax", rev = "d326fdaaeb778b6f8006a1e24c590315601e3358" }
 xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
 xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
 xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
