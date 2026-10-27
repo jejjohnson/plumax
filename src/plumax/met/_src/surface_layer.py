@@ -223,7 +223,7 @@ def friction_velocity(
 class SurfaceLayer(eqx.Module):
     """Surface-layer scales on the analysis grid's horizontal T-points.
 
-    Args:
+    Attributes:
         u_star: Friction velocity u* [m s⁻¹].
         inverse_obukhov_length: 1/L [m⁻¹]; zero is neutral, negative unstable.
             Stored as 1/L because it is finite at neutral.
@@ -263,7 +263,7 @@ class MoninObukhov(eqx.Module):
     Calm and neutral gives u* = 0, 1/L = 0, w* = 0. Very stable cases
     (z/L ≳ 1) converge slowly; check the residual there.
 
-    Args:
+    Attributes:
         n_iterations: Fixed-point iterations of the u*–L system (≥ 1).
 
     Call arguments: the ``MetField``; ``z0``, the roughness length z₀ [m]; and
