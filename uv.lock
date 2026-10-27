@@ -2076,6 +2076,7 @@ inference = [
     { name = "numpyro" },
 ]
 io = [
+    { name = "pyproj" },
     { name = "xrtoolz" },
     { name = "xrtoolz-reader" },
 ]
@@ -2128,6 +2129,7 @@ requires-dist = [
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
+    { name = "pyproj", marker = "extra == 'io'" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "xarray" },

@@ -77,7 +77,7 @@ dependencies = [
 inference = ["numpyro>=0.21"]
 # Readers: WRF (and, as Tier 0 grows, ERA5, L2 products and inventories)
 # through xrtoolz / xrreader, so the base install stays free of I/O stacks.
-io = ["xrtoolz", "xrtoolz-reader"]
+io = ["xrtoolz", "xrtoolz-reader", "pyproj"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
 
