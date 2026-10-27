@@ -68,6 +68,11 @@ dependencies = [
     # pipekit_cycle ForwardModel / ObservationOperator protocols that the
     # plumax operator + adapter layer plug into.
     "pipekit",
+    # radtrax owns the radiative transfer (the single-slab forward model, the
+    # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
+    # and the radiance adapter compose with the plume models (package
+    # boundaries rule 2: plumax imports radtrax, never the reverse).
+    "radtrax",
 ]
 
 [project.optional-dependencies]
@@ -94,12 +99,16 @@ override-dependencies = [
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 # Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
 # unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
-# release commit); gaussx is pinned to the v0.6.5 tag.
+# release commit); gaussx is pinned to the v0.6.5 tag. radtrax has no release
+# yet (rev = its main at the time of the switch); geonnax is radtrax's own git
+# dependency, which uv does not read from radtrax's sources.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
+radtrax = { git = "https://github.com/jejjohnson/radtrax", rev = "e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
+geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.9" }
 
 [dependency-groups]
 dev = [

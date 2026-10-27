@@ -7,7 +7,7 @@ L1-radiance fusion ([Tier IV §per-instrument-forward](https://github.com/jejjoh
 [RTM stack](https://github.com/jejjohnson/plumax/blob/main/docs/design/04_rtm_stack.md))
 replaces that scalar AK with a *physically real* radiative-transfer operator:
 the same column enhancement is mapped to a gas column ``ΔVMR`` and then, via the
-Beer–Lambert + spectral-response-function stack in :mod:`plumax.radtran`, to the
+Beer–Lambert + spectral-response-function stack in :mod:`radtrax.slab`, to the
 band-integrated normalised radiance each instrument would actually observe.
 
 This module provides :class:`RadianceObservationOperator` — the RTM analogue of
@@ -19,12 +19,12 @@ existing scalar-AK path is untouched — the change is purely additive.
 
 Differentiability
 -----------------
-The :mod:`plumax.radtran` Beer–Lambert forward and the
-:class:`~plumax.radtran.srf.SpectralResponseFunction` are **NumPy-side** (the
+The :mod:`radtrax.slab` Beer–Lambert forward and the
+:class:`~radtrax.instrument.SpectralResponseFunction` are **NumPy-side** (the
 LUT interpolation goes through ``xarray``), so :class:`RadianceObservationOperator`
 is *not* JAX-traceable end-to-end: it consumes concrete arrays and returns
 NumPy arrays, exactly like :class:`plumax.adapters.RadtranObservationOperator`.
-The analytic Jacobian ``d(L_norm)/d(ΔVMR)`` returned by the radtran forward is
+The analytic Jacobian ``d(L_norm)/d(ΔVMR)`` returned by the radtrax slab forward is
 the tangent-linear used in :meth:`RadianceObservationOperator.linearize`. The
 *Tier I plume* column response (:func:`plumax.coupled.forward.column_response`)
 that feeds it remains differentiable; the column→ΔVMR conversion
@@ -48,19 +48,23 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import numpy as np
+from radtrax.slab import (
+    ATM_TO_PA,
+    BOLTZMANN_J_PER_K,
+    CM3_PER_M3,
+    forward_nonlinear_normalized,
+)
 
 from plumax.coupled.forward import PlumeSource, column_response
 from plumax.lagrangian.inversion import _is_traced
-from plumax.radtran.config import ATM_TO_PA, BOLTZMANN_J_PER_K, CM3_PER_M3
-from plumax.radtran.forward import forward_nonlinear_normalized
 
 
 if TYPE_CHECKING:
     import jax
     import xarray as xr
+    from radtrax.instrument import SpectralResponseFunction
 
     from plumax.coupled.instrument import Instrument
-    from plumax.radtran.srf import SpectralResponseFunction
 
 
 # Methane molar mass and Avogadro's number for the mass→molecule conversion.
@@ -79,7 +83,7 @@ def column_mass_to_delta_vmr(
     """Convert a plume column **mass** enhancement [kg/m²] to a gas ``ΔVMR``.
 
     The Tier I plume column integral gives a column **mass enhancement**
-    ``m`` [kg/m²] of methane sitting above the pixel. The radtran Beer–Lambert
+    ``m`` [kg/m²] of methane sitting above the pixel. The radtrax slab Beer–Lambert
     forward instead parameterises absorption by the *enhancement in volume
     mixing ratio* ``ΔVMR`` over the absorbing path. The two are related by the
     column number densities of the gas and of dry air:
@@ -96,7 +100,7 @@ def column_mass_to_delta_vmr(
            N_air = n(p, T) · L
 
        where ``n(p, T)`` is the ideal-gas number density [molecules/cm³]
-       (:func:`plumax.radtran.config.number_density_cm3`) and ``L`` is the
+       (:func:`radtrax.slab.number_density_cm3`) and ``L`` is the
        vertical path length [cm] over which the enhancement is distributed.
 
     3. **Volume mixing ratio enhancement** (dimensionless)::
@@ -115,7 +119,7 @@ def column_mass_to_delta_vmr(
         T_K: Layer temperature [K], ``> 0``.
         path_length_cm: Vertical absorbing-path length [cm], ``> 0`` — the depth
             over which the column enhancement is spread (use the same value
-            passed to the radtran forward for consistency).
+            passed to the radtrax slab forward for consistency).
 
     Returns:
         The dimensionless ``ΔVMR`` enhancement, same shape as
@@ -139,7 +143,7 @@ def column_mass_to_delta_vmr(
     # Gas column number density [molecules/cm²].
     n_gas_cm2 = m * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
     # Air number density [molecules/cm³] — the ideal-gas relation inlined with
-    # ``jnp`` (rather than the NumPy ``radtran.config.number_density_cm3``) so a
+    # ``jnp`` (rather than the NumPy ``radtrax.slab.number_density_cm3``) so a
     # traced ``p_atm`` / ``T_K`` flows through differentiably, honouring the
     # pure-JAX contract; identical formula and constants.
     p_atm_j = jnp.asarray(p_atm, dtype=float)
@@ -160,9 +164,9 @@ class RadianceObservationOperator:
         column mass [kg/m²]  →  ΔVMR  →  L_norm(ν) = exp(-Δτ)  →  band radiance
 
     using :func:`column_mass_to_delta_vmr` and the normalised Beer–Lambert
-    forward :func:`plumax.radtran.forward_nonlinear_normalized`. With ``srf``
+    forward :func:`radtrax.slab.forward_nonlinear_normalized`. With ``srf``
     supplied, the high-resolution normalised radiance ``exp(-Δτ(ν))`` is
-    band-integrated by the instrument :class:`~plumax.radtran.srf.SpectralResponseFunction`;
+    band-integrated by the instrument :class:`~radtrax.instrument.SpectralResponseFunction`;
     otherwise the full ``nu_obs`` spectrum is returned per receptor.
 
     The forward is **NumPy-side** (the LUT interpolation is not JAX-traceable),
@@ -171,7 +175,7 @@ class RadianceObservationOperator:
 
     Attributes:
         ds: Absorption-cross-section LUT dataset (HAPI schema; see
-            :func:`plumax.hapi_lut.build_lut_dataset`).
+            :func:`radtrax.spectroscopy.hitran.build_lut_dataset`).
         nu_obs: Observation wavenumbers [cm⁻¹], shape ``(n_nu,)``.
         T_K: Layer temperature [K].
         p_atm: Layer pressure [atm].
@@ -292,7 +296,7 @@ class RadianceObservationOperator:
     def linearize_single(self, column_mass_kg_m2: float) -> np.ndarray:
         """Band-integrated ``d(L_norm)/d(ΔVMR)`` at one receptor.
 
-        Returns the radtran analytic Jacobian, band-integrated through the SRF
+        Returns the radtrax slab analytic Jacobian, band-integrated through the SRF
         when configured. This is the tangent-linear w.r.t. ``ΔVMR``; chain with
         ``d(ΔVMR)/d(column mass)`` (the constant slope of
         :func:`column_mass_to_delta_vmr`) for the column-space Jacobian.
