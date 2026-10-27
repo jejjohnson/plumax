@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Where plumax sits</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  #diagram { width: 1640px; }
+  .rows { display: flex; flex-direction: column; gap: 14px; }
+  .row {
+    display: grid;
+    grid-template-columns: 190px repeat(3, 1fr);
+    column-gap: 56px;
+    align-items: center;
+    min-height: 112px;
+    border-radius: 16px;
+    border: 1.5px solid var(--accent);
+    background: var(--tint);
+    padding: 14px 20px 14px 0;
+  }
+  .row-label { padding-left: 20px; }
+  .row-label .verb { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .row-label .pkg { font-size: 15px; font-weight: 700; color: var(--ink-accent); margin-top: 2px; }
+  .row-label .q { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .c2 { grid-column: 2; } .c3 { grid-column: 3; } .c4 { grid-column: 4; }
+  .c2-3 { grid-column: 2 / 4; }
+  .node.proposed { border-style: dashed; background: #fbfcfe; }
+  .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+         border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; }
+  .tag.today { background: #dcfce7; color: #166534; }
+  .tag.proposed { background: #f1f5f9; color: #475569; border: 1px dashed #94a3b8; }
+  .engine {
+    margin-top: 26px;
+    display: grid;
+    grid-template-columns: 190px repeat(4, 1fr);
+    column-gap: 18px;
+    align-items: stretch;
+    border-radius: 16px;
+    border: 1.5px solid var(--base);
+    background: var(--base-bg);
+    padding: 14px 20px 14px 0;
+  }
+  .engine .node { --accent: var(--base); }
+  .retrieve { --accent: #23978a; --tint: #e2f4f1; --ink-accent: #12403a; }
+</style>
+</head>
+<body>
+<div id="diagram">
+  <div class="title">Where plumax sits: from a column map to an emission catalogue</div>
+  <div class="subtitle">radtrax turns radiance into a column; plumax answers four questions about the plume, on a ladder of differentiable transport models · shapes as returned at each step</div>
+
+  <div class="rows">
+    <div class="row retrieve">
+      <div class="row-label"><div class="verb">retrieve</div><div class="pkg">radtrax</div><div class="q">radiance → column</div></div>
+      <div class="node c2" id="column"><span class="step">1</span>
+        <div class="name"><code>ColumnEnhancement</code><span class="tag today">today</span></div>
+        <div class="desc">matched filter on a radiance scene, any target gas</div>
+        <div class="chips"><span class="chip"><span class="t">GeoTensor</span><span class="s">(B, H, W) → (H, W)</span></span></div>
+      </div>
+      <div class="node c4" id="var3d">
+        <div class="name"><code>retrieval.var3d</code><span class="tag today">today</span></div>
+        <div class="desc">3D-Var column retrieval with posterior covariance</div>
+        <div class="chips"><span class="chip"><span class="t">ΔΩ</span><span class="s">(H, W) kg m⁻²</span></span></div>
+      </div>
+    </div>
+
+    <div class="row cut">
+      <div class="row-label"><div class="verb">segment</div><div class="pkg">plumax[geo]</div><div class="q">where is it?</div></div>
+      <div class="node proposed c2" id="mask"><span class="step">2</span>
+        <div class="name"><code>PlumeMask</code><span class="tag proposed">proposed</span></div>
+        <div class="desc">threshold + connectivity to the source</div>
+        <div class="chips"><span class="chip"><span class="t">mask</span><span class="s">(H, W) bool</span></span></div>
+      </div>
+      <div class="node proposed c3" id="shape">
+        <div class="name"><code>PlumeContours</code> · <code>PlumeFootprint</code></div>
+        <div class="desc">outline, length, shape filters, wind cone</div>
+        <div class="chips"><span class="chip"><span class="t">L</span><span class="s">() m</span></span></div>
+      </div>
+    </div>
+
+    <div class="row compute">
+      <div class="row-label"><div class="verb">quantify</div><div class="pkg">plumax</div><div class="q">how much?</div></div>
+      <div class="node proposed c2" id="ime"><span class="step">3</span>
+        <div class="name"><code>IMEEstimate</code> · <code>CrossSectionalFlux</code><span class="tag proposed">proposed</span></div>
+        <div class="desc">image-based rate from mask, column and wind</div>
+        <div class="chips"><span class="chip"><span class="t">Q</span><span class="s">() kg s⁻¹</span></span></div>
+      </div>
+      <div class="node c4" id="infer"><span class="step">3′</span>
+        <div class="name"><code>infer_emission_rate</code><span class="tag today">today</span></div>
+        <div class="desc">NUTS on a transport model; plume or puff</div>
+        <div class="chips"><span class="chip"><span class="t">p(Q | o)</span><span class="s">(S,) draws</span></span></div>
+      </div>
+    </div>
+
+    <div class="row find">
+      <div class="row-label"><div class="verb">attribute</div><div class="pkg">plumax</div><div class="q">which source?</div></div>
+      <div class="node c2" id="footprint"><span class="step">4</span>
+        <div class="name"><code>compute_footprint</code><span class="tag today">today</span></div>
+        <div class="desc">backward Lagrangian footprint per observation</div>
+        <div class="chips"><span class="chip"><span class="t">H</span><span class="s">(M, N)</span></span></div>
+      </div>
+      <div class="node c3" id="inversion">
+        <div class="name"><code>linear_gaussian_inversion</code><span class="tag today">today</span></div>
+        <div class="desc">closed-form posterior over the source vector</div>
+        <div class="chips"><span class="chip"><span class="t">p(q | o)</span><span class="s">(N,) mean · (N, N) cov</span></span></div>
+      </div>
+      <div class="node c4" id="fourdvar">
+        <div class="name"><code>solve_4dvar</code> · <code>fuse_observations</code><span class="tag today">today</span></div>
+        <div class="desc">Eulerian 4D-Var by autodiff · multi-instrument fusion</div>
+        <div class="chips"><span class="chip"><span class="t">Q(t)</span><span class="s">(T,) + Laplace cov</span></span></div>
+      </div>
+    </div>
+
+    <div class="row out">
+      <div class="row-label"><div class="verb">persist</div><div class="pkg">plumax.population</div><div class="q">how often?</div></div>
+      <div class="node c2" id="catalog"><span class="step">5</span>
+        <div class="name"><code>EmissionCatalog</code><span class="tag today">today</span></div>
+        <div class="desc">one event per detection, from any tier's posterior</div>
+        <div class="chips"><span class="chip"><span class="t">events</span><span class="s">(n,)</span></span></div>
+      </div>
+      <div class="node c3" id="rate">
+        <div class="name"><code>fit_poisson_rate</code> · <code>population.pod</code><span class="tag today">today</span></div>
+        <div class="desc">event rate, detection probability, size distribution</div>
+        <div class="chips"><span class="chip"><span class="t">λ</span><span class="s">Gamma(α, β)</span></span></div>
+      </div>
+      <div class="node proposed c4" id="persistency">
+        <div class="name">persistency metrics<span class="tag proposed">proposed</span></div>
+        <div class="desc">TMTPP likelihood · total emission</div>
+        <div class="chips"><span class="chip"><span class="t">#75</span><span class="s">Tier V epic</span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="engine" id="engine">
+    <div class="row-label"><div class="verb" style="color: var(--base)">transport</div><div class="pkg" style="color: var(--base-ink)">forward models</div><div class="q">Q → C(x, y, z, t)</div></div>
+    <div class="node" id="t1"><div class="name"><code>gauss_plume</code> · <code>gauss_puff</code></div><div class="desc">Tier I · analytical Gaussian · behind 3′</div></div>
+    <div class="node" id="t2"><div class="name"><code>lagrangian</code></div><div class="desc">Tier II · Langevin particles · behind 4</div></div>
+    <div class="node" id="t3"><div class="name"><code>les_fvm</code></div><div class="desc">Tier III · finite volumes · behind 4D-Var</div></div>
+    <div class="node" id="t4"><div class="name"><code>coupled</code></div><div class="desc">Tier IV · transport + radtrax · behind fusion</div></div>
+  </div>
+
+  <div class="legend">
+    <span><i></i> data flow</span>
+    <span><i class="dash"></i> planned</span>
+    <span>solid card: ships today · dashed card: moving in from geotoolz (#482) or designed (plumax #75) · every tier's posterior becomes a catalogue event</span>
+  </div>
+</div>
+<script src="_connect.js"></script>
+<script>
+  const R = "#23978a", S = "#3f6fb5", Q = "#cf9418", A = "#7b6bb5", P = "#c2474f", X = "#64748b";
+  wire("column", "mask", { from: "bottom", to: "top", color: R, label: "<span class='t'>ΔΩ</span><span class='s'>(H, W)</span>", at: 0.5 });
+  wire("mask", "ime", { from: "bottom", to: "top", color: S, label: "<span class='t'>M</span>", at: 0.5 });
+  wire("mask", "shape", { from: "right", to: "left", color: S });
+  wire("shape", "ime", { from: "bottom", to: "right", color: S, bend: 50, label: "<span class='t'>L</span>", at: 0.5 });
+  wire("ime", "catalog", { from: "left", to: "left", color: Q, bend: 70, fromShift: 0, toShift: 0,
+        label: "<span class='t'>Q</span><span class='s'>per event</span>", at: 0.5 });
+  wire("footprint", "inversion", { from: "right", to: "left", color: A });
+  wire("inversion", "catalog", { from: "bottom", to: "top", color: A, fromShift: -180, toShift: 150, bend: 30, label: "<span class='t'>event_from_posterior</span>", at: 0.5 });
+  wire("catalog", "rate", { from: "right", to: "left", color: P });
+  wire("rate", "persistency", { from: "right", to: "left", color: P, dashed: true });
+  ready();
+</script>
+</body>
+</html>

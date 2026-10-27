@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>plumax and its dependencies</title>
+<link rel="stylesheet" href="_base.css">
+<style>
+  #diagram { width: 1940px; }
+  /* GeoStack's layers, coloured as in geostack docs/images/overview/dependency_graph.svg */
+  .models   { --accent: #0f766e; --tint: #ecfaf6; --ink-accent: #134e4a; }
+  .ml       { --accent: #7c3aed; --tint: #f5f3ff; --ink-accent: #4c1d95; }
+  .numerics { --accent: #b45309; --tint: #fffbeb; --ink-accent: #78350f; }
+  .geo      { --accent: #1d4ed8; --tint: #eff6ff; --ink-accent: #1e3a8a; }
+  .found    { --accent: #64748b; --tint: #f1f5f9; --ink-accent: #1e293b; }
+
+  .layers { display: flex; flex-direction: column; gap: 42px; }
+    .layer { position: relative; border-radius: 16px; border: 1.5px solid var(--accent); background: var(--tint); padding: 14px 18px 18px; }
+  .layer-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+  .layer-head .verb { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .layer-head .what { font-size: 12.5px; color: var(--muted); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+
+  .grid { display: grid; grid-template-columns: repeat(12, 1fr); column-gap: 14px; align-items: start; }
+  .s1 { grid-column: 1 / 4; } .s2 { grid-column: 5 / 9; } .s3 { grid-column: 9 / 13; }
+  .h1 { grid-column: 1 / 7; } .h2 { grid-column: 7 / 13; }
+  .row2 { display: grid; grid-template-columns: 470px 1fr 300px; gap: 24px; }
+  .frame { display: grid; grid-template-columns: 330px 1fr; column-gap: 56px; row-gap: 70px; }
+  #inference { grid-column: 1; grid-row: 1 / 3; }
+  .frame > .models, .frame > .row2 { grid-column: 2; }
+  .inf-stack { display: flex; flex-direction: column; gap: 26px; }
+  .inf-note { font-size: 12px; line-height: 1.5; color: var(--ink-accent); margin: -4px 0 16px; }
+  .inf-note code { font-family: var(--mono); font-size: 11.5px; }
+  .col2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .col3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .col1 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 26px; }
+
+  .node .name { font-size: 15px; }
+  .node .name code { font-size: 14px; }
+  .node .use { margin-top: 6px; font-size: 11.5px; line-height: 1.45; color: var(--ink); font-family: var(--mono); }
+  .node.extra { border-style: dashed; background: #fcfdff; }
+  .node.test  { border-style: dotted; border-width: 2px; background: #fcfdff; }
+  .node.trans { opacity: .6; }
+  .pin { font-family: var(--sans); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+         border-radius: 999px; padding: 2px 7px; margin-left: 6px; vertical-align: 2px; background: #fff;
+         border: 1px solid #cbd5e1; color: var(--muted); }
+
+  #plumax { border-width: 2.5px; }
+  #plumax .name { font-size: 22px; }
+  .subs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .rule { margin-top: 8px; font-size: 12px; color: #b91c1c; font-weight: 600; }
+
+  .found-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .found-row .node { padding: 9px 11px; }
+  .found-row .node .name { font-size: 14px; }
+</style>
+</head>
+<body>
+<div id="diagram">
+  <div class="title">plumax and what it stands on</div>
+  <div class="subtitle">Declared dependencies of plumax 0.1.2, laid out by GeoStack layer · arrows point from user to dependency, labelled with the plumax subpackage that imports it</div>
+
+  <div class="layers">
+    <div class="frame">
+      <div class="layer ml" id="inference">
+        <div class="layer-head"><span class="verb">Inference</span><span class="what">GeoML</span></div>
+        <div class="inf-note">Written once against the fixed forward interface <code>forward(params, met) → obs</code>; any transport tier drops in.</div>
+        <div class="inf-stack">
+          <div class="node extra" id="numpyro">
+            <div class="name"><code>numpyro</code><span class="pin">[inference]</span></div>
+            <div class="desc">today · NUTS, MAP, hierarchical fits</div>
+            <div class="use">gauss_plume · gauss_puff · population</div>
+          </div>
+          <div class="node extra" id="vardax">
+            <div class="name"><code>vardax</code><span class="pin">planned</span></div>
+            <div class="desc">variational DA · plumax #163, vardax #112</div>
+            <div class="use">4D-Var for les_fvm · optimal interpolation for lagrangian; plumax keeps the forward model and cost terms</div>
+          </div>
+          <div class="node extra" id="filterax">
+            <div class="name"><code>filterax</code><span class="pin">planned</span></div>
+            <div class="desc">ensemble Kalman · plumax #164, filterax #106 #107</div>
+            <div class="use">EKI for lagrangian · En4D-Var and smoothing for les_fvm · ensemble inversion for coupled</div>
+          </div>
+        </div>
+      </div>
+    <div class="layer models">
+      <div class="layer-head"><span class="verb">GeoModels</span><span class="what">physics packages · dependencies point down and out, never back</span></div>
+      <div class="grid">
+        <div class="node" id="plumax" style="grid-column: 1 / 9">
+          <div class="name">plumax</div>
+          <div class="desc">plume transport and inversion · segment · quantify · attribute · persist</div>
+          <div class="subs">
+            <span class="chip"><span class="t">gauss_plume</span></span>
+            <span class="chip"><span class="t">gauss_puff</span></span>
+            <span class="chip"><span class="t">lagrangian</span></span>
+            <span class="chip"><span class="t">les_fvm</span></span>
+            <span class="chip"><span class="t">met</span></span>
+            <span class="chip"><span class="t">coupled</span></span>
+            <span class="chip"><span class="t">population</span></span>
+            <span class="chip"><span class="t">operators</span></span>
+            <span class="chip"><span class="t">adapters</span></span>
+          </div>
+        </div>
+        <div class="node" id="radtrax" style="grid-column: 10 / 13">
+          <div class="name"><code>radtrax</code><span class="pin">git rev</span></div>
+          <div class="desc">differentiable radiative transfer</div>
+          <div class="use">slab forwards · ForwardModel · SpectralResponseFunction</div>
+          <div class="rule">✕ never imports plumax</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="layer numerics">
+        <div class="layer-head"><span class="verb">GeoNumerics</span><span class="what">solvers · linear algebra</span></div>
+        <div class="col2">
+<div class="node" id="finitevolx">
+            <div class="name"><code>finitevolX</code><span class="pin">v0.0.45</span></div>
+            <div class="desc">finite volumes, C-grid</div>
+            <div class="use">Advection3D · Diffusion3D · RK3SSP · BCs</div>
+          </div>
+<div class="node" id="gaussx">
+            <div class="name"><code>gaussx</code><span class="pin">v0.6.5</span></div>
+            <div class="desc">structured Gaussians</div>
+            <div class="use">safe_cholesky · LowRankUpdate · solve · kalman_gain</div>
+          </div>
+<div class="node trans" id="spectraldiffx">
+            <div class="name"><code>spectraldiffx</code></div>
+            <div class="desc">via finitevolX</div>
+          </div>
+        </div>
+      </div>
+      <div class="layer geo">
+        <div class="layer-head"><span class="verb">GeoStack</span><span class="what">carriers · operators · pipelines</span></div>
+        <div class="col3">
+<div class="node" id="pipekit">
+            <div class="name"><code>pipekit</code><span class="pin">git rev</span></div>
+            <div class="desc">Operator and composition</div>
+            <div class="use">forward models as Operators</div>
+          </div>
+<div class="node test" id="cycle">
+            <div class="name"><code>pipekit-cycle</code><span class="pin">tests</span></div>
+            <div class="desc">DA protocols, never imported at run time</div>
+            <div class="use">ForwardModel · ObservationOperator</div>
+          </div>
+<div class="node extra" id="geotoolz">
+            <div class="name"><code>geotoolz</code><span class="pin">[geo]</span></div>
+            <div class="desc">planned, geotoolz #482</div>
+            <div class="use">plume masks · IME · flux move in</div>
+          </div>
+        </div>
+      </div>
+      <div class="layer ml">
+        <div class="layer-head"><span class="verb">GeoML</span><span class="what">learned · statistical</span></div>
+        <div class="col1">
+<div class="node extra" id="xtremax">
+          <div class="name"><code>xtremax</code><span class="pin">planned</span></div>
+          <div class="desc">point processes, plumax #106</div>
+          <div class="use">ThinningProcess for POD thinning</div>
+        </div>
+<div class="node trans" id="geonnax">
+          <div class="name"><code>geonnax</code><span class="pin">via radtrax</span></div>
+          <div class="desc">basis functions for radtrax's surfaces</div>
+        </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="layer found" id="foundations">
+      <div class="layer-head"><span class="verb">Foundations</span><span class="what">third-party · used throughout, so drawn without arrows</span></div>
+      <div class="found-row">
+        <div class="node"><div class="name"><code>jax</code> · <code>equinox</code></div><div class="desc">every subpackage</div></div>
+        <div class="node"><div class="name"><code>diffrax</code></div><div class="desc">gauss_puff · les_fvm</div></div>
+        <div class="node"><div class="name"><code>optimistix</code> · <code>lineax</code></div><div class="desc">les_fvm 4D-Var · lagrangian</div></div>
+        <div class="node"><div class="name"><code>xarray</code> · <code>netcdf4</code></div><div class="desc">forward-model outputs</div></div>
+        <div class="node"><div class="name"><code>scipy</code></div><div class="desc">population</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i></i> base dependency</span>
+    <span><i class="dash"></i> optional extra, planned or test-only</span>
+    <span>faded card: transitive, pulled in by another dependency</span>
+  </div>
+</div>
+<script src="_connect.js"></script>
+<script>
+  const T = "#0f766e", N = "#b45309", G = "#1d4ed8", M = "#7c3aed", X = "#94a3b8";
+  const lbl = (t) => "<span class='t'>" + t + "</span>";
+  wire("plumax", "radtrax", { from: "right", to: "left", color: T, label: lbl("coupled · adapters") });
+  wire("plumax", "numpyro", { from: "left", to: "right", color: M, dashed: true, fromShift: -40, bend: 20 });
+  wire("plumax", "vardax", { from: "left", to: "right", color: M, dashed: true, fromShift: 0, bend: 24 });
+  wire("plumax", "filterax", { from: "left", to: "right", color: M, dashed: true, fromShift: 40, bend: 28 });
+  wire("plumax", "finitevolx", { from: "bottom", to: "top", color: N, fromShift: -380, label: lbl("les_fvm"), at: 0.5 });
+  wire("plumax", "gaussx", { from: "bottom", to: "top", color: N, fromShift: -170, label: lbl("lagrangian · les_fvm"), at: 0.5 });
+  wire("plumax", "pipekit", { from: "bottom", to: "top", color: G, fromShift: 110, label: lbl("operators"), at: 0.5 });
+  wire("plumax", "cycle", { from: "bottom", to: "top", color: G, dashed: true, fromShift: 300, label: lbl("adapters · tests"), at: 0.5 });
+  wire("plumax", "geotoolz", { from: "bottom", to: "top", color: G, dashed: true, fromShift: 440, toShift: -60, label: lbl("geo"), at: 0.5 });
+  wire("plumax", "xtremax", { from: "bottom", to: "top", color: M, dashed: true, fromShift: 470, toShift: 40, label: lbl("population"), at: 0.5 });
+  wire("finitevolx", "spectraldiffx", { from: "bottom", to: "top", color: X });
+  ready();
+</script>
+</body>
+</html>

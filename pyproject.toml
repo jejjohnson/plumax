@@ -1,7 +1,7 @@
 [project]
 name = "plumax"
 version = "0.1.2"
-description = "Differentiable, probabilistic atmospheric plume dispersion and methane retrieval models (JAX)."
+description = "Differentiable, probabilistic plume transport and source inversion for any passive tracer (JAX)."
 authors = [
     {name="J. Emmanuel Johnson", email="jemanjohnson34@gmail.com"},
 ]
@@ -13,8 +13,8 @@ keywords = [
     "dispersion",
     "atmospheric-transport",
     "data-assimilation",
-    "radiative-transfer",
-    "matched-filter",
+    "source-attribution",
+    "emission-estimation",
     "jax",
     "bayesian-inference",
 ]

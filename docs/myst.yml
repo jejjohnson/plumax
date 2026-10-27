@@ -16,8 +16,8 @@ project:
   id: plumax-docs
   title: plumax
   description: >-
-    Differentiable, probabilistic atmospheric plume dispersion and methane
-    retrieval models, built on JAX.
+    Differentiable, probabilistic plume transport and source inversion for
+    any passive tracer, built on JAX.
   github: https://github.com/jejjohnson/plumax
   authors:
     - name: J. Emmanuel Johnson
@@ -120,7 +120,9 @@ site:
   title: plumax
   template: book-theme
   options:
+    logo: assets/icon-transparent.svg
     logo_text: plumax
+    favicon: assets/favicon.svg
   # mystmd requires a full URL here (both `/reference/` and `reference/` are
   # rejected), so the deployed location is hard-coded the way `repo_url` is in
   # mkdocs.yml.
