@@ -70,6 +70,7 @@ plugins:
 nav:
   - Overview: index.md
   - Tier 0 — Meteorology: met.md
+  - Tier 0 — Observations: obs.md
   - Tier I — Gaussian:
       - Gaussian plume: gauss_plume.md
       - Gaussian puff: gauss_puff.md

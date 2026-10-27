@@ -64,6 +64,7 @@ public API is re-exported through `src/plumax/__init__.py`.
 | `gauss_puff`       | Time-resolved Gaussian puff (Pasquill–Gifford), diffrax wind integration, OU sub-grid turbulence. **Tier I.** |
 | `les_fvm`          | Eulerian 3-D advection–diffusion on an Arakawa C-grid via `finitevolX`. **Tier III.** |
 | `met`              | `MetField` gridded meteorology on the `les_fvm` analysis grid + `wrfout` / ERA5 loaders (`load_wrf`, `load_era5`), `LocalFrame` / `TimeAxis` + `to_prescribed_wind` adapter. **Tier 0.** |
+| `obs`              | L2 methane products (TROPOMI, EMIT, GHGSat) → `coupled.Instrument` + observed column-mass enhancement, via xrreader. **Tier 0.** |
 | `operators`        | `pipekit.Operator` wrappers over the forward models. |
 | `adapters`         | `pipekit_cycle` `ForwardModel` / `ObservationOperator` adapters. |
 
