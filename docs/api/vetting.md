@@ -1,6 +1,6 @@
 # Plume vetting
 
-Plume-candidate vetting on arrays (L1): which of a candidate's pixels are in (the seeds) and which are out (the background pool), and how this scene's clutter scores in the candidate's shape (the null), on radtrax's plume-agnostic absorption-shape test (`radtrax.retrieval.absorption`: the pairing, the ratio spectrum, the fit and `D_norm`; see radtrax's [absorption-shape test](https://jejjohnson.github.io/radtrax/absorption-test/) page).
+Plume-candidate vetting on arrays (L1): which of a candidate's pixels are in (the seeds) and which are out (the background pool), and how this scene's clutter scores in the candidate's shape (the null), on radtrax's plume-agnostic absorption-shape test (`radtrax.retrieval.absorption`: the pairing, the ratio spectrum, the fit and `D_norm`; see radtrax's [absorption-shape test](https://jejjohnson.github.io/radtrax/absorption-test/) page). Theory: [plume vetting](../../plume-vetting/); a worked scene: [the plume vetting notebook](../../vetting-one-scene/).
 
 Errors are radtrax's public exception classes (`ParameterError`, `DegenerateInputError`, `ShapeError`), each also a `ValueError`.
 
