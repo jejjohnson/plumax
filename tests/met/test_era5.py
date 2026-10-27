@@ -221,6 +221,38 @@ def test_global_grid_interpolates_across_the_seam(tmp_path):
         )
 
 
+def test_regional_subset_across_greenwich(tmp_path):
+    """A [0, 360) subset across 0° must load like the same subset in ±180°."""
+    site = (5.0, -0.4)  # between the 359.5° and 359.75° columns
+    seam_frame = LocalFrame.at(*site)
+    grid = make_grid(*DOMAIN, dtype=jnp.float64)
+    lat = np.array([6.0, 5.0, 4.0])
+    east = np.array([359.5, 359.75, 0.0, 0.25, 0.5])  # sorts to 0 … 359.75
+    centred = ((east + 180.0) % 360.0) - 180.0  # -0.5 … 0.5
+    a, b = tmp_path / "east", tmp_path / "centred"
+    a.mkdir()
+    b.mkdir()
+    across = load_era5(
+        *write_era5(a, lon=east, lat=lat), plume_grid=grid, frame=seam_frame
+    )
+    inside = load_era5(
+        *write_era5(b, lon=centred, lat=lat), plume_grid=grid, frame=seam_frame
+    )
+    for name in ("u", "v", "pressure", "pbl_height"):
+        np.testing.assert_allclose(
+            np.asarray(getattr(across, name)),
+            np.asarray(getattr(inside, name)),
+            rtol=1e-12,
+        )
+    # the sorted axis's false gap (0.5° to 359.5°) is not coverage
+    with pytest.raises(ValueError, match="outside"):
+        load_era5(
+            *write_era5(a, lon=east, lat=lat),
+            plume_grid=grid,
+            frame=LocalFrame.at(5.0, 100.0),
+        )
+
+
 def test_single_levels_on_another_grid_are_rejected(tmp_path, frame, grid):
     pl, sl = write_era5(tmp_path, sl_lon=LON + 0.125)
     with pytest.raises(ValueError, match="different lat/lon grids"):
