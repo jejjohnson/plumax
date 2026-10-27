@@ -50,11 +50,13 @@ finitevolX for the Eulerian grid, to gaussx for every posterior covariance,
 and to pipekit for the `Operator` interface. Inference sits to one side:
 every tier exposes the same `forward(params, met) → observations`, so the
 samplers and assimilation schemes are written once against it. NumPyro does
-that today; vardax (variational) and filterax (ensemble Kalman) are planned.
+that for sampling; vardax (variational, the `assim` extra) runs the Tier II
+optimal interpolation and the Tier III 3D-Var; filterax (ensemble Kalman) is
+planned.
 
 :::{figure} assets/diagrams/plumax-deps.png
 :label: fig-plumax-deps
-:alt: plumax and its dependencies by GeoStack layer: an Inference column with numpyro (today, behind the inference extra), vardax and filterax (planned); in GeoModels, plumax depends on radtrax through coupled and adapters, and radtrax never imports plumax; in GeoNumerics, les_fvm uses finitevolX (with spectraldiffx underneath) and lagrangian and les_fvm use gaussx; in GeoStack, operators use pipekit, adapters satisfy pipekit-cycle in tests only, and geotoolz is a planned geo extra; in GeoML, xtremax is planned for population and geonnax arrives through radtrax; jax, equinox, diffrax, optimistix, lineax, xarray, netcdf4 and scipy are the third-party foundations.
+:alt: plumax and its dependencies by GeoStack layer: an Inference column with numpyro (today, behind the inference extra), vardax (today, behind the assim extra) and filterax (planned); in GeoModels, plumax depends on radtrax through coupled and adapters, and radtrax never imports plumax; in GeoNumerics, les_fvm uses finitevolX (with spectraldiffx underneath) and lagrangian and les_fvm use gaussx; in GeoStack, operators use pipekit, adapters satisfy pipekit-cycle in tests only, and geotoolz is a planned geo extra; in GeoML, xtremax is planned for population and geonnax arrives through radtrax; jax, equinox, diffrax, optimistix, lineax, xarray, netcdf4 and scipy are the third-party foundations.
 
 plumax's declared dependencies by GeoStack layer. Each arrow is labelled with
 the plumax subpackage that imports the dependency.
@@ -83,11 +85,12 @@ uv add plumax
 ```
 
 `gaussx`, `pipekit` and `radtrax` are not yet on PyPI; from a checkout they
-resolve from git via `[tool.uv.sources]`. NumPyro (Bayesian inference) and
-the notebook dependencies are optional extras:
+resolve from git via `[tool.uv.sources]`. NumPyro (Bayesian inference),
+vardax (the Tier II and Tier III source inversions) and the notebook
+dependencies are optional extras:
 
 ```bash
-uv add "plumax[inference]"
+uv add "plumax[inference,assim]"
 ```
 
 ## Quickstart: simulate a plume, then recover its emission rate

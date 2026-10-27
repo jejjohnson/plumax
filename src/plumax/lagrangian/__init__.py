@@ -15,9 +15,10 @@ inference)**:
 - ``concentration`` — forward steady concentration field via residence-time
   binning (``simulate_lagrangian``).
 - ``footprint`` — backward source–receptor sensitivity (``compute_footprint``).
-- ``inversion`` — closed-form Gaussian and sign-constrained lognormal Bayesian
-  inversion of the source vector from observations, with a Matérn-3/2 spatial
-  prior (``linear_gaussian_inversion`` / ``lognormal_inversion``).
+- ``inversion`` — Gaussian and sign-constrained lognormal Bayesian inversion of
+  the source vector from observations, with a Matérn-3/2 spatial prior
+  (``linear_gaussian_inversion`` / ``lognormal_inversion``): vardax
+  ``OptimalInterpolation`` over ``footprint_operator`` (the ``assim`` extra).
 
 The footprint emulator and the amortized predictor (Steps 3–5) are not yet
 implemented.
@@ -37,6 +38,7 @@ from plumax.lagrangian.footprint import compute_footprint
 from plumax.lagrangian.inversion import (
     GaussianPosterior,
     LognormalPosterior,
+    footprint_operator,
     linear_gaussian_inversion,
     lognormal_inversion,
     matern32_covariance,
@@ -68,6 +70,7 @@ __all__ = [
     "compute_footprint",
     "concentration",
     "footprint",
+    "footprint_operator",
     "hanna_profiles",
     "integrate_particles",
     "inversion",

@@ -14,40 +14,49 @@ covariance at overpass ``t``. (The IC / background term ``½‖c_0 − c_b(0)‖
 the full three-term design cost is future work — this v1 pins the initial field
 and inverts only the source.)
 
-The solver here is the **direct strong-constraint** path: a single L-BFGS
-minimisation of the full nonlinear cost in whitened control space. The key
+The solve is a **vardax analysis** (the ``assim`` extra,
+``pip install 'plumax[assim]'``). The control is a source, not an initial
+state, so the cost above is ``vardax.ThreeDVar`` with the source–receptor map
+``𝒢(S) = vec H c(S, ·)`` as its observation operator
+(:meth:`FourDVarProblem.source_receptor_operator`), minimised by L-BFGS. The key
 enabler (design §adjoint) is that **JAX reverse-mode autodiff through the diffrax
 FV solve is the exact discrete adjoint** — there is no hand-written adjoint
-model; ``jax.value_and_grad`` of the cost supplies the gradient the optimiser
-consumes. The incremental / Gauss-Newton inner-loop variant (design
-§incremental) is a separate future addition.
+model. The diffrax solve defines only a VJP, so the operator is linearised in
+reverse mode (``CallableObs(jac="bwd", materialise=True)``). The incremental / Gauss-Newton
+inner-loop variant (design §incremental) is a separate future addition.
 
 The control vector here is the **time-resolved scalar emission rate** ``S = q``
 at a known source location — the v1 scope. A per-cell space–time source field is
 a natural extension (the forward already accepts an arbitrary
-``emission_fn(t)``); the cost / control-transform machinery below is written
-against a flat control vector so that extension does not change the solver.
+``emission_fn(t)``); the analysis is written against a flat control vector so
+that extension does not change the solver.
 
 Control-variable transform (design §control-transform): optimisation runs in
-**whitened space** ``χ = L⁻¹ (S − S_b)`` where ``B = L Lᵀ``. The prior term is
-then the identity ``½‖χ‖²``, which is what makes the problem well-conditioned;
+**whitened space** ``χ = L⁻¹ (S − S_b)`` where ``B = L Lᵀ``, through
+``vardax.LinearParameterization(linear_basis(L, variance=1))``. The prior term
+is then the identity ``½‖χ‖²``, which is what makes the problem well-conditioned;
 the Matérn-3/2 temporal prior from :mod:`plumax.lagrangian.inversion` supplies
-``B`` and its Cholesky factor.
+``B``. The observations are whitened too (``y / σ`` with ``R = I``), so the
+tiny concentration-scale variances never enter a linear solve. The posterior is
+vardax's Gauss–Newton Laplace covariance of that linear control.
 """
 
 from __future__ import annotations
 
+import functools
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import einx
 import gaussx as gx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 
+from plumax._vardax import require_vardax
 from plumax.lagrangian.inversion import _is_traced
 from plumax.les_fvm.boundary import build_default_concentration_bc
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
@@ -59,6 +68,7 @@ from plumax.les_fvm.wind import uniform_wind_field
 
 if TYPE_CHECKING:
     import optimistix as optx
+    import vardax
 
 
 # ── differentiable forward: emission signal → column-observation time series ──
@@ -360,7 +370,11 @@ class FourDVarProblem:
         return self.prior_mean + self.prior_chol @ chi
 
     def cost(self, chi: jax.Array) -> jax.Array:
-        """The 4D-Var cost ``J`` at whitened control ``χ`` (scalar)."""
+        """The 4D-Var cost ``J`` at whitened control ``χ`` (scalar).
+
+        A diagnostic: the solve minimises the same cost inside
+        ``vardax.ThreeDVar``, not through this method.
+        """
         q = self.source_from_whitened(chi)
         predicted = self.forward.predict(q)  # (n_t, n_obs)
         residual = predicted - self.observations
@@ -371,6 +385,108 @@ class FourDVarProblem:
     def value_and_grad(self, chi: jax.Array) -> tuple[jax.Array, jax.Array]:
         """``(J, ∂J/∂χ)`` — the gradient is the exact adjoint via reverse-mode AD."""
         return jax.value_and_grad(self.cost)(chi)
+
+    def source_receptor_operator(self) -> vardax.CallableObs:
+        """The whitened source–receptor map as a vardax observation operator.
+
+        ``𝒢(S) = vec(forward.predict(S)) / σ`` on a ``(1, n_t)`` source row,
+        so the observation-error covariance is the identity. The diffrax
+        solve defines only a VJP, whose ``while_loop`` JAX cannot transpose,
+        so the operator linearises by forming the Jacobian with one VJP per
+        observation (``jac="bwd", materialise=True``); the control is
+        ``n_t`` long, so that is small.
+
+        Returns:
+            A ``vardax.CallableObs`` ``(1, n_t) → (1, n_t·n_obs)``.
+
+        Raises:
+            ImportError: Without the ``assim`` extra.
+        """
+        vdx = require_vardax("FourDVarProblem.source_receptor_operator")
+        sigma = jnp.sqrt(self.obs_variance)  # (n_t, n_obs)
+        predict = self.forward.predict
+
+        def whitened_prediction(source: jax.Array) -> jax.Array:
+            # 𝒢(S) / σ, flattened over (time, receptor)
+            return einx.rearrange("t o -> 1 (t o)", predict(source[0]) / sigma)
+
+        return vdx.CallableObs(fn=whitened_prediction, jac="bwd", materialise=True)
+
+    def analysis(
+        self,
+        *,
+        minimiser: optx.AbstractMinimiser | None = None,
+        max_steps: int = 100,
+        initial_whitened: jax.Array | None = None,
+    ) -> tuple[vardax.ThreeDVar, vardax.Batch1D]:
+        """The 3D-Var analysis of this problem, and its one-window batch.
+
+        ``vardax.ThreeDVar`` over :meth:`source_receptor_operator`, with the
+        whitened control ``S = S_b + L χ``, ``½‖χ‖²``, as a
+        ``vardax.LinearParameterization`` and ``R = I`` on the whitened
+        observations ``y / σ``.
+
+        Args:
+            minimiser: An optimistix minimiser. Default
+                ``optx.LBFGS(rtol=1e-6, atol=1e-8)``.
+            max_steps: Iteration cap.
+            initial_whitened: First guess ``χ₀``. Default ``0`` (the prior
+                mean).
+
+        Returns:
+            ``(model, batch)``: ``model(batch)`` is the MAP source, shape
+            ``(1, 1, n_t)``, ``model.analyse(batch)`` adds the minimiser's
+            diagnostics, and ``model.posterior(batch)`` is its Laplace
+            posterior.
+
+        Raises:
+            ImportError: Without the ``assim`` extra.
+        """
+        import optimistix as optx
+
+        vdx = require_vardax("FourDVarProblem.analysis")
+        n_t = self.prior_mean.shape[0]
+        dtype = self.prior_mean.dtype
+        basis = vdx.linear_basis(self.prior_chol, variance=1.0)
+        if initial_whitened is None:
+            control = vdx.LinearParameterization(basis, x_b=self.prior_mean[None])
+        else:
+            control = _warm_start_control()(
+                basis, x_b=self.prior_mean[None], start=jnp.asarray(initial_whitened)
+            )
+        observations = self.observations / jnp.sqrt(self.obs_variance)
+        n_flat = observations.size
+
+        def row_operator(op: lx.AbstractLinearOperator, n: int):
+            return lx.FunctionLinearOperator(
+                lambda x: op.mv(x[0])[None],
+                jax.ShapeDtypeStruct((1, n), dtype),
+                frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+            )
+
+        psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+        model = vdx.ThreeDVar(
+            obs_op=self.source_receptor_operator(),
+            prior_mean=self.prior_mean[None],
+            # unused by the solve and the posterior (the control's prior is
+            # ½‖χ‖²); B = L Lᵀ for consistency
+            prior_cov_op=row_operator(
+                lx.MatrixLinearOperator(self.prior_chol @ self.prior_chol.T, psd), n_t
+            ),
+            obs_cov_op=lx.IdentityLinearOperator(
+                jax.ShapeDtypeStruct((1, n_flat), dtype)
+            ),
+            minimiser=vdx.OptimistixMinimiser(
+                minimiser or optx.LBFGS(rtol=1e-6, atol=1e-8), max_steps=max_steps
+            ),
+            parameterization=control,
+            cov_solver=lx.AutoLinearSolver(well_posed=True),
+        )
+        batch = vdx.Batch1D(
+            input=einx.rearrange("t o -> 1 1 (t o)", observations),
+            mask=jnp.ones((1, 1, n_flat), dtype=dtype),
+        )
+        return model, batch
 
 
 def build_problem(
@@ -483,14 +599,14 @@ class FourDVarResult:
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
             when :func:`solve_4dvar` is called with ``compute_posterior=True``.
-        converged: optx's strict success flag (``sol.result == successful``).
-            Appended after ``posterior`` to preserve the positional constructor
-            contract. L-BFGS on these stiff problems frequently exhausts
-            ``max_steps`` while still returning a good, finite MAP, so
-            ``converged is False`` with a finite ``source`` is common and not by
-            itself alarming. The genuine failure to watch for is a non-finite
-            ``source`` (a diverged solve), which :func:`solve_4dvar` warns about
-            loudly.
+        converged: Whether the optimiser stopped on its tolerances before
+            ``max_steps``, with a finite MAP. Appended after ``posterior`` to
+            preserve the positional constructor contract. L-BFGS on these
+            stiff problems frequently exhausts ``max_steps`` while still
+            returning a good, finite MAP, so ``converged is False`` with a
+            finite ``source`` is common and not by itself alarming. The
+            genuine failure to watch for is a non-finite ``source`` (a
+            diverged solve), which :func:`solve_4dvar` warns about loudly.
     """
 
     source: jax.Array
@@ -511,11 +627,11 @@ def solve_4dvar(
     solver: optx.AbstractMinimiser | None = None,
     compute_posterior: bool = False,
 ) -> FourDVarResult:
-    """Minimise the 4D-Var cost with L-BFGS in whitened space.
+    """Minimise the 4D-Var cost with L-BFGS in whitened space, via vardax.
 
-    Optimises ``χ`` (whitened control), so the prior is the identity Gaussian
-    and the gradient — the exact discrete adjoint of the FV solver — flows
-    through ``jax.value_and_grad`` of :meth:`FourDVarProblem.cost`.
+    Runs :meth:`FourDVarProblem.analysis`: ``vardax.ThreeDVar`` over the
+    whitened control ``χ``, so the prior is the identity Gaussian and the
+    gradient is the exact discrete adjoint of the FV solver.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -529,65 +645,78 @@ def solve_4dvar(
             :func:`posterior_covariance` at the MAP and attach it to the result.
 
     Returns:
-        The :class:`FourDVarResult` with the MAP source and diagnostics.
+        The :class:`FourDVarResult` with the MAP source and diagnostics from
+        ``vardax.ThreeDVar.analyse``.
+
+    Raises:
+        ImportError: Without the ``assim`` extra (``pip install
+            'plumax[assim]'``).
     """
     import optimistix as optx
 
-    n_t = problem.prior_mean.shape[0]
-    if initial_source is None:
-        chi0 = jnp.zeros(n_t)
-    else:
+    chi0 = None
+    if initial_source is not None:
         s0 = jnp.asarray(initial_source, dtype=float)
         # χ₀ = L⁻¹ (S₀ − S_b) — solve the triangular system rather than invert.
         chi0 = jax.scipy.linalg.solve_triangular(
             problem.prior_chol, s0 - problem.prior_mean, lower=True
         )
-
-    if solver is None:
-        solver = optx.LBFGS(rtol=rtol, atol=atol)
-    sol = optx.minimise(
-        lambda chi, _args: problem.cost(chi),
-        solver,
-        chi0,
+    model, batch = problem.analysis(
+        minimiser=solver or optx.LBFGS(rtol=rtol, atol=atol),
         max_steps=max_steps,
-        throw=False,
+        initial_whitened=chi0,
     )
-    # `throw=False` suppresses the failure exception, so surface the outcome
-    # instead of trusting `sol.value` blindly. `converged` is optx's strict
-    # success flag; L-BFGS on these stiff transport problems frequently
-    # exhausts `max_steps` while still returning a good, finite MAP, so a bare
-    # `converged is False` is common and not alarming on its own. The genuine
-    # hazard the caller must be warned about loudly is a *diverged* solve whose
-    # MAP is non-finite and would silently poison `posterior_covariance`.
-    converged = bool(sol.result == optx.RESULTS.successful)
-    chi_star = sol.value
-    source = problem.source_from_whitened(chi_star)
+    analysis, outcome = model.analyse(batch)
+    source = analysis[0, 0]  # S* = S_b + L χ*, (n_t,)
+    chi_star = outcome.value[0]  # χ*, the whitened control
+    n_steps = int(outcome.num_steps[0])
     finite = bool(jnp.all(jnp.isfinite(source)))
+    # `throw=False` hides the optimiser outcome, so surface it. L-BFGS on these
+    # stiff transport problems often exhausts `max_steps` while still
+    # returning a good, finite MAP, so a bare `converged is False` is common
+    # and not alarming on its own; a non-finite MAP is the hazard to flag.
+    converged = finite and n_steps < max_steps
     if not finite:
         warnings.warn(
-            f"solve_4dvar: the optimiser returned a non-finite source "
-            f"(result={sol.result}); the solve diverged. The posterior is "
-            f"skipped (it would be NaN). Check the prior conditioning, "
-            f"`obs_variance`, and `initial_source`.",
+            "solve_4dvar: the optimiser returned a non-finite source; the "
+            "solve diverged. The posterior is skipped (it would be NaN). Check "
+            "the prior conditioning, `obs_variance`, and `initial_source`.",
             RuntimeWarning,
             stacklevel=2,
         )
-    # Skip the posterior on a non-finite MAP: evaluating the Gauss-Newton
-    # Jacobian + inverse at a NaN control would raise or attach a NaN covariance
-    # — the exact downstream poisoning the finiteness check exists to prevent.
+    # Skip the posterior on a non-finite MAP: the Gauss-Newton precision at a
+    # NaN control would attach a NaN covariance.
     posterior = (
-        posterior_covariance(problem, chi_star)
-        if compute_posterior and finite
-        else None
+        _laplace_posterior(problem, source) if compute_posterior and finite else None
     )
     return FourDVarResult(
         source=source,
         whitened=chi_star,
-        cost=float(problem.cost(chi_star)),
-        n_steps=int(sol.stats.get("num_steps", -1)),
+        cost=float(outcome.cost[0]),
+        n_steps=n_steps,
         converged=converged,
         posterior=posterior,
     )
+
+
+@functools.cache
+def _warm_start_control() -> type:
+    """``vardax.LinearParameterization`` that starts from a given ``χ₀``.
+
+    Built on first use, since vardax is optional. The subclass keeps
+    ``isinstance(..., LinearParameterization)``, which vardax's Laplace
+    covariance relies on.
+    """
+    vdx = require_vardax("solve_4dvar")
+
+    class WarmStartControl(vdx.LinearParameterization):
+        start: jax.Array
+
+        def init_control(self, *, key: jax.Array | None = None) -> jax.Array:
+            del key
+            return self.start.astype(self.x_b.dtype)
+
+    return WarmStartControl
 
 
 # ── posterior covariance (Gauss-Newton Laplace approximation) ─────────────────
@@ -620,28 +749,31 @@ class PosteriorCovariance:
         return jnp.sqrt(jnp.diagonal(self.source_covariance))
 
 
-def _gauss_newton_hessian(
-    problem: FourDVarProblem, whitened_map: jax.Array
-) -> tuple[jax.Array, jax.Array]:
-    """Assemble ``(H_GN, J̃)`` at the MAP whitened control ``χ*``.
+def _laplace_posterior(
+    problem: FourDVarProblem, source: jax.Array
+) -> PosteriorCovariance:
+    """vardax's Gauss–Newton Laplace covariance at the MAP source.
 
-    The Jacobian ``J̃ = ∂(predicted_obs)/∂χ`` of the flattened whitened-space
-    observation prediction is taken with :func:`jax.jacrev`. Forward-mode
-    (``jacfwd``) would be better-shaped here — ``n_state = n_t`` is small while
-    the observation vector is large — but the diffrax FV solve exposes a
-    reverse-mode adjoint (``custom_vjp``) and rejects forward-mode JVPs, so
-    reverse-mode is the only differentiation path through the transport model.
-    The Gauss-Newton Hessian is then ``H_GN = I + J̃ᵀ diag(1/R) J̃``.
+    ``vardax.LaplaceCovariance`` on the linear control gives
+    ``P_S = L (I + J̃ᵀ J̃)⁻¹ Lᵀ`` with ``J̃ = ∂(𝒢/σ)/∂χ``, materialised
+    column by column; ``P_χ = L⁻¹ P_S L⁻ᵀ`` by two triangular solves.
     """
-
-    def predict_whitened(chi: jax.Array) -> jax.Array:
-        return problem.forward.predict(problem.source_from_whitened(chi)).reshape(-1)
-
-    jac = jax.jacrev(predict_whitened)(whitened_map)  # (n_obs_flat, n_state)
-    r_inv = (1.0 / problem.obs_variance).reshape(-1)  # (n_obs_flat,)
-    n_state = whitened_map.shape[0]
-    h_gn = jnp.eye(n_state) + jac.T @ (r_inv[:, None] * jac)
-    return h_gn, jac
+    vdx = require_vardax("posterior_covariance")
+    model, batch = problem.analysis()
+    n_t = source.shape[0]
+    posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
+        source[None], model, batch
+    )
+    p_source = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
+        jnp.eye(n_t, dtype=source.dtype)
+    )
+    p_source = gx.symmetrize(p_source)
+    chol = problem.prior_chol
+    half = jax.scipy.linalg.solve_triangular(chol, p_source, lower=True)
+    p_chi = jax.scipy.linalg.solve_triangular(chol, half.T, lower=True)
+    return PosteriorCovariance(
+        whitened_covariance=gx.symmetrize(p_chi), source_covariance=p_source
+    )
 
 
 def posterior_covariance(
@@ -649,12 +781,10 @@ def posterior_covariance(
 ) -> PosteriorCovariance:
     """Gauss-Newton Laplace posterior covariance around a 4D-Var MAP.
 
-    Builds the Gauss-Newton Hessian ``H_GN = I + J̃ᵀ R⁻¹ J̃`` of the whitened
-    cost at ``whitened_map`` and inverts it with :mod:`gaussx` (the Hessian is
-    wrapped as a symmetric positive-semidefinite
-    :class:`lineax.MatrixLinearOperator` and inverted via :func:`gaussx.inv`).
-    The whitened posterior covariance is ``P_χ = H_GN⁻¹`` and the source-space
-    covariance is ``P_S = L P_χ Lᵀ`` for the prior Cholesky factor ``L``.
+    vardax's ``LaplaceCovariance`` of the whitened control at
+    ``whitened_map``: the Gauss–Newton precision ``I + J̃ᵀ R⁻¹ J̃`` in ``χ``,
+    mapped to the source as ``P_S = L P_χ Lᵀ`` for the prior Cholesky factor
+    ``L``.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -663,21 +793,12 @@ def posterior_covariance(
 
     Returns:
         The :class:`PosteriorCovariance` holding ``P_χ`` and ``P_S``.
+
+    Raises:
+        ImportError: Without the ``assim`` extra.
     """
     chi = jnp.asarray(whitened_map, dtype=float)
-    h_gn, _ = _gauss_newton_hessian(problem, chi)
-    hessian_op = lx.MatrixLinearOperator(
-        h_gn, tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
-    )
-    p_chi = gx.inv(hessian_op).as_matrix()
-    # Symmetrise to clean up asymmetric round-off before the congruence map.
-    p_chi = gx.symmetrize(p_chi)
-    chol = problem.prior_chol  # L with B = L Lᵀ
-    p_source = chol @ p_chi @ chol.T
-    return PosteriorCovariance(
-        whitened_covariance=p_chi,
-        source_covariance=gx.symmetrize(p_source),
-    )
+    return _laplace_posterior(problem, problem.source_from_whitened(chi))
 
 
 def laplace_sample(
