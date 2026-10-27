@@ -5,10 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 import jax.numpy as jnp
+import jaxtyping
 import numpy as np
 import pytest
 import xarray as xr
+from hypothesis import given, strategies as st
+from hypothesis.extra import numpy as hnp
 
+from plumax.errors import GridMismatchError
 from plumax.les_fvm.grid import make_grid
 from plumax.met import LocalFrame
 from plumax.priors import load_inventory, per_tile_background
@@ -114,5 +118,25 @@ def test_per_tile_background_is_the_tile_median():
     columns = np.array([1880.0, 1880.0, 1960.0, 1900.0, 1900.0])
     background = per_tile_background(columns, receptors, tile_m=10_000.0)
     np.testing.assert_array_equal(background, [1880.0, 1880.0, 1880.0, 1900.0, 1900.0])
-    with pytest.raises(ValueError, match="receptors"):
+    # the jaxtyping hook catches the mismatch first in tests; without it,
+    # GridMismatchError does
+    with pytest.raises((GridMismatchError, jaxtyping.TypeCheckError)):
         per_tile_background(columns, receptors[:3])
+
+
+@given(
+    positions=hnp.arrays(np.float64, (12, 2), elements=st.floats(-50_000.0, 50_000.0)),
+    level=st.floats(1700.0, 2100.0),
+    seed=st.integers(0, 2**16),
+)
+def test_per_tile_background_properties(positions, level, seed):
+    # a constant field is its own background
+    flat = np.full(12, level)
+    np.testing.assert_array_equal(per_tile_background(flat, positions), flat)
+    # the result follows the receptors under any reordering
+    columns = level + np.arange(12.0)
+    order = np.random.default_rng(seed).permutation(12)
+    shuffled = per_tile_background(columns[order], positions[order])
+    np.testing.assert_array_equal(
+        shuffled, per_tile_background(columns, positions)[order]
+    )

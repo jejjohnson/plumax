@@ -2218,8 +2218,8 @@ requires-dist = [
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "xarray" },
-    { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9" },
-    { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9" },
+    { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
+    { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
 ]
 provides-extras = ["inference", "io", "notebooks"]
 
@@ -2233,8 +2233,8 @@ dev = [
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-xdist", specifier = ">=3.5" },
-    { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9" },
-    { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9" },
+    { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
+    { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=4bebaa2449c759c463377762b710ffa29e0137e4" },
 ]
 docs = [
     { name = "ipykernel", specifier = ">=6.29" },
@@ -3516,7 +3516,7 @@ wheels = [
 [[package]]
 name = "xrtoolz"
 version = "0.0.5"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "dask", extra = ["array"] },
     { name = "einx" },
@@ -3545,7 +3545,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-core"
 version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-core&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-core&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "numpy" },
     { name = "pipekit" },
@@ -3555,7 +3555,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-einx"
 version = "0.0.1"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-einx&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-einx&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "einx" },
     { name = "numpy" },
@@ -3566,7 +3566,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-grad"
 version = "0.0.3"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-grad&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-grad&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "finitediffx" },
     { name = "jaxtyping" },
@@ -3577,7 +3577,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-reader"
 version = "0.0.4"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
@@ -3587,7 +3587,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-sklearn"
 version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-sklearn&rev=7fc6c69ec73a93d82802c491e1d2060cac010ce9#7fc6c69ec73a93d82802c491e1d2060cac010ce9" }
+source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-sklearn&rev=4bebaa2449c759c463377762b710ffa29e0137e4#4bebaa2449c759c463377762b710ffa29e0137e4" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
