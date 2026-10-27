@@ -16,7 +16,8 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 
 | Tier | Module | Contents |
 |---|---|---|
-| 0 | [Meteorology](met.md) | `MetField`, `load_wrf`, `to_prescribed_wind` |
+| 0 | [Meteorology](met.md) | `MetField`, `load_wrf`, `load_era5`, `LocalFrame`, `TimeAxis`, `surface_layer_from_met`, `to_prescribed_wind` |
+| 0 | [Observations](obs.md) | `load_tropomi_l2`, `load_emit_l2b`, `load_ghgsat_l2`, `ColumnObservation` |
 | I | [Gaussian plume](gauss_plume.md) | steady-state plume + emission-rate inference |
 | I | [Gaussian puff](gauss_puff.md) | time-resolved puffs, OU turbulence |
 | II | [Lagrangian](lagrangian.md) | particle dispersion |

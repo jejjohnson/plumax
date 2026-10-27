@@ -11,6 +11,8 @@ Sub-packages
 - ``met``          : gridded meteorology (``MetField``) on the ``les_fvm``
                      analysis grid, with a ``wrfout`` loader and the adapter
                      that feeds it to the Eulerian solver as wind.
+- ``obs``          : satellite L2 methane products (TROPOMI, EMIT, GHGSat)
+                     as ``coupled.Instrument``s with observed enhancements.
 
 The ``operators`` and ``adapters`` modules expose the forward models as
 ``pipekit`` operators and ``pipekit_cycle`` protocol adapters respectively.
@@ -27,6 +29,7 @@ from plumax import (
     gauss_puff,
     les_fvm,
     met,
+    obs,
     population,
 )
 
@@ -39,5 +42,6 @@ __all__ = [
     "gauss_puff",
     "les_fvm",
     "met",
+    "obs",
     "population",
 ]

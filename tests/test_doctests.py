@@ -14,6 +14,7 @@ DOCTESTED_MODULES = (
     "plumax.met._src.regrid",
     "plumax.met._src.surface_layer",
     "plumax.met._src.time",
+    "plumax.obs._src.ingest",
 )
 
 
