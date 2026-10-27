@@ -49,7 +49,7 @@ import einx
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
-from jaxtyping import Float
+from jaxtyping import Float, Int
 
 from plumax._src.errors import (
     GridMismatchError,
@@ -95,7 +95,8 @@ def load_era5(
         1. Read both files, check they share times and a lat/lon grid, and
            order the levels surface first.
         2. Integrate each level's height above ground from ``sp``.
-        3. Convert ω to w; close the longitude seam on a global grid.
+        3. Convert ω to w. Unwrap a regional subset's longitudes so they
+           increase across 0°/360° or ±180°; close the seam of a global grid.
         4. Interpolate every column to the analysis heights, then sample the
            analysis T-, U- and V-points bilinearly and project the wind onto
            the frame's axes.
@@ -115,7 +116,8 @@ def load_era5(
     Raises:
         MissingExtraError: If the ``io`` extra (xrtoolz) is not installed.
         MissingVariableError: If a required variable is missing.
-        GridMismatchError: If the two files' times or lat/lon grids differ.
+        GridMismatchError: If the two files' times or lat/lon grids differ,
+            or the longitudes are unevenly spaced.
         TimeAxisError: If ``times`` selects nothing.
         DomainError: If an analysis point falls outside the ERA5 domain.
     """
@@ -172,8 +174,14 @@ def load_era5(
         height_agl = height.transpose(*dims).values
         pbl_height = surface["blh"].transpose("time", "lat", "lon").values
         lat = levels["lat"].values
-        lon = levels["lon"].values
+        lon, lon_order = _unwrap_longitudes(levels["lon"].values)
         clock = TimeAxis.from_datetimes(levels["time"].values)
+
+    # --- longitudes in file order → increasing from the subset's west edge ---
+    reorder = lambda f: einx.get_at("... [lon], k -> ... k", f, lon_order)
+    fields = (u_east, v_north, omega, temperature, pressure_pa, height_agl)
+    u_east, v_north, omega, temperature, pressure_pa, height_agl = map(reorder, fields)
+    pbl_height = reorder(pbl_height)
 
     # --- vertical velocity ---
     # ρ = p / (R_d T)
@@ -260,6 +268,41 @@ def _is_periodic(lon: Float[np.ndarray, " lon"]) -> bool:
     return abs(lon.size * step - 360.0) < 1e-6 * 360.0
 
 
+def _unwrap_longitudes(
+    lon: Float[np.ndarray, " lon"],
+) -> tuple[Float[np.ndarray, " lon"], Int[np.ndarray, " lon"]]:
+    """Increasing longitudes starting after the axis's widest gap, and the order.
+
+    Sorting puts a regional subset across Greenwich in [0, 360), e.g. 359.5,
+    359.75, 0, 0.25, as 0, 0.25, 359.5, 359.75: no longer evenly spaced. The
+    widest cyclic gap is where the subset really ends, so the axis restarts
+    after it and runs 359.5, 359.75, 360, 360.25. A global axis is left as is.
+
+    Raises:
+        GridMismatchError: If the unwrapped axis is not evenly spaced.
+    """
+    n_lon = lon.size
+    identity = np.arange(n_lon)
+    if n_lon < 2 or _is_periodic(lon):
+        return lon, identity
+    # g_k = λ_{k+1} − λ_k, cyclically: the last gap closes through +360°
+    closed = einx.id("n, one -> (n + one)", lon, lon[:1] + 360.0)
+    gaps = np.diff(closed)
+    # the subset starts after its widest gap
+    start = (int(np.argmax(gaps)) + 1) % n_lon
+    order = (identity + start) % n_lon
+    rotated = lon[order]
+    # λ'_k = λ'_0 + ((λ'_k − λ'_0) mod 360°), increasing
+    unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
+    steps = np.diff(unwrapped)
+    # a missing column doubles a step; 1 % absorbs float32 coordinate roundoff
+    if not np.allclose(steps, np.median(steps), rtol=1e-2, atol=0.0):
+        raise GridMismatchError(
+            "load_era5: the longitudes are not evenly spaced (a gap in the subset)"
+        )
+    return unwrapped, order
+
+
 def _close_seam(
     field: Float[np.ndarray, "*lead lon"],
 ) -> Float[np.ndarray, "*lead lon_closed"]:
@@ -275,15 +318,14 @@ def _regular_index_map(
 
     i = (λ − λ₀) / Δλ,  j = (φ − φ₀) / Δφ.
 
-    Longitudes are put in the file's convention ([0, 360) when its longitudes
-    exceed 180) before indexing. On a global axis ``λ − λ₀`` is taken modulo
-    360° and ``i`` may reach ``n`` (the seam column the loader appends);
-    elsewhere points outside the grid come back NaN.
+    ``λ − λ₀`` is taken modulo 360°, so any longitude convention lands on the
+    (unwrapped, increasing) axis. On a global axis ``i`` may reach ``n`` (the
+    seam column the loader appends); elsewhere points outside the grid come
+    back NaN.
     """
     # Δλ, Δφ
     lon_step = float(lon[1] - lon[0])
     lat_step = float(lat[1] - lat[0])
-    wraps = bool(lon.max() > 180.0)
     periodic = _is_periodic(lon)
     last_i = lon.size if periodic else lon.size - 1
 
@@ -291,12 +333,8 @@ def _regular_index_map(
         x: Float[np.ndarray, "y x"], y: Float[np.ndarray, "y x"]
     ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
         point_lat, point_lon = frame.to_latlon(x, y)
-        if wraps:
-            point_lon = np.mod(point_lon, 360.0)
-        # λ − λ₀
-        lon_offset = point_lon - lon[0]
-        if periodic:
-            lon_offset = np.mod(lon_offset, 360.0)
+        # (λ − λ₀) mod 360°
+        lon_offset = np.mod(point_lon - lon[0], 360.0)
         # i = (λ − λ₀) / Δλ
         i = lon_offset / lon_step
         # j = (φ − φ₀) / Δφ
