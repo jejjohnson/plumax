@@ -96,7 +96,7 @@ def test_fixed_point_satisfies_both_similarity_equations(heat):
     u_star = np.asarray(layer.u_star)
     inv_l = np.asarray(layer.inverse_obukhov_length)
     rho = 1.0e5 / (R_DRY * 300.0)
-    # 1/L = −κ g H / (ρ c_p θ u*³), with θ = T at p = p_ref
+    # 1/L = −κ g H / (ρ c_p T u*³)
     np.testing.assert_allclose(
         inv_l, -KARMAN * GRAVITY * heat / (rho * CP_DRY * 300.0 * u_star**3), rtol=1e-6
     )
@@ -166,3 +166,41 @@ def test_bulk_richardson_matches_direct_profile():
     # the crossing is interpolated from the last level below the inversion
     assert inversion - GRID.dz < expected < z[-1]
     np.testing.assert_allclose(h, expected, rtol=1e-9)
+
+
+def test_buoyancy_uses_actual_temperature_off_reference_pressure():
+    """At p ≠ p_ref the θ/T factor must cancel: 1/L and w* carry T, not θ."""
+    p, t, heat = 85_000.0, 290.0, 150.0
+    field = make_field(
+        u_of_z=lambda z: 5.0 + 0.0 * z,
+        temperature_of_z=lambda z: t + 0.0 * z,
+        pressure=p,
+    )
+    layer = surface_layer_from_met(field, z0=Z0, sensible_heat_flux=heat)
+    rho = p / (R_DRY * t)
+    u_star = np.asarray(layer.u_star)
+    np.testing.assert_allclose(
+        layer.inverse_obukhov_length,
+        -KARMAN * GRAVITY * heat / (rho * CP_DRY * t * u_star**3),
+        rtol=1e-6,
+    )
+    expected_w = (GRAVITY * heat * PBLH / (rho * CP_DRY * t)) ** (1.0 / 3.0)
+    np.testing.assert_allclose(layer.w_star, expected_w, rtol=1e-12)
+
+
+@pytest.mark.parametrize("heat", [0.0, 100.0, -20.0])
+def test_calm_columns_stay_finite(heat):
+    calm = make_field(
+        u_of_z=lambda z: 0.0 * z, temperature_of_z=lambda z: 300.0 + 0.0 * z
+    )
+    layer = surface_layer_from_met(calm, z0=Z0, sensible_heat_flux=heat)
+    for value in (layer.u_star, layer.inverse_obukhov_length, layer.w_star):
+        assert np.all(np.isfinite(np.asarray(value)))
+    np.testing.assert_array_equal(layer.u_star, 0.0)
+    if heat == 0.0:  # calm and neutral: the neutral limit
+        np.testing.assert_array_equal(layer.inverse_obukhov_length, 0.0)
+        turb = hanna_turbulence_from(calm, layer, it=0, iy=0, ix=0)
+        sigma, tau = turb.at(jnp.array([10.0, 100.0]))
+        assert np.all(np.isfinite(np.asarray(sigma))) and np.all(
+            np.isfinite(np.asarray(tau))
+        )

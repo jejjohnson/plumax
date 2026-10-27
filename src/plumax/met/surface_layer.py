@@ -52,6 +52,8 @@ R_DRY = 287.04
 CP_DRY = 1004.5
 #: Reference pressure of potential temperature [Pa].
 P_REFERENCE = 1.0e5
+#: Floor on ``u*`` [m s⁻¹] where it divides ``1/L``, so calm columns stay finite.
+U_STAR_FLOOR = 1.0e-3
 
 
 def _unstable_x(zeta: Array) -> Array:
@@ -182,15 +184,21 @@ def surface_layer_from_met(
     The reference level is the analysis grid's lowest T-level, at height
     ``z = dz/2`` above its surface; the wind speed there averages ``u``
     and ``v`` from the neighbouring U- and V-points. With
-    ``θ = T (p_ref/p)^{R_d/c_p}`` and ``ρ = p/(R_d T)`` the system
+    ``ρ = p/(R_d T)`` the system
 
     - ``u* = κ U / (ln(z/z₀) − ψ_m(z/L) + ψ_m(z₀/L))``,
-    - ``1/L = −κ g H / (ρ c_p θ u*³)``
+    - ``1/L = −κ g H / (ρ c_p T u*³)``
 
     is iterated ``n_iterations`` times from neutral (``1/L = 0``), and
-    ``w* = (g H h / (ρ c_p θ))^{1/3}`` for ``H > 0`` with ``h`` the PBL
-    height, else zero. Very stable cases (large ``z/L``) converge slowly;
-    check the residual if ``ζ`` exceeds about 1.
+    ``w* = (g H h / (ρ c_p T))^{1/3}`` for ``H > 0`` with ``h`` the PBL
+    height, else zero. The usual forms carry ``g w'θ'/θ``; ``H/(ρ c_p)`` is
+    the actual-temperature flux ``w'T'`` and ``w'θ' = (θ/T) w'T'``, so the
+    potential-temperature factor cancels and ``T`` remains (dry air).
+
+    ``u*`` enters ``1/L`` floored at :data:`U_STAR_FLOOR`, so a calm column
+    stays finite: calm and neutral gives ``u* = 0``, ``1/L = 0``,
+    ``w* = 0``. Very stable cases (large ``z/L``) converge slowly; check
+    the residual if ``ζ`` exceeds about 1.
 
     Args:
         field: Met on the analysis grid.
@@ -213,15 +221,14 @@ def surface_layer_from_met(
     speed = jnp.sqrt(u_t**2 + v_t**2)
     temperature = field.temperature[:, 0]
     pressure = field.pressure[:, 0]
-    theta = temperature * (P_REFERENCE / pressure) ** (R_DRY / CP_DRY)
     rho = pressure / (R_DRY * temperature)
     heat = jnp.broadcast_to(jnp.asarray(sensible_heat_flux, speed.dtype), speed.shape)
-    buoyancy = KARMAN * GRAVITY * heat / (rho * CP_DRY * theta)
+    buoyancy = KARMAN * GRAVITY * heat / (rho * CP_DRY * temperature)
 
     def step(_, carry):
         _, inv_l = carry
         u_star = friction_velocity(speed, z_ref, z0, inv_l)
-        return u_star, -buoyancy / u_star**3
+        return u_star, -buoyancy / jnp.maximum(u_star, U_STAR_FLOOR) ** 3
 
     u_star0 = friction_velocity(speed, z_ref, z0, jnp.zeros_like(speed))
     u_star, inv_l = jax.lax.fori_loop(
@@ -229,7 +236,10 @@ def surface_layer_from_met(
     )
     u_star = friction_velocity(speed, z_ref, z0, inv_l)
     convective = (
-        GRAVITY * jnp.maximum(heat, 0.0) * field.pbl_height / (rho * CP_DRY * theta)
+        GRAVITY
+        * jnp.maximum(heat, 0.0)
+        * field.pbl_height
+        / (rho * CP_DRY * temperature)
     )
     # cbrt has an infinite slope at 0: evaluate it only where H > 0 so the
     # stable/neutral side of the `where` keeps finite gradients.
