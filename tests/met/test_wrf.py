@@ -167,3 +167,24 @@ def test_simulate_eulerian_dispersion_runs_on_loaded_met(loaded_f32):
     c = ds["concentration"].values
     assert np.all(np.isfinite(c))
     assert c[-1].max() > 0.0
+
+
+def test_rotated_file_keeps_grid_relative_wind(tmp_path, loaded):
+    """COSALPHA / SINALPHA in the file must not rotate the grid-frame wind."""
+    from tests.met.conftest import write_synthetic_wrfout
+
+    _grid_ref, field_ref = loaded
+    spec = write_synthetic_wrfout(tmp_path / "wrfout_rotated.nc", alpha_deg=12.0)
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+    field = load_wrf(spec.path, plume_grid=grid, origin=ORIGIN)
+    np.testing.assert_allclose(np.asarray(field.u), np.asarray(field_ref.u), atol=1e-9)
+    np.testing.assert_allclose(np.asarray(field.v), np.asarray(field_ref.v), atol=1e-9)
+
+
+def test_missing_io_extra_names_it(synthetic_wrf, monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "xrtoolz.atm", None)
+    grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
+    with pytest.raises(ImportError, match=r"plumax\[io\]"):
+        load_wrf(synthetic_wrf.path, plume_grid=grid, origin=ORIGIN)

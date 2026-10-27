@@ -76,6 +76,7 @@ def write_synthetic_wrfout(
     dy: float = 50.0,
     dz: float = 20.0,
     with_xtime: bool = True,
+    alpha_deg: float | None = None,
 ) -> SyntheticWrf:
     """Write a flat-terrain synthetic ``wrfout`` and return its analytic spec."""
     z_stag = dz * np.arange(n_lev + 1, dtype=np.float64)
@@ -149,6 +150,11 @@ def write_synthetic_wrfout(
     )
     if not with_xtime:
         ds = ds.drop_vars("XTIME")
+    if alpha_deg is not None:  # map rotation; U/V above stay grid-relative
+        alpha = np.full((n_time, n_y, n_x), np.deg2rad(alpha_deg))
+        dims = ("Time", "south_north", "west_east")
+        ds["COSALPHA"] = (dims, np.cos(alpha))
+        ds["SINALPHA"] = (dims, np.sin(alpha))
     ds.to_netcdf(path)
     return spec
 

@@ -75,6 +75,9 @@ dependencies = [
 [project.optional-dependencies]
 # The `inference` submodules are the only consumers of numpyro.
 inference = ["numpyro>=0.21"]
+# Readers: WRF (and, as Tier 0 grows, ERA5, L2 products and inventories)
+# through xrtoolz / xrreader, so the base install stays free of I/O stacks.
+io = ["xrtoolz", "xrtoolz-reader"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
 
@@ -89,6 +92,9 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # every symbol those two packages import still exists at this rev.
 override-dependencies = [
     "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.5",
+    # xrtoolz (the `io` extra) sources pipekit from its unpinned main; hold the
+    # graph on plumax's pin, the same commit xrtoolz's own lock resolves to.
+    "pipekit @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
@@ -97,6 +103,8 @@ override-dependencies = [
 # release commit); gaussx is pinned to the v0.6.5 tag. radtrax has no release
 # yet (rev = its main at the time of the switch); geonnax is radtrax's own git
 # dependency, which uv does not read from radtrax's sources.
+# xrtoolz (the `io` extra) is a workspace of six packages, none on PyPI; all
+# six are pinned to one rev of its main.
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
@@ -104,6 +112,12 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", rev = "e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.9" }
+xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
+xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "2f6318d614061dcff472c4d8546ece4813471c41" }
 
 [dependency-groups]
 dev = [
@@ -115,6 +129,10 @@ dev = [
     # pipekit-cycle is a *test-only* dep: the adapters satisfy its protocols
     # structurally, and the tests assert that conformance via isinstance.
     "pipekit-cycle",
+    # The `io` extra's readers, so the loader tests run in CI (which syncs
+    # only this group).
+    "xrtoolz",
+    "xrtoolz-reader",
 ]
 lint = [
     "ruff>=0.15.10",
