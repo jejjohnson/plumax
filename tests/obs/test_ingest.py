@@ -268,3 +268,25 @@ def test_ghgsat_background_and_conversion(tmp_path, frame):
     assert enhancement.max() == pytest.approx(expected_peak, rel=1e-6)
     assert np.count_nonzero(enhancement) == 1
     assert obs.time == np.datetime64("2024-06-01T19:00:00")
+
+
+def test_ghgsat_background_comes_from_the_kept_pixels(tmp_path, frame):
+    """A crop with its own background must not inherit the whole scene's."""
+    xs = np.linspace(0.0, 5000.0, 6)
+    lat, lon, _ = _pixels(frame, xs, np.array([0.0, 100.0]))
+    xch4 = np.where(xs[None, :] < 2500.0, 1880.0, 1920.0) * np.ones((2, 1))
+    path = tmp_path / "ghgsat_two_backgrounds.nc"
+    xr.Dataset(
+        {
+            "xch4": (("y", "x"), xch4, {"units": "ppb"}),
+            "latitude": (("y", "x"), lat),
+            "longitude": (("y", "x"), lon),
+        }
+    ).to_netcdf(path)
+    lat_e, lon_e = frame.to_latlon(
+        np.array([2600.0, 5600.0]), np.array([-100.0, 200.0])
+    )
+    east = (float(lon_e[0]), float(lat_e[0]), float(lon_e[1]), float(lat_e[1]))
+    obs = load_ghgsat_l2(path, frame=frame, retrieval_sigma_ppb=10.0, bbox=east)
+    assert obs.instrument.n_obs == 6  # the 1920 ppb half only
+    np.testing.assert_allclose(obs.enhancement, 0.0, atol=1e-15)

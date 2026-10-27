@@ -287,13 +287,18 @@ def load_ghgsat_l2(
         dry_air_column(xr.Dataset({"sp": surface_pressure_pa}))["dry_air_column"]
     )
     xch4 = ds["xch4"]
-    valid = xch4.values[np.isfinite(xch4.values)]
-    background = float(np.median(valid)) if background_ppb is None else background_ppb
+
+    def to_mass(kept: np.ndarray) -> np.ndarray:
+        # `kept` is already screened, so the default background is the median
+        # of the pixels that stay (as for TROPOMI), not of the whole file.
+        b = float(np.median(kept)) if background_ppb is None else background_ppb
+        return ppb_to_column_mass(kept - b, n_dry)
+
     return _scene_observation(
         ds,
         "xch4",
         xr.full_like(xch4, retrieval_sigma_ppb),
-        lambda x: ppb_to_column_mass(x - background, n_dry),
+        to_mass,
         name=name,
         frame=frame,
         bbox=bbox,
