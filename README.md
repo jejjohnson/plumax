@@ -1,29 +1,26 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/plumax-banner-dark.svg">
-    <img alt="plumax — plumes of anything, from pixels to sources" src="docs/images/brand/plumax-banner-light.svg" width="720">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img alt="plumax" src="docs/assets/logo-light.svg" width="480">
   </picture>
 </p>
 
-<p align="center">
-  <a href="https://github.com/jejjohnson/plumax/actions/workflows/ci.yml"><img alt="Tests" src="https://github.com/jejjohnson/plumax/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://github.com/jejjohnson/plumax/actions/workflows/lint.yml"><img alt="Lint" src="https://github.com/jejjohnson/plumax/actions/workflows/lint.yml/badge.svg"></a>
-  <a href="https://github.com/jejjohnson/plumax/actions/workflows/typecheck.yml"><img alt="Type Check" src="https://github.com/jejjohnson/plumax/actions/workflows/typecheck.yml/badge.svg"></a>
-  <a href="https://github.com/jejjohnson/plumax/actions/workflows/pages.yml"><img alt="Docs" src="https://github.com/jejjohnson/plumax/actions/workflows/pages.yml/badge.svg"></a>
-  <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
-  <a href="https://github.com/astral-sh/ruff"><img alt="Ruff" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json"></a>
-  <a href="https://github.com/astral-sh/uv"><img alt="uv" src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json"></a>
-</p>
+# plumax — plumes of anything, from pixels to sources
 
-**plumax** answers four questions about a plume — *where is it, how much is
-coming out, where does it come from, and how often does it happen* — for any
-passive tracer: methane, CO₂, NO₂, SO₂, smoke or heat. Underneath is a ladder
-of differentiable transport models (Gaussian plume and puff, Lagrangian
-particles, Eulerian finite volumes) and the Bayesian and variational
-machinery to invert them. Everything is JAX: `jit`, `vmap` and `grad`
-through the physics.
+[![Tests](https://github.com/jejjohnson/plumax/actions/workflows/ci.yml/badge.svg)](https://github.com/jejjohnson/plumax/actions/workflows/ci.yml)
+[![Lint](https://github.com/jejjohnson/plumax/actions/workflows/lint.yml/badge.svg)](https://github.com/jejjohnson/plumax/actions/workflows/lint.yml)
+[![Type Check](https://github.com/jejjohnson/plumax/actions/workflows/typecheck.yml/badge.svg)](https://github.com/jejjohnson/plumax/actions/workflows/typecheck.yml)
+[![Deploy Docs](https://github.com/jejjohnson/plumax/actions/workflows/pages.yml/badge.svg)](https://github.com/jejjohnson/plumax/actions/workflows/pages.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Author: J. Emmanuel Johnson · Docs: <https://jejjohnson.github.io/plumax/>
+> **Where is the plume, how much is coming out, where does it come from, how often does it happen.**
+> Differentiable transport models (Gaussian plume and puff, Lagrangian
+> particles, Eulerian finite volumes) and the Bayesian and variational
+> machinery to invert them, for any passive tracer: methane, CO₂, NO₂,
+> SO₂, smoke or heat. Everything is JAX: `jit`, `vmap` and `grad` through
+> the physics.
+
+<p align="center"><img src="docs/assets/diagrams/plumax-stack.png" alt="Where plumax sits: radtrax turns a radiance scene into a column enhancement map; plumax segments it into a mask (PlumeMask, proposed), quantifies an emission rate (IMEEstimate proposed; infer_emission_rate today), attributes it to a source (compute_footprint, linear_gaussian_inversion, solve_4dvar, fuse_observations, all today) and turns every posterior into a catalogue event for rates and detection probability (EmissionCatalog, fit_poisson_rate, population.pod, today); underneath, the transport tiers gauss_plume, gauss_puff, lagrangian, les_fvm and coupled" width="100%"></p>
 
 ---
 
@@ -32,19 +29,19 @@ Author: J. Emmanuel Johnson · Docs: <https://jejjohnson.github.io/plumax/>
 <table align="center">
 <tr>
 <td align="center" width="25%">
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/glyph-segment-dark.svg"><img src="docs/images/brand/glyph-segment.svg" width="64" alt="segment"></picture><br>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/glyphs/segment-dark.svg"><img src="docs/assets/glyphs/segment.svg" width="64" alt="segment"></picture><br>
 <b>segment</b><br><sub>Where is the plume?<br>mask · contours · footprint</sub><br><sub>🚧 moving in from geotoolz</sub>
 </td>
 <td align="center" width="25%">
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/glyph-quantify-dark.svg"><img src="docs/images/brand/glyph-quantify.svg" width="64" alt="quantify"></picture><br>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/glyphs/quantify-dark.svg"><img src="docs/assets/glyphs/quantify.svg" width="64" alt="quantify"></picture><br>
 <b>quantify</b><br><sub>How much, in kg s⁻¹?<br>model inversion · IME · flux</sub><br><sub>✅ inversion · 🚧 IME / flux</sub>
 </td>
 <td align="center" width="25%">
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/glyph-attribute-dark.svg"><img src="docs/images/brand/glyph-attribute.svg" width="64" alt="attribute"></picture><br>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/glyphs/attribute-dark.svg"><img src="docs/assets/glyphs/attribute.svg" width="64" alt="attribute"></picture><br>
 <b>attribute</b><br><sub>Which source?<br>footprints · 4D-Var · fusion</sub><br><sub>✅ known source · 🚧 multi-source</sub>
 </td>
 <td align="center" width="25%">
-<picture><source media="(prefers-color-scheme: dark)" srcset="docs/images/brand/glyph-persist-dark.svg"><img src="docs/images/brand/glyph-persist.svg" width="64" alt="persist"></picture><br>
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/glyphs/persist-dark.svg"><img src="docs/assets/glyphs/persist.svg" width="64" alt="persist"></picture><br>
 <b>persist</b><br><sub>How often, how long?<br>event rates · POD · catalogues</sub><br><sub>✅ rates · 🚧 persistency metrics</sub>
 </td>
 </tr>
@@ -60,31 +57,8 @@ plumax starts where light stops. Turning radiance into a column of gas is
 radiative transfer, and that lives in
 [**radtrax**](https://github.com/jejjohnson/radtrax). plumax takes the
 column (or any concentration field) and reasons about the *plume*: its
-shape, its transport and its source.
-
-```
-   satellite radiance   L(x, y, λ)
-            │
-   ┌────────▼────────┐
-   │     radtrax     │  radiative transfer
-   │                 │  matched filter · 3D-Var
-   └────────┬────────┘
-            │  column enhancement ΔΩ(x, y)
-   ┌────────▼────────┐
-   │     plumax      │
-   │                 │
-   │  segment        │  ΔΩ ─► mask M
-   │  quantify       │  M, ΔΩ, wind ─► Q
-   │  attribute      │  Q, footprint ─► source
-   │  persist        │  {events} ─► rate, POD
-   │                 │
-   │  transport      │  Q ─► C(x, y, z, t)
-   │  (forward)      │  plume · puff · Lagrangian · FV
-   └────────┬────────┘
-            │  emission catalogue
-            ▼
-     inventories · alerts
-```
+shape, its transport and its source. The figure above traces one scene
+through every step.
 
 The arrow only points down: plumax imports radtrax (the `coupled` tier maps
 a simulated plume to radiance through it), and radtrax never imports
@@ -105,25 +79,25 @@ GeoStack's
 ## One plume, end to end
 
 The running example is a single stack 20 m tall releasing a passive tracer at
-$Q = 0.5$ kg s⁻¹ into a 4 m s⁻¹ westerly, under Pasquill stability class C.
+$`Q = 0.5`$ kg s⁻¹ into a 4 m s⁻¹ westerly, under Pasquill stability class C.
 
-### 1. Forward and back: simulate it, then recover $Q$
+### 1. Forward and back: simulate it, then recover Q
 
-The steady Gaussian plume gives the concentration $C$ [kg m⁻³] at a point
-$(x, y, z)$, with $x$ downwind, $y$ crosswind, $z$ up, source height $h$,
-wind speed $u$, and the Briggs widths $\sigma_y(x)$, $\sigma_z(x)$ of the
+The steady Gaussian plume gives the concentration $`C`$ [kg m⁻³] at a point
+$`(x, y, z)`$, with $`x`$ downwind, $`y`$ crosswind, $`z`$ up, source height $`h`$,
+wind speed $`u`$, and the Briggs widths $`\sigma_y(x)`$, $`\sigma_z(x)`$ of the
 stability class; the second exponential reflects the plume off the ground:
 
-$$
+```math
 C(x, y, z) = \frac{Q}{2 \pi u \sigma_y \sigma_z}
 \exp\left(-\frac{y^2}{2 \sigma_y^2}\right)
 \left[\exp\left(-\frac{(z-h)^2}{2 \sigma_z^2}\right)
 + \exp\left(-\frac{(z+h)^2}{2 \sigma_z^2}\right)\right]
-$$
+```
 
-$K$ sensors at 5 m record $o_k = C(x_k, y_k, z_k) + b + \varepsilon_k$,
-with a background $b$ and noise $\varepsilon_k \sim \mathcal{N}(0, s^2)$.
-NUTS samples the posterior over $(Q, b)$; $S$ is the number of draws.
+$`K`$ sensors at 5 m record $`o_k = C(x_k, y_k, z_k) + b + \varepsilon_k`$,
+with a background $`b`$ and noise $`\varepsilon_k \sim \mathcal{N}(0, s^2)`$.
+NUTS samples the posterior over $`(Q, b)`$; $`S`$ is the number of draws.
 
 ```python
 import jax
@@ -184,12 +158,12 @@ transport changes.
 
 ### 2. From an image: mask, then measure
 
-A satellite does not see $C$; it sees the column enhancement
-$\Delta\Omega(x, y)$ [kg m⁻²] that radtrax retrieves. On an image, plumax
-segments the plume into a mask $M$ of pixels with area $A_i$, sums the
-integrated mass enhancement $\mathrm{IME} = \sum_{i \in M} \Delta\Omega_i A_i$,
-and divides by the residence time $L / U_{\mathrm{eff}}$, with plume length
-$L$ and effective wind $U_{\mathrm{eff}}$. These operators exist in geotoolz
+A satellite does not see $`C`$; it sees the column enhancement
+$`\Delta\Omega(x, y)`$ [kg m⁻²] that radtrax retrieves. On an image, plumax
+segments the plume into a mask $`M`$ of pixels with area $`A_i`$, sums the
+integrated mass enhancement $`\mathrm{IME} = \sum_{i \in M} \Delta\Omega_i A_i`$,
+and divides by the residence time $`L / U_{\mathrm{eff}}`$, with plume length
+$`L`$ and effective wind $`U_{\mathrm{eff}}`$. These operators exist in geotoolz
 today and move into `plumax[geo]` under geotoolz
 [#482](https://github.com/jejjohnson/geotoolz/issues/482), so this block is a
 sketch. `scene` is a radiance GeoTensor and `u_10m` the 10 m wind speed
@@ -217,9 +191,9 @@ rate = pgeo.IMEEstimate(wind=u_10m, length_method="sqrt_area")(column, mask)  # 
 ### 3. Over time: how often does it fire?
 
 One plume is one event. A site seen on many overpasses gives an event
-catalogue, and a Gamma–Poisson update turns $n$ events over an exposure
-$A \cdot T$ (area times duration) into a posterior on the event rate
-$\lambda \sim \mathrm{Gamma}(\alpha_0 + n, \beta_0 + A T)$.
+catalogue, and a Gamma–Poisson update turns $`n`$ events over an exposure
+$`A \cdot T`$ (area times duration) into a posterior on the event rate
+$`\lambda \sim \mathrm{Gamma}(\alpha_0 + n, \beta_0 + A T)`$.
 
 ```python
 from plumax.population import EmissionCatalog, EmissionEvent, fit_poisson_rate
@@ -312,12 +286,17 @@ make install      # uv sync --all-groups + pre-commit hooks
 | `make docs` / `make docs-serve` | Build (and preview) the docs: mystmd prose + MkDocs API reference |
 
 The pre-commit checklist (tests, `ruff check .`, `ruff format --check .`,
-`ty check src/plumax`) must pass before every commit. See
+`ty check src/plumax`) must pass before every commit.
+
+The README diagram is an HTML source in
+[`docs/assets/diagrams/`](docs/assets/diagrams) (the stack's shared
+stylesheet, one colour per question); edit the `.html` and re-render the PNG
+with `uv run --no-project --with playwright python docs/assets/diagrams/render.py`. See
 [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md) for the full
 contributor and agent contract.
 
 <p align="center">
-  <img src="docs/images/brand/plumax-favicon.svg" width="40" alt="">
+  <img src="docs/assets/favicon.svg" width="40" alt="">
 </p>
 
 ## License
