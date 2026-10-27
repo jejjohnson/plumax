@@ -80,6 +80,9 @@ public API is re-exported through `src/plumax/__init__.py`.
 - NumPyro inference submodules are imported lazily (PEP 562) — importing a
   forward model never pulls in NumPyro.
 - Radiative transfer, the matched filter and the 3D-Var retrieval are in `radtrax` (a base dependency); `plumax.radtran`, `plumax.hapi_lut`, `plumax.matched_filter` and `plumax.assimilation` raise `ImportError` naming their new home.
+- Readers (`met.load_wrf`, and the Tier 0 loaders as they land) go through
+  `xrtoolz` / `xrreader` behind the `io` extra (`pip install 'plumax[io]'`)
+  and import it lazily, so `import plumax` never needs it.
 - `gaussx` and `pipekit` resolve from git (`[tool.uv.sources]`); they are
   not yet on PyPI.
 

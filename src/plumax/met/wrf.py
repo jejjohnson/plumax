@@ -26,6 +26,15 @@ terrain ``HGT`` — so terrain-following levels are handled per column.
 Below the lowest mass level and above the highest the nearest level is
 held (constant extrapolation).
 
+Reading
+-------
+The file is read through :func:`xrtoolz.atm.open_wrfout`, which destaggers
+to mass points, rebuilds height above ground from the geopotential and the
+terrain, converts WRF's perturbation fields and decodes the time axis. It
+needs the ``io`` extra (``pip install 'plumax[io]'``). This module owns
+only what is specific to the analysis grid: the vertical and horizontal
+interpolation onto it, and a grid-relative wind.
+
 All of this is NumPy: it is IO-side, not on any gradient path, and WRF
 files are large.  Only the final fields become JAX arrays.
 """
@@ -72,39 +81,36 @@ def load_wrf(
         A :class:`MetField` on ``plume_grid``.
 
     Raises:
+        ImportError: If the ``io`` extra (xrtoolz) is not installed.
         ValueError: If any analysis T-, U- or V-point falls outside the
             WRF mass-point domain (the loader never extrapolates
-            horizontally), or if ``times`` selects nothing.
+            horizontally), if ``times`` selects nothing, or if the file
+            has no usable time axis (``Times``, or ``XTIME`` with the
+            ``SIMULATION_START_DATE`` attribute).
     """
-    # Time decoding off: WRF gives XTIME CF units (``minutes since ...``),
-    # which xarray would otherwise turn into datetimes; we want raw minutes.
-    with xr.open_dataset(path, decode_times=False) as ds:
-        if times is not None:
-            ds = ds.isel(Time=times)
-        if ds.sizes["Time"] == 0:
-            raise ValueError("load_wrf: `times` selects no time steps")
+    open_wrfout = _require_open_wrfout()
+    rotation = ["COSALPHA", "SINALPHA"]
+    with xr.open_dataset(path, decode_times=False) as raw:
+        has_rotation = all(name in raw for name in rotation)
+        n_selected = len(range(raw.sizes["Time"])[times or slice(None)])
+    if n_selected == 0:
+        raise ValueError("load_wrf: `times` selects no time steps")
+    # xrtoolz destaggers to mass points, rebuilds height above ground and
+    # temperature, and decodes the time axis.
+    with open_wrfout(
+        path, times=times, variables=rotation if has_rotation else None
+    ) as ds:
         dx_w = float(ds.attrs["DX"])
         dy_w = float(ds.attrs["DY"])
-        u_stag = ds["U"].values
-        v_stag = ds["V"].values
-        w_stag = ds["W"].values
-        theta_pert = ds["T"].values
-        pressure = ds["P"].values + ds["PB"].values
-        geopotential = ds["PH"].values + ds["PHB"].values
-        terrain = ds["HGT"].values
-        pblh = ds["PBLH"].values
-        seconds, t0 = _time_axis(ds)
-
-    # Destagger to mass points (WRF stores U/V/W on the faces).
-    u_m = 0.5 * (u_stag[..., :-1] + u_stag[..., 1:])
-    v_m = 0.5 * (v_stag[..., :-1, :] + v_stag[..., 1:, :])
-    w_m = 0.5 * (w_stag[:, :-1] + w_stag[:, 1:])
-    z_stag = geopotential / GRAVITY
-    z_mass = 0.5 * (z_stag[:, :-1] + z_stag[:, 1:])
-    if terrain.ndim == 3:  # WRF writes HGT with a Time axis
-        terrain = terrain[:, None]
-    z_agl = z_mass - terrain
-    temperature = (theta_pert + THETA_BASE) * (pressure / P_REFERENCE) ** KAPPA
+        u_m, v_m = _grid_relative_wind(ds)
+        w_m = ds["w"].values
+        temperature = ds["temperature"].values
+        pressure = ds["pressure"].values
+        z_agl = np.broadcast_to(ds["z_agl"].values, u_m.shape)
+        pblh = ds["pbl_height"].values
+        stamps = ds["time"].values.astype("datetime64[s]")
+    seconds = (stamps - stamps[0]) / np.timedelta64(1, "s")
+    t0 = str(stamps[0]).replace("T", "_")
 
     n_y_w, n_x_w = u_m.shape[-2:]
     x_t = np.asarray(plume_grid.x, dtype=np.float64) + origin[0]
@@ -138,42 +144,34 @@ def load_wrf(
     )
 
 
-def _time_axis(ds: xr.Dataset) -> tuple[np.ndarray, str]:
-    """Seconds since the first selected time, plus that time's stamp.
+def _require_open_wrfout():
+    """``xrtoolz.atm.open_wrfout``, or an error naming the ``io`` extra."""
+    try:
+        from xrtoolz.atm import open_wrfout
+    except ImportError as err:
+        raise ImportError(
+            "load_wrf reads through xrtoolz; install it with `pip install 'plumax[io]'`"
+        ) from err
+    return open_wrfout
 
-    Prefers ``XTIME`` (minutes since the simulation start; read undecoded,
-    or converted back from datetimes if a caller passed a decoded dataset).
-    Falls back to parsing the ``Times`` strings so a file without ``XTIME``
-    keeps its real cadence. Raises if neither is present rather than
-    inventing one.
+
+def _grid_relative_wind(ds: xr.Dataset) -> tuple[np.ndarray, np.ndarray]:
+    """Mass-point ``(u, v)`` along the WRF grid axes.
+
+    The analysis grid sits in WRF's grid frame (see the module docstring),
+    so the wind must be grid-relative. ``open_wrfout`` rotates to
+    earth-relative when the file carries ``COSALPHA`` / ``SINALPHA``
+    (``u_e = u cos α − v sin α``, ``v_e = v cos α + u sin α``); the inverse
+    rotation ``u = u_e cos α + v_e sin α``, ``v = v_e cos α − u_e sin α``
+    undoes it.
     """
-    stamps = _decode_times(ds) if "Times" in ds else None
-    if "XTIME" in ds:
-        xtime = ds["XTIME"].values
-        if np.issubdtype(xtime.dtype, np.datetime64):
-            seconds = (xtime - xtime[0]) / np.timedelta64(1, "s")
-        else:
-            minutes = np.asarray(xtime, dtype=np.float64)
-            seconds = (minutes - minutes[0]) * 60.0
-    elif stamps is not None:
-        seconds = (stamps - stamps[0]) / np.timedelta64(1, "s")
-    else:
-        raise ValueError(
-            "load_wrf: the file has neither `XTIME` nor `Times`, so the met "
-            "cadence cannot be recovered"
-        )
-    t0 = "" if stamps is None else str(stamps[0]).replace("T", "_")
-    return np.asarray(seconds, dtype=np.float64), t0
-
-
-def _decode_times(ds: xr.Dataset) -> np.ndarray:
-    """``Times`` (``YYYY-MM-DD_HH:MM:SS`` char rows) as ``datetime64[s]``."""
-    out = []
-    for row in ds["Times"].values:
-        raw = row.tobytes() if isinstance(row, np.ndarray) else row
-        text = raw.decode() if isinstance(raw, bytes) else str(raw)
-        out.append(np.datetime64(text.strip("\x00 ").replace("_", "T"), "s"))
-    return np.asarray(out, dtype="datetime64[s]")
+    u, v = ds["u"], ds["v"]
+    if u.attrs.get("grid_relative") == "true":
+        return u.values, v.values
+    cos_a, sin_a = ds["COSALPHA"], ds["SINALPHA"]
+    u_g = u * cos_a + v * sin_a
+    v_g = v * cos_a - u * sin_a
+    return u_g.transpose(*u.dims).values, v_g.transpose(*v.dims).values
 
 
 def _check_inside(
