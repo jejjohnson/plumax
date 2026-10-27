@@ -15,6 +15,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+from hypothesis import given, strategies as st
 
 from plumax.coupled import (
     Instrument,
@@ -23,6 +24,7 @@ from plumax.coupled import (
     default_prior,
     fuse_observations,
 )
+from plumax.errors import MissingVariableError
 from plumax.met import LocalFrame, TimeAxis
 from plumax.obs import (
     load_emit_l2b,
@@ -198,7 +200,7 @@ def test_tropomi_screening_kernel_and_variance(files, frame):
     np.testing.assert_allclose(obs.instrument.ak, AK_SURFACE)
     sigma = ppb_to_column_mass(0.5, dry_air(SP))
     np.testing.assert_allclose(obs.instrument.retrieval_variance, sigma**2, rtol=1e-6)
-    # middle scanline: 1.5 s after the reference time → observed 1 h 0 m 1.5 s ±0.5 s after t0
+    # the middle scanline is ~1.5 s after the reference time, an hour after t0
     assert 3600.0 <= obs.instrument.observation_time <= 3603.0
 
 
@@ -243,7 +245,7 @@ def test_emit_needs_an_uncertainty(tmp_path, frame):
             "longitude": (("y", "x"), lon),
         }
     ).to_netcdf(path)
-    with pytest.raises(ValueError, match="retrieval_sigma_ppm_m"):
+    with pytest.raises(MissingVariableError, match="retrieval_sigma_ppm_m"):
         load_emit_l2b(path, frame=frame)
     obs = load_emit_l2b(path, frame=frame, retrieval_sigma_ppm_m=50.0)
     assert obs.instrument.n_obs == 4
@@ -290,3 +292,25 @@ def test_ghgsat_background_comes_from_the_kept_pixels(tmp_path, frame):
     obs = load_ghgsat_l2(path, frame=frame, retrieval_sigma_ppb=10.0, bbox=east)
     assert obs.instrument.n_obs == 6  # the 1920 ppb half only
     np.testing.assert_allclose(obs.enhancement, 0.0, atol=1e-15)
+
+
+@given(
+    a=st.floats(-500.0, 500.0),
+    b=st.floats(-500.0, 500.0),
+    pressure=st.floats(50_000.0, 105_000.0),
+)
+def test_conversions_are_linear_and_scale_with_the_column(a, b, pressure):
+    column = dry_air(pressure)
+    total = ppb_to_column_mass(a + b, column)
+    parts = ppb_to_column_mass(a, column) + ppb_to_column_mass(b, column)
+    np.testing.assert_allclose(total, parts, rtol=1e-9, atol=1e-18)
+    # ΔΩ ∝ p_s through N_dry, and ∝ p / T for ppm·m
+    np.testing.assert_allclose(
+        ppb_to_column_mass(a, column),
+        ppb_to_column_mass(a, dry_air(101_325.0)) * pressure / 101_325.0,
+        rtol=1e-9,
+        atol=1e-18,
+    )
+    one = ppm_m_to_column_mass(a, pressure_pa=pressure, temperature_k=290.0)
+    two = ppm_m_to_column_mass(a, pressure_pa=2.0 * pressure, temperature_k=290.0)
+    np.testing.assert_allclose(two, 2.0 * one, rtol=1e-12, atol=1e-18)
