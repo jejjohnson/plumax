@@ -88,6 +88,9 @@ project:
             - file: theory/population/01_mttpp_theory.md
             - file: theory/population/02_intensity_zoo.md
             - file: theory/population/03_persistency.md
+        - title: Plume vetting
+          children:
+            - file: theory/plume_vetting.md
         - file: theory/satellites.md
         - file: theory/equations.md
     - title: Notebooks
@@ -112,6 +115,9 @@ project:
             - file: notebooks/population/02_intensity_gallery.ipynb
             - file: notebooks/population/03_pod_gallery.ipynb
             - file: notebooks/population/04_stationary_numpyro_mcmc.ipynb
+        - title: Plume vetting
+          children:
+            - file: notebooks/vetting/01_vetting_one_scene.ipynb
     - title: Project
       children:
         - file: changelog.md
