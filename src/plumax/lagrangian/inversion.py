@@ -32,20 +32,32 @@ kernel with a real correlation length, as the design note insists (a diagonal
 assembled by :func:`observation_covariance`, which adds the **representation
 error** to the retrieval error rather than using the retrieval error alone.
 
-The estimators solve the ``(n_obs × n_obs)`` innovation system, which is the
-efficient ordering when ``n_obs ≪ n_grid`` (the usual overpass regime). They
-are pure JAX, so they compose under ``jit`` / ``vmap`` and are differentiable
-through the posterior mean (e.g. for hyperparameter tuning of ``ℓ`` or ``σ``).
+Both estimators are vardax analyses (the ``assim`` extra,
+``pip install 'plumax[assim]'``): :func:`footprint_operator` wraps
+``q ↦ F q`` as a ``vardax.CallableObs``, ``vardax.OptimalInterpolation`` with a
+Cholesky solve of the ``(n_obs × n_obs)`` innovation system gives the mean (the
+efficient ordering when ``n_obs ≪ n_grid``, the usual overpass regime), and
+``vardax.LaplaceCovariance`` the covariance. They are pure JAX, so they compose
+under ``jit`` / ``vmap`` and are differentiable through the posterior mean
+(e.g. for hyperparameter tuning of ``ℓ`` or ``σ``).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+import einx
 import gaussx as gx
 import jax
 import jax.numpy as jnp
 import lineax as lx
+
+from plumax._vardax import require_vardax
+
+
+if TYPE_CHECKING:
+    import vardax
 
 
 def _is_traced(*values: object) -> bool:
@@ -153,35 +165,80 @@ def observation_covariance(
     return retr + repr_
 
 
+def footprint_operator(footprint: jax.Array) -> vardax.CallableObs:
+    """The Tier II source–receptor map ``𝒢(q) = F q`` as a vardax operator.
+
+    ``vardax`` analyses carry the control as a ``(T, N)`` state; for a source
+    inversion ``T = 1``. The operator maps that ``(1, n_grid)`` row to the
+    ``(1, n_obs)`` predicted observations, and vardax linearises it by
+    autodiff.
+
+    Args:
+        footprint: Source–receptor matrix ``F``, shape ``(n_obs, n_grid)``.
+
+    Returns:
+        A ``vardax.CallableObs`` ``(1, n_grid) → (1, n_obs)``.
+
+    Raises:
+        ImportError: Without the ``assim`` extra.
+    """
+    vdx = require_vardax("footprint_operator")
+    f = jnp.asarray(footprint, dtype=float)
+    return vdx.CallableObs(fn=lambda q: einx.dot("t n, m n -> t m", q, f))
+
+
 def _blue_update(
     jacobian: jax.Array,
     innovation: jax.Array,
     prior_cov: jax.Array,
     obs_var: jax.Array,
+    *,
+    caller: str,
 ) -> tuple[jax.Array, jax.Array]:
-    """Solve the BLUE increment and posterior covariance via gaussx primitives.
+    """BLUE increment and posterior covariance as a vardax OI analysis.
 
-    Returns ``(increment, posterior_cov)`` where
-    ``increment = K · innovation`` with the Kalman gain
-    ``K = B Fᵀ (F B Fᵀ + R)⁻¹`` (:func:`gaussx.kalman_gain`), and the posterior
-    covariance is the numerically-superior **Joseph form**
-    ``(I − K F) B (I − K F)ᵀ + K R Kᵀ`` (:func:`gaussx.joseph_update`) —
-    algebraically identical to ``B − K (F B Fᵀ + R) Kᵀ`` for the exact gain but
-    guaranteed symmetric/PSD under floating-point error, so no manual
-    symmetrisation is needed. ``R`` is diagonal, given by ``obs_var``.
+    ``OptimalInterpolation`` on ``𝒢(δ) = J δ`` with prior ``N(0, B)`` gives
+    ``δ* = B Jᵀ (J B Jᵀ + R)⁻¹ d`` (Cholesky solve of the innovation
+    system), and its ``LaplaceCovariance`` the posterior covariance
+    ``(B⁻¹ + Jᵀ R⁻¹ J)⁻¹``, materialised and symmetrised. ``R`` is diagonal,
+    given by ``obs_var``.
+
+    Returns:
+        ``(increment, posterior_cov)``, shapes ``(n_grid,)`` and
+        ``(n_grid, n_grid)``.
     """
-    prior_op = lx.MatrixLinearOperator(
-        prior_cov,
-        tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+    vdx = require_vardax(caller)
+    n_grid = prior_cov.shape[0]
+    n_obs = obs_var.shape[0]
+    psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+
+    def row_operator(
+        op: lx.AbstractLinearOperator, n: int
+    ) -> lx.FunctionLinearOperator:
+        # vardax applies covariances to (1, n) rows
+        return lx.FunctionLinearOperator(
+            lambda x: op.mv(x[0])[None],
+            jax.ShapeDtypeStruct((1, n), prior_cov.dtype),
+            psd,
+        )
+
+    oi = vdx.OptimalInterpolation(
+        obs_op=footprint_operator(jacobian),
+        prior_mean=jnp.zeros((1, n_grid), dtype=prior_cov.dtype),
+        prior_cov_op=row_operator(lx.MatrixLinearOperator(prior_cov, psd), n_grid),
+        obs_cov_op=row_operator(lx.DiagonalLinearOperator(obs_var), n_obs),
+        solver=lx.Cholesky(),
     )
-    gain = gx.kalman_gain(
-        prior_op,
-        lx.MatrixLinearOperator(jacobian),
-        lx.DiagonalLinearOperator(obs_var),
-    )  # K = B Fᵀ (F B Fᵀ + R)⁻¹, shape (n_grid, n_obs)
-    increment = gain @ innovation
-    posterior_cov = gx.joseph_update(prior_cov, gain, jacobian, jnp.diag(obs_var))
-    return increment, posterior_cov
+    batch = vdx.Batch1D(
+        input=innovation[None, None],
+        mask=jnp.ones((1, 1, n_obs), dtype=innovation.dtype),
+    )
+    posterior = oi.posterior(batch)
+    # P*: one lazy mat-vec per basis vector, (n_grid, n_grid)
+    covariance = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
+        jnp.eye(n_grid, dtype=prior_cov.dtype)
+    )
+    return posterior.mean[0], gx.symmetrize(covariance)
 
 
 def linear_gaussian_inversion(
@@ -212,6 +269,11 @@ def linear_gaussian_inversion(
 
     Returns:
         The :class:`GaussianPosterior` over ``q``.
+
+    Raises:
+        ImportError: Without the ``assim`` extra (``pip install
+            'plumax[assim]'``): the update is a ``vardax.OptimalInterpolation``
+            analysis over :func:`footprint_operator`.
     """
     f = jnp.asarray(footprint, dtype=float)
     y = jnp.asarray(observation, dtype=float)
@@ -221,7 +283,9 @@ def linear_gaussian_inversion(
     _check_inversion_shapes(f, y, qa, b, r)
 
     innovation = y - f @ qa
-    increment, posterior_cov = _blue_update(f, innovation, b, r)
+    increment, posterior_cov = _blue_update(
+        f, innovation, b, r, caller="linear_gaussian_inversion"
+    )
     return GaussianPosterior(mean=qa + increment, covariance=posterior_cov)
 
 
@@ -276,6 +340,10 @@ def lognormal_inversion(
 
     Returns:
         The :class:`LognormalPosterior` over ``q``.
+
+    Raises:
+        ImportError: Without the ``assim`` extra: the log-space update is a
+            ``vardax.OptimalInterpolation`` analysis over ``δ ↦ F̃ δ``.
     """
     f = jnp.asarray(footprint, dtype=float)
     y = jnp.asarray(observation, dtype=float)
@@ -291,7 +359,9 @@ def lognormal_inversion(
 
     jac_tilde = f * qa[None, :]  # F̃ = F diag(q_a), (n_obs, n_grid)
     innovation = y - f @ qa
-    log_increment, log_cov = _blue_update(jac_tilde, innovation, b_log, r)
+    log_increment, log_cov = _blue_update(
+        jac_tilde, innovation, b_log, r, caller="lognormal_inversion"
+    )
     mean = qa * jnp.exp(log_increment)
     return LognormalPosterior(
         mean=mean, log_increment=log_increment, log_covariance=log_cov
@@ -333,6 +403,7 @@ def _check_inversion_shapes(
 __all__ = [
     "GaussianPosterior",
     "LognormalPosterior",
+    "footprint_operator",
     "linear_gaussian_inversion",
     "lognormal_inversion",
     "matern32_covariance",

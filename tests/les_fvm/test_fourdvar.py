@@ -589,17 +589,26 @@ def test_laplace_sample_rejects_nonpositive_n_samples():
         laplace_sample(prob, res.whitened, jax.random.PRNGKey(0), n_samples=0)
 
 
-def test_posterior_covariance_matches_dense_inverse():
-    # gaussx is on the path: its inverse of the GN-Hessian must agree with a
-    # dense jnp.linalg.inv reference (P_χ = H_GN⁻¹, P_S = L P_χ Lᵀ).
-    from plumax.les_fvm.fourdvar import _gauss_newton_hessian
+def _dense_gauss_newton_hessian(prob, chi):
+    """H_GN = I + J̃ᵀ R⁻¹ J̃, J̃ = ∂(predicted obs)/∂χ, by jacrev."""
 
+    def predict_whitened(c):
+        return prob.forward.predict(prob.source_from_whitened(c)).reshape(-1)
+
+    jac = jax.jacrev(predict_whitened)(chi)
+    r_inv = (1.0 / prob.obs_variance).reshape(-1)
+    return jnp.eye(chi.shape[0]) + jac.T @ (r_inv[:, None] * jac)
+
+
+def test_posterior_covariance_matches_dense_inverse():
+    # vardax's Laplace covariance of the whitened control must agree with a
+    # dense jnp.linalg.inv reference (P_χ = H_GN⁻¹, P_S = L P_χ Lᵀ).
     fwd = _forward(n_t=4)
     q_true = jnp.array([0.0, 1.0, 0.5, 0.5])
     prob = _problem(fwd, q_true, obs_floor=1e-6)
     res = solve_4dvar(prob, max_steps=30)
     post = posterior_covariance(prob, res.whitened)
-    h_gn, _ = _gauss_newton_hessian(prob, res.whitened)
+    h_gn = _dense_gauss_newton_hessian(prob, res.whitened)
     p_chi_ref = np.linalg.inv(np.asarray(h_gn))
     np.testing.assert_allclose(
         np.asarray(post.whitened_covariance), p_chi_ref, rtol=1e-4, atol=1e-6

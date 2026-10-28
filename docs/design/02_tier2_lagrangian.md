@@ -209,7 +209,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ [#88](https://github.com/jejjohnson/plumax/issues/88) |
 | 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr) | `plumax.lagrangian.inversion` | ✓ |
-| 2 | Linear inversion (Gaussian / lognormal closed form) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`) | ✓ |
+| 2 | Linear inversion (Gaussian / lognormal, linearised in log space) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`): `vardax.OptimalInterpolation` over `footprint_operator`, Laplace covariance; `assim` extra | ✓ [#163](https://github.com/jejjohnson/plumax/issues/163) |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |
 | 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |

@@ -84,6 +84,10 @@ inference = ["numpyro>=0.21"]
 io = ["xrtoolz", "xrtoolz-reader", "pyproj"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
+# Variational source inversion (Tier II OI, Tier III 3D-Var with a Laplace
+# posterior) through vardax: plumax supplies the source-receptor map, vardax
+# the analysis. Imported lazily, so the base install stays vardax-free.
+assim = ["vardax"]
 
 [project.urls]
 Repository = "https://github.com/jejjohnson/plumax"
@@ -99,6 +103,12 @@ override-dependencies = [
     # xrtoolz (the `io` extra) sources pipekit from its unpinned main; hold the
     # graph on plumax's pin, the same commit xrtoolz's own lock resolves to.
     "pipekit @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit",
+    # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
+    # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
+    "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
+    # vardax sources pipekit-cycle from pipekit's unpinned main; same rev as
+    # pipekit above.
+    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit-cycle",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
@@ -119,7 +129,11 @@ finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45"
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
-geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.9" }
+geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
+# TEMPORARY: vardax v0.1.13 plus jejjohnson/vardax#128 (MinimiseResult.converged,
+# which FourDVarResult.converged reports); move to the release tag once it
+# merges and ships.
+vardax = { git = "https://github.com/jejjohnson/vardax", rev = "94665ef4c587737ee3663abff8b39eff8e35b92f" }
 xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
@@ -144,6 +158,8 @@ dev = [
     # only this group).
     "xrtoolz",
     "xrtoolz-reader",
+    # The `assim` extra, so the vardax inversion tests run in CI.
+    "vardax",
 ]
 lint = [
     "ruff>=0.15.10",
