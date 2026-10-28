@@ -77,3 +77,16 @@ def test_map_and_laplace_match(problem):
     # same optimiser on the same whitened cost: same iteration count
     assert result.n_steps == steps_ref
     assert result.converged
+
+
+@pytest.mark.slow
+def test_converged_is_the_optimiser_verdict(problem):
+    """Tolerance met on the last allowed step: converged, though n == max_steps.
+
+    The step-count rule (``n_steps < max_steps``) got this case wrong.
+    """
+    free = solve_4dvar(problem, max_steps=500)
+    capped = solve_4dvar(problem, max_steps=free.n_steps)
+    assert capped.n_steps == free.n_steps
+    assert capped.converged
+    assert not solve_4dvar(problem, max_steps=1).converged

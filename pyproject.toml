@@ -68,8 +68,9 @@ dependencies = [
     # radtrax owns the radiative transfer (the single-slab forward model, the
     # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
     # and the radiance adapter compose with the plume models (package
-    # boundaries rule 2: plumax imports radtrax, never the reverse).
-    "radtrax",
+    # boundaries rule 2: plumax imports radtrax, never the reverse). 0.1.0 is
+    # the first release with `radtrax.retrieval.absorption` (plumax.vetting).
+    "radtrax>=0.1.0",
     # einx writes reductions, gathers and rearranges with named axes (the
     # house style's replacement for axis= / reshape / indexing tricks).
     "einx>=0.4",
@@ -113,31 +114,32 @@ override-dependencies = [
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 # Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
 # unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
-# release commit); gaussx is pinned to the v0.6.5 tag. radtrax has no release
-# yet (rev = its main at the time of the switch); geonnax is radtrax's own git
-# dependency, which uv does not read from radtrax's sources.
+# release commit); gaussx is pinned to the v0.6.5 tag; radtrax to its v0.1.0
+# tag (the first release, with `radtrax.retrieval.absorption`, which
+# `plumax.vetting` needs; radtrax is not on PyPI).
+# geonnax is radtrax's own git dependency, which uv does not read from
+# radtrax's sources.
 # xrtoolz (the `io` extra) is a workspace of six packages, none on PyPI; all
-# six are pinned to one rev. TEMPORARY: the rev is jejjohnson/xrtoolz#357's
-# head (xrreader.open_ch4_inventory, used by plumax.priors); move it to
-# xrtoolz main once that PR merges.
+# six are pinned to one rev: the release commit of xrtoolz-v0.0.6 /
+# xrtoolz-reader-v0.0.5, the first with xrreader.open_ch4_inventory (used by
+# plumax.priors).
 [tool.uv.sources]
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
-radtrax = { git = "https://github.com/jejjohnson/radtrax", rev = "e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
+radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# TEMPORARY: vardax's head of the jejjohnson/vardax#119-#125 stack
-# (CallableObs jac= / materialise=, OI solver=, cov_solver=, linear-control
-# posterior, ThreeDVar.analyse);
-# move to the release tag once those merge.
-vardax = { git = "https://github.com/jejjohnson/vardax", rev = "f82db60e9f234b3409b47651141a36df0624dd30" }
-xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
-xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
-xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
-xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
-xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
-xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "4bebaa2449c759c463377762b710ffa29e0137e4" }
+# TEMPORARY: vardax v0.1.13 plus jejjohnson/vardax#128 (MinimiseResult.converged,
+# which FourDVarResult.converged reports); move to the release tag once it
+# merges and ships.
+vardax = { git = "https://github.com/jejjohnson/vardax", rev = "94665ef4c587737ee3663abff8b39eff8e35b92f" }
+xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
+xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
+xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
+xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
+xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
+xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 
 [dependency-groups]
 dev = [

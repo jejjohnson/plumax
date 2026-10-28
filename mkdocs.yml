@@ -79,6 +79,7 @@ nav:
   - Tier III — Eulerian FV: les_fvm.md
   - Tier IV — Coupled: coupled.md
   - Tier V — Population: population.md
+  - Plume vetting: vetting.md
   - pipekit integration:
       - Operators: operators.md
       - Adapters: adapters.md

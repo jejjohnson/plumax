@@ -599,8 +599,9 @@ class FourDVarResult:
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
             when :func:`solve_4dvar` is called with ``compute_posterior=True``.
-        converged: Whether the optimiser stopped on its tolerances before
-            ``max_steps``, with a finite MAP. Appended after ``posterior`` to
+        converged: optimistix's strict success flag (``result ==
+            successful``), as ``vardax.MinimiseResult.converged`` reports
+            it. Appended after ``posterior`` to
             preserve the positional constructor contract. L-BFGS on these
             stiff problems frequently exhausts ``max_steps`` while still
             returning a good, finite MAP, so ``converged is False`` with a
@@ -671,11 +672,12 @@ def solve_4dvar(
     chi_star = outcome.value[0]  # χ*, the whitened control
     n_steps = int(outcome.num_steps[0])
     finite = bool(jnp.all(jnp.isfinite(source)))
-    # `throw=False` hides the optimiser outcome, so surface it. L-BFGS on these
-    # stiff transport problems often exhausts `max_steps` while still
-    # returning a good, finite MAP, so a bare `converged is False` is common
-    # and not alarming on its own; a non-finite MAP is the hazard to flag.
-    converged = finite and n_steps < max_steps
+    # `throw=False` hides the optimiser outcome, so surface optimistix's own
+    # verdict (`result == successful`). L-BFGS on these stiff transport
+    # problems often exhausts `max_steps` while still returning a good, finite
+    # MAP, so a bare `converged is False` is common and not alarming on its
+    # own; a non-finite MAP is the hazard to flag.
+    converged = bool(outcome.converged[0])
     if not finite:
         warnings.warn(
             "solve_4dvar: the optimiser returned a non-finite source; the "
