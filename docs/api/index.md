@@ -25,7 +25,7 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | III | [Eulerian FV](les_fvm.md) | advection–diffusion on a C-grid |
 | IV | [Coupled](coupled.md) | multi-instrument source inversion |
 | V | [Population](population.md) | source populations and forecasting |
-| — | [Plume vetting](vetting.md) | `select_seeds`, `background_pool`, `null_masks`, `null_pvalue` on radtrax's absorption-shape test |
+| — | [Plume vetting](vetting.md) | `vet_candidate`, `select_seeds`, `background_pool`, `null_masks`, `null_pvalue` on radtrax's absorption-shape test |
 | — | [Operators](operators.md) · [Adapters](adapters.md) | `pipekit` integration |
 
 ## Package overview

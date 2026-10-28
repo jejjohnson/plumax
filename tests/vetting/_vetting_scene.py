@@ -6,9 +6,9 @@ classes, noise at SNR 300, candidate A a methane plume and candidate B a
 plume-shaped patch of a surface whose reflectance dips by 6 % at 2335 nm.
 The same seeds and steps, with radtrax's `transmittance_table` and
 `AbsorptionWindow`, so the gates test what the notebook shows. Built once per
-session (``notebook_scene`` is cached); ``vet_d_norm`` is the notebook's
-``vet_candidate`` chain up to ``D_norm``: plumax's seeds and pool, then
-radtrax's absorption-shape test on them.
+session (``notebook_scene`` is cached); ``vet_scene`` vets one of its masks
+with `vet_candidate` as the notebook does, and ``vet_d_norm`` is its
+``D_norm``.
 """
 
 from __future__ import annotations
@@ -20,14 +20,7 @@ import numpy as np
 import radtrax
 from radtrax.atmosphere import ViewingGeometry, afgl_us_standard
 from radtrax.instrument import GaussianInstrument
-from radtrax.retrieval.absorption import (
-    AbsorptionWindow,
-    d_norm,
-    fit_transmittance,
-    pair_pixels,
-    ratio_spectrum,
-    transmittance_table,
-)
+from radtrax.retrieval.absorption import AbsorptionWindow, transmittance_table
 from radtrax.retrieval.matched_filter import apply_image, estimate_cov_shrunk
 from radtrax.solvers import BeerLambert
 from radtrax.spectroscopy import TableOpacity
@@ -35,7 +28,7 @@ from radtrax.spectroscopy.synthetic import NU_CM, synthetic_table
 from radtrax.surface import Lambertian
 from scipy.ndimage import gaussian_filter
 
-from plumax.vetting import background_pool, select_seeds
+from plumax.vetting import VettingResult, vet_candidate
 
 
 @dataclasses.dataclass(frozen=True)
@@ -131,24 +124,20 @@ def notebook_scene() -> Scene:
 
 
 def vet_d_norm(scene: Scene, mask: np.ndarray, *, box: int = 16) -> float:
-    """``D_norm`` of one mask: seeds, pool, pairs, ratio, fit (the notebook's chain)."""
-    seeds = select_seeds(scene.mf, mask)
-    pool = background_pool(
+    """``D_norm`` of one mask, vetted as the notebook vets it (``box=16``)."""
+    return float(vet_scene(scene, mask, box=box).d_norm)
+
+
+def vet_scene(scene: Scene, mask: np.ndarray, *, box: int = 16) -> VettingResult:
+    """`vet_candidate` on one mask of the scene, every candidate excluded."""
+    return vet_candidate(
+        scene.radiance,
         scene.mf,
-        seeds,
-        threshold=scene.window.mf_background_mol_m2,
+        mask,
+        scene.wavelength_nm,
+        scene.table,
+        scene.delta_grid,
+        scene.window,
         exclude=scene.masks,
         box=box,
     )
-    i_in, i_out = pair_pixels(
-        scene.radiance,
-        np.flatnonzero(seeds),
-        np.flatnonzero(pool),
-        scene.window.pairing_bands(scene.wavelength_nm),
-    )
-    fit_b = scene.window.fit_bands(scene.wavelength_nm)
-    ratio = ratio_spectrum(scene.radiance, i_in, i_out)[fit_b]
-    fit = fit_transmittance(
-        ratio, scene.table, scene.delta_grid, scene.wavelength_nm[fit_b]
-    )
-    return float(d_norm(ratio, fit))
