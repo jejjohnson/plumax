@@ -2215,7 +2215,7 @@ requires-dist = [
     { name = "optimistix", specifier = ">=0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pyproj", marker = "extra == 'io'" },
-    { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee" },
+    { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "xarray" },
     { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
@@ -2652,8 +2652,8 @@ wheels = [
 
 [[package]]
 name = "radtrax"
-version = "0.0.0"
-source = { git = "https://github.com/jejjohnson/radtrax?rev=e3eccf222d16b27bf56145915144cf27c4f6e8ee#e3eccf222d16b27bf56145915144cf27c4f6e8ee" }
+version = "0.1.0"
+source = { git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0#43a7b0163cb6787d91a872ccb49929c52fdaca6f" }
 dependencies = [
     { name = "equinox" },
     { name = "gaussx" },
@@ -2666,6 +2666,7 @@ dependencies = [
     { name = "numpy" },
     { name = "optimistix" },
     { name = "scikit-learn" },
+    { name = "scipy" },
     { name = "xarray" },
 ]
 
