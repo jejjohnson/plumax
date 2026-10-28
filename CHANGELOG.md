@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1](https://github.com/jejjohnson/plumax/compare/v0.2.0...v0.2.1) (2026-10-28)
+
+
+### Features
+
+* **inversion:** run the Tier II and Tier III source inversions on vardax ([#171](https://github.com/jejjohnson/plumax/issues/171)) ([da1c5ae](https://github.com/jejjohnson/plumax/commit/da1c5aeba405413a202807b662c446c7717dc051))
+* **vetting:** add null_masks and null_pvalue, a per-scene null over the plume's shape ([#166](https://github.com/jejjohnson/plumax/issues/166)) ([2135084](https://github.com/jejjohnson/plumax/commit/213508459823c81b8392c7f4cabb64de2f54afad)), closes [#155](https://github.com/jejjohnson/plumax/issues/155)
+* **vetting:** add select_seeds and background_pool, a candidate's seeds and pool ([#165](https://github.com/jejjohnson/plumax/issues/165)) ([a6bfcac](https://github.com/jejjohnson/plumax/commit/a6bfcacedf54b8ed7bfb1a0844e17da06ccb6da9))
+* **vetting:** add vet_candidate and VettingResult, one candidate on radtrax's absorption-shape test ([#167](https://github.com/jejjohnson/plumax/issues/167)) ([44b1142](https://github.com/jejjohnson/plumax/commit/44b11428c12bc42393924bc109ecebbca163ed1e)), closes [#156](https://github.com/jejjohnson/plumax/issues/156)
+
 ## [0.2.0](https://github.com/jejjohnson/plumax/compare/v0.1.2...v0.2.0) (2026-10-27)
 
 
