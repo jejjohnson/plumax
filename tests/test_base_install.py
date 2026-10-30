@@ -1,7 +1,8 @@
-"""The optional stacks stay optional: ``import plumax`` needs neither.
+"""The optional stacks stay optional: ``import plumax`` needs none of them.
 
-vardax (the ``assim`` extra) and NumPyro (the ``inference`` extra) are
-imported lazily by the functions that need them. Each check runs in a fresh
+vardax (the ``assim`` extra), NumPyro (the ``inference`` extra) and the geo
+carriers (geoops and georeader, the ``geo`` extra) are imported lazily by
+the functions and operators that need them. Each check runs in a fresh
 interpreter, so modules imported by other tests cannot hide a regression.
 ``_BLOCK`` installs an import hook that raises ``ModuleNotFoundError`` for
 the named packages exactly as a missing install does. (gaussx imports NumPyro
@@ -81,6 +82,35 @@ def test_inversion_without_vardax_names_the_extra():
             assert "plumax[assim]" in str(exc), exc
         else:
             raise AssertionError("no ImportError")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_no_geo_carrier_without_extra():
+    result = _run(
+        """
+        import sys
+        import plumax, plumax.geo
+        loaded = {m.partition(".")[0] for m in sys.modules}
+        assert not loaded & {"geoops", "georeader", "geotoolz"}, loaded
+        """
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_geo_operator_without_extra_names_it():
+    result = _run(
+        """
+        block("geoops", "georeader")
+        import plumax
+        from plumax.errors import MissingExtraError
+        try:
+            from plumax.geo import PlumeMask
+        except MissingExtraError as exc:
+            assert "plumax[geo]" in str(exc), exc
+        else:
+            raise AssertionError("no MissingExtraError")
         """
     )
     assert result.returncode == 0, result.stderr

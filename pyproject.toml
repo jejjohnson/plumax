@@ -89,6 +89,19 @@ notebooks = ["matplotlib", "ipython"]
 # posterior) through vardax: plumax supplies the source-receptor map, vardax
 # the analysis. Imported lazily, so the base install stays vardax-free.
 assim = ["vardax"]
+# Plume post-processing on GeoTensors (plumax.geo): the ten plume operators
+# ported from geotoolz's `plume` (#134) and the vetting operator (#157), as
+# pipekit Operators built with geoops's public carrier helpers, as radtrax's
+# [geo] does. georeader 2.4.1 imports typing_extensions and tqdm without
+# declaring them; scikit-learn's DBSCAN counts clumps in PlumeQNDFeatures.
+# Imported lazily, so the base install stays carrier-free (gate P5).
+geo = [
+    "georeader-spaceml>=2.4.1",
+    "geotoolz-ops>=0.10.3",
+    "scikit-learn>=1.4",
+    "tqdm>=4",
+    "typing-extensions>=4",
+]
 
 [project.urls]
 Repository = "https://github.com/jejjohnson/plumax"
@@ -135,6 +148,10 @@ geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 # which FourDVarResult.converged reports); move to the release tag once it
 # merges and ships.
 vardax = { git = "https://github.com/jejjohnson/vardax", rev = "94665ef4c587737ee3663abff8b39eff8e35b92f" }
+# geotoolz-ops (the `geo` extra) is pinned to the rev radtrax's [geo] uses: the
+# rename commit (geotoolz#489), the last GeoTensor-carrier release line with the
+# public `geoops.carrier` helpers (geotoolz#480) and pipekit 0.0.2.
+geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "278b8afbc675b9e082ac75488200a4729da38097" }
 xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
@@ -161,6 +178,11 @@ dev = [
     "xrtoolz-reader",
     # The `assim` extra, so the vardax inversion tests run in CI.
     "vardax",
+    # The `geo` extra, so the plumax.geo tests run in CI.
+    "georeader-spaceml>=2.4.1",
+    "geotoolz-ops",
+    "scikit-learn>=1.4",
+    "tqdm>=4",
 ]
 lint = [
     "ruff>=0.15.10",
