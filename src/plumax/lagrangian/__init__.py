@@ -5,8 +5,8 @@ plus an Ornstein–Uhlenbeck turbulent-velocity process. The bridge between the
 analytical Tier I (no real wind variability) and the Eulerian Tier III. See the
 [Tier II design doc](https://github.com/jejjohnson/plumax/blob/main/docs/design/02_tier2_lagrangian.md).
 
-This implements **Step 1 (the forward model)** and **Step 2 (model-based
-inference)**:
+This implements **Step 1 (the forward model)**, **Step 2 (model-based
+inference)** and **Steps 3–4 (the footprint emulator and inference on it)**:
 
 - ``turbulence`` — ``HomogeneousTurbulence`` (well-mixed-exact) and Hanna (1982)
   Monin–Obukhov-similarity profiles.
@@ -26,14 +26,20 @@ inference)**:
   (``linear_gaussian_inversion`` / ``lognormal_inversion``): vardax
   ``OptimalInterpolation`` over ``footprint_operator`` (the ``assim`` extra).
 
-The footprint emulator and the amortized predictor (Steps 3–5) are not yet
-implemented.
+- ``emulator`` — ``FootprintEmulator``, an MLP from met context and receptor to
+  a footprint row, trained on particle-model footprints
+  (``generate_training_set``, ``train_footprint_emulator``) and calibrated
+  against them (``emulator_relative_error``, ``assert_emulator_calibrated``).
+  ``emulated_footprint`` feeds the inversions unchanged (Step 4).
+
+The amortized predictor (Step 5) is not yet implemented.
 """
 
 from __future__ import annotations
 
 from plumax.lagrangian import (
     concentration,
+    emulator,
     footprint,
     inversion,
     met_ensemble,
@@ -42,6 +48,16 @@ from plumax.lagrangian import (
     wind_interp,
 )
 from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
+from plumax.lagrangian.emulator import (
+    FootprintEmulator,
+    FootprintTrainingSet,
+    assert_emulator_calibrated,
+    emulated_footprint,
+    emulator_relative_error,
+    generate_training_set,
+    init_footprint_emulator,
+    train_footprint_emulator,
+)
 from plumax.lagrangian.footprint import compute_footprint
 from plumax.lagrangian.inversion import (
     GaussianPosterior,
@@ -79,22 +95,30 @@ from plumax.lagrangian.wind_interp import (
 
 
 __all__ = [
+    "FootprintEmulator",
+    "FootprintTrainingSet",
     "GaussianPosterior",
     "GriddedWind",
     "HannaTurbulence",
     "HomogeneousTurbulence",
     "LognormalPosterior",
     "ParticleState",
+    "assert_emulator_calibrated",
     "bin_positions",
     "compute_footprint",
     "concentration",
+    "emulated_footprint",
+    "emulator",
+    "emulator_relative_error",
     "ensemble_footprints",
     "ensemble_inversion",
     "footprint",
     "footprint_operator",
+    "generate_training_set",
     "gridded_wind_from_met",
     "gridded_wind_from_prescribed",
     "hanna_profiles",
+    "init_footprint_emulator",
     "integrate_particles",
     "inversion",
     "langevin_step",
@@ -107,6 +131,7 @@ __all__ = [
     "particles",
     "simulate_lagrangian",
     "step_durations",
+    "train_footprint_emulator",
     "transport_covariance",
     "turbulence",
     "uniform_wind",

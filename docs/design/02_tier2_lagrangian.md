@@ -231,7 +231,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |
 | 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| 3 | Footprint emulator (+ Step 4 inversion on it) | `plumax.lagrangian.emulator` | ☐ [#90](https://github.com/jejjohnson/plumax/issues/90) |
+| 3 | Footprint emulator (+ Step 4 inversion on it) | `plumax.lagrangian.emulator` (v1: per-receptor MLP on a met-context vector, BFGS-trained; Step 4 is `linear_gaussian_inversion` on `emulated_footprint`; calibration gates from vardax) | ✓ [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 5 | Field predictor (per instrument) | `plumax.lagrangian.predictor` | ☐ after [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` (v1: mean footprint + linearised transport covariance; mixture posterior not yet) | ✓ [#89](https://github.com/jejjohnson/plumax/issues/89) |
 
