@@ -34,6 +34,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax._src.errors import PayloadError
+from plumax._src.scalar_emission import GaussianEmission
 from plumax.coupled.forward import CoupledForward
 from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
 
@@ -68,6 +70,13 @@ class FusionPosterior:
         pixels_used: Pixels each instrument contributed at full weight
             (unmasked, not inflated), shape ``(n_inst,)``, aligned with
             ``instrument_names``.
+        prior_mean: Prior mean state θ_b the fusion used (``None`` when built
+            by hand).
+        prior_covariance: Prior covariance ``B`` (``None`` when built by hand).
+
+    For a scalar Q it also carries the Tier V per-event payload
+    (``population.PerEventPosterior``): Q's posterior marginal
+    N(Q*, P*₀₀) and its prior marginal N(θ_b,0, B₀₀) are exact.
     """
 
     emission_rate: jax.Array
@@ -78,6 +87,39 @@ class FusionPosterior:
     covariance: jax.Array
     instrument_names: tuple[str, ...]
     pixels_used: jax.Array | None = None
+    prior_mean: jax.Array | None = None
+    prior_covariance: jax.Array | None = None
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """n exact draws of Q from its posterior marginal N(Q*, P*₀₀).
+
+        Raises:
+            PayloadError: For design-matrix (vector) emissions.
+        """
+        self._require_scalar("samples")
+        return GaussianEmission(self.emission_rate, self.emission_std).sample(key, n)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(Q) of Q's prior marginal N(θ_b,0, B₀₀).
+
+        Raises:
+            PayloadError: For vector emissions, or without the prior.
+        """
+        self._require_scalar("prior_logpdf")
+        if self.prior_mean is None or self.prior_covariance is None:
+            raise PayloadError(
+                "FusionPosterior.prior_logpdf: this posterior carries no prior; "
+                "build it with fuse_observations."
+            )
+        prior_std = jnp.sqrt(self.prior_covariance[0, 0])
+        return GaussianEmission(self.prior_mean[0], prior_std).log_prob(q)
+
+    def _require_scalar(self, method: str) -> None:
+        if jnp.ndim(self.emission_rate) != 0:
+            raise PayloadError(
+                f"FusionPosterior.{method}: the Tier V payload is for a scalar Q; "
+                "this posterior has one emission per design-matrix column."
+            )
 
 
 def _stack_design(
@@ -247,6 +289,8 @@ def fuse_observations(
         pixels_used=jnp.stack(
             [full_weight_pixels(inst) for inst in forward.instruments]
         ),
+        prior_mean=theta_b,
+        prior_covariance=b,
     )
 
 

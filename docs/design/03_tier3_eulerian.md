@@ -264,7 +264,7 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 | 2 | Background ($S_b$, $c_b$, BC scaling) | [`assimilation/background.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/var3d/background.py) (`B` builders exist; not in the 4D-Var cost) | 🚧 [#92](https://github.com/jejjohnson/plumax/issues/92) |
 | 2 | Diagnostics | [`assimilation/diagnostics.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/var3d/diagnostics.py) | 🚧 |
 | 2 | Posterior covariance (Hessian / Laplace / En4D-Var) | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`posterior_covariance`, `laplace_sample`): `vardax.LaplaceCovariance` of the linear control | 🚧 Gauss-Newton Laplace ✓; En4D-Var ☐ |
-| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `FourDVarResult` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `FourDVarResult` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Emulator (UNet / GNN / FNO) | `plumax.les_fvm.emulator` | ☐ [#95](https://github.com/jejjohnson/plumax/issues/95) |
 | 3 | Emulator-adjoint calibration harness | `plumax.les_fvm.emulator_adjoint_test` | ☐ [#95](https://github.com/jejjohnson/plumax/issues/95) |
 | 5 | Sequence predictor (set-transformer) | `plumax.les_fvm.predictor` | ☐ |

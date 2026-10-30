@@ -60,6 +60,7 @@ from plumax.gauss_plume.plume_rise import (
 
 
 _LAZY_INFERENCE_SYMBOLS = {
+    "EmissionRateSamples",
     "gaussian_plume_model",
     "infer_emission_rate",
     "infer_multi_source",
@@ -79,6 +80,7 @@ def __getattr__(name: str):  # PEP 562 lazy module-level attribute
 if TYPE_CHECKING:  # make the lazy names visible to type checkers / IDEs
     from plumax.gauss_plume import inference
     from plumax.gauss_plume.inference import (
+        EmissionRateSamples,
         gaussian_plume_model,
         infer_emission_rate,
         infer_multi_source,
@@ -92,6 +94,7 @@ __all__ = [
     "STABILITY_CLASSES",
     "BriggsPlumeRise",
     "ColumnObservation",
+    "EmissionRateSamples",
     "GaussianNoise",
     "HeteroscedasticNoise",
     "MaskedSources",

@@ -56,6 +56,8 @@ import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 
+from plumax._src.errors import PayloadError
+from plumax._src.scalar_emission import GaussianEmission, gaussian_total
 from plumax._vardax import require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import _is_traced
@@ -612,6 +614,15 @@ class FourDVarResult:
             finite ``source`` is common and not by itself alarming. The
             genuine failure to watch for is a non-finite ``source`` (a
             diverged solve), which :func:`solve_4dvar` warns about loudly.
+        prior_mean: Source prior mean ``S_b`` the solve used, shape ``(n_t,)``
+            (``None`` when built by hand).
+        prior_covariance: Source prior covariance ``B = L Lᵀ``, shape
+            ``(n_t, n_t)`` (``None`` when built by hand).
+
+    The result also carries the Tier V per-event payload
+    (``population.PerEventPosterior``) for the event emission rate, the time
+    mean Q = wᵀS with w = 1/n_t: its Laplace posterior N(wᵀS*, wᵀP_S w) and
+    its prior N(wᵀS_b, wᵀBw) are exact images of the Gaussian source laws.
     """
 
     source: jax.Array
@@ -620,6 +631,56 @@ class FourDVarResult:
     n_steps: int
     posterior: PosteriorCovariance | None = None
     converged: bool = True
+    prior_mean: jax.Array | None = None
+    prior_covariance: jax.Array | None = None
+
+    @property
+    def emission_rate(self) -> jax.Array:
+        """Time-mean MAP emission rate Q* = wᵀS*."""
+        return jnp.mean(self.source)
+
+    @property
+    def emission_std(self) -> jax.Array:
+        """Laplace posterior sd of Q, √(wᵀP_S w); NaN without the posterior."""
+        if self.posterior is None:
+            return jnp.full_like(self.emission_rate, jnp.nan)
+        return self._mean_law(self.source, self.posterior.source_covariance).std
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """n draws of Q from the Laplace posterior N(wᵀS*, wᵀP_S w).
+
+        The same law as averaging :func:`laplace_sample` source draws over
+        time, without re-solving for the covariance.
+
+        Raises:
+            PayloadError: Without the posterior (``compute_posterior=False``).
+        """
+        if self.posterior is None:
+            raise PayloadError(
+                "FourDVarResult.samples needs the Laplace posterior; solve with "
+                "compute_posterior=True."
+            )
+        law = self._mean_law(self.source, self.posterior.source_covariance)
+        return law.sample(key, n)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(Q) of the time-mean source prior, N(wᵀS_b, wᵀBw).
+
+        Raises:
+            PayloadError: If the result was built without its prior.
+        """
+        if self.prior_mean is None or self.prior_covariance is None:
+            raise PayloadError(
+                "FourDVarResult.prior_logpdf: this result carries no prior; "
+                "build it with solve_4dvar."
+            )
+        return self._mean_law(self.prior_mean, self.prior_covariance).log_prob(q)
+
+    @staticmethod
+    def _mean_law(mean: jax.Array, covariance: jax.Array) -> GaussianEmission:
+        # w = 1/n_t, so Q = wᵀS is the time mean
+        weights = jnp.full_like(mean, 1.0 / mean.shape[0])
+        return gaussian_total(mean, covariance, weights)
 
 
 def solve_4dvar(
@@ -702,6 +763,8 @@ def solve_4dvar(
         n_steps=n_steps,
         converged=converged,
         posterior=posterior,
+        prior_mean=problem.prior_mean,
+        prior_covariance=problem.prior_chol @ problem.prior_chol.T,
     )
 
 
