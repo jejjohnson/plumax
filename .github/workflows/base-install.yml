@@ -1,0 +1,28 @@
+name: Base install
+
+# Gate P5: `pip install plumax` (no extras) pulls in no geo carrier, and
+# plumax imports without the optional dependencies.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  base-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install plumax without extras into a fresh venv
+        run: |
+          uv venv /tmp/base
+          VIRTUAL_ENV=/tmp/base uv pip install .
+      - name: Check gate P5
+        run: /tmp/base/bin/python scripts/check_base_install.py

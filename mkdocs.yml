@@ -80,6 +80,7 @@ nav:
   - Tier IV — Coupled: coupled.md
   - Tier V — Population: population.md
   - Plume vetting: vetting.md
+  - Plume operators (geo): geo.md
   - pipekit integration:
       - Operators: operators.md
       - Adapters: adapters.md

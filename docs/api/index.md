@@ -26,6 +26,7 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | IV | [Coupled](coupled.md) | multi-instrument source inversion |
 | V | [Population](population.md) | source populations and forecasting |
 | — | [Plume vetting](vetting.md) | `vet_candidate`, `select_seeds`, `background_pool`, `null_masks`, `null_pvalue` on radtrax's absorption-shape test |
+| — | [Plume operators (geo)](geo.md) | `PlumeMask`, `PlumeFootprint`, `IMEEstimate`, `CrossSectionalFlux`, `ColumnToMass` and five more on GeoTensors, behind `[geo]` |
 | — | [Operators](operators.md) · [Adapters](adapters.md) | `pipekit` integration |
 
 ## Package overview
