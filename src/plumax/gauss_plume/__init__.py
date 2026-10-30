@@ -3,6 +3,7 @@
 Submodules:
   - dispersion    — Briggs σ_y(x), σ_z(x) coefficients (A-F stability classes)
   - plume         — coordinate rotation + JIT forward model + xarray wrapper
+  - plume_rise    — Briggs plume rise Δh(x) and the effective release height
   - inference     — NumPyro Bayesian inference for Q (and optional stability)
   - observation   — column + averaging-kernel observation shared by every tier
   - likelihoods   — Gaussian, Student-t and heteroscedastic observation noise
@@ -17,7 +18,13 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-from plumax.gauss_plume import dispersion, likelihoods, observation, plume
+from plumax.gauss_plume import (
+    dispersion,
+    likelihoods,
+    observation,
+    plume,
+    plume_rise,
+)
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -37,6 +44,11 @@ from plumax.gauss_plume.plume import (
     plume_concentration_vmap,
     rotate_to_wind_frame,
     simulate_plume,
+)
+from plumax.gauss_plume.plume_rise import (
+    BriggsPlumeRise,
+    briggs_plume_rise,
+    effective_height,
 )
 
 
@@ -67,13 +79,16 @@ __all__ = [
     "BRIGGS_DISPERSION_PARAMS",
     "MIN_WIND_SPEED",
     "STABILITY_CLASSES",
+    "BriggsPlumeRise",
     "ColumnObservation",
     "GaussianNoise",
     "HeteroscedasticNoise",
     "Noise",
     "StudentTNoise",
+    "briggs_plume_rise",
     "calculate_briggs_dispersion",
     "dispersion",
+    "effective_height",
     "gaussian_plume_model",
     "get_dispersion_params",
     "infer_emission_rate",
@@ -83,6 +98,7 @@ __all__ = [
     "plume",
     "plume_concentration",
     "plume_concentration_vmap",
+    "plume_rise",
     "rotate_to_wind_frame",
     "simulate_plume",
 ]

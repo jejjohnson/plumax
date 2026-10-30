@@ -38,6 +38,8 @@ from plumax.gauss_plume.dispersion import (
 if TYPE_CHECKING:  # xarray is imported lazily inside simulate_plume
     import xarray as xr
 
+    from plumax.gauss_plume.plume_rise import BriggsPlumeRise
+
 
 # ── Coordinate transform ─────────────────────────────────────────────────────
 
@@ -109,6 +111,7 @@ def plume_concentration(
     wind_v: float,
     emission_rate: float,
     dispersion_params: jnp.ndarray,
+    plume_rise: BriggsPlumeRise | None = None,
 ) -> jnp.ndarray:
     """Evaluate the steady-state Gaussian plume concentration.
 
@@ -130,6 +133,12 @@ def plume_concentration(
         Continuous emission rate Q [kg/s].
     dispersion_params : jnp.ndarray, shape (6,)
         ``[a_y, b_y, c_y, a_z, b_z, c_z]`` (Briggs parameters).
+    plume_rise : BriggsPlumeRise, optional
+        Plume rise Δh(x'). When given, the release height at each receptor is
+        the effective height ``source_z + Δh(x')`` with Δh evaluated at the
+        receptor's downwind distance and the (clamped) wind speed; it is
+        differentiable in the stack parameters. Default ``None`` keeps the
+        fixed height ``source_z``.
 
     Returns
     -------
@@ -151,8 +160,14 @@ def plume_concentration(
 
     exp_y = jnp.exp(-0.5 * jnp.square(y_crosswind / sigma_y))
 
-    z_diff = z - source_z
-    z_sum = z + source_z
+    if plume_rise is None:
+        release_height = source_z
+    else:
+        # H_eff = H + Δh(x')
+        release_height = source_z + plume_rise(x_positive, wind_speed=wind_speed)
+
+    z_diff = z - release_height
+    z_sum = z + release_height
     exp_z_direct = jnp.exp(-0.5 * jnp.square(z_diff / sigma_z))
     exp_z_reflected = jnp.exp(-0.5 * jnp.square(z_sum / sigma_z))
 
@@ -183,6 +198,7 @@ def simulate_plume(
     domain_y: tuple[float, float, int],
     domain_z: tuple[float, float, int],
     background_conc: float = 0.0,
+    plume_rise: BriggsPlumeRise | None = None,
 ) -> xr.Dataset:
     """Simulate a steady-state Gaussian plume on a 3-D grid.
 
@@ -214,6 +230,9 @@ def simulate_plume(
         ``n_points ≥ 2``.
     background_conc : float
         Additive background concentration [kg/m³]. Default ``0.0``.
+    plume_rise : BriggsPlumeRise, optional
+        Plume rise added to the source height ``z`` (see
+        :func:`plume_concentration`). Default ``None``: no rise.
 
     Returns
     -------
@@ -297,6 +316,7 @@ def simulate_plume(
         float(wind_v),
         emission_rate,
         dispersion_params,
+        plume_rise=plume_rise,
     )
     concentration = np.asarray(conc_flat).reshape((n_x, n_y, n_z))
     concentration = concentration + background_conc
