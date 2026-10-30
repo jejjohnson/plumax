@@ -22,7 +22,7 @@ import sys
 FORBIDDEN = ("georeader", "geoops", "geotoolz")
 
 #: The modules that need the [geo] extra and must say so when it is missing.
-EXTRA_ONLY = ("plumax.geo.plume", "plumax.geo.plume_array")
+EXTRA_ONLY = ("plumax.geo.plume", "plumax.geo.plume_array", "plumax.geo.vetting")
 
 
 def main() -> int:

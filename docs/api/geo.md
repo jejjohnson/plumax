@@ -24,6 +24,17 @@ Plume post-processing on GeoTensors, behind the `[geo]` extra (`pip install 'plu
         - CrossSectionalFlux
         - ColumnToMass
 
+## `vetting` — plume vetting on carriers
+
+`PlumeVetting` runs [plume vetting](vetting.md) (`vet_candidate` and the scene null) on every candidate of a scene and returns the scores as one `xarray.Dataset`; the decision rule is left to the caller.
+
+::: plumax.geo.vetting
+    options:
+      show_root_heading: false
+      heading_level: 3
+      members:
+        - PlumeVetting
+
 ## `plume_array` — the array functions
 
 ::: plumax.geo.plume_array
