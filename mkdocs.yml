@@ -77,6 +77,7 @@ nav:
       - Plume rise: gauss_plume_plume_rise.md
       - Column observation: gauss_plume_observation.md
       - Likelihoods: gauss_plume_likelihoods.md
+      - Multi-source: gauss_plume_multi_source.md
       - Gaussian puff: gauss_puff.md
   - Tier II — Lagrangian:
       - Lagrangian particles: lagrangian.md

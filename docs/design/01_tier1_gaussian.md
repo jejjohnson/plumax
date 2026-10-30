@@ -222,7 +222,7 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | 4 | Emulator-based MCMC | wired in `inference.py` once emulator exists | — skipped with Step 3 |
 | 5 | NPE / flow predictor | `gauss_plume.predictor` | ☐ [#87](https://github.com/jejjohnson/plumax/issues/87) |
 | 5 | Context-conditioning layer | uses `pyrox.nn` FiLM/hypernet primitives | external dep |
-| 6 | Multi-source (masked-K v1, RJMCMC later) | extend `inference.py` with a `K_max` activity mask | ☐ [#85](https://github.com/jejjohnson/plumax/issues/85) |
+| 6 | Multi-source (masked-K v1, RJMCMC later) | `inference.multi_source_plume_model` / `infer_multi_source` with a `K_max` activity mask; [`gauss_plume/multi_source.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/multi_source.py) holds the slots and posterior | ✓ [#85](https://github.com/jejjohnson/plumax/issues/85) |
 | 6 | MO $\sigma$ swap | `gauss_plume.dispersion_mo` | ☐ [#86](https://github.com/jejjohnson/plumax/issues/86) (needs [#78](https://github.com/jejjohnson/plumax/issues/78)) |
 
 ---
