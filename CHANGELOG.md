@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.2](https://github.com/jejjohnson/plumax/compare/v0.2.1...v0.2.2) (2026-10-30)
+
+
+### Features
+
+* **gauss_plume:** one column + averaging-kernel observation shared by every tier ([#179](https://github.com/jejjohnson/plumax/issues/179)) ([8ce7ebf](https://github.com/jejjohnson/plumax/commit/8ce7ebf40ffa8971f6b9f91d03a81178fb93baa8)), closes [#83](https://github.com/jejjohnson/plumax/issues/83)
+* **geo:** plumax.geo with the ten plume operators from geotoolz ([#177](https://github.com/jejjohnson/plumax/issues/177)) ([68ea412](https://github.com/jejjohnson/plumax/commit/68ea412728f81c70340e6aecc824a522049cfd87))
+* **geo:** PlumeVetting, plume vetting on GeoTensors in plumax.geo ([#178](https://github.com/jejjohnson/plumax/issues/178)) ([7974adb](https://github.com/jejjohnson/plumax/commit/7974adbd81ae19a0aba1a01e1b4493ef88eeb9be)), closes [#157](https://github.com/jejjohnson/plumax/issues/157)
+* **lagrangian:** gridded C-grid wind sampled at each particle ([#180](https://github.com/jejjohnson/plumax/issues/180)) ([654e9a5](https://github.com/jejjohnson/plumax/commit/654e9a5dc9d953e84d3ff574f4d1c6d6ecc7099f)), closes [#88](https://github.com/jejjohnson/plumax/issues/88)
+* **lagrangian:** met-ensemble footprints and the inversion over them ([#181](https://github.com/jejjohnson/plumax/issues/181)) ([84eb653](https://github.com/jejjohnson/plumax/commit/84eb653d133048a657a621039f98a435c3898416)), closes [#89](https://github.com/jejjohnson/plumax/issues/89)
+
 ## [0.2.1](https://github.com/jejjohnson/plumax/compare/v0.2.0...v0.2.1) (2026-10-28)
 
 
