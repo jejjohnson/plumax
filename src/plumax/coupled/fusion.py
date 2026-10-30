@@ -112,10 +112,11 @@ def fuse_observations(
     Gaussian prior ``θ ~ N(θ_b, B)`` and diagonal observation covariance ``R``
     (the per-instrument ``R_retr + R_repr + R_align``)::
 
-        θ* = θ_b + B Gᵀ (G B Gᵀ + R)⁻¹ (y − G θ_b − c_bg)
-        P* = B − B Gᵀ (G B Gᵀ + R)⁻¹ G B
+        P*⁻¹ = B⁻¹ + Gᵀ R⁻¹ G
+        θ*   = θ_b + P* Gᵀ R⁻¹ (y − G θ_b − c_bg)
 
-    solved in the ``(n_total_obs × n_total_obs)`` innovation form via Cholesky.
+    solved in the information form, which inverts only the small
+    ``(1 + n_inst) × (1 + n_inst)`` posterior precision.
 
     Args:
         forward: The assembled multi-instrument coupled forward.
