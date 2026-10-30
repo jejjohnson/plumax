@@ -99,7 +99,7 @@ def _readers():
 def ppb_to_column_mass(
     delta_ppb: Float[np.ndarray, "*#pixel"] | float,
     dry_air_molecules: Float[np.ndarray, "*#pixel"] | float,
-) -> Float[np.ndarray, ...]:
+) -> Float[np.ndarray, " ..."]:
     """Column-mass enhancement of a mixing-ratio enhancement.
 
     ΔΩ = Δχ · 10⁻⁹ · N_dry · M / N_A.
@@ -135,7 +135,7 @@ def ppm_m_to_column_mass(
     *,
     pressure_pa: float,
     temperature_k: float,
-) -> Float[np.ndarray, ...]:
+) -> Float[np.ndarray, " ..."]:
     """Column-mass enhancement of a path-integrated enhancement.
 
     ΔΩ = E · 10⁻⁶ · (p / (k_B T)) · M / N_A.
@@ -395,7 +395,7 @@ def load_ghgsat_l2(
     )
 
 
-def _flatten(values: Shaped[np.ndarray, ...]) -> Shaped[np.ndarray, " pixel"]:
+def _flatten(values: Shaped[np.ndarray, " ..."]) -> Shaped[np.ndarray, " pixel"]:
     return einx.id("... -> (...)", values)
 
 

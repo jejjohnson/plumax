@@ -96,7 +96,7 @@ class OUTurbulence:
 
 def sample_ou_offsets(
     turbulence: OUTurbulence,
-    release_times: Float[np.ndarray, N] | np.ndarray,
+    release_times: Float[np.ndarray, " N"] | np.ndarray,
     seed: int | np.random.Generator | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Draw per-puff (Δx, Δy) offsets from a 2-D OU process at release times.

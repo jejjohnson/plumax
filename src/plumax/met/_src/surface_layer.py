@@ -181,7 +181,7 @@ def friction_velocity(
     z: float | Float[Array, "*#batch"],
     z0: float | Float[Array, "*#batch"],
     inverse_obukhov_length: Float[Array, "*#batch"],
-) -> Float[Array, ...]:
+) -> Float[Array, " ..."]:
     """Friction velocity from the stability-corrected log law.
 
     u* = κ U / (ln(z/z₀) − ψ_m(z/L) + ψ_m(z₀/L)).

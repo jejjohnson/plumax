@@ -58,9 +58,9 @@ class PlumeGrid3D(eqx.Module):
     """
 
     grid: CartesianGrid3D
-    x: Float[Array, nx_interior]
-    y: Float[Array, ny_interior]
-    z: Float[Array, nz_interior]
+    x: Float[Array, " nx_interior"]
+    y: Float[Array, " ny_interior"]
+    z: Float[Array, " nz_interior"]
 
     @property
     def dx(self) -> float:

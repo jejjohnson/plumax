@@ -80,7 +80,7 @@ def interpolate_in_time(
     times: Float[Array, " n_time"],
     values: Float[Array, "n_time ..."],
     t: Float[Array, ""],
-) -> Float[Array, ...]:
+) -> Float[Array, " ..."]:
     """Linear interpolation of a time-stacked array at scalar time ``t``.
 
     Clamps ``t`` to the covered interval, so the result is constant beyond
