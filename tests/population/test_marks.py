@@ -155,3 +155,24 @@ def test_lognormal_pareto_recovery():
     for name in ("alpha", "q_break"):
         draws = np.asarray(samples[f"mark.{name}"])
         assert abs(draws.mean() - truth[name]) < 2.0 * draws.std(), name
+
+
+def test_powerlaw_mean_diverges_or_is_logarithmic_for_small_alpha():
+    mark = PowerLawMark(q_min=1.0)
+    assert float(mark.truncated_mean(0.0, np.inf, alpha=1.5)) == np.inf
+    assert float(mark.truncated_mean(0.0, np.inf, alpha=2.0)) == np.inf
+    # α = 2: ∫₁² q · q⁻² dq = log 2
+    np.testing.assert_allclose(mark.truncated_mean(1.0, 2.0, alpha=2.0), np.log(2.0))
+    # α = 1.5 on a finite interval: ½ ∫₁⁴ q^(−1/2) dq = 2
+    np.testing.assert_allclose(mark.truncated_mean(1.0, 4.0, alpha=1.5), 1.0)
+
+
+def test_lognormal_pareto_mean_with_a_break_far_below_the_body():
+    # log F_LN(Q_b) ≈ −930: the body's renormalisation stays in log space
+    mark = LognormalParetoMark(q_break_loc=2.0)
+    theta = {"mu": 5.0, "sigma": 0.1, "alpha": 2.5, "q_break": 2.0}
+    mean = float(mark.truncated_mean(0.0, np.inf, **theta))
+    assert np.isfinite(mean)
+    np.testing.assert_allclose(mean, _integrate(mark, theta, 1.0), rtol=1e-5)
+    # continuity puts almost all the mass on the Pareto, mean α Q_b/(α − 1)
+    np.testing.assert_allclose(mean, 2.5 * 2.0 / 1.5, rtol=1e-2)

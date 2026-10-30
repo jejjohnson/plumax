@@ -74,19 +74,46 @@ def _lognormal_log_prob(
     return jnp.where(positive, density, -jnp.inf)
 
 
+def _log_lognormal_partial_mean(
+    lower: Float[Array, "*lower"],
+    upper: Float[Array, "*upper"],
+    mu: Float[Array, "*mu"],
+    sigma: Float[Array, "*sigma"],
+) -> Float[Array, "*out"]:
+    # log ∫ₐᵇ q LN(q) dq = μ + σ²/2 + log[Φ(z_b) − Φ(z_a)], z = (log q − μ − σ²)/σ
+    shift = mu + sigma**2
+    log_lower = jnp.log(jnp.clip(lower, jnp.finfo(lower.dtype).tiny))
+    upper_z = (jnp.log(upper) - shift) / sigma
+    lower_z = (log_lower - shift) / sigma
+    empty = upper_z <= lower_z
+    # keep the masked branch finite, for its value and its gradient
+    upper_z = jnp.where(empty, lower_z + 1.0, upper_z)
+    # log[Φ(z_b) − Φ(z_a)] from the CDFs left of the centre and from the
+    # survivals right of it, so neither difference cancels to zero
+    log_cdf_upper = norm.logcdf(upper_z)
+    log_cdf_lower = norm.logcdf(lower_z)
+    from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(log_cdf_lower - log_cdf_upper))
+    log_survival_upper = norm.logcdf(-upper_z)
+    log_survival_lower = norm.logcdf(-lower_z)
+    from_survival = log_survival_lower + jnp.log1p(
+        -jnp.exp(log_survival_upper - log_survival_lower)
+    )
+    log_mass = jnp.where(lower_z > 0.0, from_survival, from_cdf)
+    return jnp.where(empty, -jnp.inf, mu + 0.5 * sigma**2 + log_mass)
+
+
 def _lognormal_partial_mean(
     lower: Float[Array, "*lower"],
     upper: Float[Array, "*upper"],
     mu: Float[Array, "*mu"],
     sigma: Float[Array, "*sigma"],
 ) -> Float[Array, "*out"]:
-    # ∫ₐᵇ q LN(q) dq = exp(μ + σ²/2) [Φ((log b − μ − σ²)/σ) − Φ((log a − μ − σ²)/σ)]
-    shift = mu + sigma**2
-    log_lower = jnp.log(jnp.clip(lower, jnp.finfo(lower.dtype).tiny))
-    upper_cdf = ndtr((jnp.log(upper) - shift) / sigma)
-    lower_cdf = ndtr((log_lower - shift) / sigma)
-    mean = jnp.exp(mu + 0.5 * sigma**2)
-    return mean * jnp.clip(upper_cdf - lower_cdf, 0.0)
+    # ∫ₐᵇ q LN(q) dq = exp(μ + σ²/2) [Φ(z_b) − Φ(z_a)]
+    return jnp.exp(_log_lognormal_partial_mean(lower, upper, mu, sigma))
+
+
+#: |index − 1| below which the Pareto partial mean uses its logarithmic form.
+_LOG_FORM_TOLERANCE = 1e-8
 
 
 def _pareto_partial_mean(
@@ -95,16 +122,25 @@ def _pareto_partial_mean(
     scale: Float[Array, "*scale"],
     alpha: Float[Array, "*alpha"],
 ) -> Float[Array, "*out"]:
-    # ∫ q · α sᵅ q^(−α−1) dq over [max(a, s), b] = α sᵅ (a'^(1−α) − b^(1−α))/(α − 1)
+    # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s):
+    #   α sᵅ (a'^(1−α) − b^(1−α))/(α − 1) for α ≠ 1, s log(b/a') for α = 1;
+    #   +∞ for b = ∞ and α ≤ 1, where the mean diverges
     lower = jnp.maximum(lower, scale)
     upper = jnp.maximum(upper, lower)
+    unit_index = jnp.abs(alpha - 1.0) < _LOG_FORM_TOLERANCE
     lower_power = jnp.exp((1.0 - alpha) * jnp.log(lower))
-    # b^(1−α) → 0 as b → ∞ for α > 1
+    # b^(1−α) → 0 for α > 1 and → ∞ for α < 1 as b → ∞
+    tail_limit = jnp.where(alpha > 1.0, 0.0, jnp.inf)
+    finite_upper = jnp.where(jnp.isinf(upper), lower, upper)
     upper_power = jnp.where(
-        jnp.isinf(upper), 0.0, jnp.exp((1.0 - alpha) * jnp.log(upper))
+        jnp.isinf(upper), tail_limit, jnp.exp((1.0 - alpha) * jnp.log(finite_upper))
     )
-    coefficient = alpha * jnp.exp(alpha * jnp.log(scale)) / (alpha - 1.0)
-    return coefficient * (lower_power - upper_power)
+    divisor = jnp.where(unit_index, 1.0, alpha - 1.0)
+    coefficient = alpha * jnp.exp(alpha * jnp.log(scale)) / divisor
+    general = coefficient * (lower_power - upper_power)
+    # α = 1: s log(b/a'), ∞ for b = ∞
+    logarithmic = scale * (jnp.log(upper) - jnp.log(lower))
+    return jnp.where(unit_index, logarithmic, general)
 
 
 def _bounds(q_min: ArrayLike, q_max: ArrayLike) -> tuple[Array, Array]:
@@ -117,7 +153,9 @@ def _bounds(q_min: ArrayLike, q_max: ArrayLike) -> tuple[Array, Array]:
 class PowerLawMark(eqx.Module):
     """Pareto power law f(q) = (α − 1)/q_min · (q/q_min)^(−α) on q ≥ q_min.
 
-    θ = {α}, α > 1. E[Q] is finite for α > 2.
+    θ = {α}, α > 1. E[Q] is finite for α > 2; for α ≤ 2 ``truncated_mean``
+    over an unbounded interval is +∞ (logarithmic in the upper limit at
+    α = 2).
 
     Attributes:
         q_min: Lower end of the support [kg/s].
@@ -344,11 +382,12 @@ class LognormalParetoMark(eqx.Module):
         log_body_weight, log_tail_weight, log_body_mass = _splice_log_weights(
             mu, sigma, alpha, q_break
         )
-        # body part on [a, min(b, Q_b)], renormalised by F_LN(Q_b)
+        # body part on [a, min(b, Q_b)], renormalised by F_LN(Q_b) in log
+        # space: far below the lognormal's centre both factors leave float64
         body_upper = jnp.minimum(upper, q_break)
         body_lower = jnp.minimum(lower, body_upper)
-        body = _lognormal_partial_mean(body_lower, body_upper, mu, sigma)
-        body = jnp.exp(log_body_weight - log_body_mass) * body
+        log_body = _log_lognormal_partial_mean(body_lower, body_upper, mu, sigma)
+        body = jnp.exp(log_body_weight - log_body_mass + log_body)
         # tail part on [max(a, Q_b), b]
         tail = _pareto_partial_mean(lower, upper, q_break, alpha)
         return body + jnp.exp(log_tail_weight) * tail
