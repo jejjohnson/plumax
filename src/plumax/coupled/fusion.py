@@ -26,6 +26,7 @@ via the per-instrument :meth:`Instrument.observation_variance`.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -34,6 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from plumax.coupled.forward import CoupledForward
+from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,9 @@ class FusionPosterior:
         covariance: Full posterior covariance ``P*``, shape
             ``(n_param + n_inst, n_param + n_inst)``.
         instrument_names: Names aligned with the bias entries.
+        pixels_used: Pixels each instrument contributed at full weight
+            (unmasked, not inflated), shape ``(n_inst,)``, aligned with
+            ``instrument_names``.
     """
 
     emission_rate: jax.Array
@@ -72,38 +77,42 @@ class FusionPosterior:
     mean: jax.Array
     covariance: jax.Array
     instrument_names: tuple[str, ...]
+    pixels_used: jax.Array | None = None
 
 
 def _stack_design(
     forward: CoupledForward,
-) -> tuple[jax.Array, jax.Array, jax.Array]:
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
     """Build the stacked design matrix ``G``, observation variance and background.
 
     ``G`` has shape ``(n_total_obs, n_param + n_inst)``: the first ``n_param``
     columns are the concatenated unit-``Q`` responses (one column for a scalar
     ``Q``); column ``n_param + i`` is the indicator (ones) for the rows
-    belonging to instrument ``i`` (its additive bias). Returns ``(G, r, bg)``
-    with ``r`` the stacked observation variance and ``bg`` the stacked
-    background offset.
+    belonging to instrument ``i`` (its additive bias). Returns
+    ``(G, r, m, bg)`` with ``r`` the stacked observation variance, ``m`` the
+    stacked observation mask and ``bg`` the stacked background offset.
     """
     n_inst = len(forward.instruments)
     cols_bias = []
     response_blocks = []
     var_blocks = []
+    mask_blocks = []
     for i, (inst, resp) in enumerate(
         zip(forward.instruments, forward.responses, strict=True)
     ):
         n = inst.n_obs
         response_blocks.append(resp[:, None] if resp.ndim == 1 else resp)
         var_blocks.append(inst.observation_variance())
+        mask_blocks.append(inst.observation_mask())
         indicator = jnp.zeros((n, n_inst)).at[:, i].set(1.0)
         cols_bias.append(indicator)
     response = jnp.concatenate(response_blocks, axis=0)  # (n_total, n_param)
     bias_cols = jnp.concatenate(cols_bias, axis=0)  # (n_total, n_inst)
     g = jnp.concatenate([response, bias_cols], axis=1)  # (n_total, n_param + n_inst)
     r = jnp.concatenate(var_blocks)  # (n_total,)
+    m = jnp.concatenate(mask_blocks)  # (n_total,)
     bg = jnp.asarray(forward.source.background, dtype=float)
-    return g, r, bg
+    return g, r, m, bg
 
 
 def _n_emission_params(forward: CoupledForward) -> int:
@@ -123,6 +132,7 @@ def fuse_observations(
     *,
     prior_mean: jax.Array,
     prior_covariance: jax.Array,
+    quality: QualityPolicy | None = None,
 ) -> FusionPosterior:
     """Closed-form joint posterior over ``(Q, bias_inst)`` from fused observations.
 
@@ -136,6 +146,11 @@ def fuse_observations(
     solved in the information form, which inverts only the small
     ``(1 + n_inst) × (1 + n_inst)`` posterior precision.
 
+    Each instrument's ``mask`` zeroes its pixels' weight in ``R⁻¹`` and its
+    ``variance_inflation`` scales their variance (see
+    :mod:`plumax.coupled.quality`); a masked observation may hold anything,
+    NaN included.
+
     Args:
         forward: The assembled multi-instrument coupled forward.
         observations: Observed enhancement vector per instrument, aligned with
@@ -146,6 +161,10 @@ def fuse_observations(
         prior_covariance: Prior covariance ``B``, shape
             ``(n_param + n_inst, n_param + n_inst)`` — e.g.
             ``diag(σ_Q², σ_bias², …)``.
+        quality: Optional quality policy, applied to every instrument that
+            carries ``flags`` (:func:`~plumax.coupled.quality.apply_quality`).
+            Default ``None``: use the instruments' masks and inflation as
+            they are.
 
     Returns:
         The :class:`FusionPosterior`.
@@ -154,6 +173,12 @@ def fuse_observations(
         ValueError: on a per-instrument observation-count mismatch or a
             mis-shaped prior.
     """
+    if quality is not None:
+        screened = tuple(
+            inst if inst.flags is None else apply_quality(inst, inst.flags, quality)
+            for inst in forward.instruments
+        )
+        forward = dataclasses.replace(forward, instruments=screened)
     n_inst = len(forward.instruments)
     n_param = _n_emission_params(forward)
     n_state = n_param + n_inst
@@ -186,8 +211,10 @@ def fuse_observations(
         obs_blocks.append(o)
     y = jnp.concatenate(obs_blocks)
 
-    g, r, bg = _stack_design(forward)
+    g, r, m, bg = _stack_design(forward)
     innovation = y - (g @ theta_b + bg)
+    # a masked pixel may hold NaN; zero it so 0 · NaN never reaches the update
+    innovation = jnp.where(m > 0.0, innovation, 0.0)
 
     # Information-form BLUE, solved in the tiny (1 + n_inst)-dim state space.
     # For fusion n_obs ≫ n_state, so the innovation form (n_obs × n_obs) would be
@@ -195,7 +222,8 @@ def fuse_observations(
     # R gives a near-singular system). The information form inverts only the
     # (n_state × n_state) posterior precision, which is well-conditioned:
     #     P*⁻¹ = B⁻¹ + Gᵀ R⁻¹ G,   θ* = θ_b + P* Gᵀ R⁻¹ (y − G θ_b − c_bg).
-    r_inv = 1.0 / r
+    # m_i / R_ii: a masked pixel carries no weight
+    r_inv = m / r
     gt_rinv = g.T * r_inv[None, :]  # Gᵀ R⁻¹, (n_state, n_obs)
     precision = jnp.linalg.inv(b) + gt_rinv @ g  # B⁻¹ + Gᵀ R⁻¹ G
     precision = 0.5 * (precision + precision.T)
@@ -216,6 +244,9 @@ def fuse_observations(
         mean=theta,
         covariance=posterior_cov,
         instrument_names=names,
+        pixels_used=jnp.stack(
+            [full_weight_pixels(inst) for inst in forward.instruments]
+        ),
     )
 
 

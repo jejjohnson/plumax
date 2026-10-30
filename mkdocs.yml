@@ -87,6 +87,7 @@ nav:
   - Tier IV — Coupled:
       - Coupled inversion: coupled.md
       - Transport backends: coupled_backends.md
+      - Quality flags: coupled_quality.md
   - Tier V — Population: population.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md

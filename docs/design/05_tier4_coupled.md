@@ -282,7 +282,7 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 | 1 | RTM observation operator — nonlinear (column → ΔVMR → band radiance, `L=exp(-Δτ)`) | [`coupled/rtm.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py) (`RadianceObservationOperator`, `radiance_response`) | 🚧 |
 | 1 | RTM observation operator — linearised / tangent-linear (linear in `Q`, pure-JAX) | [`coupled/rtm.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/rtm.py) (`LinearisedRadianceOperator`, `linearise`, `radiance_response_linear`) | 🚧 |
 | 1 | Coupled forward (Tier III + RTM + multi-inst) | [`coupled/backends.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/backends.py) (`EulerianSource`, `TransportBackend`) | ✓ [#101](https://github.com/jejjohnson/plumax/issues/101) |
-| 1 | Quality-flag aggregator | `plumax.coupled.quality` | ☐ [#105](https://github.com/jejjohnson/plumax/issues/105) |
+| 1 | Quality-flag aggregator | [`coupled/quality.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/quality.py) (`QualityPolicy`, `apply_quality`, `contribution_report`) | ✓ [#105](https://github.com/jejjohnson/plumax/issues/105) |
 | 1 | $Q(t)$ stochastic-process model (OU / GP) | `plumax.coupled.q_dynamics` | ☐ [#103](https://github.com/jejjohnson/plumax/issues/103) |
 | 1 | Trans-dimensional source-count handling | `plumax.coupled.k_sources` | ☐ [#104](https://github.com/jejjohnson/plumax/issues/104) |
 | 2 | End-to-end inversion | `coupled.inversion` — reuse [`assimilation/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/var3d/) with composed `forward` | ☐ [#102](https://github.com/jejjohnson/plumax/issues/102) |

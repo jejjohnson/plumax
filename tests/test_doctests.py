@@ -9,6 +9,7 @@ import pytest
 
 
 DOCTESTED_MODULES = (
+    "plumax.coupled._src.quality",
     "plumax.gauss_plume._src.likelihoods",
     "plumax.gauss_plume._src.multi_source",
     "plumax.gauss_plume._src.observation",
