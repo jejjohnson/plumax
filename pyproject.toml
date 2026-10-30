@@ -39,7 +39,8 @@ classifiers = [
 dependencies = [
     "jax>=0.10",
     "jaxlib>=0.10",
-    "numpy",
+    # >= 2.0 for np.trapezoid (gauss_plume, gauss_puff, population).
+    "numpy>=2.0",
     "xarray",
     # netcdf4 backs the compressed-NetCDF LUT round-trip in hapi_lut; without a
     # real engine xarray falls back to scipy, which rejects zlib/complevel.
