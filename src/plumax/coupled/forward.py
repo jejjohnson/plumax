@@ -30,6 +30,7 @@ import numpy as np
 
 from plumax.coupled.instrument import Instrument
 from plumax.gauss_plume.dispersion import get_dispersion_params
+from plumax.gauss_plume.observation import ColumnObservation
 from plumax.gauss_plume.plume import plume_concentration_vmap
 
 
@@ -71,9 +72,11 @@ class PlumeSource:
 def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
     """Per-receptor column enhancement at **unit emission** for one instrument.
 
-    Evaluates the Gaussian plume at unit ``Q`` on each receptor column, integrates
-    over ``source.column_z`` (trapezoidal), and applies the instrument averaging
-    kernel. The full observation at emission ``Q`` is then
+    Evaluates the Gaussian plume at unit ``Q`` on each receptor column, then
+    integrates over ``source.column_z`` (trapezoidal) and applies the instrument
+    averaging kernel with the shared
+    :class:`~plumax.gauss_plume.observation.ColumnObservation` (whose module
+    docstring states the units). The full observation at emission ``Q`` is then
     ``Q · column_response + bias`` (plus the background; see
     :func:`predict_observation`). Linearity in ``Q`` is what makes the coupled
     inversion closed-form.
@@ -103,8 +106,8 @@ def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
         x, y, z_tiled, sx, sy, sz, u, v, 1.0, dispersion
     )  # unit Q
     conc = conc.reshape(n_obs, n_z)
-    column = jnp.trapezoid(conc, x=z, axis=1)  # (n_obs,)
-    return instrument.ak * column
+    observation = ColumnObservation.trapezoid(z, averaging_kernel=instrument.ak)
+    return observation.column(conc)
 
 
 def predict_observation(

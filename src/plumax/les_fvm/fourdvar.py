@@ -57,6 +57,7 @@ import lineax as lx
 import numpy as np
 
 from plumax._vardax import require_vardax
+from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import _is_traced
 from plumax.les_fvm.boundary import build_default_concentration_bc
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
@@ -81,6 +82,9 @@ class ColumnObservationOperator:
     ``H_t`` in the 4D-Var cost: vertically integrate the 3-D concentration to a
     column (``∑_z c · dz``), then gather the values at a set of receptor pixels.
     With ``receptor_index = None`` every interior column is an observation.
+    A thin wrapper over the shared
+    :class:`~plumax.gauss_plume.observation.ColumnObservation` (identity
+    averaging kernel, ``h_k = dz``), whose module docstring states the units.
 
     Attributes:
         dz: Vertical cell size [m] for the column integral.
@@ -94,12 +98,12 @@ class ColumnObservationOperator:
 
     def __call__(self, concentration: jax.Array) -> jax.Array:
         """Map an interior field ``(nz, ny, nx)`` to observations ``(n_obs,)``."""
-        column = jnp.sum(concentration, axis=0) * self.dz  # (ny, nx)
-        if self.receptor_index is None:
-            return column.reshape(-1)
-        iy = self.receptor_index[:, 0]
-        ix = self.receptor_index[:, 1]
-        return column[iy, ix]
+        nz = concentration.shape[0]
+        layer_weights = jnp.full(nz, self.dz, dtype=concentration.dtype)
+        observation = ColumnObservation(
+            layer_weights=layer_weights, receptor_index=self.receptor_index
+        )
+        return observation.from_field(concentration)
 
 
 @dataclass(frozen=True)

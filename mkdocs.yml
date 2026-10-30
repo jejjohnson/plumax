@@ -74,6 +74,7 @@ nav:
   - Tier 0 — Priors: priors.md
   - Tier I — Gaussian:
       - Gaussian plume: gauss_plume.md
+      - Column observation: gauss_plume_observation.md
       - Gaussian puff: gauss_puff.md
   - Tier II — Lagrangian: lagrangian.md
   - Tier III — Eulerian FV: les_fvm.md

@@ -212,7 +212,7 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | 1 | Plume rise (Briggs) | `gauss_plume.plume_rise` | ☐ [#82](https://github.com/jejjohnson/plumax/issues/82) |
 | 1 | Stability + dispersion | [`gauss_plume/dispersion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/dispersion.py) | 🚧 partial |
 | 1 | Puff turbulence | [`gauss_puff/turbulence.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/turbulence.py) | ✓ |
-| 1 | Column + AK pipeline | `gauss_plume.observation` (shared by Tiers II–III; today split between `coupled.column_response` and `les_fvm.ColumnObservationOperator`) | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
+| 1 | Column + AK pipeline | `gauss_plume.observation` (`ColumnObservation`, shared by Tiers II–III; `coupled.column_response` and `les_fvm.ColumnObservationOperator` call it) | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 1 | Background $c_\text{bg}$ loader | `plumax.priors.background` | ☐ [#81](https://github.com/jejjohnson/plumax/issues/81) |
 | 2 | Likelihoods + priors | `gauss_plume.likelihoods` | ☐ [#84](https://github.com/jejjohnson/plumax/issues/84) |
 | 2 | Plume MAP/MCMC | [`gauss_plume/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ |

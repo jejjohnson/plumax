@@ -82,6 +82,24 @@ $$
 - $\mathbf{A}$ applies the satellite [averaging kernel](#prereqs-ak-operator); see (eq-ak-operator).
 - $\mathbf{c}_\text{bg}$ is the regional background — mandatory, not optional. Same critique as Tier I: predicted enhancement vs. absolute-column observation must be reconciled day-1.
 
+The column and averaging kernel are the Tier I [`ColumnObservation`](xref:api#plumax.gauss_plume.observation.ColumnObservation), applied to the forward concentration on its `(z, y, x)` grid. With `c` in kg m⁻³ and `h_k = Δz` it returns the column-mass enhancement in kg m⁻², the unit `plumax.obs` converts L2 products to:
+
+```python
+import jax.numpy as jnp
+
+from plumax.gauss_plume import ColumnObservation
+from plumax.lagrangian import simulate_lagrangian
+
+ds = simulate_lagrangian(...)  # concentration on (x, y, z) [kg m⁻³]
+concentration = jnp.asarray(ds["concentration"].transpose("z", "y", "x").values)
+dz = float(ds["z"][1] - ds["z"][0])
+observation = ColumnObservation(
+    layer_weights=jnp.full(ds.sizes["z"], dz),
+    receptor_index=jnp.array([[4, 2], [4, 6]]),  # (iy, ix) receptor cells
+)
+column = observation.from_field(concentration)  # ΔΩ per receptor [kg m⁻²]
+```
+
 (tier2-likelihood)=
 ### Likelihood model
 
@@ -207,7 +225,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 1 | Forward concentration (residence-time binning) | `plumax.lagrangian.concentration` | ✓ |
 | 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |
 | 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ [#88](https://github.com/jejjohnson/plumax/issues/88) |
-| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ☐ [#83](https://github.com/jejjohnson/plumax/issues/83) |
+| 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr) | `plumax.lagrangian.inversion` | ✓ |
 | 2 | Linear inversion (Gaussian / lognormal, linearised in log space) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`): `vardax.OptimalInterpolation` over `footprint_operator`, Laplace covariance; `assim` extra | ✓ [#163](https://github.com/jejjohnson/plumax/issues/163) |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
