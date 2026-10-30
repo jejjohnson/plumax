@@ -1122,3 +1122,39 @@ def test_max_axis_length_of_collinear_pixels(line: str) -> None:
     expected = {"row": 60.0, "column": 60.0, "diagonal": 80.0 * np.sqrt(2.0)}
     length = plume_length(mask, transform, method="max_axis")
     assert length == pytest.approx(expected[line], rel=1e-12)
+
+
+def _uint8_labels_with_fill() -> GeoTensor:
+    """Two 3 x 6 instances on a 12 x 12 grid, and a 255 nodata block."""
+    labels = np.zeros((12, 12), dtype=np.uint8)
+    labels[1:4, 1:7] = 1
+    labels[6:9, 1:7] = 2
+    labels[10:, :] = 255  # nodata
+    return GeoTensor(
+        values=labels,
+        transform=rasterio.Affine(10.0, 0.0, 0.0, 0.0, -10.0, 120.0),
+        crs="EPSG:32629",
+        fill_value_default=255,
+    )
+
+
+@pytest.mark.parametrize("op_name", ["PlumeColumnStats", "PlumeQNDFeatures"])
+def test_instance_features_ignore_a_positive_label_fill(op_name: str) -> None:
+    """A uint8 label image's 255 nodata is not an instance (#177 review)."""
+    column = GeoTensor(
+        values=np.random.default_rng(0).random((12, 12)),
+        transform=rasterio.Affine(10.0, 0.0, 0.0, 0.0, -10.0, 120.0),
+        crs="EPSG:32629",
+        fill_value_default=-9999,
+    )
+    op = getattr(geo, op_name)()
+    df = op(_uint8_labels_with_fill(), column)
+    assert df["label"].tolist() == [1, 2]
+
+
+def test_shape_filter_ignores_a_positive_label_fill() -> None:
+    out = geo.PlumeShapeFilter(min_area_px=1, min_fiber_to_major_ratio=0.0)(
+        _uint8_labels_with_fill()
+    )
+    assert set(np.unique(np.asarray(out))) <= {0, 1, 2}
+    assert not np.asarray(out)[10:].any()

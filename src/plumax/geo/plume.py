@@ -112,6 +112,17 @@ def _single_band_nan(x: GeoTensor | np.ndarray) -> np.ndarray:
     return squeeze_single_band(mask_invalid_to_nan(x))
 
 
+def _instance_labels(x: GeoTensor | np.ndarray) -> np.ndarray:
+    """``(H, W)`` int64 label image of ``x`` with nodata pixels as background.
+
+    A positive fill (a uint8 raster's ``255``) would otherwise read as one
+    more instance.
+    """
+    labels = squeeze_single_band(np.asarray(x)).astype(np.int64, copy=False)
+    valid = squeeze_single_band(valid_pixels(x))
+    return np.where(valid, labels, 0)
+
+
 class PlumeMask(Operator):
     """Binary plume mask from a single-band score or enhancement map.
 
@@ -896,7 +907,7 @@ class PlumeShapeFilter(Operator):
 
     @over_frames
     def _apply(self, gt: GeoTensor | np.ndarray) -> GeoTensor | np.ndarray:
-        labels = squeeze_single_band(np.asarray(gt)).astype(np.int64, copy=False)
+        labels = _instance_labels(gt)
         kept: set[int] = set()
         for lbl, compact, _bbox in _iter_instances(labels):
             area = int(compact.sum())
@@ -989,7 +1000,7 @@ class PlumeColumnStats(Operator):
     ) -> pd.DataFrame:
         require_ndim(gt, (2, 3), "PlumeColumnStats")
         require_grid_match(gt, column, "PlumeColumnStats", names=("labels", "column"))
-        labels = squeeze_single_band(np.asarray(gt)).astype(np.int64, copy=False)
+        labels = _instance_labels(gt)
         col_arr = _single_band_nan(column).astype(float, copy=False)
         if col_arr.shape != labels.shape:
             raise ValueError(
@@ -1177,7 +1188,7 @@ class PlumeQNDFeatures(Operator):
             require_grid_match(
                 gt, albedo, "PlumeQNDFeatures", names=("labels", "albedo")
             )
-        labels = squeeze_single_band(np.asarray(gt)).astype(np.int64, copy=False)
+        labels = _instance_labels(gt)
         col_arr = _single_band_nan(column).astype(float, copy=False)
         if col_arr.shape != labels.shape:
             raise ValueError(
