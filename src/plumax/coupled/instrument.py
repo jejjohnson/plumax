@@ -20,6 +20,11 @@ its residuals in the cost:
 - **observation_time** — the overpass time [s], used by time-resolved transport
   tiers (Tier II/III); Tier I is steady-state and ignores it.
 
+- **quality** — optional per-pixel ``flags`` (bit flags, ``0`` = clear), the
+  ``mask`` that drops pixels from the likelihood and the ``variance_inflation``
+  that down-weights them. :func:`plumax.coupled.quality.apply_quality` sets the
+  last two from the flags and a policy.
+
 ``bias`` (the per-instrument additive offset) is *not* stored here — it is a
 first-class **state** element solved for in :mod:`plumax.coupled.fusion`, so it
 lives with the inference, not the fixed instrument geometry.
@@ -53,6 +58,13 @@ class Instrument:
             ``(n_obs,)``). Default ``0``.
         observation_time: Overpass time [s] (used by time-resolved transport
             tiers; ignored by the steady-state Tier I forward). Default ``0``.
+        flags: Per-pixel quality bit flags, shape ``(n_obs,)``, ``0`` = clear
+            (see :class:`~plumax.coupled.quality.QualityFlag`). ``None`` is
+            all-clear.
+        mask: Per-pixel observation mask, shape ``(n_obs,)``: ``1`` keeps the
+            pixel, ``0`` drops it from the likelihood. ``None`` keeps all.
+        variance_inflation: Per-pixel factor ``≥ 1`` on the total observation
+            variance, shape ``(n_obs,)``. ``None`` is no inflation.
     """
 
     name: str
@@ -62,6 +74,9 @@ class Instrument:
     representation_variance: jax.Array | float = 0.0
     alignment_variance: jax.Array | float = 0.0
     observation_time: float = 0.0
+    flags: jax.Array | None = None
+    mask: jax.Array | None = None
+    variance_inflation: jax.Array | None = None
 
     def __post_init__(self) -> None:
         rec = np.asarray(self.receptors, dtype=float)
@@ -77,6 +92,13 @@ class Instrument:
                     f"Instrument {self.name!r}: `averaging_kernel` must have shape "
                     f"({rec.shape[0]},); got {ak.shape}."
                 )
+        for label in ("flags", "mask", "variance_inflation"):
+            value = getattr(self, label)
+            if value is not None and np.shape(value) != (rec.shape[0],):
+                raise ValueError(
+                    f"Instrument {self.name!r}: `{label}` must have shape "
+                    f"({rec.shape[0]},); got {np.shape(value)}."
+                )
 
     @property
     def n_obs(self) -> int:
@@ -90,12 +112,19 @@ class Instrument:
             return jnp.ones(self.n_obs)
         return jnp.asarray(self.averaging_kernel, dtype=float)
 
+    def observation_mask(self) -> jax.Array:
+        """Per-pixel mask as a float array, ``1`` = used (all ones if unset)."""
+        if self.mask is None:
+            return jnp.ones(self.n_obs)
+        return jnp.asarray(self.mask, dtype=float)
+
     def observation_variance(self) -> jax.Array:
         """Total per-receptor observation variance ``R_retr + R_repr + R_align``.
 
         Each term broadcasts to ``(n_obs,)``. The design flags omitting the
         representation / alignment terms as a source of overconfident posteriors,
-        so all three are summed here.
+        so all three are summed here. A ``variance_inflation`` multiplies the
+        sum pixel by pixel.
 
         Raises:
             ValueError: if any resulting variance is non-positive (a zero/negative
@@ -119,6 +148,8 @@ class Instrument:
                 f"Instrument {self.name!r}: total observation variance must be > 0 "
                 "(check retrieval / representation / alignment variances)."
             )
+        if self.variance_inflation is not None:
+            r = r * jnp.asarray(self.variance_inflation, dtype=float)
         return r
 
 

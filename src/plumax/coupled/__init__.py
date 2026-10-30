@@ -33,6 +33,11 @@ rate, with the per-instrument bias as a first-class state element:
   (:class:`TransportBackend`, :class:`LagrangianSource`,
   :class:`EulerianSource`), through the shared column observation.
 
+- ``quality`` — the per-instrument quality-flag aggregator
+  (:class:`QualityPolicy`, :func:`apply_quality`, :func:`contribution_report`):
+  flagged pixels are masked or have their variance inflated, and
+  :func:`stack_observations` hands the result to vardax.
+
 Later build-order steps (the ``Q(t)`` stochastic
 process, trans-dimensional source count, coupled emulator, operational
 predictor) are future work; the fusion harness and likelihood structure here
@@ -41,7 +46,7 @@ are designed to stay the same as those blocks are swapped in.
 
 from __future__ import annotations
 
-from plumax.coupled import backends, forward, fusion, instrument, rtm
+from plumax.coupled import backends, forward, fusion, instrument, quality, rtm
 from plumax.coupled.backends import EulerianSource, LagrangianSource, TransportBackend
 from plumax.coupled.forward import (
     CoupledForward,
@@ -52,6 +57,15 @@ from plumax.coupled.forward import (
 )
 from plumax.coupled.fusion import FusionPosterior, default_prior, fuse_observations
 from plumax.coupled.instrument import Instrument
+from plumax.coupled.quality import (
+    FlagPolicy,
+    QualityFlag,
+    QualityPolicy,
+    StackedObservations,
+    apply_quality,
+    contribution_report,
+    stack_observations,
+)
 from plumax.coupled.rtm import (
     LayeredRadianceOperator,
     LinearisedRadianceOperator,
@@ -66,18 +80,24 @@ from plumax.coupled.rtm import (
 __all__ = [
     "CoupledForward",
     "EulerianSource",
+    "FlagPolicy",
     "FusionPosterior",
     "Instrument",
     "LagrangianSource",
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "PlumeSource",
+    "QualityFlag",
+    "QualityPolicy",
     "RadianceObservationOperator",
+    "StackedObservations",
     "TransportBackend",
+    "apply_quality",
     "backends",
     "build_coupled_forward",
     "column_mass_to_delta_vmr",
     "column_response",
+    "contribution_report",
     "default_prior",
     "forward",
     "fuse_observations",
@@ -85,7 +105,9 @@ __all__ = [
     "instrument",
     "linearise",
     "predict_observation",
+    "quality",
     "radiance_response",
     "radiance_response_linear",
     "rtm",
+    "stack_observations",
 ]
