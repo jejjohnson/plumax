@@ -37,3 +37,7 @@ class ScreeningError(PlumaxError, ValueError):
 
 class UnitsError(PlumaxError, ValueError):
     """A quantity is missing or in units the reader cannot convert."""
+
+
+class ParameterError(PlumaxError, ValueError):
+    """A model parameter lies outside its valid range (a negative scale, say)."""

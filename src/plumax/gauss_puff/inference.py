@@ -5,7 +5,8 @@ for a given emission rate ``Q`` (constant or time-varying) under a specified
 wind schedule. This module provides:
 
 * :func:`gaussian_puff_model` — a NumPyro model over ``Q``, a half-normal
-  background, and Gaussian observation noise.
+  background, and observation noise (a
+  :class:`plumax.gauss_plume.likelihoods.Noise`, Gaussian by default).
 * :func:`infer_emission_rate` — NUTS runner for a **constant** Q, wrapping
   the model with input validation and posterior unpacking.
 * :func:`infer_emission_timeseries` — NUTS runner for a **time-varying**
@@ -27,6 +28,7 @@ from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
 from plumax.gauss_plume.inference import _lognormal_from_moments
+from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_puff.dispersion import (
     STABILITY_CLASSES,
     get_dispersion_scheme,
@@ -183,6 +185,7 @@ def gaussian_puff_model(
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
     puff_durations: jnp.ndarray | None = None,
+    noise: Noise | None = None,
 ) -> jnp.ndarray:
     """NumPyro model for the Gaussian puff forward with a constant Q prior.
 
@@ -191,7 +194,10 @@ def gaussian_puff_model(
         background    ~ HalfNormal(σ_bg)                            [kg/m³]
 
     Likelihood:
-        obs ~ Normal(f_puff(emission_rate, ...) + background, σ_obs)
+        obs ~ noise(f_puff(emission_rate, ...) + background)
+
+    with ``noise`` defaulting to ``GaussianNoise(obs_noise_std)``, i.e.
+    ``obs ~ Normal(f_puff + background, σ_obs)``.
 
     where ``(μ_log, σ_log)`` are the log-space parameters derived from the
     requested real-scale ``(prior_emission_rate_mean, prior_emission_rate_std)``.
@@ -224,6 +230,11 @@ def gaussian_puff_model(
         Dispersion scheme: ``'pg'`` or ``'briggs'``.
     prior_emission_rate_mean, prior_emission_rate_std : float
     background_prior_std, obs_noise_std : float
+        ``obs_noise_std`` is the σ of the default Gaussian noise; ignored when
+        ``noise`` is given.
+    noise : Noise, optional
+        Observation-noise model from :mod:`plumax.gauss_plume.likelihoods`.
+        Default ``None`` is ``GaussianNoise(obs_noise_std)``.
     """
     _require_forward_inputs(
         observations,
@@ -281,11 +292,8 @@ def gaussian_puff_model(
     else:
         predicted = background
 
-    return numpyro.sample(
-        "obs",
-        dist.Normal(predicted, obs_noise_std),
-        obs=observations,
-    )
+    noise_model = GaussianNoise(std=obs_noise_std) if noise is None else noise
+    return noise_model("obs", predicted, observations)
 
 
 def gaussian_puff_rw_model(
@@ -304,6 +312,7 @@ def gaussian_puff_rw_model(
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
     puff_durations: jnp.ndarray | None = None,
+    noise: Noise | None = None,
 ) -> jnp.ndarray:
     """Random-walk state-space model for a time-varying emission rate Q_i.
 
@@ -315,7 +324,8 @@ def gaussian_puff_rw_model(
         ln Q_i | ln Q_{i−1} ~ Normal(ln Q_{i−1}, rw_step_std)        for i ≥ 1
         Q_i              = exp(ln Q_i)                              [kg/s]
 
-    Likelihood is the same as :func:`gaussian_puff_model`.
+    Likelihood is the same as :func:`gaussian_puff_model`, including the
+    ``noise`` override (default ``GaussianNoise(obs_noise_std)``).
     """
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
     if stability_class not in scheme_params_dict:
@@ -365,11 +375,8 @@ def gaussian_puff_rw_model(
     )
     predicted = predicted + background
 
-    return numpyro.sample(
-        "obs",
-        dist.Normal(predicted, obs_noise_std),
-        obs=observations,
-    )
+    noise_model = GaussianNoise(std=obs_noise_std) if noise is None else noise
+    return noise_model("obs", predicted, observations)
 
 
 # ── High-level runners ───────────────────────────────────────────────────────
@@ -490,6 +497,7 @@ def infer_emission_rate(
     seed: int = 0,
     progress_bar: bool = False,
     print_summary: bool = False,
+    noise: Noise | None = None,
 ) -> dict[str, NDArray]:
     """NUTS inference of a **constant** emission rate from puff observations.
 
@@ -513,8 +521,13 @@ def infer_emission_rate(
         Dispersion scheme: ``'pg'`` or ``'briggs'``.
     prior_mean, prior_std : float
         Real-scale prior moments for Q.
+    obs_noise_std : float
+        σ of the default Gaussian noise; ignored when ``noise`` is given.
     num_warmup, num_samples, num_chains, seed : int
     progress_bar, print_summary : bool
+    noise : Noise, optional
+        Observation-noise model from :mod:`plumax.gauss_plume.likelihoods`.
+        Default ``None`` is ``GaussianNoise(obs_noise_std)``.
 
     Returns
     -------
@@ -570,6 +583,7 @@ def infer_emission_rate(
         prior_emission_rate_mean=prior_mean,
         prior_emission_rate_std=prior_std,
         obs_noise_std=obs_noise_std,
+        noise=noise,
     )
     if print_summary:
         mcmc.print_summary()
@@ -599,12 +613,14 @@ def infer_emission_timeseries(
     seed: int = 0,
     progress_bar: bool = False,
     print_summary: bool = False,
+    noise: Noise | None = None,
 ) -> dict[str, NDArray]:
     """NUTS inference of a **time-varying** emission rate series Q_i.
 
     Uses a Gaussian random-walk prior on ``ln Q`` along puff indices, anchored
     by the LogNormal(``prior_mean``, ``prior_std``) prior on ``ln Q_0``. See
-    :func:`gaussian_puff_rw_model`.
+    :func:`gaussian_puff_rw_model`. ``noise`` overrides the default
+    ``GaussianNoise(obs_noise_std)`` likelihood.
 
     Returns posterior draws with key ``'emission_rate'`` of shape
     ``(num_samples, n_puffs)``.
@@ -663,6 +679,7 @@ def infer_emission_timeseries(
         prior_emission_rate_std=prior_std,
         rw_step_std=rw_step_std,
         obs_noise_std=obs_noise_std,
+        noise=noise,
     )
     if print_summary:
         mcmc.print_summary()
