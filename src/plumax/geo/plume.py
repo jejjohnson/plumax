@@ -227,8 +227,9 @@ class PlumeFootprint(Operator):
     ``major_axis_length``, ``orientation``, ``eccentricity``, ``solidity``,
     ``perimeter``, ``bbox-*``, and ``inertia_tensor_eigvals-*``.
 
-    Nodata pixels of a boolean mask never form a polygon, non-positive
-    labels are background, and nodata ``enhancement`` pixels are ignored
+    Nodata pixels never form a polygon (of a boolean mask, or of a label
+    image whose fill is positive, such as a uint8 raster's ``255``),
+    non-positive labels are background, and nodata ``enhancement`` pixels are ignored
     by the per-polygon statistics.
 
     Geo-dependent: polygonisation needs the carrier's transform and CRS,
@@ -288,16 +289,19 @@ class PlumeFootprint(Operator):
                 gt, enhancement, "PlumeFootprint", names=("mask", "enhancement")
             )
         mask_arr = squeeze_single_band(np.asarray(gt))
+        valid = squeeze_single_band(valid_pixels(gt))
         if mask_arr.dtype == bool:
             labels = label_components(
-                mask_arr & squeeze_single_band(valid_pixels(gt)),
+                mask_arr & valid,
                 min_area_px=1,
                 connectivity=8,
             )
         else:
             # Non-positive labels (background, or a label image's fill
-            # value such as -9999) are not plumes.
-            labels = np.where(mask_arr > 0, mask_arr, 0).astype(np.int32, copy=False)
+            # value such as -9999) are not plumes, and neither are nodata
+            # pixels under a positive fill such as a uint8 raster's 255.
+            is_plume = (mask_arr > 0) & valid
+            labels = np.where(is_plume, mask_arr, 0).astype(np.int32, copy=False)
         enh = None if enhancement is None else _single_band_nan(enhancement)
         properties = list(self.properties)
         if enh is not None:

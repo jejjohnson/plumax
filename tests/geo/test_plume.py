@@ -104,6 +104,22 @@ def test_plume_footprint_area_and_enhancement_stats() -> None:
     assert no_stats.iloc[0].max_enhancement is None
 
 
+def test_plume_footprint_ignores_a_positive_label_fill() -> None:
+    """A uint8 label image's 255 nodata is not a plume (#177 review)."""
+    labels = np.zeros((6, 6), dtype=np.uint8)
+    labels[1:3, 1:3] = 1
+    labels[4:, :] = 255  # nodata
+    gt = GeoTensor(
+        values=labels,
+        transform=rasterio.Affine(10.0, 0.0, 0.0, 0.0, -10.0, 100.0),
+        crs="EPSG:32629",
+        fill_value_default=255,
+    )
+    gdf = geo.PlumeFootprint(min_area_m2=1.0, simplify_tolerance=None)(gt)
+    assert gdf["label_id"].tolist() == [1]
+    assert gdf["n_pixels"].tolist() == [4]
+
+
 def test_plume_footprint_empty_mask_returns_empty_geodataframe() -> None:
     """Empty masks (or all-filtered components) must yield a valid empty GDF.
 
