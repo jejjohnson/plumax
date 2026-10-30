@@ -214,7 +214,7 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | 1 | Puff turbulence | [`gauss_puff/turbulence.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/turbulence.py) | ✓ |
 | 1 | Column + AK pipeline | `gauss_plume.observation` (`ColumnObservation`, shared by Tiers II–III; `coupled.column_response` and `les_fvm.ColumnObservationOperator` call it) | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 1 | Background $c_\text{bg}$ loader | `plumax.priors.background` | ☐ [#81](https://github.com/jejjohnson/plumax/issues/81) |
-| 2 | Likelihoods + priors | `gauss_plume.likelihoods` | ☐ [#84](https://github.com/jejjohnson/plumax/issues/84) |
+| 2 | Likelihoods + priors | [`gauss_plume/likelihoods.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/likelihoods.py) (`GaussianNoise`, `StudentTNoise`, `HeteroscedasticNoise`; priors stay in `inference.py`) | ✓ [#84](https://github.com/jejjohnson/plumax/issues/84) |
 | 2 | Plume MAP/MCMC | [`gauss_plume/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ |
 | 2 | Puff inference | [`gauss_puff/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/inference.py) | ✓ |
 | 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06_tier5a_instantaneous.md)) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |

@@ -3,8 +3,13 @@
 Infers the emission rate Q from downwind concentration observations, and
 optionally the atmospheric stability class as a discrete latent. The forward
 model is :func:`plumax.gauss_plume.plume.plume_concentration`;
-observations are modelled as Gaussian around the forward prediction plus a
-half-normal background.
+observations are modelled as noisy around the forward prediction plus a
+half-normal background. The noise is a :class:`plumax.gauss_plume.likelihoods.Noise`
+(Gaussian by default; Student-t or heteroscedastic on request).
+
+Identifiability target (Tier I design): the inference is good enough when
+three overpasses with varied wind direction give CV(Q) ≤ 50 % and a single
+overpass gives CV(Q) ≤ 100 % under a tight met wind prior.
 
 Public surface
 --------------
@@ -27,6 +32,7 @@ from plumax.gauss_plume.dispersion import (
     STABILITY_CLASSES,
     get_dispersion_params,
 )
+from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_plume.plume import plume_concentration
 
 
@@ -57,6 +63,7 @@ def gaussian_plume_model(
     infer_stability: bool = False,
     background_prior_std: float = 5e-7,
     obs_noise_std: float = 5e-7,
+    noise: Noise | None = None,
 ) -> jnp.ndarray:
     """NumPyro model for the steady-state Gaussian plume.
 
@@ -70,7 +77,10 @@ def gaussian_plume_model(
     via the method-of-moments inversion in :func:`_lognormal_from_moments`.
 
     Likelihood:
-        obs ~ Normal(f_plume(emission_rate, ...) + background, σ_obs)
+        obs ~ noise(f_plume(emission_rate, ...) + background)
+
+    with ``noise`` defaulting to ``GaussianNoise(obs_noise_std)``, i.e.
+    ``obs ~ Normal(f_plume + background, σ_obs)``.
 
     Parameters
     ----------
@@ -96,7 +106,12 @@ def gaussian_plume_model(
     background_prior_std : float
         HalfNormal scale for the background concentration [kg/m³].
     obs_noise_std : float
-        Observation noise σ [kg/m³].
+        Observation noise σ [kg/m³] of the default Gaussian noise. Ignored
+        when ``noise`` is given.
+    noise : Noise, optional
+        Observation-noise model, e.g. ``StudentTNoise(scale, df=5.0)`` or
+        ``HeteroscedasticNoise(std)`` from :mod:`plumax.gauss_plume.likelihoods`.
+        Default ``None`` is ``GaussianNoise(obs_noise_std)``.
 
     Raises
     ------
@@ -170,11 +185,8 @@ def gaussian_plume_model(
         # Prior-predictive mode (observations is None and no forward inputs).
         predicted = background
 
-    return numpyro.sample(
-        "obs",
-        dist.Normal(predicted, obs_noise_std),
-        obs=observations,
-    )
+    noise_model = GaussianNoise(std=obs_noise_std) if noise is None else noise
+    return noise_model("obs", predicted, observations)
 
 
 def infer_emission_rate(
@@ -195,11 +207,18 @@ def infer_emission_rate(
     print_summary: bool = False,
     obs_noise_std: float = 5e-7,
     background_prior_std: float = 5e-7,
+    noise: Noise | None = None,
 ) -> dict[str, NDArray]:
     """Infer the plume emission rate via NUTS.
 
     Wraps :func:`gaussian_plume_model` with input validation, wind-from-angle
     to (u, v) conversion, and posterior unpacking into NumPy arrays.
+
+    Identifiability target: three overpasses with varied wind direction
+    should give a posterior CV(Q) ≤ 50 %, and a single overpass CV(Q) ≤ 100 %
+    under a tight met wind prior (Tier I design, "Identifiability —
+    quantitative target"). A wider posterior means the data do not constrain
+    Q yet.
 
     Parameters
     ----------
@@ -230,9 +249,12 @@ def infer_emission_rate(
     obs_noise_std : float
         Observation-noise σ for the Gaussian likelihood [kg/m³]. Set this to
         the sensor noise so the posterior width reflects the instrument rather
-        than the hard-coded default.
+        than the hard-coded default. Ignored when ``noise`` is given.
     background_prior_std : float
         HalfNormal scale for the background-concentration prior [kg/m³].
+    noise : Noise, optional
+        Observation-noise model (see :func:`gaussian_plume_model`). Default
+        ``None`` is ``GaussianNoise(obs_noise_std)``, today's likelihood.
 
     Returns
     -------
@@ -321,6 +343,7 @@ def infer_emission_rate(
         infer_stability=infer_stability,
         obs_noise_std=obs_noise_std,
         background_prior_std=background_prior_std,
+        noise=noise,
     )
     if print_summary:
         mcmc.print_summary()

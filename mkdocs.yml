@@ -75,6 +75,7 @@ nav:
   - Tier I — Gaussian:
       - Gaussian plume: gauss_plume.md
       - Column observation: gauss_plume_observation.md
+      - Likelihoods: gauss_plume_likelihoods.md
       - Gaussian puff: gauss_puff.md
   - Tier II — Lagrangian:
       - Lagrangian particles: lagrangian.md

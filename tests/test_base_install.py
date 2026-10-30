@@ -67,6 +67,21 @@ def test_imports_without_either_extra():
     assert result.returncode == 0, result.stderr
 
 
+def test_noise_models_without_numpyro():
+    # The likelihoods import NumPyro only to sample a site; building a noise
+    # model and its plain-JAX log-density need neither extra.
+    result = _run(
+        """
+        block("numpyro")
+        import jax.numpy as jnp
+        from plumax.gauss_plume import StudentTNoise
+        value = StudentTNoise(scale=1.0).log_prob(jnp.zeros(2), jnp.zeros(2))
+        assert value.shape == (2,)
+        """
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_inversion_without_vardax_names_the_extra():
     result = _run(
         """

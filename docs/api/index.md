@@ -21,6 +21,7 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | 0 | [Priors](priors.md) | `load_inventory`, `per_tile_background` |
 | I | [Gaussian plume](gauss_plume.md) | steady-state plume + emission-rate inference |
 | I | [Column observation](gauss_plume_observation.md) | `ColumnObservation`, the column + averaging-kernel observation shared by every tier |
+| I | [Likelihoods](gauss_plume_likelihoods.md) | `GaussianNoise`, `StudentTNoise`, `HeteroscedasticNoise`: the observation noise of the Tier I inference |
 | I | [Gaussian puff](gauss_puff.md) | time-resolved puffs, OU turbulence |
 | II | [Lagrangian](lagrangian.md) | particle dispersion |
 | II | [Gridded wind](lagrangian_wind_interp.md) | `GriddedWind`, `gridded_wind_from_met`, `gridded_wind_from_prescribed`: the C-grid wind at each particle |
