@@ -33,6 +33,7 @@ from jaxtyping import Array, Bool, Float
 
 from plumax.population._src.importance import (
     EventEvidence,
+    Measure,
     Regime,
     catalog_evidence,
     effective_sample_size,
@@ -223,6 +224,7 @@ def fit_size_distribution_iw(
     log_pod: Callable[[Array], Array] | None = None,
     support: tuple[float, float] | None = None,
     n_nodes: int = 32,
+    measure: Measure = "lognormal",
     num_warmup: int = 500,
     num_samples: int = 500,
     num_chains: int = 1,
@@ -244,6 +246,8 @@ def fit_size_distribution_iw(
         log_pod: log P_d on rates in the marks' units, or ``None``.
         support: Rate range of the p̄ integral; default from the evidence.
         n_nodes: Gauss–Hermite nodes of the GAUSSIAN regime.
+        measure: The GAUSSIAN-regime summary, ``"lognormal"`` or ``"normal"``
+            (see :func:`~plumax.population.importance.event_evidence`).
         num_warmup: NUTS warm-up steps.
         num_samples: Posterior draws per chain.
         num_chains: NUTS chains.
@@ -259,7 +263,9 @@ def fit_size_distribution_iw(
 
     regime = Regime(regime)
     family = MARKS[mark](**(mark_fields or {}))
-    evidence = catalog_evidence(catalog, regime=regime, n_nodes=n_nodes)
+    evidence = catalog_evidence(
+        catalog, regime=regime, n_nodes=n_nodes, measure=measure
+    )
     mcmc = MCMC(
         NUTS(mark_iw_model),
         num_warmup=num_warmup,

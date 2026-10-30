@@ -372,3 +372,47 @@ def test_gaussian_fit_warns_on_collapse():
             num_warmup=20,
             num_samples=20,
         )
+
+
+def _gaussian_event(mean, std, prior):
+    return EmissionEvent(
+        emission_rate=mean,
+        emission_std=std,
+        x=0.0,
+        y=0.0,
+        time=0.0,
+        tier="IV",
+        prior_logpdf=prior.log_prob,
+    )
+
+
+def test_gaussian_regime_rejects_tails_heavier_than_the_prior():
+    from plumax._src.scalar_emission import GaussianEmission
+
+    # posterior and prior both N(1, 0.5²): the likelihood is flat, so the
+    # corrected mark term is log ∫ f = 0 for a normalised f on Q > 0
+    prior = GaussianEmission(1.0, 0.5)
+    event = _gaussian_event(1.0, 0.5, prior)
+    with pytest.raises(PayloadError, match="heavier tails"):
+        event_evidence(event, regime=Regime.GAUSSIAN)
+    evidence = event_evidence(event, regime=Regime.GAUSSIAN, measure="normal")
+    term = evidence.log_mark_term(lambda q: MARK.log_prob(q, mu=0.0, sigma=0.3))
+    np.testing.assert_allclose(term, 0.0, atol=1e-3)
+
+
+def test_nodes_at_non_positive_rates_carry_no_weight():
+    draws = jnp.array([-0.5, 0.0, 0.5, 1.5])
+    event = EmissionEvent(
+        emission_rate=0.4,
+        emission_std=0.8,
+        x=0.0,
+        y=0.0,
+        time=0.0,
+        tier="II",
+        q_samples=draws,
+        prior_logpdf=LognormalEmission(0.0, 1.0).log_prob,
+    )
+    evidence = event_evidence(event, regime=Regime.FULL)
+    assert np.all(np.isneginf(np.asarray(evidence.log_weights[:2])))
+    term = evidence.log_mark_term(lambda q: MARK.log_prob(q, mu=0.0, sigma=1.0))
+    assert bool(jnp.isfinite(term))

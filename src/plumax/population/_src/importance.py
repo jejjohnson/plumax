@@ -37,7 +37,7 @@ import math
 import warnings
 from collections.abc import Callable
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -46,6 +46,7 @@ from jax.scipy.special import logsumexp
 from jaxtyping import Array, Float
 
 from plumax._src.errors import PayloadError
+from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
 from plumax.population._src.integrate import pareto_smoothed_log_weights
 
 
@@ -57,6 +58,14 @@ if TYPE_CHECKING:
 ESS_WARNING_FRACTION = 0.1
 #: Pareto shape above which importance weights are unreliable (PSIS).
 PARETO_K_WARNING = 0.7
+
+
+#: Nats by which the summary likelihood p̃/π may rise at an outermost
+#: Hermite node above its interior maximum before the GAUSSIAN regime is
+#: rejected (equal summary and prior give a flat likelihood, 0 nats).
+TAIL_TOLERANCE = 1.0
+#: The GAUSSIAN regime's two-moment summary of a posterior.
+Measure = Literal["lognormal", "normal"]
 
 
 class Regime(StrEnum):
@@ -124,21 +133,37 @@ def _prior_logpdf(event: EmissionEvent) -> Callable[[Array], Array]:
 
 
 def event_evidence(
-    event: EmissionEvent, *, regime: Regime | str = Regime.FULL, n_nodes: int = 32
+    event: EmissionEvent,
+    *,
+    regime: Regime | str = Regime.FULL,
+    n_nodes: int = 32,
+    measure: Measure = "lognormal",
 ) -> EventEvidence:
     """Nodes and log-weights of one event's importance-corrected mark integral.
+
+    In the GAUSSIAN regime the posterior is replaced by its two-moment summary,
+    a lognormal (the 06a default) or a normal in Q (``measure="normal"``, the
+    family of the Gaussian Tier II–IV posteriors). The prior is divided out
+    exactly, so the summary's tails must not be heavier than the prior's: when
+    the summary's likelihood p̃/π rises at an outermost Hermite node more than
+    ``TAIL_TOLERANCE`` nats above its interior maximum, the approximation is
+    rejected, since the quadrature would then be driven by its extreme nodes.
+    Nodes at Q ≤ 0 carry no weight (every registry mark lives on Q > 0).
 
     Args:
         event: The event, with ``prior_logpdf`` (and ``q_samples`` for FULL).
         regime: POINT, GAUSSIAN or FULL.
         n_nodes: Gauss–Hermite nodes for the GAUSSIAN regime.
+        measure: ``"lognormal"`` or ``"normal"``, the GAUSSIAN-regime summary.
 
     Returns:
         The :class:`EventEvidence`.
 
     Raises:
-        PayloadError: Without the per-event prior, or without draws for FULL.
-        ValueError: For a non-positive emission rate outside FULL.
+        PayloadError: Without the per-event prior, without draws for FULL, or
+            when the GAUSSIAN summary's tails outweigh the prior's.
+        ValueError: For a non-positive emission rate outside FULL, or an
+            unknown measure.
     """
     regime = Regime(regime)
     prior_logpdf = _prior_logpdf(event)
@@ -151,7 +176,9 @@ def event_evidence(
         nodes = jnp.ravel(jnp.asarray(event.q_samples, dtype=float))
         # ℓₛ = −log π(qₛ) − log S
         log_weights = -prior_logpdf(nodes) - math.log(nodes.shape[0])
-        return EventEvidence(log_weights=log_weights, q_samples=nodes)
+        return EventEvidence(
+            log_weights=_positive_only(log_weights, nodes), q_samples=nodes
+        )
     if not event.emission_rate > 0.0:
         raise ValueError(
             f"event_evidence: the {regime.value} regime needs a positive "
@@ -160,19 +187,54 @@ def event_evidence(
     if regime is Regime.POINT:
         nodes = jnp.asarray([event.emission_rate], dtype=float)
         return EventEvidence(log_weights=-prior_logpdf(nodes), q_samples=nodes)
-    # lognormal summary moment-matched to (mean, sd), as catalog.log_moments
-    log_variance = math.log1p((event.emission_std / event.emission_rate) ** 2)
-    log_mean = math.log(event.emission_rate) - 0.5 * log_variance
     hermite, weights = np.polynomial.hermite.hermgauss(n_nodes)
-    # qₖ = exp(μ + √2 σ xₖ)
-    nodes = jnp.exp(log_mean + math.sqrt(2.0 * log_variance) * jnp.asarray(hermite))
+    if measure == "lognormal":
+        # lognormal summary moment-matched to (mean, sd), as catalog.log_moments
+        summary = LognormalEmission.from_moments(
+            event.emission_rate, event.emission_std
+        )
+        # qₖ = exp(μ + √2 σ xₖ)
+        nodes = jnp.exp(summary.loc + math.sqrt(2.0) * summary.scale * hermite)
+    elif measure == "normal":
+        summary = GaussianEmission(event.emission_rate, event.emission_std)
+        # qₖ = m + √2 s xₖ
+        nodes = summary.mean + math.sqrt(2.0) * summary.std * jnp.asarray(hermite)
+    else:
+        raise ValueError(f"event_evidence: unknown measure {measure!r}.")
+    log_prior = prior_logpdf(nodes)
     # ℓₖ = log(wₖ/√π) − log π(qₖ)
     quadrature = jnp.log(jnp.asarray(weights)) - 0.5 * math.log(math.pi)
-    return EventEvidence(log_weights=quadrature - prior_logpdf(nodes), q_samples=nodes)
+    log_weights = _positive_only(quadrature - log_prior, nodes)
+    # the summary's likelihood log p̃(q) − log π(q) must not climb towards
+    # the outermost nodes, or they would dominate the corrected integral
+    log_likelihood = np.asarray(
+        _positive_only(summary.log_prob(nodes) - log_prior, nodes)
+    )
+    edge = max(log_likelihood[0], log_likelihood[-1])
+    interior = np.max(log_likelihood[1:-1])
+    if edge > interior + TAIL_TOLERANCE:
+        raise PayloadError(
+            f"event_evidence: the {measure} summary has heavier tails than the "
+            "per-event prior, so dividing the prior out is dominated by the "
+            "outermost Hermite node; use the FULL regime or the measure that "
+            "matches the posterior's family."
+        )
+    return EventEvidence(log_weights=log_weights, q_samples=nodes)
+
+
+def _positive_only(
+    log_weights: Float[Array, " member"], nodes: Float[Array, " member"]
+) -> Float[Array, " member"]:
+    # Q ≤ 0 lies outside every mark's support; drop it before −log π can be +∞
+    return jnp.where(nodes > 0.0, log_weights, -jnp.inf)
 
 
 def catalog_evidence(
-    catalog: EmissionCatalog, *, regime: Regime | str = Regime.FULL, n_nodes: int = 32
+    catalog: EmissionCatalog,
+    *,
+    regime: Regime | str = Regime.FULL,
+    n_nodes: int = 32,
+    measure: Measure = "lognormal",
 ) -> EventEvidence:
     """:func:`event_evidence` for every event, stacked along a leading axis.
 
@@ -182,7 +244,7 @@ def catalog_evidence(
     if catalog.n_events == 0:
         raise ValueError("catalog_evidence: the catalog is empty.")
     per_event = [
-        event_evidence(event, regime=regime, n_nodes=n_nodes)
+        event_evidence(event, regime=regime, n_nodes=n_nodes, measure=measure)
         for event in catalog.events
     ]
     lengths = {evidence.q_samples.shape[0] for evidence in per_event}
@@ -201,6 +263,7 @@ def ess_report(
     *,
     log_integrand: Callable[[Array], Array],
     regime: Regime | str = Regime.FULL,
+    measure: Measure = "lognormal",
     warn: bool = True,
 ) -> np.ndarray:
     """Per-event ESS of the importance weights at one θ, with a collapse warning.
@@ -213,12 +276,13 @@ def ess_report(
         catalog: The events.
         log_integrand: g, e.g. ``lambda q: mark.log_prob(q, **theta)``.
         regime: How the events enter.
+        measure: The GAUSSIAN-regime summary (see :func:`event_evidence`).
         warn: Emit the collapse warning.
 
     Returns:
         ESS per event.
     """
-    evidence = catalog_evidence(catalog, regime=regime)
+    evidence = catalog_evidence(catalog, regime=regime, measure=measure)
     log_w = np.asarray(evidence.log_weights + log_integrand(evidence.q_samples))
     ess = np.asarray(effective_sample_size(jnp.asarray(log_w)))
     if warn:
