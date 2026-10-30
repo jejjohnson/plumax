@@ -50,6 +50,7 @@ from typing import TYPE_CHECKING
 import einx
 import gaussx as gx
 import jax
+import jax.core
 import jax.numpy as jnp
 import lineax as lx
 
