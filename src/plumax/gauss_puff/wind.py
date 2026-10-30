@@ -58,9 +58,9 @@ class WindSchedule(eqx.Module):
     that need strict clamping should range-check times before calling.
     """
 
-    times: Float[Array, T]
-    u_wind: Float[Array, T]
-    v_wind: Float[Array, T]
+    times: Float[Array, " T"]
+    u_wind: Float[Array, " T"]
+    v_wind: Float[Array, " T"]
 
     @classmethod
     def from_speed_direction(
@@ -115,10 +115,10 @@ class WindSchedule(eqx.Module):
 @eqx.filter_jit
 def cumulative_wind_integrals(
     schedule: WindSchedule,
-    save_at: Float[Array, M],
+    save_at: Float[Array, " M"],
     rtol: float = 1e-6,
     atol: float = 1e-8,
-) -> tuple[Float[Array, M], Float[Array, M], Float[Array, M]]:
+) -> tuple[Float[Array, " M"], Float[Array, " M"], Float[Array, " M"]]:
     """Compute cumulative wind integrals via a single diffrax ODE solve.
 
     Integrates ``d(I_u, I_v, S)/dt = (u(t), v(t), √(u² + v²))`` from
@@ -148,7 +148,7 @@ def cumulative_wind_integrals(
     interp_u = schedule._interp_u()
     interp_v = schedule._interp_v()
 
-    def rhs(t: Float[Array, ""], y: Float[Array, 3], args) -> Float[Array, 3]:
+    def rhs(t: Float[Array, ""], y: Float[Array, " 3"], args) -> Float[Array, " 3"]:
         u = interp_u.evaluate(t)
         v = interp_v.evaluate(t)
         speed = jnp.sqrt(u**2 + v**2)

@@ -19,7 +19,7 @@ from plumax._src.errors import TimeAxisError
 TIMESTAMP_UNIT = "datetime64[ms]"
 
 
-def _as_datetime64(when: object) -> Shaped[np.ndarray, ...]:
+def _as_datetime64(when: object) -> Shaped[np.ndarray, " ..."]:
     return np.asarray(when, dtype=TIMESTAMP_UNIT)
 
 
@@ -84,13 +84,13 @@ class TimeAxis:
         seconds = (values - reference) / np.timedelta64(1, "s")
         return cls(t0=reference.astype(TIMESTAMP_UNIT)[()], seconds=seconds)
 
-    def to_seconds(self, when: object) -> Float[np.ndarray, ...]:
+    def to_seconds(self, when: object) -> Float[np.ndarray, " ..."]:
         """Seconds since ``t0`` of timestamps: s = (τ − t₀) / 1 s."""
         # s = (τ − t₀) / 1 s
         seconds = (_as_datetime64(when) - self.t0) / np.timedelta64(1, "s")
         return np.asarray(seconds)
 
-    def to_datetime(self, seconds: object) -> Shaped[np.ndarray, ...]:
+    def to_datetime(self, seconds: object) -> Shaped[np.ndarray, " ..."]:
         """Timestamps τ = t₀ + s, rounded to the millisecond."""
         # n_ms = round(1000 s)
         milliseconds = np.round(np.asarray(seconds, dtype=float) * 1e3)
