@@ -35,9 +35,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax.lagrangian._src.wind_interp import mean_wind
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from plumax.lagrangian._src.wind_interp import GriddedWind
 
 
 class TurbulenceModel(Protocol):
@@ -93,7 +97,8 @@ def langevin_step(
 
     Args:
         state: Current particle state.
-        wind: Mean wind ``(u, v, w)`` [m/s] at this step, shape ``(3,)``.
+        wind: Mean wind ``(u, v, w)`` [m/s] at this step, shape ``(3,)`` for
+            a uniform wind or ``(n, 3)`` for one per particle.
         turbulence: Turbulence model supplying ``σ(z)`` and ``τ_L(z)``.
         dt: Time step [s].
         key: PRNG key for the Wiener increment.
@@ -119,7 +124,7 @@ def langevin_step(
     drift_w = 0.5 * (1.0 + vw**2 / sigma[:, 2] ** 2) * dsigw2_dz * dt
     vel_new = vel_ou.at[:, 2].add(drift_w)
 
-    pos_new = pos + (wind[None, :] + vel_new) * dt
+    pos_new = pos + (wind + vel_new) * dt
 
     # Ground reflection at z = 0.
     zc = pos_new[:, 2]
@@ -176,7 +181,7 @@ def step_durations(horizon: float, dt: float, n_steps: int) -> jax.Array:
 
 def integrate_particles(
     state: ParticleState,
-    wind: Callable[[jax.Array], jax.Array],
+    wind: Callable[[jax.Array], jax.Array] | GriddedWind,
     turbulence: TurbulenceModel,
     *,
     t0: float,
@@ -190,7 +195,9 @@ def integrate_particles(
 
     Args:
         state: Initial particle state.
-        wind: Mean-wind field ``t -> (u, v, w)`` [m/s], spatially uniform.
+        wind: Mean-wind field: ``t -> (u, v, w)`` [m/s], spatially uniform,
+            or a :class:`~plumax.lagrangian.GriddedWind` sampled at each
+            particle.
         turbulence: Turbulence model.
         t0: Start time [s].
         t1: End time [s].
@@ -217,7 +224,12 @@ def integrate_particles(
     ) -> tuple[ParticleState, jax.Array]:
         t, k, dt_i = inputs
         nxt = langevin_step(
-            carry, jnp.asarray(wind(t)), turbulence, dt_i, k, pbl_height=pbl_height
+            carry,
+            mean_wind(wind, carry.position, t),
+            turbulence,
+            dt_i,
+            k,
+            pbl_height=pbl_height,
         )
         return nxt, nxt.position
 

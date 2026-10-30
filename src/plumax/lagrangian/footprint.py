@@ -34,6 +34,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.concentration import _cell_indices
 from plumax.lagrangian.particles import (
     ParticleState,
@@ -46,6 +47,7 @@ from plumax.lagrangian.particles import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from plumax.lagrangian._src.wind_interp import GriddedWind
     from plumax.lagrangian.particles import TurbulenceModel
 
 
@@ -71,7 +73,7 @@ def compute_footprint(
     domain_x: tuple[float, float, int],
     domain_y: tuple[float, float, int],
     *,
-    wind: Callable[[jax.Array], jax.Array],
+    wind: Callable[[jax.Array], jax.Array] | GriddedWind,
     n_particles: int = 5000,
     t_back: float = 600.0,
     dt: float = 1.0,
@@ -88,9 +90,10 @@ def compute_footprint(
         turbulence: Turbulence model.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
         domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
-        wind: Forward mean-wind field ``t -> (u, v, w)``; integration reverses
-            it internally and samples it on the receptor clock (see
-            ``receptor_time``).
+        wind: Forward mean-wind field ``t -> (u, v, w)`` or a
+            :class:`~plumax.lagrangian.GriddedWind` sampled at each particle;
+            integration reverses it internally and samples it on the receptor
+            clock (see ``receptor_time``).
         n_particles: Ensemble size.
         t_back: Backward integration time [s].
         dt: Time step [s].
@@ -149,7 +152,7 @@ def compute_footprint(
         t_start, k, dt_i = inputs
         st = langevin_step(
             st,
-            -jnp.asarray(wind(t_start)),
+            -mean_wind(wind, st.position, t_start),
             turbulence,
             dt_i,
             k,

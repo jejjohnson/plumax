@@ -10,6 +10,7 @@ import pytest
 
 DOCTESTED_MODULES = (
     "plumax.gauss_plume._src.observation",
+    "plumax.lagrangian._src.wind_interp",
     "plumax.met._src.frames",
     "plumax.met._src.pbl",
     "plumax.met._src.regrid",

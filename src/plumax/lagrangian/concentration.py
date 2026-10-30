@@ -21,6 +21,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.particles import (
     ParticleState,
     n_steps_for_horizon,
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
 
     import xarray as xr
 
+    from plumax.lagrangian._src.wind_interp import GriddedWind
     from plumax.lagrangian.particles import TurbulenceModel
 
 
@@ -76,7 +78,7 @@ def simulate_lagrangian(
     n_particles: int = 5000,
     t_end: float = 600.0,
     dt: float = 1.0,
-    wind: Callable[[jax.Array], jax.Array] | None = None,
+    wind: Callable[[jax.Array], jax.Array] | GriddedWind | None = None,
     wind_speed: float | None = None,
     wind_direction: float | None = None,
     pbl_height: float | None = None,
@@ -96,8 +98,10 @@ def simulate_lagrangian(
         n_particles: Number of particles in the ensemble.
         t_end: Integration horizon [s].
         dt: Time step [s].
-        wind: Mean-wind field ``t -> (u, v, w)``. Mutually exclusive with the
-            ``wind_speed`` / ``wind_direction`` shortcut.
+        wind: Mean-wind field ``t -> (u, v, w)``, or a
+            :class:`~plumax.lagrangian.GriddedWind` sampled at each particle.
+            Mutually exclusive with the ``wind_speed`` / ``wind_direction``
+            shortcut.
         wind_speed: Wind speed [m/s] (with ``wind_direction``) if ``wind`` is
             not given.
         wind_direction: Meteorological direction [deg from North].
@@ -192,7 +196,7 @@ def simulate_lagrangian(
 
 def _accumulate_residence(
     state: ParticleState,
-    wind: Callable[[jax.Array], jax.Array],
+    wind: Callable[[jax.Array], jax.Array] | GriddedWind,
     turbulence: TurbulenceModel,
     t_end: float,
     dt: float,
@@ -221,7 +225,12 @@ def _accumulate_residence(
         st, hist = carry
         t, k, dt_i = inputs
         st = langevin_step(
-            st, jnp.asarray(wind(t)), turbulence, dt_i, k, pbl_height=pbl_height
+            st,
+            mean_wind(wind, st.position, t),
+            turbulence,
+            dt_i,
+            k,
+            pbl_height=pbl_height,
         )
         hist = hist + bin_positions(st.position, x_edges, y_edges, z_edges) * dt_i
         return (st, hist), None
