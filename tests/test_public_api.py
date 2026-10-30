@@ -1,4 +1,4 @@
-"""Public-API hygiene: every public annotation evaluates (#55).
+"""Public-API hygiene: annotations evaluate (#55); the root lists one set of sub-packages (#54).
 
 ``from __future__ import annotations`` keeps annotations as strings, so a
 bare jaxtyping dimension (``Float[Array, N]``) or a non-string shape
@@ -14,6 +14,7 @@ import ast
 import importlib
 import inspect
 import pkgutil
+import re
 import typing
 from types import ModuleType
 
@@ -83,3 +84,15 @@ def test_annotations_evaluate(module: ModuleType) -> None:
         except Exception as err:  # report every failure at once
             failures.append(f"{qualname}: {type(err).__name__}: {err}")
     assert not failures, "\n".join(failures)
+
+
+def _advertised_subpackages() -> list[str]:
+    """Sub-package names listed as ``- ``name`` :`` in the package docstring."""
+    return re.findall(r"^- ``(\w+)``\s+:", plumax.__doc__ or "", flags=re.MULTILINE)
+
+
+def test_advertised_subpackages_importable() -> None:
+    advertised = _advertised_subpackages()
+    assert sorted(advertised) == sorted(plumax.__all__)
+    for name in advertised:
+        assert isinstance(getattr(plumax, name), ModuleType), name
