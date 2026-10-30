@@ -224,7 +224,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 1 | Turbulence parameterisation ($\sigma_{ij}, \tau_L$) | `plumax.lagrangian.turbulence` | ✓ |
 | 1 | Forward concentration (residence-time binning) | `plumax.lagrangian.concentration` | ✓ |
 | 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |
-| 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ☐ [#88](https://github.com/jejjohnson/plumax/issues/88) |
+| 1 | C-grid-aware wind interpolator | `plumax.lagrangian.wind_interp` | ✓ [#88](https://github.com/jejjohnson/plumax/issues/88) |
 | 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | Likelihoods + spatial priors (Matérn-3/2, R = R_retr + R_repr) | `plumax.lagrangian.inversion` | ✓ |
 | 2 | Linear inversion (Gaussian / lognormal, linearised in log space) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`): `vardax.OptimalInterpolation` over `footprint_operator`, Laplace covariance; `assim` extra | ✓ [#163](https://github.com/jejjohnson/plumax/issues/163) |

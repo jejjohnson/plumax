@@ -15,6 +15,9 @@ inference)**:
 - ``concentration`` — forward steady concentration field via residence-time
   binning (``simulate_lagrangian``).
 - ``footprint`` — backward source–receptor sensitivity (``compute_footprint``).
+- ``wind_interp`` — ``GriddedWind``, the ``les_fvm`` C-grid wind (from a
+  ``MetField`` or a ``PrescribedWindField``) sampled at each particle; accepted
+  wherever a wind callable is.
 - ``inversion`` — Gaussian and sign-constrained lognormal Bayesian inversion of
   the source vector from observations, with a Matérn-3/2 spatial prior
   (``linear_gaussian_inversion`` / ``lognormal_inversion``): vardax
@@ -32,6 +35,7 @@ from plumax.lagrangian import (
     inversion,
     particles,
     turbulence,
+    wind_interp,
 )
 from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
 from plumax.lagrangian.footprint import compute_footprint
@@ -58,10 +62,16 @@ from plumax.lagrangian.turbulence import (
     HomogeneousTurbulence,
     hanna_profiles,
 )
+from plumax.lagrangian.wind_interp import (
+    GriddedWind,
+    gridded_wind_from_met,
+    gridded_wind_from_prescribed,
+)
 
 
 __all__ = [
     "GaussianPosterior",
+    "GriddedWind",
     "HannaTurbulence",
     "HomogeneousTurbulence",
     "LognormalPosterior",
@@ -71,6 +81,8 @@ __all__ = [
     "concentration",
     "footprint",
     "footprint_operator",
+    "gridded_wind_from_met",
+    "gridded_wind_from_prescribed",
     "hanna_profiles",
     "integrate_particles",
     "inversion",
@@ -86,4 +98,5 @@ __all__ = [
     "turbulence",
     "uniform_wind",
     "wind_from_speed_direction",
+    "wind_interp",
 ]

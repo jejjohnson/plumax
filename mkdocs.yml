@@ -76,7 +76,9 @@ nav:
       - Gaussian plume: gauss_plume.md
       - Column observation: gauss_plume_observation.md
       - Gaussian puff: gauss_puff.md
-  - Tier II — Lagrangian: lagrangian.md
+  - Tier II — Lagrangian:
+      - Lagrangian particles: lagrangian.md
+      - Gridded wind: lagrangian_wind_interp.md
   - Tier III — Eulerian FV: les_fvm.md
   - Tier IV — Coupled: coupled.md
   - Tier V — Population: population.md
