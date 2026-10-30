@@ -234,9 +234,11 @@ def test_moment_gradients_in_the_tails_and_at_the_splice():
     assert bool(jnp.isfinite(gradient))
     np.testing.assert_allclose(gradient, _central_difference(full_mean, 2.0), rtol=1e-5)
 
+    # at α = 2 the moment is logarithmic; its α-derivative is that of the
+    # continuous moment, log 4 − (log 4)²/2 on [1, 4]
     power_law = PowerLawMark(q_min=1.0)
     gradient = jax.grad(lambda a: power_law.truncated_mean(1.0, 4.0, alpha=a))(2.0)
-    assert bool(jnp.isfinite(gradient))
+    np.testing.assert_allclose(gradient, np.log(4.0) - np.log(4.0) ** 2 / 2.0)
 
 
 @pytest.mark.parametrize("name", sorted(CASES))
