@@ -434,9 +434,10 @@ def multi_source_plume_model(
     have no symmetry to break.
 
     Promotion to RJMCMC (Tier I / IV design): masked-K caps K at K_max. Track
-    :meth:`MultiSourcePosterior.saturated_fraction` per overpass; when more
-    than 5 % of overpasses put their posterior mode on K = K_max, the cap is
-    binding and the trans-dimensional (RJMCMC) model is due.
+    the posterior mass at the cap, P(K = K_max | y)
+    (:meth:`MultiSourcePosterior.saturated_fraction`), per overpass; when more
+    than 5 % of overpasses saturate K_max, the cap is binding and the
+    trans-dimensional (RJMCMC) model is due.
 
     Parameters
     ----------
