@@ -4,6 +4,7 @@ Submodules:
   - dispersion    — Briggs σ_y(x), σ_z(x) coefficients (A-F stability classes)
   - plume         — coordinate rotation + JIT forward model + xarray wrapper
   - inference     — NumPyro Bayesian inference for Q (and optional stability)
+  - observation   — column + averaging-kernel observation shared by every tier
 
 The ``inference`` submodule is imported lazily on first attribute access so
 that ``from plumax import gauss_plume`` does not pull in NumPyro
@@ -15,13 +16,14 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-from plumax.gauss_plume import dispersion, plume
+from plumax.gauss_plume import dispersion, observation, plume
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
     calculate_briggs_dispersion,
     get_dispersion_params,
 )
+from plumax.gauss_plume.observation import ColumnObservation
 from plumax.gauss_plume.plume import (
     MIN_WIND_SPEED,
     plume_concentration,
@@ -58,12 +60,14 @@ __all__ = [
     "BRIGGS_DISPERSION_PARAMS",
     "MIN_WIND_SPEED",
     "STABILITY_CLASSES",
+    "ColumnObservation",
     "calculate_briggs_dispersion",
     "dispersion",
     "gaussian_plume_model",
     "get_dispersion_params",
     "infer_emission_rate",
     "inference",
+    "observation",
     "plume",
     "plume_concentration",
     "plume_concentration_vmap",

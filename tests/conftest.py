@@ -31,5 +31,10 @@ jax.config.update("jax_enable_x64", True)
 from jaxtyping import install_import_hook
 
 
-_TYPED_PACKAGES = ("plumax.met._src", "plumax.obs._src", "plumax.priors._src")
+_TYPED_PACKAGES = (
+    "plumax.gauss_plume._src",
+    "plumax.met._src",
+    "plumax.obs._src",
+    "plumax.priors._src",
+)
 _type_check_hook = install_import_hook(_TYPED_PACKAGES, "beartype.beartype")
