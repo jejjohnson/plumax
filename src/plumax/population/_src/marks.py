@@ -143,8 +143,16 @@ def _lognormal_partial_mean(
     return jnp.exp(_log_lognormal_partial_mean(lower, upper, mu, sigma))
 
 
-#: |index − 1| below which the Pareto partial mean uses its logarithmic form.
-_LOG_FORM_TOLERANCE = 1e-8
+#: |y| below which expm1(y)/y is evaluated by its Taylor series.
+_SERIES_THRESHOLD = 1e-4
+
+
+def _expm1_over_x(y: Float[Array, "*y"]) -> Float[Array, "*y"]:
+    # E(y) = (eʸ − 1)/y, smooth through y = 0 (E = 1 + y/2 + y²/6 + y³/24 + …)
+    small = jnp.abs(y) < _SERIES_THRESHOLD
+    safe = jnp.where(small, 1.0, y)
+    series = 1.0 + y / 2.0 + y**2 / 6.0 + y**3 / 24.0
+    return jnp.where(small, series, jnp.expm1(safe) / safe)
 
 
 def _pareto_partial_mean(
@@ -153,27 +161,27 @@ def _pareto_partial_mean(
     scale: Float[Array, "*scale"],
     alpha: Float[Array, "*alpha"],
 ) -> Float[Array, "*out"]:
-    # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s):
-    #   α sᵅ (a'^(1−α) − b^(1−α))/(α − 1) for α ≠ 1, s log(b/a') for α = 1;
-    #   +∞ for b = ∞ and α ≤ 1, where the mean diverges
+    # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s), ε = α − 1:
+    #   α sᵅ (a'^(−ε) − b^(−ε))/ε, which is α sᵅ log(b/a') at ε = 0 and
+    #   +∞ for b = ∞ and ε ≤ 0, where the mean diverges
     lower = jnp.maximum(lower, scale)
     upper = jnp.maximum(upper, lower)
-    unit_index = jnp.abs(alpha - 1.0) < _LOG_FORM_TOLERANCE
-    lower_power = jnp.exp((1.0 - alpha) * jnp.log(lower))
-    # b^(1−α) → 0 for α > 1 and → ∞ for α < 1 as b → ∞ (0 on the unused
-    # general branch at α = 1, so that branch stays finite for the gradient)
-    tail_limit = jnp.where((alpha > 1.0) | unit_index, 0.0, jnp.inf)
-    finite_upper = jnp.where(jnp.isinf(upper), lower, upper)
-    upper_power = jnp.where(
-        jnp.isinf(upper), tail_limit, jnp.exp((1.0 - alpha) * jnp.log(finite_upper))
+    excess = alpha - 1.0
+    open_upper = jnp.isinf(upper)
+    log_lower = jnp.log(lower)
+    log_upper = jnp.log(jnp.where(open_upper, lower, upper))
+    # (a'^(−ε) − b^(−ε))/ε = log b · E(−ε log b) − log a' · E(−ε log a'),
+    # continuous and differentiable in ε through ε = 0
+    finite = log_upper * _expm1_over_x(-excess * log_upper) - log_lower * (
+        _expm1_over_x(-excess * log_lower)
     )
-    divisor = jnp.where(unit_index, 1.0, alpha - 1.0)
-    coefficient = alpha * jnp.exp(alpha * jnp.log(scale)) / divisor
-    general = coefficient * (lower_power - upper_power)
-    # α = 1: s log(b/a'), ∞ for b = ∞; a finite stand-in when unused
-    log_upper = jnp.where(unit_index, upper, lower)
-    logarithmic = scale * (jnp.log(log_upper) - jnp.log(lower))
-    return jnp.where(unit_index, logarithmic, general)
+    # b = ∞: a'^(−ε)/ε for ε > 0, ∞ otherwise
+    safe_excess = jnp.where(excess > 0.0, excess, 1.0)
+    open_value = jnp.where(
+        excess > 0.0, jnp.exp(-excess * log_lower) / safe_excess, jnp.inf
+    )
+    bracket = jnp.where(open_upper, open_value, finite)
+    return alpha * jnp.exp(alpha * jnp.log(scale)) * bracket
 
 
 def _bounds(q_min: ArrayLike, q_max: ArrayLike) -> tuple[Array, Array]:
