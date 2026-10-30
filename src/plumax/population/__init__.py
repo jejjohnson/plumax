@@ -14,6 +14,8 @@ products:
 * :mod:`~plumax.population.pod` — V.B registry of 10 probability-of-detection
   models ``P_d(·)`` (equinox modules). "POD" here is *probability of
   detection*, not proper orthogonal decomposition.
+* :mod:`~plumax.population.marks` — V.B mark registry, the size distribution
+  ``f(Q | θ)`` (power law, lognormal, lognormal-Pareto, mixture of lognormals).
 * :mod:`~plumax.population.processes` — the intensity and POD registries as
   ``xtremax.point_processes`` Poisson, marked and detection-thinned processes
   (the ``population`` extra).
@@ -51,6 +53,15 @@ from plumax.population.intensity import (
     SeasonalSinusoidalIntensity,
     WeibullRenewalIntensity,
     WetlandPermafrostIntensity,
+)
+from plumax.population.marks import (
+    MARKS,
+    LognormalMark,
+    LognormalParetoMark,
+    Mark,
+    MixtureLognormalMark,
+    PowerLawMark,
+    make_mark,
 )
 from plumax.population.paradox import (
     FacilityConfig,
@@ -108,6 +119,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "INTENSITY_REGISTRY",
+    "MARKS",
     "POD_REGISTRY",
     "X_MAX_DEFAULT",
     "X_MIN_DEFAULT",
@@ -128,6 +140,10 @@ __all__ = [
     "LogIntensity",
     "LogLogisticPOD",
     "LogisticPOD",
+    "LognormalMark",
+    "LognormalParetoMark",
+    "Mark",
+    "MixtureLognormalMark",
     "OffshorePlatformIntensity",
     "OperationalScheduleIntensity",
     "PODRetention",
@@ -135,6 +151,7 @@ __all__ = [
     "PerEventPosterior",
     "PeriodicBatchIntensity",
     "PoissonRatePosterior",
+    "PowerLawMark",
     "ProbitPOD",
     "SNRBasedPOD",
     "SeasonalSinusoidalIntensity",
@@ -154,6 +171,7 @@ __all__ = [
     "logistic_pod",
     "lognorm_cdf",
     "lognormal_pdf",
+    "make_mark",
     "make_process",
     "padded_event_buffer",
     "pod_powerlaw_model",
