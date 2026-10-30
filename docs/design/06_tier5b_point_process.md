@@ -140,7 +140,7 @@ $$
 \;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
 $$
 
-This is the form implemented in `plumax.population.fitting.pod_powerlaw_model` (to be rebuilt on `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess` under [#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it's safe to use.
+Its mark part, with $\lambda$ profiled out, is `plumax.population.fitting.pod_powerlaw_model`; the full form with a temporal ground process is `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess`, built by `plumax.population.processes.detection_process` ([#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it's safe to use.
 
 (vb-numerical-stability)=
 ### Numerical stability of the integrated thinned-rate term
@@ -206,7 +206,7 @@ Both have library support; the choice is driven by the scientific question, not 
 | Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
-| TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree; `xtremax` `ThinningProcess` rebuild ☐ [#106](https://github.com/jejjohnson/plumax/issues/106) |
+| TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
 | TMTPP likelihood — full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) — consumes [`population.importance`](#va-modules) |
 | Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
 | Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) — beyond the existing kernels |

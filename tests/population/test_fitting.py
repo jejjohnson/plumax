@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import pytest
 
@@ -120,3 +122,20 @@ def test_run_mcmc_recovers_alpha_on_synthetic_data():
     assert 1.1 < df["alpha"].mean() < 4.5
     assert 1.0 < df["x0"].mean() < 20_000.0
     assert 0.1 < df["sk"].mean() < 1.5
+
+
+def test_pod_powerlaw_gradient_matches_finite_differences():
+    from numpyro.infer.util import log_density
+
+    from plumax.population.fitting import pod_powerlaw_model
+
+    fluxes = jnp.array([20.0, 55.0, 140.0, 900.0, 4000.0])
+
+    def log_likelihood(alpha):
+        params = {"alpha": alpha, "x0": 80.0, "sk": 0.6}
+        value, _ = log_density(pod_powerlaw_model, (fluxes, 10.0, 1e6), {}, params)
+        return value
+
+    step = 1e-5
+    central = (log_likelihood(2.0 + step) - log_likelihood(2.0 - step)) / (2 * step)
+    np.testing.assert_allclose(jax.grad(log_likelihood)(2.0), central, rtol=1e-5)

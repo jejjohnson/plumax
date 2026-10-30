@@ -37,6 +37,7 @@ _TYPED_PACKAGES = (
     "plumax.lagrangian._src",
     "plumax.met._src",
     "plumax.obs._src",
+    "plumax.population._src",
     "plumax.priors._src",
 )
 _type_check_hook = install_import_hook(_TYPED_PACKAGES, "beartype.beartype")
