@@ -38,6 +38,12 @@ rate, with the per-instrument bias as a first-class state element:
   flagged pixels are masked or have their variance inflated, and
   :func:`stack_observations` hands the result to vardax.
 
+- ``inversion`` — the nonlinear end-to-end inversion (:func:`solve_coupled`)
+  over the emission, source position, wind, background and biases, through
+  the averaging kernel or a radiance operator per instrument: plumax builds the
+  forward, prior and masks, vardax solves (``ThreeDVar``, L-BFGS) and gives the
+  Laplace posterior. Needs the ``assim`` extra.
+
 Later build-order steps (the ``Q(t)`` stochastic
 process, trans-dimensional source count, coupled emulator, operational
 predictor) are future work; the fusion harness and likelihood structure here
@@ -46,7 +52,15 @@ are designed to stay the same as those blocks are swapped in.
 
 from __future__ import annotations
 
-from plumax.coupled import backends, forward, fusion, instrument, quality, rtm
+from plumax.coupled import (
+    backends,
+    forward,
+    fusion,
+    instrument,
+    inversion,
+    quality,
+    rtm,
+)
 from plumax.coupled.backends import EulerianSource, LagrangianSource, TransportBackend
 from plumax.coupled.forward import (
     CoupledForward,
@@ -57,6 +71,12 @@ from plumax.coupled.forward import (
 )
 from plumax.coupled.fusion import FusionPosterior, default_prior, fuse_observations
 from plumax.coupled.instrument import Instrument
+from plumax.coupled.inversion import (
+    CoupledPrior,
+    CoupledProblem,
+    CoupledResult,
+    solve_coupled,
+)
 from plumax.coupled.quality import (
     FlagPolicy,
     QualityFlag,
@@ -79,6 +99,9 @@ from plumax.coupled.rtm import (
 
 __all__ = [
     "CoupledForward",
+    "CoupledPrior",
+    "CoupledProblem",
+    "CoupledResult",
     "EulerianSource",
     "FlagPolicy",
     "FusionPosterior",
@@ -103,11 +126,13 @@ __all__ = [
     "fuse_observations",
     "fusion",
     "instrument",
+    "inversion",
     "linearise",
     "predict_observation",
     "quality",
     "radiance_response",
     "radiance_response_linear",
     "rtm",
+    "solve_coupled",
     "stack_observations",
 ]
