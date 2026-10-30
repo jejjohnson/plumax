@@ -6,6 +6,8 @@
   enhancement, the cross-sectional flux and column-unit conversion.
 - :mod:`plumax.geo.plume_array`: the array functions under them
   (`plume_mask`, `wind_advection_cone`, `convert_column_units`, ...).
+- :mod:`plumax.geo.vetting`: `PlumeVetting`, :mod:`plumax.vetting`'s
+  candidate vetting and scene null on GeoTensors, as one Dataset (#157).
 
 Importing this subpackage does not need the extra; the operators load on
 first use, and a missing extra raises an ``ImportError`` naming it.
@@ -27,6 +29,7 @@ _LAZY = {
     "PlumeMask": "plume",
     "PlumeQNDFeatures": "plume",
     "PlumeShapeFilter": "plume",
+    "PlumeVetting": "vetting",
     "WindAdvectionCone": "plume",
     "convert_column_units": "plume_array",
     "plume_mask": "plume_array",
@@ -65,6 +68,7 @@ if TYPE_CHECKING:
         plume_mask,
         wind_advection_cone,
     )
+    from plumax.geo.vetting import PlumeVetting
 
 
 __all__ = [
@@ -77,6 +81,7 @@ __all__ = [
     "PlumeMask",
     "PlumeQNDFeatures",
     "PlumeShapeFilter",
+    "PlumeVetting",
     "WindAdvectionCone",
     "convert_column_units",
     "plume_mask",
