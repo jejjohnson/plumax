@@ -73,6 +73,11 @@ def log_thinned_rate(
 ) -> Float[Array, ""]:
     """log p̄(θ) = log ∫ P_d(q) f(q | θ) dq, 0 without a POD.
 
+    Log-space Simpson on [q_lo, q_hi], plus the mass above q_hi at the POD's
+    value there, P_d(q_hi) P(Q > q_hi | θ), so a heavy tail beyond the grid is
+    not dropped. The mass below q_lo is left out: a detection curve is
+    nondecreasing in Q, and q_lo sits far below every detection.
+
     Args:
         mark: The mark family.
         theta: Its parameters.
@@ -87,7 +92,11 @@ def log_thinned_rate(
         # a normalised f integrates to one
         return jnp.zeros(())
     integrand = _log_integrand(mark, theta, log_pod)
-    return log_simpson(integrand, support[0], support[1], n=n_nodes)
+    inside = log_simpson(integrand, support[0], support[1], n=n_nodes)
+    # P_d(q_hi) P(Q > q_hi), the tail beyond the last node
+    upper = jnp.asarray(support[1], dtype=float)
+    beyond = log_pod(upper) + mark.log_survival(upper, **theta)
+    return jnp.logaddexp(inside, beyond)
 
 
 def default_support(evidence: EventEvidence) -> tuple[float, float]:
@@ -223,7 +232,8 @@ def fit_size_distribution_iw(
 
     Runs :func:`mark_iw_model`, then reports the per-event ESS (and, in the
     FULL regime, the Pareto k̂) of the weights at the posterior-mean θ,
-    warning when an event collapses (ESS < 0.1 S or k̂ > 0.7).
+    warning in every regime when an event collapses (ESS < 0.1 S, or
+    k̂ > 0.7).
 
     Args:
         catalog: Events with the payload-v2 fields (``prior_logpdf``, and
@@ -284,7 +294,7 @@ def fit_size_distribution_iw(
         pareto_k = np.array(
             [pareto_smoothed_log_weights(row)[1] for row in log_weights]
         )
-        warn_on_collapse(ess, log_weights.shape[-1], pareto_k)
+    warn_on_collapse(ess, log_weights.shape[-1], pareto_k)
     return MarkPosterior(
         mark=mark, regime=regime, samples=samples, ess=ess, pareto_k=pareto_k
     )

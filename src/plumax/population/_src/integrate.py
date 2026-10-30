@@ -170,6 +170,9 @@ def pareto_smoothed_log_weights(log_weights: ArrayLike) -> tuple[np.ndarray, flo
     log_w = log_w - log_w.max()
     size = log_w.size
     tail_length = math.ceil(min(0.2 * size, 3.0 * math.sqrt(size)))
+    if tail_length >= size:
+        # too few weights to separate a tail: normalise, no diagnostic
+        return log_w - np.logaddexp.reduce(log_w), math.nan
     order = np.argsort(log_w)
     cutoff = max(log_w[order[-tail_length - 1]], math.log(np.finfo(float).tiny))
     tail = order[log_w[order] > cutoff]

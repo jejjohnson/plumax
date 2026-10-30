@@ -237,3 +237,13 @@ def test_moment_gradients_in_the_tails_and_at_the_splice():
     power_law = PowerLawMark(q_min=1.0)
     gradient = jax.grad(lambda a: power_law.truncated_mean(1.0, 4.0, alpha=a))(2.0)
     assert bool(jnp.isfinite(gradient))
+
+
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_log_survival_matches_quadrature(name):
+    mark, theta = CASES[name]
+    for level in (0.7, 2.0, 2.5, 6.0):
+        expected = _integrate(mark, theta, 0.0, lower=level)
+        value = float(jnp.exp(mark.log_survival(level, **theta)))
+        np.testing.assert_allclose(value, expected, rtol=1e-5)
+    np.testing.assert_allclose(mark.log_survival(1e-12, **theta), 0.0, atol=1e-9)

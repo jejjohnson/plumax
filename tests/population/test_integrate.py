@@ -88,3 +88,9 @@ def test_pareto_smoothing_of_equal_weights_needs_no_fit():
     smoothed, k_hat = pareto_smoothed_log_weights(np.zeros(64))
     np.testing.assert_allclose(np.exp(smoothed), 1.0 / 64)
     assert np.isnan(k_hat)
+
+
+def test_pareto_smoothing_of_a_single_weight():
+    smoothed, k_hat = pareto_smoothed_log_weights(np.array([0.3]))
+    np.testing.assert_allclose(smoothed, [0.0])
+    assert np.isnan(k_hat)

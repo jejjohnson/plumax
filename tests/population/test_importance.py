@@ -342,3 +342,33 @@ def test_lognormal_size_distribution_delegates_with_a_regime():
     assert abs(posterior.mu_mean - TRUTH["mu"]) < 3.0 * float(
         np.std(posterior.mu_samples)
     )
+
+
+def test_thinned_rate_keeps_the_tail_beyond_the_grid():
+    from plumax.population.fitting import log_thinned_rate
+    from plumax.population.marks import PowerLawMark
+
+    # α = 1.1: about 40 % of the mass lies above 1e4; an identity POD must
+    # still give p̄ = 1
+    def identity(q):
+        return jnp.zeros_like(q)
+
+    mark = PowerLawMark(q_min=1.0)
+    rate = jnp.exp(log_thinned_rate(mark, {"alpha": 1.1}, identity, (1e-4, 1e4)))
+    np.testing.assert_allclose(rate, 1.0, atol=1e-3)
+
+
+def test_gaussian_fit_warns_on_collapse():
+    from plumax.population.fitting import fit_size_distribution_iw
+
+    # a population f pinned near Q = 1 by its priors against wide posteriors
+    catalog = _catalog(1.5, noise=1.5, n_events=4, n_draws=50)
+    with pytest.warns(RuntimeWarning, match="collapsed"):
+        fit_size_distribution_iw(
+            catalog,
+            mark="lognormal",
+            mark_fields={"mu_prior_scale": 0.01, "sigma_prior_scale": 0.01},
+            regime="gaussian",
+            num_warmup=20,
+            num_samples=20,
+        )
