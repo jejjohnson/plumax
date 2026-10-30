@@ -600,6 +600,28 @@ def test_cross_sectional_flux_matches_uniform_plume_analytical() -> None:
     assert (gdf["n_pixels"] == 1).all()
 
 
+def test_cross_sectional_flux_counts_a_boundary_pixel_once() -> None:
+    """A transect on a pixel boundary takes one column, not both (#177 review).
+
+    With the source at x = 0 on the 10 m grid, the transect at 50 m lies
+    between the pixel centres at 45 m and 55 m. The old inclusive test took
+    both and returned 20 kg/s for a one-row plume of 1 kg/m² in a 1 m/s wind.
+    """
+    enhancement = np.zeros((11, 21), dtype=float)
+    enhancement[5, :] = 1.0
+    mask_arr = enhancement > 0
+    source_y = 100.0 - 5.5 * 10.0  # row 5 centre
+    gdf = geo.CrossSectionalFlux(
+        source=(0.0, source_y),
+        wind_u=1.0,
+        wind_v=0.0,
+        n_transects=3,
+        transect_spacing_m=50.0,
+    )(_gt(enhancement), _gt(mask_arr))
+    assert gdf["n_pixels"].tolist() == [1, 1, 1]
+    assert gdf["flux_kg_s"].tolist() == pytest.approx([10.0, 10.0, 10.0])
+
+
 def test_cross_sectional_flux_rejects_zero_wind() -> None:
     mask = _gt(np.ones((3, 3), dtype=bool))
     enhancement = _gt(np.ones((3, 3), dtype=float))
@@ -1052,3 +1074,35 @@ def test_plume_carrier_kwargs_are_gone() -> None:
         assert not op.forbid_in_yaml
         clone = Operator.from_state(json.loads(json.dumps(op.state)))
         assert clone.get_config() == op.get_config()
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_max_axis_length_equals_the_brute_force_diameter(seed: int) -> None:
+    """The hull-vertex diameter is the all-pairs one, exactly (#177 review)."""
+    from plumax.geo.plume_array import pixel_centers, plume_length
+
+    rng = np.random.default_rng(seed)
+    mask = rng.random((15, 12)) < 0.3
+    transform = rasterio.Affine(10.0, 5.0, 500_000.0, 0.0, -20.0, 4_000_000.0)
+    xs, ys = pixel_centers(mask.shape, transform)
+    points = np.column_stack([xs[mask], ys[mask]])
+    diff = points[:, None, :] - points[None, :, :]
+    brute = float(np.sqrt(np.max(np.sum(diff**2, axis=-1))))
+    assert plume_length(mask, transform, method="max_axis") == brute
+
+
+@pytest.mark.parametrize("line", ["row", "column", "diagonal"])
+def test_max_axis_length_of_collinear_pixels(line: str) -> None:
+    from plumax.geo.plume_array import plume_length
+
+    mask = np.zeros((9, 9), dtype=bool)
+    if line == "row":
+        mask[4, 1:8] = True
+    elif line == "column":
+        mask[1:8, 4] = True
+    else:
+        np.fill_diagonal(mask, True)
+    transform = rasterio.Affine(10.0, 0.0, 0.0, 0.0, -10.0, 100.0)
+    expected = {"row": 60.0, "column": 60.0, "diagonal": 80.0 * np.sqrt(2.0)}
+    length = plume_length(mask, transform, method="max_axis")
+    assert length == pytest.approx(expected[line], rel=1e-12)

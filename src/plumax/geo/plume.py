@@ -644,8 +644,9 @@ class CrossSectionalFlux(Operator):
                        \Omega_i \,\Delta y_i
 
     where :math:`\mathrm{strip}_k` is the set of plume pixels whose
-    along-wind distance to the source falls within half a pixel of
-    :math:`d_k`. This is the cross-section method of Krings et al. (2011)
+    along-wind distance to the source falls in the half-open interval
+    :math:`[d_k - \Delta y / 2,\, d_k + \Delta y / 2)`, so a pixel whose
+    centre lies on a strip boundary is counted once. This is the cross-section method of Krings et al. (2011)
     and Varon et al. (2018, appendix); a flat downwind profile of
     :math:`Q_k` versus :math:`d_k` confirms a steady-state estimate.
 
@@ -728,7 +729,11 @@ class CrossSectionalFlux(Operator):
         rows: list[dict[str, Any]] = []
         for idx in range(self.n_transects):
             distance = (idx + 1) * self.transect_spacing_m
-            on_transect = mask & (np.abs(along - distance) <= width / 2.0)
+            # Half-open strips [d − w/2, d + w/2) tile the along-wind axis,
+            # so a pixel centre on a strip boundary counts in one strip only.
+            offset = along - distance
+            in_strip = (offset >= -width / 2.0) & (offset < width / 2.0)
+            on_transect = mask & in_strip
             flux = float(np.nansum(enhancement[on_transect] * wind_norm * width))
             half_len = max(
                 float(np.max(np.abs(across[mask]))) if mask.any() else width,

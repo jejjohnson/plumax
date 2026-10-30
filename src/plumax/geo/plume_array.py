@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 import numpy as np
 from jaxtyping import Bool, Float, Num, Shaped
+from scipy.spatial import ConvexHull, QhullError
 
 from plumax.errors import MissingExtraError
 
@@ -266,6 +267,24 @@ def convert_column_units(
     raise ValueError("units_out must be 'ppm_m', 'mol_m2', or 'kg_m2'")
 
 
+def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
+    """Largest distance between two of ``points``, in bounded memory.
+
+    The farthest pair of a point set are vertices of its convex hull, so the
+    pairwise maximum runs over the hull's ``h`` vertices (``h²`` memory, not
+    ``n²``) and gives the brute-force value exactly: the same pair, the same
+    arithmetic. Collinear points have no 2-D hull; their farthest pair are
+    the two lexicographic extremes along the line.
+    """
+    try:
+        candidates = points[ConvexHull(points).vertices]
+    except QhullError:
+        order = np.lexsort((points[:, 1], points[:, 0]))
+        candidates = points[order[[0, -1]]]
+    diff = candidates[:, None, :] - candidates[None, :, :]
+    return float(np.sqrt(np.max(np.sum(diff**2, axis=-1))))
+
+
 def plume_length(
     mask: Bool[np.ndarray, "h w"],
     transform: Any,
@@ -277,8 +296,9 @@ def plume_length(
     ``L`` is the effective length used by Varon et al. (2018) in the IME
     method ``Q = U_eff * IME / L``. Three estimators are supported:
 
-    - ``"max_axis"``: maximum pairwise distance between active pixels.
-      Fast and robust; matches the original Varon 2018 definition for
+    - ``"max_axis"``: maximum pairwise distance between active pixels,
+      taken over the vertices of their convex hull (the same value as over
+      every pair, in memory that does not grow with ``N²``). Fast and robust; matches the original Varon 2018 definition for
       reasonably linear plumes.
     - ``"convex_hull"``: max diameter of the convex hull of the active
       pixels. For degenerate hulls (single point, collinear points) we
@@ -327,8 +347,7 @@ def plume_length(
         # Single pixel: use one linear pixel size as the length proxy.
         return float(np.sqrt(pixel_area(transform)))
     if method == "max_axis":
-        diff = points[:, None, :] - points[None, :, :]
-        return float(np.sqrt(np.max(np.sum(diff**2, axis=-1))))
+        return _diameter(points)
     if method == "convex_hull":
         hull = MultiPoint(points).convex_hull
         # For polygonal hulls use the exterior ring; for degenerate
