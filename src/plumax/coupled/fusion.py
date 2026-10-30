@@ -46,16 +46,22 @@ class FusionPosterior:
     raise a concretization error under ``jax.grad`` / ``jax.jit``. Use
     ``float(post.emission_rate)`` at the call site when a Python scalar is wanted.
 
+    With design-matrix responses (``n_param`` emission parameters, e.g. one per
+    cell of a Tier II source) the emission fields are ``(n_param,)`` vectors and
+    the state is ``[q₁ … q_P, bias₁ … bias_M]``.
+
     Attributes:
-        emission_rate: Posterior mean emission ``Q*`` [kg/s], 0-d array.
-        emission_std: Posterior standard deviation of ``Q``, 0-d array.
+        emission_rate: Posterior mean emission ``Q*`` [kg/s], 0-d array
+            (``(n_param,)`` for design-matrix responses).
+        emission_std: Posterior standard deviation of ``Q``, 0-d array
+            (``(n_param,)`` for design-matrix responses).
         biases: Posterior mean per-instrument biases, shape ``(n_inst,)``.
         bias_std: Posterior standard deviations of the biases, shape
             ``(n_inst,)``.
         mean: Full posterior mean state ``[Q, bias₁ … bias_M]``, shape
-            ``(1 + n_inst,)``.
+            ``(n_param + n_inst,)``.
         covariance: Full posterior covariance ``P*``, shape
-            ``(1 + n_inst, 1 + n_inst)``.
+            ``(n_param + n_inst, n_param + n_inst)``.
         instrument_names: Names aligned with the bias entries.
     """
 
@@ -73,8 +79,9 @@ def _stack_design(
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Build the stacked design matrix ``G``, observation variance and background.
 
-    ``G`` has shape ``(n_total_obs, 1 + n_inst)``: column 0 is the concatenated
-    unit-``Q`` responses; column ``1 + i`` is the indicator (ones) for the rows
+    ``G`` has shape ``(n_total_obs, n_param + n_inst)``: the first ``n_param``
+    columns are the concatenated unit-``Q`` responses (one column for a scalar
+    ``Q``); column ``n_param + i`` is the indicator (ones) for the rows
     belonging to instrument ``i`` (its additive bias). Returns ``(G, r, bg)``
     with ``r`` the stacked observation variance and ``bg`` the stacked
     background offset.
@@ -87,16 +94,27 @@ def _stack_design(
         zip(forward.instruments, forward.responses, strict=True)
     ):
         n = inst.n_obs
-        response_blocks.append(resp)
+        response_blocks.append(resp[:, None] if resp.ndim == 1 else resp)
         var_blocks.append(inst.observation_variance())
         indicator = jnp.zeros((n, n_inst)).at[:, i].set(1.0)
         cols_bias.append(indicator)
-    response = jnp.concatenate(response_blocks)[:, None]  # (n_total, 1)
+    response = jnp.concatenate(response_blocks, axis=0)  # (n_total, n_param)
     bias_cols = jnp.concatenate(cols_bias, axis=0)  # (n_total, n_inst)
-    g = jnp.concatenate([response, bias_cols], axis=1)  # (n_total, 1 + n_inst)
+    g = jnp.concatenate([response, bias_cols], axis=1)  # (n_total, n_param + n_inst)
     r = jnp.concatenate(var_blocks)  # (n_total,)
     bg = jnp.asarray(forward.source.background, dtype=float)
     return g, r, bg
+
+
+def _n_emission_params(forward: CoupledForward) -> int:
+    """Emission parameters per response: 1 for a vector, its columns otherwise."""
+    widths = {1 if r.ndim == 1 else int(r.shape[1]) for r in forward.responses}
+    if len(widths) != 1:
+        raise ValueError(
+            "fuse_observations: every instrument's response must have the same "
+            f"number of emission parameters; got {sorted(widths)}."
+        )
+    return widths.pop()
 
 
 def fuse_observations(
@@ -123,9 +141,11 @@ def fuse_observations(
         observations: Observed enhancement vector per instrument, aligned with
             ``forward.instruments`` (each ``(n_obs_i,)``).
         prior_mean: Prior mean state ``[Q_b, bias_b₁ … bias_b_M]``, shape
-            ``(1 + n_inst,)`` (biases typically prior-zero).
+            ``(n_param + n_inst,)`` with ``n_param = 1`` for a scalar ``Q``
+            (biases typically prior-zero).
         prior_covariance: Prior covariance ``B``, shape
-            ``(1 + n_inst, 1 + n_inst)`` — e.g. ``diag(σ_Q², σ_bias², …)``.
+            ``(n_param + n_inst, n_param + n_inst)`` — e.g.
+            ``diag(σ_Q², σ_bias², …)``.
 
     Returns:
         The :class:`FusionPosterior`.
@@ -135,12 +155,14 @@ def fuse_observations(
             mis-shaped prior.
     """
     n_inst = len(forward.instruments)
-    n_state = 1 + n_inst
+    n_param = _n_emission_params(forward)
+    n_state = n_param + n_inst
     theta_b = jnp.asarray(prior_mean, dtype=float)
     b = jnp.asarray(prior_covariance, dtype=float)
     if theta_b.shape != (n_state,):
         raise ValueError(
-            f"fuse_observations: `prior_mean` must be (1 + n_inst = {n_state},); "
+            f"fuse_observations: `prior_mean` must be (n_param + n_inst = "
+            f"{n_state},); "
             f"got {theta_b.shape}."
         )
     if b.shape != (n_state, n_state):
@@ -184,11 +206,13 @@ def fuse_observations(
 
     std = jnp.sqrt(jnp.clip(jnp.diag(posterior_cov), 0.0, None))
     names = tuple(inst.name for inst in forward.instruments)
+    emission = theta[0] if n_param == 1 else theta[:n_param]
+    emission_std = std[0] if n_param == 1 else std[:n_param]
     return FusionPosterior(
-        emission_rate=theta[0],
-        emission_std=std[0],
-        biases=theta[1:],
-        bias_std=std[1:],
+        emission_rate=emission,
+        emission_std=emission_std,
+        biases=theta[n_param:],
+        bias_std=std[n_param:],
         mean=theta,
         covariance=posterior_cov,
         instrument_names=names,

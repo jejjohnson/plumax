@@ -84,7 +84,9 @@ nav:
       - Gridded wind: lagrangian_wind_interp.md
       - Met ensemble: lagrangian_met_ensemble.md
   - Tier III — Eulerian FV: les_fvm.md
-  - Tier IV — Coupled: coupled.md
+  - Tier IV — Coupled:
+      - Coupled inversion: coupled.md
+      - Transport backends: coupled_backends.md
   - Tier V — Population: population.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
