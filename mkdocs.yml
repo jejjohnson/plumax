@@ -79,6 +79,7 @@ nav:
   - Tier II — Lagrangian:
       - Lagrangian particles: lagrangian.md
       - Gridded wind: lagrangian_wind_interp.md
+      - Met ensemble: lagrangian_met_ensemble.md
   - Tier III — Eulerian FV: les_fvm.md
   - Tier IV — Coupled: coupled.md
   - Tier V — Population: population.md

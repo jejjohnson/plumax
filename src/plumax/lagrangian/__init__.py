@@ -18,6 +18,9 @@ inference)**:
 - ``wind_interp`` — ``GriddedWind``, the ``les_fvm`` C-grid wind (from a
   ``MetField`` or a ``PrescribedWindField``) sampled at each particle; accepted
   wherever a wind callable is.
+- ``met_ensemble`` — one footprint per met-ensemble member
+  (``ensemble_footprints``) and the Gaussian inversion that adds their spread
+  as a transport-error covariance (``ensemble_inversion``).
 - ``inversion`` — Gaussian and sign-constrained lognormal Bayesian inversion of
   the source vector from observations, with a Matérn-3/2 spatial prior
   (``linear_gaussian_inversion`` / ``lognormal_inversion``): vardax
@@ -33,6 +36,7 @@ from plumax.lagrangian import (
     concentration,
     footprint,
     inversion,
+    met_ensemble,
     particles,
     turbulence,
     wind_interp,
@@ -47,6 +51,11 @@ from plumax.lagrangian.inversion import (
     lognormal_inversion,
     matern32_covariance,
     observation_covariance,
+)
+from plumax.lagrangian.met_ensemble import (
+    ensemble_footprints,
+    ensemble_inversion,
+    transport_covariance,
 )
 from plumax.lagrangian.particles import (
     ParticleState,
@@ -79,6 +88,8 @@ __all__ = [
     "bin_positions",
     "compute_footprint",
     "concentration",
+    "ensemble_footprints",
+    "ensemble_inversion",
     "footprint",
     "footprint_operator",
     "gridded_wind_from_met",
@@ -90,11 +101,13 @@ __all__ = [
     "linear_gaussian_inversion",
     "lognormal_inversion",
     "matern32_covariance",
+    "met_ensemble",
     "n_steps_for_horizon",
     "observation_covariance",
     "particles",
     "simulate_lagrangian",
     "step_durations",
+    "transport_covariance",
     "turbulence",
     "uniform_wind",
     "wind_from_speed_direction",

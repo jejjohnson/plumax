@@ -233,7 +233,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Footprint emulator (+ Step 4 inversion on it) | `plumax.lagrangian.emulator` | ☐ [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 5 | Field predictor (per instrument) | `plumax.lagrangian.predictor` | ☐ after [#90](https://github.com/jejjohnson/plumax/issues/90) |
-| 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` | ☐ [#89](https://github.com/jejjohnson/plumax/issues/89) |
+| 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` (v1: mean footprint + linearised transport covariance; mixture posterior not yet) | ✓ [#89](https://github.com/jejjohnson/plumax/issues/89) |
 
 `plumax.lagrangian` exists (Steps 1–2 landed in #8, corrected in #63); the ☐ rows are tracked under the Tier II epic [#71](https://github.com/jejjohnson/plumax/issues/71).
 
