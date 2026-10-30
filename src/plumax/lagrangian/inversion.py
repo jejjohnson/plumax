@@ -200,8 +200,9 @@ def _blue_update(
     ``OptimalInterpolation`` on ``𝒢(δ) = J δ`` with prior ``N(0, B)`` gives
     ``δ* = B Jᵀ (J B Jᵀ + R)⁻¹ d`` (Cholesky solve of the innovation
     system), and its ``LaplaceCovariance`` the posterior covariance
-    ``(B⁻¹ + Jᵀ R⁻¹ J)⁻¹``, materialised and symmetrised. ``R`` is diagonal,
-    given by ``obs_var``.
+    ``(B⁻¹ + Jᵀ R⁻¹ J)⁻¹``, materialised and symmetrised. ``obs_var`` is the
+    diagonal of ``R`` ``(n_obs,)``, or the full ``R`` ``(n_obs, n_obs)`` (the
+    met-ensemble inversion adds a correlated transport error).
 
     Returns:
         ``(increment, posterior_cov)``, shapes ``(n_grid,)`` and
@@ -211,6 +212,10 @@ def _blue_update(
     n_grid = prior_cov.shape[0]
     n_obs = obs_var.shape[0]
     psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+    if obs_var.ndim == 2:
+        obs_cov = lx.MatrixLinearOperator(obs_var, psd)
+    else:
+        obs_cov = lx.DiagonalLinearOperator(obs_var)
 
     def row_operator(
         op: lx.AbstractLinearOperator, n: int
@@ -226,7 +231,7 @@ def _blue_update(
         obs_op=footprint_operator(jacobian),
         prior_mean=jnp.zeros((1, n_grid), dtype=prior_cov.dtype),
         prior_cov_op=row_operator(lx.MatrixLinearOperator(prior_cov, psd), n_grid),
-        obs_cov_op=row_operator(lx.DiagonalLinearOperator(obs_var), n_obs),
+        obs_cov_op=row_operator(obs_cov, n_obs),
         solver=lx.Cholesky(),
     )
     batch = vdx.Batch1D(

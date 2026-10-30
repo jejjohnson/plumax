@@ -24,6 +24,7 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | I | [Gaussian puff](gauss_puff.md) | time-resolved puffs, OU turbulence |
 | II | [Lagrangian](lagrangian.md) | particle dispersion |
 | II | [Gridded wind](lagrangian_wind_interp.md) | `GriddedWind`, `gridded_wind_from_met`, `gridded_wind_from_prescribed`: the C-grid wind at each particle |
+| II | [Met ensemble](lagrangian_met_ensemble.md) | `ensemble_footprints`, `ensemble_inversion`, `transport_covariance`: footprints per met member and the inversion over them |
 | III | [Eulerian FV](les_fvm.md) | advection–diffusion on a C-grid |
 | IV | [Coupled](coupled.md) | multi-instrument source inversion |
 | V | [Population](population.md) | source populations and forecasting |
