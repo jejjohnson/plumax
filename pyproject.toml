@@ -188,7 +188,7 @@ lint = [
     "ruff>=0.15.10",
 ]
 typecheck = [
-    "ty>=0.0.29",
+    "ty>=0.0.30",
 ]
 docs = [
     # The prose half of the site is built by mystmd, a Node CLI installed with
@@ -196,13 +196,13 @@ docs = [
     # MkDocs here builds only the API reference, whose `objects.inv` is what
     # lets the MyST prose cross-reference into it.
     "mkdocs>=1.6.1",
-    "mkdocs-material>=9.5",
+    "mkdocs-material>=9.7.6",
     # pygments 2.20.0 + pymdownx crash on code fences containing blank lines
     # inside docstrings (html.escape on a None filename); 2.19.x is fine.
     "pygments<2.20",
-    "mkdocstrings[python]>=0.25",
+    "mkdocstrings[python]>=1.0.4",
     "jupytext>=1.16",
-    "ipykernel>=6.29",
+    "ipykernel>=7.2.0",
     # Executes notebooks for docs/notebooks (see the docs-examples instructions).
     "nbconvert>=7.16.6",
     # matplotlib + watermark used by the example notebooks during local
