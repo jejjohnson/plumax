@@ -52,10 +52,17 @@ class SizeDistributionPosterior:
             ``(n_samples,)``.
         sigma_samples: Posterior samples of the log-scale spread ``sigma``
             ``(n_samples,)``.
+        ess: Per-event effective sample size of the importance weights at
+            the posterior mean, from an importance-corrected fit (``regime``
+            given); ``None`` for the Gaussian-summary fit.
+        pareto_k: Per-event Pareto k̂ of those weights (FULL regime), or
+            ``None``.
     """
 
     mu_samples: np.ndarray
     sigma_samples: np.ndarray
+    ess: np.ndarray | None = None
+    pareto_k: np.ndarray | None = None
 
     @property
     def mu_mean(self) -> float:
@@ -121,6 +128,7 @@ def fit_lognormal_size_distribution(
     mu_prior_scale: float = 5.0,
     sigma_prior_scale: float = 2.0,
     seed: int = 0,
+    regime: str | None = None,
 ) -> SizeDistributionPosterior:
     """Hierarchical-Bayes fit of the lognormal population size distribution.
 
@@ -150,6 +158,13 @@ def fit_lognormal_size_distribution(
         sigma_prior_scale: Scale of the ``HalfNormal`` hyperprior on
             ``sigma``.
         seed: PRNG seed for the sampler.
+        regime: ``None`` (default) for the Gaussian-summary fit above, or
+            ``"point"`` / ``"gaussian"`` / ``"full"`` to delegate to the
+            importance-corrected fit
+            :func:`~plumax.population.fitting.fit_size_distribution_iw` with
+            the lognormal mark and these priors, which divides out each
+            event's per-event prior (payload v2) instead of treating its
+            posterior as the likelihood.
 
     Returns:
         The fitted :class:`SizeDistributionPosterior`.
@@ -160,6 +175,28 @@ def fit_lognormal_size_distribution(
     if catalog.n_events == 0:
         msg = "cannot fit a size distribution to an empty catalog"
         raise ValueError(msg)
+    if regime is not None:
+        from plumax.population._src.fitting_iw import fit_size_distribution_iw
+
+        posterior = fit_size_distribution_iw(
+            catalog,
+            mark="lognormal",
+            mark_fields={
+                "mu_prior_scale": mu_prior_scale,
+                "sigma_prior_scale": sigma_prior_scale,
+            },
+            regime=regime,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
+            num_chains=num_chains,
+            seed=seed,
+        )
+        return SizeDistributionPosterior(
+            mu_samples=posterior.samples["mu"],
+            sigma_samples=posterior.samples["sigma"],
+            ess=posterior.ess,
+            pareto_k=posterior.pareto_k,
+        )
 
     import jax
     import numpyro

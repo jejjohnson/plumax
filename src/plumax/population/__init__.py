@@ -20,7 +20,12 @@ products:
   ``xtremax.point_processes`` Poisson, marked and detection-thinned processes
   (the ``population`` extra).
 * :mod:`~plumax.population.paradox` — V.D missing-mass paradox Monte Carlo.
-* :mod:`~plumax.population.fitting` — POD-modified power-law NUTS fitter.
+* :mod:`~plumax.population.importance` — importance-corrected per-event
+  evidence (POINT / GAUSSIAN / FULL regimes) and the ESS diagnostic.
+* :mod:`~plumax.population.integrate` — log-space Gauss–Hermite and Simpson
+  quadrature, Pareto-smoothed importance weights.
+* :mod:`~plumax.population.fitting` — POD-modified power-law NUTS fitter and
+  the importance-corrected mark and TMTPP models.
 
 Importing this package is cheap: the NumPyro-dependent fit functions and
 result types are bound lazily (PEP 562), so ``import plumax.population``
@@ -37,6 +42,19 @@ from plumax.population.catalog import (
     EmissionEvent,
     PerEventPosterior,
     event_from_posterior,
+)
+from plumax.population.importance import (
+    EventEvidence,
+    Regime,
+    catalog_evidence,
+    effective_sample_size,
+    ess_report,
+    event_evidence,
+)
+from plumax.population.integrate import (
+    log_gauss_hermite,
+    log_simpson,
+    pareto_smoothed_log_weights,
 )
 from plumax.population.intensity import (
     INTENSITY_REGISTRY,
@@ -103,10 +121,14 @@ if TYPE_CHECKING:
     from plumax.population.fitting import (
         X_MAX_DEFAULT,
         X_MIN_DEFAULT,
+        MarkPosterior,
+        fit_size_distribution_iw,
         lognorm_cdf,
+        mark_iw_model,
         pod_powerlaw_model,
         power_law,
         run_mcmc,
+        tmtpp_iw_model,
     )
     from plumax.population.point_process import (
         InhomogeneousIntensityPosterior,
@@ -132,6 +154,7 @@ __all__ = [
     "DiurnalSinusoidalIntensity",
     "EmissionCatalog",
     "EmissionEvent",
+    "EventEvidence",
     "FacilityConfig",
     "FullVaryingCoefficientPOD",
     "InhomogeneousIntensityPosterior",
@@ -143,6 +166,7 @@ __all__ = [
     "LognormalMark",
     "LognormalParetoMark",
     "Mark",
+    "MarkPosterior",
     "MixtureLognormalMark",
     "OffshorePlatformIntensity",
     "OperationalScheduleIntensity",
@@ -153,6 +177,7 @@ __all__ = [
     "PoissonRatePosterior",
     "PowerLawMark",
     "ProbitPOD",
+    "Regime",
     "SNRBasedPOD",
     "SeasonalSinusoidalIntensity",
     "SeasonallyModulatedDiurnalIntensity",
@@ -162,23 +187,33 @@ __all__ = [
     "WeibullRenewalIntensity",
     "WetlandPermafrostIntensity",
     "build_canonical_scenarios",
+    "catalog_evidence",
     "compute_E_Pd",
     "detection_process",
+    "effective_sample_size",
+    "ess_report",
+    "event_evidence",
     "event_from_posterior",
     "fit_inhomogeneous_intensity",
     "fit_lognormal_size_distribution",
     "fit_poisson_rate",
+    "fit_size_distribution_iw",
+    "log_gauss_hermite",
+    "log_simpson",
     "logistic_pod",
     "lognorm_cdf",
     "lognormal_pdf",
     "make_mark",
     "make_process",
+    "mark_iw_model",
     "padded_event_buffer",
+    "pareto_smoothed_log_weights",
     "pod_powerlaw_model",
     "power_law",
     "run_mcmc",
     "run_scenario_grid",
     "simulate_paradox",
+    "tmtpp_iw_model",
 ]
 
 _LAZY = {
@@ -192,6 +227,10 @@ _LAZY = {
     "pod_powerlaw_model": "plumax.population.fitting",
     "power_law": "plumax.population.fitting",
     "run_mcmc": "plumax.population.fitting",
+    "MarkPosterior": "plumax.population.fitting",
+    "fit_size_distribution_iw": "plumax.population.fitting",
+    "mark_iw_model": "plumax.population.fitting",
+    "tmtpp_iw_model": "plumax.population.fitting",
 }
 
 
