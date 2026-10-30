@@ -239,3 +239,13 @@ def test_moment_gradients_in_the_tails_and_at_the_splice():
     power_law = PowerLawMark(q_min=1.0)
     gradient = jax.grad(lambda a: power_law.truncated_mean(1.0, 4.0, alpha=a))(2.0)
     np.testing.assert_allclose(gradient, np.log(4.0) - np.log(4.0) ** 2 / 2.0)
+
+
+def test_pareto_moment_at_large_bounds_keeps_its_precision():
+    # ∫ from 1e8 to 2e8 of q · 3.5 · 1e8^3.5 q^(−4.5) dq
+    # = 3.5 · 1e8 · (1 − 2^(−2.5))/2.5
+    mark = PowerLawMark(q_min=1e8)
+    expected = 3.5e8 * (1.0 - 2.0**-2.5) / 2.5
+    np.testing.assert_allclose(
+        mark.truncated_mean(1e8, 2e8, alpha=4.5), expected, rtol=1e-12
+    )
