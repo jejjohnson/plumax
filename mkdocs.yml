@@ -74,6 +74,7 @@ nav:
   - Tier 0 — Priors: priors.md
   - Tier I — Gaussian:
       - Gaussian plume: gauss_plume.md
+      - Plume rise: gauss_plume_plume_rise.md
       - Column observation: gauss_plume_observation.md
       - Likelihoods: gauss_plume_likelihoods.md
       - Gaussian puff: gauss_puff.md

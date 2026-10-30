@@ -20,6 +20,7 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | 0 | [Observations](obs.md) | `load_tropomi_l2`, `load_emit_l2b`, `load_ghgsat_l2`, `ColumnObservation` |
 | 0 | [Priors](priors.md) | `load_inventory`, `per_tile_background` |
 | I | [Gaussian plume](gauss_plume.md) | steady-state plume + emission-rate inference |
+| I | [Plume rise](gauss_plume_plume_rise.md) | `BriggsPlumeRise`, `briggs_plume_rise`, `effective_height`: Briggs rise of buoyant and momentum sources |
 | I | [Column observation](gauss_plume_observation.md) | `ColumnObservation`, the column + averaging-kernel observation shared by every tier |
 | I | [Likelihoods](gauss_plume_likelihoods.md) | `GaussianNoise`, `StudentTNoise`, `HeteroscedasticNoise`: the observation noise of the Tier I inference |
 | I | [Gaussian puff](gauss_puff.md) | time-resolved puffs, OU turbulence |
