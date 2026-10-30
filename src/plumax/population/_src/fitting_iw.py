@@ -290,10 +290,7 @@ def fit_size_distribution_iw(
     theta = {
         name: jnp.asarray(np.mean(value, axis=0)) for name, value in samples.items()
     }
-    log_weights = np.asarray(
-        evidence.log_weights
-        + _log_integrand(family, theta, log_pod)(evidence.q_samples)
-    )
+    log_weights = np.asarray(evidence.log_terms(_log_integrand(family, theta, log_pod)))
     ess = np.asarray(effective_sample_size(jnp.asarray(log_weights)))
     pareto_k = np.full(ess.shape, math.nan)
     if regime is Regime.FULL:

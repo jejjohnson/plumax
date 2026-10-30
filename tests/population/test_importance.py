@@ -416,3 +416,30 @@ def test_nodes_at_non_positive_rates_carry_no_weight():
     assert np.all(np.isneginf(np.asarray(evidence.log_weights[:2])))
     term = evidence.log_mark_term(lambda q: MARK.log_prob(q, mu=0.0, sigma=1.0))
     assert bool(jnp.isfinite(term))
+
+
+def test_a_pod_undefined_below_zero_does_not_poison_the_term():
+    from plumax._src.scalar_emission import GaussianEmission
+
+    # Gaussian posterior draws straddle zero; log P_d = −log(1 + 1/q) is NaN
+    # for −1 < q < 0, but those draws carry no weight
+    draws = GaussianEmission(0.4, 0.5).sample(jax.random.key(5), 400)
+    event = EmissionEvent(
+        emission_rate=0.4,
+        emission_std=0.5,
+        x=0.0,
+        y=0.0,
+        time=0.0,
+        tier="II",
+        q_samples=draws,
+        prior_logpdf=GaussianEmission(1.0, 2.0).log_prob,
+    )
+    evidence = event_evidence(event, regime=Regime.FULL)
+
+    def integrand(q):
+        return -jnp.log1p(1.0 / q) + MARK.log_prob(q, mu=0.0, sigma=1.0)
+
+    assert bool(jnp.isfinite(evidence.log_mark_term(integrand)))
+    assert bool(jnp.isfinite(evidence.effective_sample_size(integrand)))
+    catalog = EmissionCatalog.from_events([event])
+    assert np.all(np.isfinite(ess_report(catalog, log_integrand=integrand, warn=False)))

@@ -89,11 +89,24 @@ class EventEvidence(eqx.Module):
     log_weights: Float[Array, "*event member"]
     q_samples: Float[Array, "*event member"]
 
+    def log_terms(
+        self, log_integrand: Callable[[Array], Array]
+    ) -> Float[Array, "*event member"]:
+        """ℓₛ + g(qₛ), with nodes at Q ≤ 0 excluded (−∞).
+
+        g is evaluated on a positive stand-in at excluded nodes, so a POD or
+        mark that is undefined there cannot turn the sum into NaN.
+        """
+        positive = self.q_samples > 0.0
+        safe_nodes = jnp.where(positive, self.q_samples, 1.0)
+        terms = self.log_weights + log_integrand(safe_nodes)
+        return jnp.where(positive, terms, -jnp.inf)
+
     def log_mark_term(
         self, log_integrand: Callable[[Array], Array]
     ) -> Float[Array, "*event"]:
         """log Σₛ exp(ℓₛ + g(qₛ)), per event."""
-        return logsumexp(self.log_weights + log_integrand(self.q_samples), axis=-1)
+        return logsumexp(self.log_terms(log_integrand), axis=-1)
 
     def effective_sample_size(
         self, log_integrand: Callable[[Array], Array] | None = None
@@ -102,10 +115,9 @@ class EventEvidence(eqx.Module):
 
         Without ``log_integrand`` the weights are the prior correction alone.
         """
-        log_w = self.log_weights
-        if log_integrand is not None:
-            log_w = log_w + log_integrand(self.q_samples)
-        return effective_sample_size(log_w)
+        if log_integrand is None:
+            return effective_sample_size(self.log_weights)
+        return effective_sample_size(self.log_terms(log_integrand))
 
 
 def effective_sample_size(log_weights: Float[Array, "*event member"]) -> Array:
@@ -283,7 +295,7 @@ def ess_report(
         ESS per event.
     """
     evidence = catalog_evidence(catalog, regime=regime, measure=measure)
-    log_w = np.asarray(evidence.log_weights + log_integrand(evidence.q_samples))
+    log_w = np.asarray(evidence.log_terms(log_integrand))
     ess = np.asarray(effective_sample_size(jnp.asarray(log_w)))
     if warn:
         pareto_k = None
