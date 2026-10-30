@@ -97,12 +97,16 @@ def _log_lognormal_partial_mean(
     log_survival_upper = jnp.where(open_upper, -jnp.inf, norm.logcdf(-upper_z))
     log_survival_lower = jnp.where(open_lower, 0.0, norm.logcdf(-lower_z))
     # log[Φ(z_b) − Φ(z_a)] from the CDFs left of the centre and from the
-    # survivals right of it, so neither difference cancels to zero
-    from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(log_cdf_lower - log_cdf_upper))
-    from_survival = log_survival_lower + jnp.log1p(
-        -jnp.exp(log_survival_upper - log_survival_lower)
-    )
+    # survivals right of it, so neither difference cancels to zero; the
+    # unused one gets a safe log-ratio, since its log1p(−1) would put a NaN
+    # into the reverse-mode gradient through jnp.where
     right_of_centre = (~open_lower) & (lower_z > 0.0)
+    cdf_ratio = jnp.where(right_of_centre, -1.0, log_cdf_lower - log_cdf_upper)
+    survival_ratio = jnp.where(
+        right_of_centre, log_survival_upper - log_survival_lower, -1.0
+    )
+    from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(cdf_ratio))
+    from_survival = log_survival_lower + jnp.log1p(-jnp.exp(survival_ratio))
     log_mass = jnp.where(right_of_centre, from_survival, from_cdf)
     return jnp.where(empty, -jnp.inf, mu + 0.5 * sigma**2 + log_mass)
 
@@ -156,8 +160,9 @@ def _pareto_partial_mean(
     upper = jnp.maximum(upper, lower)
     unit_index = jnp.abs(alpha - 1.0) < _LOG_FORM_TOLERANCE
     lower_power = jnp.exp((1.0 - alpha) * jnp.log(lower))
-    # b^(1−α) → 0 for α > 1 and → ∞ for α < 1 as b → ∞
-    tail_limit = jnp.where(alpha > 1.0, 0.0, jnp.inf)
+    # b^(1−α) → 0 for α > 1 and → ∞ for α < 1 as b → ∞ (0 on the unused
+    # general branch at α = 1, so that branch stays finite for the gradient)
+    tail_limit = jnp.where((alpha > 1.0) | unit_index, 0.0, jnp.inf)
     finite_upper = jnp.where(jnp.isinf(upper), lower, upper)
     upper_power = jnp.where(
         jnp.isinf(upper), tail_limit, jnp.exp((1.0 - alpha) * jnp.log(finite_upper))
@@ -165,8 +170,9 @@ def _pareto_partial_mean(
     divisor = jnp.where(unit_index, 1.0, alpha - 1.0)
     coefficient = alpha * jnp.exp(alpha * jnp.log(scale)) / divisor
     general = coefficient * (lower_power - upper_power)
-    # α = 1: s log(b/a'), ∞ for b = ∞
-    logarithmic = scale * (jnp.log(upper) - jnp.log(lower))
+    # α = 1: s log(b/a'), ∞ for b = ∞; a finite stand-in when unused
+    log_upper = jnp.where(unit_index, upper, lower)
+    logarithmic = scale * (jnp.log(log_upper) - jnp.log(lower))
     return jnp.where(unit_index, logarithmic, general)
 
 

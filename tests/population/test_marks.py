@@ -207,3 +207,33 @@ def test_full_mean_gradient_is_finite_with_an_open_upper_bound(name):
         # d/dσ exp(μ + σ²/2) = σ exp(μ + σ²/2)
         expected = 0.8 * np.exp(0.3 + 0.5 * 0.8**2)
         np.testing.assert_allclose(gradient, expected, rtol=1e-10)
+
+
+def _central_difference(fn, x, step=1e-6):
+    return (fn(x + step) - fn(x - step)) / (2.0 * step)
+
+
+def test_moment_gradients_in_the_tails_and_at_the_splice():
+    lognormal = LognormalMark()
+
+    def far_tail(mu):
+        return lognormal.truncated_mean(np.exp(12.0), np.exp(13.0), mu=mu, sigma=1.0)
+
+    gradient = jax.grad(far_tail)(0.0)
+    assert bool(jnp.isfinite(gradient))
+    np.testing.assert_allclose(gradient, _central_difference(far_tail, 0.0), rtol=1e-5)
+
+    mark = LognormalParetoMark(q_break_loc=2.0)
+
+    def full_mean(q_break):
+        return mark.truncated_mean(
+            0.0, jnp.inf, mu=0.0, sigma=1.0, alpha=2.5, q_break=q_break
+        )
+
+    gradient = jax.grad(full_mean)(2.0)
+    assert bool(jnp.isfinite(gradient))
+    np.testing.assert_allclose(gradient, _central_difference(full_mean, 2.0), rtol=1e-5)
+
+    power_law = PowerLawMark(q_min=1.0)
+    gradient = jax.grad(lambda a: power_law.truncated_mean(1.0, 4.0, alpha=a))(2.0)
+    assert bool(jnp.isfinite(gradient))
