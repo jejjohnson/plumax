@@ -32,15 +32,17 @@ type, normalising their heterogeneous field layouts:
 For a single-source overpass these reductions are exact / near-exact; for
 genuine multi-source overpasses, build one event per source upstream.
 
-Note:
-    The full TMTPP cross-tier contract (importance-weighted mark
-    likelihood, per-event prior recall, full posterior samples) is future
-    work; v1 consumes the Gaussian-summary representation
-    ``(emission_rate, emission_std)`` only.
+Payload v2 adds what the importance-corrected mark likelihood needs: every
+tier's posterior also exposes ``samples(key, n)`` (draws of Q) and
+``prior_logpdf(q)`` (the log-density of the per-event prior on Q the
+posterior was made under), and :func:`event_from_posterior` copies them onto
+the event as ``q_samples`` and ``prior_logpdf`` when they are available. The
+Gaussian summary is unchanged, so v1 consumers see no difference.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol
 
@@ -64,13 +66,16 @@ __all__ = [
 
 
 class PerEventPosterior(Protocol):
-    """Structural type for a scalar per-event ``Q`` posterior summary.
+    """Structural type for a per-event ``Q`` posterior (payload v2).
 
-    The canonical scalar interface is a posterior mean and standard
-    deviation of the emission rate ``Q``.
-    :class:`plumax.coupled.fusion.FusionPosterior` satisfies this directly;
-    the grid-vector Tier II posteriors are reduced to it by
-    :func:`event_from_posterior`.
+    A posterior mean and standard deviation of the emission rate ``Q``, plus
+    draws of ``Q`` and the log-density of the per-event prior on ``Q`` that
+    the importance correction divides out. Every tier implements it:
+    ``gauss_plume.EmissionRateSamples`` (Tier I),
+    ``lagrangian.GaussianPosterior`` / ``LognormalPosterior`` (Tier II, for
+    the field total), ``les_fvm.FourDVarResult`` (Tier III, for the time
+    mean), ``coupled.FusionPosterior`` and ``coupled.CoupledResult``
+    (Tier IV, for a scalar ``Q``).
     """
 
     @property
@@ -81,6 +86,14 @@ class PerEventPosterior(Protocol):
     @property
     def emission_std(self) -> jax.Array:
         """Posterior standard deviation of ``Q`` [kg/s]."""
+        ...
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """``n`` posterior draws of ``Q`` [kg/s]."""
+        ...
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """Log-density of the per-event prior on ``Q`` at ``q``."""
         ...
 
 
@@ -98,6 +111,9 @@ class EmissionEvent:
         tier: Originating tier label, e.g. ``"II"`` / ``"III"`` / ``"IV"``.
         instrument: Instrument identifier for per-satellite POD dispatch,
             or ``None`` when unknown.
+        q_samples: Posterior draws of ``Q`` [kg/s], or ``None`` (payload v2).
+        prior_logpdf: Log-density of the per-event prior on ``Q``, or
+            ``None`` (payload v2). Both are left out of equality.
     """
 
     emission_rate: float
@@ -107,6 +123,10 @@ class EmissionEvent:
     time: float
     tier: str
     instrument: str | None = None
+    q_samples: jax.Array | None = field(default=None, compare=False)
+    prior_logpdf: Callable[[jax.Array], jax.Array] | None = field(
+        default=None, compare=False
+    )
 
     def __post_init__(self) -> None:
         """Validate that ``emission_std`` is non-negative.
@@ -182,8 +202,10 @@ def event_from_posterior(
     time: float,
     tier: str,
     instrument: str | None = None,
+    n_samples: int = 512,
+    key: jax.Array | None = None,
 ) -> EmissionEvent:
-    """Build an :class:`EmissionEvent` from any Tier II-IV posterior.
+    """Build an :class:`EmissionEvent` from any Tier I-IV posterior.
 
     The posterior is duck-typed: a scalar ``(Q_mean, Q_std)`` is extracted
     by :func:`_scalar_q_summary`, so the same adapter works for
@@ -200,11 +222,20 @@ def event_from_posterior(
         time: Detection / overpass time [s].
         tier: Originating tier label.
         instrument: Instrument identifier, or ``None``.
+        n_samples: Number of draws of ``Q`` to store when ``key`` is given.
+        key: PRNG key for the draws; without it ``q_samples`` stays ``None``.
 
     Returns:
-        The corresponding :class:`EmissionEvent`.
+        The corresponding :class:`EmissionEvent`, with ``q_samples`` and
+        ``prior_logpdf`` filled when the posterior exposes them (payload v2)
+        and ``None`` otherwise.
     """
     rate, std = _scalar_q_summary(posterior)
+    draw = getattr(posterior, "samples", None)
+    q_samples = None
+    if key is not None and callable(draw):
+        q_samples = jnp.asarray(draw(key, n_samples))
+    prior_logpdf = getattr(posterior, "prior_logpdf", None)
     return EmissionEvent(
         emission_rate=float(rate),
         emission_std=float(std),
@@ -213,6 +244,8 @@ def event_from_posterior(
         time=float(time),
         tier=tier,
         instrument=instrument,
+        q_samples=q_samples,
+        prior_logpdf=prior_logpdf if callable(prior_logpdf) else None,
     )
 
 

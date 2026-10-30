@@ -41,3 +41,7 @@ class UnitsError(PlumaxError, ValueError):
 
 class ParameterError(PlumaxError, ValueError):
     """A model parameter lies outside its valid range (a negative scale, say)."""
+
+
+class PayloadError(PlumaxError, ValueError):
+    """A posterior lacks what the Tier V payload needs (its prior or its covariance)."""

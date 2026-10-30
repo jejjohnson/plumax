@@ -217,4 +217,9 @@ def ensemble_inversion(
         total_covariance,
         caller="ensemble_inversion",
     )
-    return GaussianPosterior(mean=qa + increment, covariance=posterior_cov)
+    return GaussianPosterior(
+        mean=qa + increment,
+        covariance=posterior_cov,
+        prior_mean=qa,
+        prior_covariance=b,
+    )

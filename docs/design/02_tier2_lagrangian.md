@@ -230,7 +230,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 2 | Linear inversion (Gaussian / lognormal, linearised in log space) | `plumax.lagrangian.inversion` (`linear_gaussian_inversion` / `lognormal_inversion`): `vardax.OptimalInterpolation` over `footprint_operator`, Laplace covariance; `assim` extra | ✓ [#163](https://github.com/jejjohnson/plumax/issues/163) |
 | 2 | Krylov / structure-aware solver | dispatch to [`gaussx`](https://github.com/jejjohnson/gaussx) | dependency |
 | 2 | EKI | [`filterax`](https://github.com/jejjohnson/filterax) (external) | dependency |
-| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `GaussianPosterior` / `LognormalPosterior` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Footprint emulator (+ Step 4 inversion on it) | `plumax.lagrangian.emulator` | ☐ [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 5 | Field predictor (per instrument) | `plumax.lagrangian.predictor` | ☐ after [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` (v1: mean footprint + linearised transport covariance; mixture posterior not yet) | ✓ [#89](https://github.com/jejjohnson/plumax/issues/89) |

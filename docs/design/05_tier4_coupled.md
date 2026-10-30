@@ -287,7 +287,7 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 | 1 | Trans-dimensional source-count handling | `plumax.coupled.k_sources` | ☐ [#104](https://github.com/jejjohnson/plumax/issues/104) |
 | 2 | End-to-end inversion | [`coupled/inversion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/inversion.py) (`solve_coupled`): vardax `ThreeDVar` over the composed forward, L-BFGS; the Gauss–Newton minimiser waits on [vardax#72](https://github.com/jejjohnson/vardax/issues/72) | 🚧 [#102](https://github.com/jejjohnson/plumax/issues/102) |
 | 2 | Posterior covariance (Laplace / Hessian / EnKF) | Laplace via vardax `LaplaceCovariance` in `solve_coupled`, dense or diagonal covariances; block-structured ones wait on [vardax#141](https://github.com/jejjohnson/vardax/issues/141) | 🚧 [#102](https://github.com/jejjohnson/plumax/issues/102) |
-| 2 | Posterior export → Tier V | `FusionPosterior` already consumed by `population.catalog`; full-sample payload | 🚧 [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `FusionPosterior` and `CoupledResult` (scalar Q) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Stacked emulator runtime | `plumax.coupled.stacked_emulator` | ☐ |
 | 3 | Coupled emulator (end-to-end) | `plumax.coupled.emulator` | ☐ |
 | 3 | Active-learning training scheduler | `plumax.coupled.active_learning` | ☐ |

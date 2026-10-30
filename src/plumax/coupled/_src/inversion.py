@@ -39,6 +39,8 @@ import numpy as np
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float
 
+from plumax._src.errors import PayloadError
+from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
 from plumax._vardax import require_vardax
 from plumax.coupled.forward import CoupledForward, PlumeSource, _scale_response
 from plumax.coupled.instrument import Instrument
@@ -455,6 +457,13 @@ class CoupledResult:
         per_instrument_residuals: y_i − h_i(θ*) by instrument, NaN where
             masked.
         pixels_used: Pixels each instrument contributed at full weight.
+        prior: The prior the solve used (``None`` when built by hand).
+
+    For a scalar Q it also carries the Tier V per-event payload
+    (``population.PerEventPosterior``): draws of Q from the Laplace marginal
+    of its block, N(Q*, σ²) or log Q ~ N(log Q*, σ²) for a lognormal Q, and the
+    log-density of that block's prior marginal, both exact for the Gaussian
+    laws on θ.
     """
 
     map_estimate: dict[str, jax.Array]
@@ -468,6 +477,67 @@ class CoupledResult:
     cost: float
     per_instrument_residuals: dict[str, jax.Array]
     pixels_used: dict[str, int]
+    prior: CoupledPrior | None = None
+
+    def samples(self, key: jax.Array, n: int) -> Float[Array, " member"]:
+        """n draws of Q from the Laplace marginal of its block.
+
+        Raises:
+            PayloadError: Without the Laplace posterior, or for a vector Q.
+        """
+        block = _emission_block(self.map_estimate)
+        if self.std is None:
+            raise PayloadError(
+                "CoupledResult.samples needs the Laplace posterior; solve with "
+                "laplace=True."
+            )
+        center = self.map_estimate[block]
+        spread = self.std[block]
+        _require_scalar(center, "samples")
+        if block == "log_emission_rate":
+            return LognormalEmission(center, spread).sample(key, n)
+        return GaussianEmission(center, spread).sample(key, n)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(Q) of the prior marginal of Q's block.
+
+        Raises:
+            PayloadError: Without the prior, or for a vector Q.
+        """
+        if self.prior is None:
+            raise PayloadError(
+                "CoupledResult.prior_logpdf: this result carries no prior; build "
+                "it with solve_coupled."
+            )
+        block = _emission_block(self.prior.mean)
+        center = jnp.asarray(self.prior.mean[block], dtype=float)
+        _require_scalar(center, "prior_logpdf")
+        # Q's diagonal entry of Σ_θ, at its offset in the flattened layout
+        offset = 0
+        for name, length in self.prior.layout:
+            if name == block:
+                break
+            offset += length
+        covariance = jnp.asarray(self.prior.covariance, dtype=float)
+        if covariance.ndim == 1:
+            variance = covariance[offset]
+        else:
+            variance = covariance[offset, offset]
+        if block == "log_emission_rate":
+            return LognormalEmission(center, jnp.sqrt(variance)).log_prob(q)
+        return GaussianEmission(center, jnp.sqrt(variance)).log_prob(q)
+
+
+def _emission_block(blocks: Mapping[str, jax.Array]) -> str:
+    return "log_emission_rate" if "log_emission_rate" in blocks else "emission_rate"
+
+
+def _require_scalar(value: jax.Array, method: str) -> None:
+    if jnp.ndim(value) != 0:
+        raise PayloadError(
+            f"CoupledResult.{method}: the Tier V payload is for a scalar Q; this "
+            "result has one emission per parameter."
+        )
 
 
 def solve_coupled(
@@ -594,6 +664,7 @@ def solve_coupled(
         cost=float(outcome.cost[0]),
         per_instrument_residuals=residuals,
         pixels_used=contribution_report(problem.forward.instruments),
+        prior=prior,
     )
 
 
