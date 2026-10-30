@@ -249,3 +249,13 @@ def test_log_survival_matches_quadrature(name):
         value = float(jnp.exp(mark.log_survival(level, **theta)))
         np.testing.assert_allclose(value, expected, rtol=1e-5)
     np.testing.assert_allclose(mark.log_survival(1e-12, **theta), 0.0, atol=1e-9)
+
+
+def test_pareto_moment_at_large_bounds_keeps_its_precision():
+    # ∫ from 1e8 to 2e8 of q · 3.5 · 1e8^3.5 q^(−4.5) dq
+    # = 3.5 · 1e8 · (1 − 2^(−2.5))/2.5
+    mark = PowerLawMark(q_min=1e8)
+    expected = 3.5e8 * (1.0 - 2.0**-2.5) / 2.5
+    np.testing.assert_allclose(
+        mark.truncated_mean(1e8, 2e8, alpha=4.5), expected, rtol=1e-12
+    )

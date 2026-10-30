@@ -185,27 +185,24 @@ def _pareto_partial_mean(
     scale: Float[Array, "*scale"],
     alpha: Float[Array, "*alpha"],
 ) -> Float[Array, "*out"]:
-    # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s), ε = α − 1:
-    #   α sᵅ (a'^(−ε) − b^(−ε))/ε, which is α sᵅ log(b/a') at ε = 0 and
-    #   +∞ for b = ∞ and ε ≤ 0, where the mean diverges
+    # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s), ε = α − 1, r = log(b/a'):
+    #   α sᵅ a'^(−ε) (1 − e^(−ε r))/ε = α sᵅ a'^(−ε) r E(−ε r), E(y) = (eʸ − 1)/y,
+    #   which never subtracts two nearly equal powers, is α s log(b/a') at
+    #   ε = 0 and stays differentiable through it; +∞ for b = ∞ and ε ≤ 0
     lower = jnp.maximum(lower, scale)
     upper = jnp.maximum(upper, lower)
     excess = alpha - 1.0
     open_upper = jnp.isinf(upper)
     log_lower = jnp.log(lower)
-    log_upper = jnp.log(jnp.where(open_upper, lower, upper))
-    # (a'^(−ε) − b^(−ε))/ε = log b · E(−ε log b) − log a' · E(−ε log a'),
-    # continuous and differentiable in ε through ε = 0
-    finite = log_upper * _expm1_over_x(-excess * log_upper) - log_lower * (
-        _expm1_over_x(-excess * log_lower)
-    )
-    # b = ∞: a'^(−ε)/ε for ε > 0, ∞ otherwise
+    log_ratio = jnp.log(jnp.where(open_upper, lower, upper)) - log_lower
+    # log(α sᵅ a'^(−ε)), combined before exponentiating
+    log_coefficient = jnp.log(alpha) + alpha * jnp.log(scale) - excess * log_lower
+    finite = log_ratio * _expm1_over_x(-excess * log_ratio)
+    # b = ∞: 1/ε for ε > 0, ∞ otherwise
     safe_excess = jnp.where(excess > 0.0, excess, 1.0)
-    open_value = jnp.where(
-        excess > 0.0, jnp.exp(-excess * log_lower) / safe_excess, jnp.inf
-    )
+    open_value = jnp.where(excess > 0.0, 1.0 / safe_excess, jnp.inf)
     bracket = jnp.where(open_upper, open_value, finite)
-    return alpha * jnp.exp(alpha * jnp.log(scale)) * bracket
+    return jnp.exp(log_coefficient) * bracket
 
 
 def _bounds(q_min: ArrayLike, q_max: ArrayLike) -> tuple[Array, Array]:
