@@ -10,6 +10,7 @@ import pytest
 
 DOCTESTED_MODULES = (
     "plumax.gauss_plume._src.likelihoods",
+    "plumax.gauss_plume._src.multi_source",
     "plumax.gauss_plume._src.observation",
     "plumax.gauss_plume._src.plume_rise",
     "plumax.lagrangian._src.met_ensemble",

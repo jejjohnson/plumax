@@ -7,6 +7,7 @@ Submodules:
   - inference     — NumPyro Bayesian inference for Q (and optional stability)
   - observation   — column + averaging-kernel observation shared by every tier
   - likelihoods   — Gaussian, Student-t and heteroscedastic observation noise
+  - multi_source  — masked-K source slots and their posterior
 
 The ``inference`` submodule is imported lazily on first attribute access so
 that ``from plumax import gauss_plume`` does not pull in NumPyro
@@ -21,6 +22,7 @@ from typing import TYPE_CHECKING
 from plumax.gauss_plume import (
     dispersion,
     likelihoods,
+    multi_source,
     observation,
     plume,
     plume_rise,
@@ -36,6 +38,11 @@ from plumax.gauss_plume.likelihoods import (
     HeteroscedasticNoise,
     Noise,
     StudentTNoise,
+)
+from plumax.gauss_plume.multi_source import (
+    MaskedSources,
+    MultiSourcePosterior,
+    SourceSummary,
 )
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.gauss_plume.plume import (
@@ -55,6 +62,8 @@ from plumax.gauss_plume.plume_rise import (
 _LAZY_INFERENCE_SYMBOLS = {
     "gaussian_plume_model",
     "infer_emission_rate",
+    "infer_multi_source",
+    "multi_source_plume_model",
 }
 
 
@@ -72,6 +81,8 @@ if TYPE_CHECKING:  # make the lazy names visible to type checkers / IDEs
     from plumax.gauss_plume.inference import (
         gaussian_plume_model,
         infer_emission_rate,
+        infer_multi_source,
+        multi_source_plume_model,
     )
 
 
@@ -83,7 +94,10 @@ __all__ = [
     "ColumnObservation",
     "GaussianNoise",
     "HeteroscedasticNoise",
+    "MaskedSources",
+    "MultiSourcePosterior",
     "Noise",
+    "SourceSummary",
     "StudentTNoise",
     "briggs_plume_rise",
     "calculate_briggs_dispersion",
@@ -92,8 +106,11 @@ __all__ = [
     "gaussian_plume_model",
     "get_dispersion_params",
     "infer_emission_rate",
+    "infer_multi_source",
     "inference",
     "likelihoods",
+    "multi_source",
+    "multi_source_plume_model",
     "observation",
     "plume",
     "plume_concentration",
