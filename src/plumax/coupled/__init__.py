@@ -29,7 +29,11 @@ rate, with the per-instrument bias as a first-class state element:
   radtrax's layered ``ForwardModel`` instead of the slab, in JAX end to end, so
   ``jax.grad`` with respect to ``Q`` runs through plume and radiance together. The scalar-AK path above is unchanged.
 
-Later build-order steps (Tier II/III transport + RTM, the ``Q(t)`` stochastic
+- ``backends`` — the Tier II and Tier III transports behind the same forward
+  (:class:`TransportBackend`, :class:`LagrangianSource`,
+  :class:`EulerianSource`), through the shared column observation.
+
+Later build-order steps (the ``Q(t)`` stochastic
 process, trans-dimensional source count, coupled emulator, operational
 predictor) are future work; the fusion harness and likelihood structure here
 are designed to stay the same as those blocks are swapped in.
@@ -37,7 +41,8 @@ are designed to stay the same as those blocks are swapped in.
 
 from __future__ import annotations
 
-from plumax.coupled import forward, fusion, instrument, rtm
+from plumax.coupled import backends, forward, fusion, instrument, rtm
+from plumax.coupled.backends import EulerianSource, LagrangianSource, TransportBackend
 from plumax.coupled.forward import (
     CoupledForward,
     PlumeSource,
@@ -60,12 +65,16 @@ from plumax.coupled.rtm import (
 
 __all__ = [
     "CoupledForward",
+    "EulerianSource",
     "FusionPosterior",
     "Instrument",
+    "LagrangianSource",
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "PlumeSource",
     "RadianceObservationOperator",
+    "TransportBackend",
+    "backends",
     "build_coupled_forward",
     "column_mass_to_delta_vmr",
     "column_response",

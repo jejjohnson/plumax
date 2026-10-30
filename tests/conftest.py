@@ -32,6 +32,7 @@ from jaxtyping import install_import_hook
 
 
 _TYPED_PACKAGES = (
+    "plumax.coupled._src",
     "plumax.gauss_plume._src",
     "plumax.lagrangian._src",
     "plumax.met._src",

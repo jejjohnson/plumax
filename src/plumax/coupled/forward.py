@@ -17,12 +17,21 @@ forward as the linear map ``y = Q · response + bias`` and solve in closed form
 (the design's "linear-conditional-Gaussian limit"). :func:`predict_observation`
 / :func:`predict_multi` give the full (Q-scaled, bias-added) prediction for
 simulation and diagnostics.
+
+The transport is pluggable: :func:`build_coupled_forward` takes any
+:class:`~plumax.coupled.backends.TransportBackend`, an object with a
+``background`` and a ``column_response(instrument)``. ``PlumeSource`` is the
+Tier I one; :class:`~plumax.coupled.backends.LagrangianSource` (Tier II) and
+:class:`~plumax.coupled.backends.EulerianSource` (Tier III) are the others. A
+backend may return a design matrix ``(n_obs, n_param)`` instead of a vector,
+one column per emission parameter, and the forward is then ``y = R q + bias``.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -32,6 +41,10 @@ from plumax.coupled.instrument import Instrument
 from plumax.gauss_plume.dispersion import get_dispersion_params
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.gauss_plume.plume import plume_concentration_vmap
+
+
+if TYPE_CHECKING:
+    from plumax.coupled.backends import TransportBackend
 
 
 @dataclass(frozen=True)
@@ -67,6 +80,13 @@ class PlumeSource:
         u = -self.wind_speed * np.sin(theta)
         v = -self.wind_speed * np.cos(theta)
         return float(u), float(v)
+
+    def column_response(self, instrument: Instrument) -> jax.Array:
+        """Unit-``Q`` column response, the Tier I :class:`TransportBackend` method.
+
+        Delegates to the module-level :func:`column_response`.
+        """
+        return column_response(self, instrument)
 
 
 def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
@@ -143,13 +163,15 @@ class CoupledForward:
     ``Q``-independent part of the forward). Use :func:`build_coupled_forward`.
 
     Attributes:
-        source: Shared source + met configuration.
+        source: Shared transport backend (``PlumeSource``, ``LagrangianSource``
+            or ``EulerianSource``).
         instruments: The observing instruments (fusion list).
         responses: Per-instrument unit-``Q`` column responses (one ``(n_obs,)``
-            array each), aligned with ``instruments``.
+            array each, or an ``(n_obs, n_param)`` design matrix for a
+            multi-parameter emission), aligned with ``instruments``.
     """
 
-    source: PlumeSource
+    source: PlumeSource | TransportBackend
     instruments: tuple[Instrument, ...]
     responses: tuple[jax.Array, ...]
 
@@ -161,7 +183,8 @@ class CoupledForward:
         """Predicted observation vector per instrument (list, native resolution).
 
         Args:
-            emission_rate: Emission rate ``Q`` [kg/s].
+            emission_rate: Emission rate ``Q`` [kg/s], or the ``(n_param,)``
+                emission vector when the responses are design matrices.
             biases: Per-instrument additive biases, one per instrument. Defaults
                 to zero for every instrument.
 
@@ -176,18 +199,27 @@ class CoupledForward:
                 f"{len(self.instruments)} instruments."
             )
         return [
-            emission_rate * resp + self.source.background + b
+            _scale_response(resp, emission_rate) + self.source.background + b
             for resp, b in zip(self.responses, biases, strict=True)
         ]
 
 
+def _scale_response(response: jax.Array, emission_rate: jax.Array | float) -> jax.Array:
+    """``Q · r`` for a response vector, ``R q`` for a design matrix."""
+    if response.ndim == 1:
+        return emission_rate * response
+    return response @ jnp.asarray(emission_rate, dtype=response.dtype)
+
+
 def build_coupled_forward(
-    source: PlumeSource, instruments: Sequence[Instrument]
+    source: PlumeSource | TransportBackend, instruments: Sequence[Instrument]
 ) -> CoupledForward:
     """Assemble a :class:`CoupledForward`, precomputing unit-``Q`` responses.
 
     Args:
-        source: Shared source + met configuration.
+        source: Shared transport backend: the Tier I ``PlumeSource``, or a
+            :class:`~plumax.coupled.backends.LagrangianSource` /
+            :class:`~plumax.coupled.backends.EulerianSource`.
         instruments: One or more observing instruments to fuse.
 
     Returns:
@@ -199,7 +231,7 @@ def build_coupled_forward(
     insts = tuple(instruments)
     if not insts:
         raise ValueError("build_coupled_forward: need at least one instrument.")
-    responses = tuple(column_response(source, inst) for inst in insts)
+    responses = tuple(source.column_response(inst) for inst in insts)
     return CoupledForward(source=source, instruments=insts, responses=responses)
 
 
