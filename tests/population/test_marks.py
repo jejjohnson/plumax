@@ -176,3 +176,34 @@ def test_lognormal_pareto_mean_with_a_break_far_below_the_body():
     np.testing.assert_allclose(mean, _integrate(mark, theta, 1.0), rtol=1e-5)
     # continuity puts almost all the mass on the Pareto, mean α Q_b/(α − 1)
     np.testing.assert_allclose(mean, 2.5 * 2.0 / 1.5, rtol=1e-2)
+
+
+def test_lognormal_pareto_samples_a_body_far_below_its_centre():
+    # Φ(z_b) underflows float64 here, yet the body keeps ~0.6 % of the mass
+    from plumax.population._src.marks import _splice_log_weights
+
+    mark = LognormalParetoMark(q_break_loc=2.0)
+    theta = {"mu": 5.0, "sigma": 0.1, "alpha": 2.5, "q_break": 2.0}
+    draws = np.asarray(mark.sample(jax.random.key(4), 400_000, **theta))
+    assert draws.min() > 0.0
+    params = (jnp.asarray(v) for v in (5.0, 0.1, 2.5, 2.0))
+    body_weight = float(jnp.exp(_splice_log_weights(*params)[0]))
+    below = draws < 2.0
+    np.testing.assert_allclose(below.mean(), body_weight, rtol=0.05)
+    assert np.all(np.isfinite(np.asarray(mark.log_prob(jnp.asarray(draws), **theta))))
+
+
+@pytest.mark.parametrize("name", ["lognormal", "mixture_lognormal"])
+def test_full_mean_gradient_is_finite_with_an_open_upper_bound(name):
+    mark, theta = CASES[name]
+    scale_key = "sigma" if name == "lognormal" else "scales"
+
+    def mean(scale):
+        return mark.truncated_mean(0.0, jnp.inf, **{**theta, scale_key: scale})
+
+    gradient = jax.grad(lambda s: jnp.sum(mean(s)))(jnp.asarray(theta[scale_key]))
+    assert bool(jnp.all(jnp.isfinite(gradient)))
+    if name == "lognormal":
+        # d/dσ exp(μ + σ²/2) = σ exp(μ + σ²/2)
+        expected = 0.8 * np.exp(0.3 + 0.5 * 0.8**2)
+        np.testing.assert_allclose(gradient, expected, rtol=1e-10)

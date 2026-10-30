@@ -38,7 +38,7 @@ import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import ndtr, ndtri
+from jax.scipy.special import ndtri
 from jax.scipy.stats import norm
 from jaxtyping import Array, ArrayLike, Float
 
@@ -82,24 +82,51 @@ def _log_lognormal_partial_mean(
 ) -> Float[Array, "*out"]:
     # log ∫ₐᵇ q LN(q) dq = μ + σ²/2 + log[Φ(z_b) − Φ(z_a)], z = (log q − μ − σ²)/σ
     shift = mu + sigma**2
-    log_lower = jnp.log(jnp.clip(lower, jnp.finfo(lower.dtype).tiny))
-    upper_z = (jnp.log(upper) - shift) / sigma
-    lower_z = (log_lower - shift) / sigma
-    empty = upper_z <= lower_z
-    # keep the masked branch finite, for its value and its gradient
-    upper_z = jnp.where(empty, lower_z + 1.0, upper_z)
+    empty = upper <= lower
+    open_upper = jnp.isinf(upper)
+    open_lower = lower <= 0.0
+    # finite stand-ins for the open ends, so that neither the value nor the
+    # reverse-mode gradient meets ∞ · 0; the limits are selected below
+    safe_upper = jnp.where(open_upper | empty, 1.0, upper)
+    safe_lower = jnp.where(open_lower | empty, 0.5, lower)
+    upper_z = (jnp.log(safe_upper) - shift) / sigma
+    lower_z = (jnp.log(safe_lower) - shift) / sigma
+    # log Φ and log(1 − Φ) at each end, with the limits at open ends
+    log_cdf_upper = jnp.where(open_upper, 0.0, norm.logcdf(upper_z))
+    log_cdf_lower = jnp.where(open_lower, -jnp.inf, norm.logcdf(lower_z))
+    log_survival_upper = jnp.where(open_upper, -jnp.inf, norm.logcdf(-upper_z))
+    log_survival_lower = jnp.where(open_lower, 0.0, norm.logcdf(-lower_z))
     # log[Φ(z_b) − Φ(z_a)] from the CDFs left of the centre and from the
     # survivals right of it, so neither difference cancels to zero
-    log_cdf_upper = norm.logcdf(upper_z)
-    log_cdf_lower = norm.logcdf(lower_z)
     from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(log_cdf_lower - log_cdf_upper))
-    log_survival_upper = norm.logcdf(-upper_z)
-    log_survival_lower = norm.logcdf(-lower_z)
     from_survival = log_survival_lower + jnp.log1p(
         -jnp.exp(log_survival_upper - log_survival_lower)
     )
-    log_mass = jnp.where(lower_z > 0.0, from_survival, from_cdf)
+    right_of_centre = (~open_lower) & (lower_z > 0.0)
+    log_mass = jnp.where(right_of_centre, from_survival, from_cdf)
     return jnp.where(empty, -jnp.inf, mu + 0.5 * sigma**2 + log_mass)
+
+
+#: Newton steps of :func:`_normal_quantile_from_log`.
+_QUANTILE_NEWTON_STEPS = 4
+
+
+def _normal_quantile_from_log(log_p: Float[Array, "*p"]) -> Float[Array, "*p"]:
+    # z with log Φ(z) = log p, also where p underflows float64
+    probability = jnp.exp(log_p)
+    representable = probability > jnp.finfo(log_p.dtype).tiny
+    # start: Φ⁻¹(p) where p is representable, else the left-tail asymptote
+    # z² ≈ t − log(2π t), t = −2 log p
+    tail = -2.0 * jnp.where(representable, -1.0, log_p)
+    asymptote = -jnp.sqrt(tail - jnp.log(2.0 * jnp.pi * tail))
+    direct = ndtri(jnp.where(representable, probability, 0.5))
+    quantile = jnp.where(representable, direct, asymptote)
+    for _ in range(_QUANTILE_NEWTON_STEPS):
+        # Newton on log Φ(z) − log p, with d/dz log Φ(z) = φ(z)/Φ(z)
+        log_cdf = norm.logcdf(quantile)
+        slope = jnp.exp(norm.logpdf(quantile) - log_cdf)
+        quantile = quantile - (log_cdf - log_p) / slope
+    return quantile
 
 
 def _lognormal_partial_mean(
@@ -357,9 +384,11 @@ class LognormalParetoMark(eqx.Module):
         log_body_weight, _, _ = _splice_log_weights(mu, sigma, alpha, q_break)
         in_body = jax.random.uniform(piece_key, (n,)) < jnp.exp(log_body_weight)
         # body: inverse CDF of the lognormal truncated to (0, Q_b)
-        break_cdf = ndtr((jnp.log(q_break) - mu) / sigma)
-        body_uniform = jax.random.uniform(body_key, (n,))
-        body = jnp.exp(mu + sigma * ndtri(body_uniform * break_cdf))
+        # in log space: Φ(z_b) underflows when Q_b sits far below the body
+        log_break_cdf = norm.logcdf((jnp.log(q_break) - mu) / sigma)
+        body_uniform = jax.random.uniform(body_key, (n,), minval=jnp.finfo(float).tiny)
+        log_level = jnp.log(body_uniform) + log_break_cdf
+        body = jnp.exp(mu + sigma * _normal_quantile_from_log(log_level))
         # tail: inverse CDF of the Pareto, q = Q_b u^(−1/α)
         tail_uniform = jax.random.uniform(tail_key, (n,), minval=jnp.finfo(float).tiny)
         tail = q_break * tail_uniform ** (-1.0 / alpha)
