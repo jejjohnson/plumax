@@ -14,12 +14,16 @@ products:
 * :mod:`~plumax.population.pod` — V.B registry of 10 probability-of-detection
   models ``P_d(·)`` (equinox modules). "POD" here is *probability of
   detection*, not proper orthogonal decomposition.
+* :mod:`~plumax.population.processes` — the intensity and POD registries as
+  ``xtremax.point_processes`` Poisson, marked and detection-thinned processes
+  (the ``population`` extra).
 * :mod:`~plumax.population.paradox` — V.D missing-mass paradox Monte Carlo.
 * :mod:`~plumax.population.fitting` — POD-modified power-law NUTS fitter.
 
 Importing this package is cheap: the NumPyro-dependent fit functions and
 result types are bound lazily (PEP 562), so ``import plumax.population``
-never pulls in NumPyro.
+never pulls in NumPyro. xtremax (the ``population`` extra) is imported only
+when a process is built.
 """
 
 from __future__ import annotations
@@ -75,6 +79,13 @@ from plumax.population.point_process import (
     PoissonRatePosterior,
     fit_poisson_rate,
 )
+from plumax.population.processes import (
+    LogIntensity,
+    PODRetention,
+    detection_process,
+    make_process,
+    padded_event_buffer,
+)
 
 
 if TYPE_CHECKING:
@@ -114,10 +125,12 @@ __all__ = [
     "InhomogeneousIntensityPosterior",
     "LandfillIntensity",
     "LivestockFeedlotIntensity",
+    "LogIntensity",
     "LogLogisticPOD",
     "LogisticPOD",
     "OffshorePlatformIntensity",
     "OperationalScheduleIntensity",
+    "PODRetention",
     "ParadoxResult",
     "PerEventPosterior",
     "PeriodicBatchIntensity",
@@ -133,6 +146,7 @@ __all__ = [
     "WetlandPermafrostIntensity",
     "build_canonical_scenarios",
     "compute_E_Pd",
+    "detection_process",
     "event_from_posterior",
     "fit_inhomogeneous_intensity",
     "fit_lognormal_size_distribution",
@@ -140,6 +154,8 @@ __all__ = [
     "logistic_pod",
     "lognorm_cdf",
     "lognormal_pdf",
+    "make_process",
+    "padded_event_buffer",
     "pod_powerlaw_model",
     "power_law",
     "run_mcmc",

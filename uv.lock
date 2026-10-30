@@ -2285,6 +2285,10 @@ notebooks = [
     { name = "ipython" },
     { name = "matplotlib" },
 ]
+population = [
+    { name = "numpyro" },
+    { name = "xtremax" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -2303,6 +2307,7 @@ dev = [
     { name = "vardax" },
     { name = "xrtoolz" },
     { name = "xrtoolz-reader" },
+    { name = "xtremax" },
 ]
 docs = [
     { name = "ipykernel" },
@@ -2338,6 +2343,7 @@ requires-dist = [
     { name = "netcdf4" },
     { name = "numpy", specifier = ">=2.0" },
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
+    { name = "numpyro", marker = "extra == 'population'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pyproj", marker = "extra == 'io'" },
@@ -2350,8 +2356,9 @@ requires-dist = [
     { name = "xarray" },
     { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
+    { name = "xtremax", marker = "extra == 'population'", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
-provides-extras = ["inference", "io", "notebooks", "assim", "geo"]
+provides-extras = ["inference", "io", "notebooks", "assim", "population", "geo"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -2370,6 +2377,7 @@ dev = [
     { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=94665ef4c587737ee3663abff8b39eff8e35b92f" },
     { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
+    { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 docs = [
     { name = "ipykernel", specifier = ">=7.2.0" },
@@ -3843,6 +3851,23 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/31/8a/97da0fda5c642afec1ff5974b16830bc07b3a8eb1ec6e43eabfe88e5c157/xskillscore-0.0.29.tar.gz", hash = "sha256:34375e86ea5e2ac710e52b8eb8e77c7acb5b2782aa6c67e863c71e4ae202dd74", size = 219113, upload-time = "2026-02-18T14:05:36.362Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f0/8d/4f78ecff7c6ae42312d20bbff1df1587e14fec198a9091381ebda6ae678b/xskillscore-0.0.29-py3-none-any.whl", hash = "sha256:d021e2fc035fad3fc1341bb9353150117a2eda57439caa671032605ceb9d2358", size = 80466, upload-time = "2026-02-18T14:05:31.907Z" },
+]
+
+[[package]]
+name = "xtremax"
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a#eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
+dependencies = [
+    { name = "einops" },
+    { name = "equinox" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "numpy" },
+    { name = "numpyro" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "xarray" },
 ]
 
 [[package]]
