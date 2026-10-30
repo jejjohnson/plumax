@@ -59,7 +59,7 @@ class Mark(Protocol):
         """∫ q f(q | θ) dq over [q_min, q_max]."""
         ...
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         """NumPyro sites for θ under the default priors."""
         ...
 
@@ -225,7 +225,7 @@ class PowerLawMark(eqx.Module):
         # a Pareto with index α − 1 and scale q_min
         return _pareto_partial_mean(lower, upper, jnp.asarray(self.q_min), alpha - 1.0)
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -274,7 +274,7 @@ class LognormalMark(eqx.Module):
             lower, upper, jnp.asarray(mu, dtype=float), jnp.asarray(sigma, dtype=float)
         )
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -421,7 +421,7 @@ class LognormalParetoMark(eqx.Module):
         tail = _pareto_partial_mean(lower, upper, q_break, alpha)
         return body + jnp.exp(log_tail_weight) * tail
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -527,7 +527,7 @@ class MixtureLognormalMark(eqx.Module):
         )
         return einx.dot("... k, k -> ...", per_component, weights)
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
