@@ -19,7 +19,10 @@ design, the per-instrument **bias is a first-class state element** (documented
 inter-instrument biases are O(±10 ppb); ignoring them double-counts agreement),
 which is why it is solved jointly with ``Q`` here rather than pre-subtracted.
 
-The estimator is pure JAX and differentiable; it reuses
+plumax builds the design matrix, the background, the prior and the instrument
+error budget; the solve is a ``vardax.OptimalInterpolation`` analysis in its
+state-space (information) form (the ``assim`` extra, ``pip install
+'plumax[assim]'``). The estimator stays pure JAX and differentiable; it reuses
 :func:`plumax.lagrangian.inversion.observation_covariance` semantics implicitly
 via the per-instrument :meth:`Instrument.observation_variance`.
 """
@@ -30,12 +33,15 @@ import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import gaussx as gx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission
+from plumax._vardax import require_vardax
 from plumax.coupled.forward import CoupledForward
 from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
 
@@ -168,6 +174,60 @@ def _n_emission_params(forward: CoupledForward) -> int:
     return widths.pop()
 
 
+def _information_form_analysis(
+    design: jax.Array,
+    shifted_obs: jax.Array,
+    mask: jax.Array,
+    obs_variance: jax.Array,
+    *,
+    prior_mean: jax.Array,
+    prior_covariance: jax.Array,
+) -> tuple[jax.Array, jax.Array]:
+    """BLUE of the stacked fusion problem as a vardax state-space OI analysis.
+
+    θ* = θ_b + (B⁻¹ + Gᵀ R⁻¹ G)⁻¹ Gᵀ R⁻¹ (y − c − G θ_b),  P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹.
+
+    For fusion D_y ≫ D_x, and G B Gᵀ has rank at most D_x, so the
+    observation-space system G B Gᵀ + R is large and close to singular for a
+    small R. ``OptimalInterpolation(form="state")`` solves the small, well
+    conditioned D_x × D_x information system instead, with a Cholesky
+    factorisation; its default posterior is the inverse of that precision.
+
+    Args:
+        design: Stacked design matrix G, shape ``(n_obs, n_state)``.
+        shifted_obs: y − c, the observations minus the stacked background; a
+            masked pixel may hold anything, NaN included.
+        mask: Stacked 0/1 observation mask m; vardax zeroes the masked rows
+            of G and of the innovation, so they carry no weight.
+        obs_variance: Diagonal of R, shape ``(n_obs,)``.
+        prior_mean: θ_b, shape ``(n_state,)``.
+        prior_covariance: B, shape ``(n_state, n_state)``.
+
+    Returns:
+        ``(θ*, P*)``, the posterior mean and the materialised, symmetrised
+        posterior covariance.
+
+    Raises:
+        ImportError: Without the ``assim`` extra.
+    """
+    vdx = require_vardax("fuse_observations")
+    psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+    oi = vdx.OptimalInterpolation(
+        obs_op=vdx.LinearObs(operator=lx.MatrixLinearOperator(design)),
+        prior_mean=prior_mean,
+        prior_cov_op=lx.MatrixLinearOperator(prior_covariance, psd),
+        obs_cov_op=lx.DiagonalLinearOperator(obs_variance),
+        form="state",
+        solver=lx.Cholesky(),
+    )
+    batch = vdx.Batch1D(input=shifted_obs[None], mask=mask[None])
+    posterior = oi.posterior(batch)
+    n_state = prior_mean.shape[0]
+    # P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹, one lazy mat-vec per basis vector
+    covariance = jax.vmap(posterior.cov.mv)(jnp.eye(n_state, dtype=prior_mean.dtype))
+    return posterior.mean, gx.symmetrize(covariance)
+
+
 def fuse_observations(
     forward: CoupledForward,
     observations: Sequence[jax.Array],
@@ -185,8 +245,9 @@ def fuse_observations(
         P*⁻¹ = B⁻¹ + Gᵀ R⁻¹ G
         θ*   = θ_b + P* Gᵀ R⁻¹ (y − G θ_b − c_bg)
 
-    solved in the information form, which inverts only the small
-    ``(1 + n_inst) × (1 + n_inst)`` posterior precision.
+    solved as a ``vardax.OptimalInterpolation`` analysis in its state-space
+    (information) form, which factorises only the small
+    ``(n_param + n_inst) × (n_param + n_inst)`` posterior precision.
 
     Each instrument's ``mask`` zeroes its pixels' weight in ``R⁻¹`` and its
     ``variance_inflation`` scales their variance (see
@@ -214,6 +275,7 @@ def fuse_observations(
     Raises:
         ValueError: on a per-instrument observation-count mismatch or a
             mis-shaped prior.
+        ImportError: Without the ``assim`` extra (vardax).
     """
     if quality is not None:
         screened = tuple(
@@ -254,25 +316,9 @@ def fuse_observations(
     y = jnp.concatenate(obs_blocks)
 
     g, r, m, bg = _stack_design(forward)
-    innovation = y - (g @ theta_b + bg)
-    # a masked pixel may hold NaN; zero it so 0 · NaN never reaches the update
-    innovation = jnp.where(m > 0.0, innovation, 0.0)
-
-    # Information-form BLUE, solved in the tiny (1 + n_inst)-dim state space.
-    # For fusion n_obs ≫ n_state, so the innovation form (n_obs × n_obs) would be
-    # large *and* ill-conditioned (G B Gᵀ has rank ≤ n_state, so adding a small
-    # R gives a near-singular system). The information form inverts only the
-    # (n_state × n_state) posterior precision, which is well-conditioned:
-    #     P*⁻¹ = B⁻¹ + Gᵀ R⁻¹ G,   θ* = θ_b + P* Gᵀ R⁻¹ (y − G θ_b − c_bg).
-    # m_i / R_ii: a masked pixel carries no weight
-    r_inv = m / r
-    gt_rinv = g.T * r_inv[None, :]  # Gᵀ R⁻¹, (n_state, n_obs)
-    precision = jnp.linalg.inv(b) + gt_rinv @ g  # B⁻¹ + Gᵀ R⁻¹ G
-    precision = 0.5 * (precision + precision.T)
-    posterior_cov = jnp.linalg.inv(precision)
-    posterior_cov = 0.5 * (posterior_cov + posterior_cov.T)
-    increment = posterior_cov @ (gt_rinv @ innovation)
-    theta = theta_b + increment
+    theta, posterior_cov = _information_form_analysis(
+        g, y - bg, m, r, prior_mean=theta_b, prior_covariance=b
+    )
 
     std = jnp.sqrt(jnp.clip(jnp.diag(posterior_cov), 0.0, None))
     names = tuple(inst.name for inst in forward.instruments)

@@ -151,10 +151,11 @@ gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# TEMPORARY: vardax v0.1.13 plus jejjohnson/vardax#128 (MinimiseResult.converged,
-# which FourDVarResult.converged reports); move to the release tag once it
-# merges and ships.
-vardax = { git = "https://github.com/jejjohnson/vardax", rev = "94665ef4c587737ee3663abff8b39eff8e35b92f" }
+# vardax v0.2.1: the first release with both MinimiseResult.converged
+# (jejjohnson/vardax#128, which FourDVarResult.converged reports) and the
+# state-space form of OptimalInterpolation (jejjohnson/vardax#163, which
+# coupled.fuse_observations solves with).
+vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.2.1" }
 # geotoolz-ops (the `geo` extra) is pinned to the rev radtrax's [geo] uses: the
 # rename commit (geotoolz#489), the last GeoTensor-carrier release line with the
 # public `geoops.carrier` helpers (geotoolz#480) and pipekit 0.0.2.

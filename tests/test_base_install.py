@@ -102,6 +102,36 @@ def test_inversion_without_vardax_names_the_extra():
     assert result.returncode == 0, result.stderr
 
 
+def test_fusion_without_vardax_names_the_extra():
+    result = _run(
+        """
+        block("vardax")
+        import jax.numpy as jnp
+        from plumax.coupled import (
+            CoupledForward, Instrument, PlumeSource, fuse_observations,
+        )
+        source = PlumeSource(
+            location=(0.0, 0.0, 10.0), wind_speed=5.0, wind_direction=270.0,
+            stability_class="D", column_z=jnp.linspace(0.0, 200.0, 3),
+        )
+        instrument = Instrument("A", jnp.zeros((2, 2)))
+        forward = CoupledForward(
+            source=source, instruments=(instrument,), responses=(jnp.ones(2),)
+        )
+        try:
+            fuse_observations(
+                forward, [jnp.ones(2)], prior_mean=jnp.zeros(2),
+                prior_covariance=jnp.eye(2),
+            )
+        except ImportError as exc:
+            assert "plumax[assim]" in str(exc), exc
+        else:
+            raise AssertionError("no ImportError")
+        """
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_no_geo_carrier_without_extra():
     result = _run(
         """
