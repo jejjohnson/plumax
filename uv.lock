@@ -2352,7 +2352,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?rev=94665ef4c587737ee3663abff8b39eff8e35b92f" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.2.1" },
     { name = "xarray" },
     { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
@@ -2374,7 +2374,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=94665ef4c587737ee3663abff8b39eff8e35b92f" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.2.1" },
     { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
@@ -3536,10 +3536,11 @@ wheels = [
 
 [[package]]
 name = "vardax"
-version = "0.1.13"
-source = { git = "https://github.com/jejjohnson/vardax?rev=94665ef4c587737ee3663abff8b39eff8e35b92f#94665ef4c587737ee3663abff8b39eff8e35b92f" }
+version = "0.2.1"
+source = { git = "https://github.com/jejjohnson/vardax?tag=v0.2.1#e31a804ef5780866e7c605c2d16a84b05dd3b4f5" }
 dependencies = [
     { name = "diffrax" },
+    { name = "einx" },
     { name = "equinox" },
     { name = "gaussx" },
     { name = "geonnax" },

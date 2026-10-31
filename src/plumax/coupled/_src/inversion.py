@@ -595,7 +595,7 @@ def solve_coupled(
     cholesky = prior.cholesky()
     # θ = μ_θ + L χ, ½ ‖χ‖²
     basis = vdx.linear_basis(cholesky, variance=1.0)
-    control = vdx.LinearParameterization(basis, x_b=prior_mean[None])
+    control = vdx.LinearParameterization(basis, background=prior_mean[None])
 
     # --- observations ---
     stacked = problem.stacked_observations()
