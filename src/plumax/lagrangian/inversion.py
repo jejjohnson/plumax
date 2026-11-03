@@ -54,6 +54,13 @@ import jax.core
 import jax.numpy as jnp
 import lineax as lx
 
+from plumax._src.errors import PayloadError
+from plumax._src.scalar_emission import (
+    GaussianEmission,
+    gaussian_total,
+    lognormal_total,
+    sample_lognormal_total,
+)
 from plumax._vardax import require_vardax
 
 
@@ -76,20 +83,62 @@ def _is_traced(*values: object) -> bool:
 class GaussianPosterior:
     """Closed-form Gaussian posterior over the source vector.
 
+    It also carries the Tier V per-event payload
+    (``population.PerEventPosterior``) for the event total Q = 1ᵀq, whose
+    posterior N(1ᵀq*, 1ᵀP*1) and prior N(1ᵀq_a, 1ᵀB1) are exact.
+
     Attributes:
         mean: Posterior mean emission field ``q*`` [same units as the prior
             mean], shape ``(n_grid,)``.
         covariance: Posterior covariance ``P*`` [units²], shape
             ``(n_grid, n_grid)``.
+        prior_mean: Prior mean ``q_a`` the inversion used, shape ``(n_grid,)``
+            (``None`` when built by hand).
+        prior_covariance: Prior covariance ``B``, shape ``(n_grid, n_grid)``
+            (``None`` when built by hand).
     """
 
     mean: jax.Array
     covariance: jax.Array
+    prior_mean: jax.Array | None = None
+    prior_covariance: jax.Array | None = None
 
     @property
     def std(self) -> jax.Array:
         """Posterior per-cell standard deviation ``sqrt(diag(P*))``."""
         return jnp.sqrt(jnp.clip(jnp.diag(self.covariance), 0.0, None))
+
+    @property
+    def emission_rate(self) -> jax.Array:
+        """Posterior mean of the event total Q = 1ᵀq*."""
+        return self._total_posterior().mean
+
+    @property
+    def emission_std(self) -> jax.Array:
+        """Posterior standard deviation of Q, √(1ᵀP*1)."""
+        return self._total_posterior().std
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """n exact draws of Q from N(1ᵀq*, 1ᵀP*1)."""
+        return self._total_posterior().sample(key, n)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(Q) of the prior on the total, N(1ᵀq_a, 1ᵀB1).
+
+        Raises:
+            PayloadError: If the posterior was built without its prior.
+        """
+        if self.prior_mean is None or self.prior_covariance is None:
+            raise PayloadError(
+                "GaussianPosterior.prior_logpdf: this posterior carries no prior; "
+                "build it with linear_gaussian_inversion."
+            )
+        weights = jnp.ones_like(self.prior_mean)
+        prior = gaussian_total(self.prior_mean, self.prior_covariance, weights)
+        return prior.log_prob(q)
+
+    def _total_posterior(self) -> GaussianEmission:
+        return gaussian_total(self.mean, self.covariance, jnp.ones_like(self.mean))
 
 
 def matern32_covariance(
@@ -292,12 +341,23 @@ def linear_gaussian_inversion(
     increment, posterior_cov = _blue_update(
         f, innovation, b, r, caller="linear_gaussian_inversion"
     )
-    return GaussianPosterior(mean=qa + increment, covariance=posterior_cov)
+    return GaussianPosterior(
+        mean=qa + increment,
+        covariance=posterior_cov,
+        prior_mean=qa,
+        prior_covariance=b,
+    )
 
 
 @dataclass(frozen=True)
 class LognormalPosterior:
     """Linearised lognormal posterior over a non-negative source vector.
+
+    It also carries the Tier V per-event payload
+    (``population.PerEventPosterior``) for the event total
+    Q = Σᵢ q_a,i exp(δᵢ): draws are exact (δ ~ N(δ*, P*_log)); the prior
+    density of Q under δ ~ N(0, B_log) is the moment-matched lognormal, exact
+    for one cell.
 
     Attributes:
         mean: Posterior mean emission field ``q* = q_a · exp(δ*) ≥ 0``, shape
@@ -306,11 +366,49 @@ class LognormalPosterior:
             ``(n_grid,)``.
         log_covariance: Posterior covariance in log-space ``P*_log``, shape
             ``(n_grid, n_grid)``.
+        prior_mean: Prior median field ``q_a``, shape ``(n_grid,)`` (``None``
+            when built by hand).
+        prior_log_covariance: Log-space prior covariance ``B_log``, shape
+            ``(n_grid, n_grid)`` (``None`` when built by hand).
     """
 
     mean: jax.Array
     log_increment: jax.Array
     log_covariance: jax.Array
+    prior_mean: jax.Array | None = None
+    prior_log_covariance: jax.Array | None = None
+
+    @property
+    def emission_rate(self) -> jax.Array:
+        """The event total Σᵢ q*ᵢ, as ``population.event_from_posterior`` reads it."""
+        return jnp.sum(self.mean)
+
+    @property
+    def emission_std(self) -> jax.Array:
+        """Delta-method sd of the total, √(q*ᵀ(exp(P*_log) − 1)q*)."""
+        # Cov[qᵢ, qⱼ] ≈ qᵢ qⱼ (exp(P*_log,ij) − 1)
+        covariance = jnp.outer(self.mean, self.mean) * jnp.expm1(self.log_covariance)
+        return jnp.sqrt(jnp.clip(jnp.sum(covariance), 0.0, None))
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """n exact draws of Q = Σᵢ q*ᵢ exp(εᵢ), ε ~ N(0, P*_log)."""
+        zeros = jnp.zeros_like(self.mean)
+        return sample_lognormal_total(key, n, zeros, self.log_covariance, self.mean)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(Q) for the prior total Σᵢ q_a,i exp(δᵢ), δ ~ N(0, B_log).
+
+        Raises:
+            PayloadError: If the posterior was built without its prior.
+        """
+        if self.prior_mean is None or self.prior_log_covariance is None:
+            raise PayloadError(
+                "LognormalPosterior.prior_logpdf: this posterior carries no prior; "
+                "build it with lognormal_inversion."
+            )
+        zeros = jnp.zeros_like(self.prior_mean)
+        prior = lognormal_total(zeros, self.prior_log_covariance, self.prior_mean)
+        return prior.log_prob(q)
 
 
 def lognormal_inversion(
@@ -370,7 +468,11 @@ def lognormal_inversion(
     )
     mean = qa * jnp.exp(log_increment)
     return LognormalPosterior(
-        mean=mean, log_increment=log_increment, log_covariance=log_cov
+        mean=mean,
+        log_increment=log_increment,
+        log_covariance=log_cov,
+        prior_mean=qa,
+        prior_log_covariance=b_log,
     )
 
 

@@ -197,13 +197,13 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Per-event posterior (Tier I) | [`gauss_plume.inference`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ — `per_event_prior_logpdf` / samples via [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| Per-event posterior (Tier II/III) | `lagrangian.inversion` (closed form) / `les_fvm.fourdvar` (Laplace) | ✓ — payload extension via [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| Per-event posterior export adapter | extended `PerEventPosterior` Protocol implemented by every tier | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | 🚧 — duck-typed adapter over `GaussianPosterior` / `LognormalPosterior` / `FusionPosterior`; full-sample + prior-recall payload [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event posterior (Tier I) | [`gauss_plume.inference`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ — `EmissionRateSamples.samples` / `prior_logpdf` ([#107](https://github.com/jejjohnson/plumax/issues/107)) |
+| Per-event posterior (Tier II/III) | `lagrangian.inversion` (closed form) / `les_fvm.fourdvar` (Laplace) | ✓ — `samples` / `prior_logpdf` on the posteriors ([#107](https://github.com/jejjohnson/plumax/issues/107)) |
+| Per-event posterior export adapter | extended `PerEventPosterior` Protocol implemented by every tier | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | ✓ — duck-typed adapter over every tier's posterior, filling `q_samples` and `prior_logpdf` ([#107](https://github.com/jejjohnson/plumax/issues/107)) |
 | Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | 🚧 — hierarchical lognormal NUTS fit with per-event uncertainty propagation; importance correction [#108](https://github.com/jejjohnson/plumax/issues/108) |
-| Per-event payload summariser | `plumax.population.catalog` | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| Per-event prior recall | `plumax.population.catalog` (`prior_logpdf`) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event payload summariser | `plumax.population.catalog` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| Per-event prior recall | `plumax.population.catalog` (`prior_logpdf`) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | Importance-weight calculator | `plumax.population.importance` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
 | Regime selector | `plumax.population.importance.Regime` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
 | De-duplication / spatial-temporal clustering | `plumax.population.dedup` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |

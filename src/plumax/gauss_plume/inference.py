@@ -14,7 +14,9 @@ overpass gives CV(Q) ≤ 100 % under a tight met wind prior.
 Public surface
 --------------
 - ``gaussian_plume_model`` : NumPyro probabilistic model
-- ``infer_emission_rate``   : NUTS runner returning a dict of posterior arrays
+- ``infer_emission_rate``   : NUTS runner returning an
+  :class:`EmissionRateSamples`, the dict of posterior arrays that also carries
+  the Tier V per-event payload (``samples`` and ``prior_logpdf``)
 - ``multi_source_plume_model`` : masked-K model, up to K_max sources with an
   on/off indicator each
 - ``infer_multi_source``    : NUTS + Gibbs runner returning a
@@ -31,6 +33,7 @@ import numpyro.distributions as dist
 from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS, DiscreteHMCGibbs
 
+from plumax._src.scalar_emission import EmpiricalEmission, LognormalEmission
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -54,6 +57,48 @@ def _lognormal_from_moments(mean: float, std: float) -> tuple[jnp.ndarray, jnp.n
     sigma_log = jnp.sqrt(sigma_log_sq)
     mu_log = jnp.log(mean) - 0.5 * sigma_log_sq
     return mu_log, sigma_log
+
+
+class EmissionRateSamples(dict):
+    """NUTS draws by site name, with the per-event payload Tier V reads.
+
+    A ``dict`` of posterior arrays (``samples["emission_rate"]`` is unchanged)
+    that also satisfies ``population.PerEventPosterior``: the posterior mean and
+    standard deviation of Q, resampled draws of Q, and the log-density of the
+    emission-rate prior the draws were made under,
+    Q ~ LogNormal(μ, σ²) moment-matched to ``(prior_mean, prior_std)``.
+
+    Args:
+        draws: Posterior arrays keyed by site name.
+        prior_mean: Real-scale prior mean of Q [kg/s].
+        prior_std: Real-scale prior standard deviation of Q [kg/s].
+    """
+
+    def __init__(
+        self, draws: dict[str, NDArray], *, prior_mean: float, prior_std: float
+    ) -> None:
+        super().__init__(draws)
+        self.prior_mean = prior_mean
+        self.prior_std = prior_std
+
+    @property
+    def emission_rate(self) -> NDArray:
+        """Posterior mean of Q [kg/s]."""
+        return np.mean(self["emission_rate"])
+
+    @property
+    def emission_std(self) -> NDArray:
+        """Posterior standard deviation of Q [kg/s]."""
+        return np.std(self["emission_rate"])
+
+    def samples(self, key: jax.Array, n: int) -> jax.Array:
+        """n draws of Q, resampled with replacement from the NUTS draws."""
+        return EmpiricalEmission(self["emission_rate"]).sample(key, n)
+
+    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+        """log π(q) of the emission-rate prior of :func:`gaussian_plume_model`."""
+        prior = LognormalEmission.from_moments(self.prior_mean, self.prior_std)
+        return prior.log_prob(q)
 
 
 def gaussian_plume_model(
@@ -213,7 +258,7 @@ def infer_emission_rate(
     obs_noise_std: float = 5e-7,
     background_prior_std: float = 5e-7,
     noise: Noise | None = None,
-) -> dict[str, NDArray]:
+) -> EmissionRateSamples:
     """Infer the plume emission rate via NUTS.
 
     Wraps :func:`gaussian_plume_model` with input validation, wind-from-angle
@@ -263,9 +308,12 @@ def infer_emission_rate(
 
     Returns
     -------
-    samples : dict[str, ndarray]
+    samples : EmissionRateSamples
         Posterior draws keyed by site name: ``'emission_rate'``,
         ``'background'``, and (if ``infer_stability``) ``'stability_idx'``.
+        A ``dict`` that also carries the Tier V per-event payload
+        (``emission_rate`` / ``emission_std`` attributes, ``samples`` and
+        ``prior_logpdf``).
 
     Raises
     ------
@@ -353,7 +401,8 @@ def infer_emission_rate(
     if print_summary:
         mcmc.print_summary()
 
-    return {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    draws = {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    return EmissionRateSamples(draws, prior_mean=prior_mean, prior_std=prior_std)
 
 
 # ── Masked-K multi-source ────────────────────────────────────────────────────

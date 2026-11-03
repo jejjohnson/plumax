@@ -217,7 +217,7 @@ Training dataset is **free**: simulate millions of plume configurations in secon
 | 2 | Likelihoods + priors | [`gauss_plume/likelihoods.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/likelihoods.py) (`GaussianNoise`, `StudentTNoise`, `HeteroscedasticNoise`; priors stay in `inference.py`) | ✓ [#84](https://github.com/jejjohnson/plumax/issues/84) |
 | 2 | Plume MAP/MCMC | [`gauss_plume/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/inference.py) | ✓ |
 | 2 | Puff inference | [`gauss_puff/inference.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/inference.py) | ✓ |
-| 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06_tier5a_instantaneous.md)) | ☐ [#107](https://github.com/jejjohnson/plumax/issues/107) |
+| 2 | Posterior export → Tier V | extended `PerEventPosterior` on the `infer_emission_rate` result (mark-likelihood adapter for [V.A](06_tier5a_instantaneous.md)): `EmissionRateSamples` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Plume emulator | `gauss_plume.emulator` | — skipped: model is cheap (see [cycle](#cycle-overview)) |
 | 4 | Emulator-based MCMC | wired in `inference.py` once emulator exists | — skipped with Step 3 |
 | 5 | NPE / flow predictor | `gauss_plume.predictor` | ☐ [#87](https://github.com/jejjohnson/plumax/issues/87) |
