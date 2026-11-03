@@ -33,6 +33,7 @@ from plumax.gauss_plume.dispersion import (
     calculate_briggs_dispersion,
     get_dispersion_params,
 )
+from plumax.gauss_plume.mo_dispersion import GolderDispersion
 
 
 if TYPE_CHECKING:  # xarray is imported lazily inside simulate_plume
@@ -110,7 +111,7 @@ def plume_concentration(
     wind_u: float,
     wind_v: float,
     emission_rate: float,
-    dispersion_params: jnp.ndarray,
+    dispersion_params: jnp.ndarray | GolderDispersion,
     plume_rise: BriggsPlumeRise | None = None,
 ) -> jnp.ndarray:
     """Evaluate the steady-state Gaussian plume concentration.
@@ -131,8 +132,10 @@ def plume_concentration(
         below to :data:`MIN_WIND_SPEED` for numerical stability.
     emission_rate : float
         Continuous emission rate Q [kg/s].
-    dispersion_params : jnp.ndarray, shape (6,)
-        ``[a_y, b_y, c_y, a_z, b_z, c_z]`` (Briggs parameters).
+    dispersion_params : jnp.ndarray, shape (6,), or GolderDispersion
+        ``[a_y, b_y, c_y, a_z, b_z, c_z]`` (Briggs parameters of one PG
+        class), or a :class:`~plumax.gauss_plume.GolderDispersion` that picks
+        the PG class from the Obukhov length and roughness length.
     plume_rise : BriggsPlumeRise, optional
         Plume rise Δh(x'). When given, the release height at each receptor is
         the effective height ``source_z + Δh(x')`` with Δh evaluated at the
@@ -154,7 +157,10 @@ def plume_concentration(
     )
 
     x_positive = jnp.maximum(x_downwind, 1.0)
-    sigma_y, sigma_z = calculate_briggs_dispersion(x_positive, dispersion_params)
+    if isinstance(dispersion_params, GolderDispersion):
+        sigma_y, sigma_z = dispersion_params(x_positive)
+    else:
+        sigma_y, sigma_z = calculate_briggs_dispersion(x_positive, dispersion_params)
 
     normalization = 2.0 * jnp.pi * wind_speed * sigma_y * sigma_z
 
@@ -193,7 +199,7 @@ def simulate_plume(
     source_location: tuple[float, float, float],
     wind_speed: float,
     wind_direction: float,
-    stability_class: str,
+    stability_class: str | GolderDispersion,
     domain_x: tuple[float, float, int],
     domain_y: tuple[float, float, int],
     domain_z: tuple[float, float, int],
@@ -223,8 +229,10 @@ def simulate_plume(
         Wind speed magnitude [m/s]. Must be strictly positive.
     wind_direction : float
         Wind direction [degrees from North, meteorological "from" convention].
-    stability_class : str
-        One of ``'A'``, ..., ``'F'``.
+    stability_class : str or GolderDispersion
+        One of ``'A'``, ..., ``'F'``, or a
+        :class:`~plumax.gauss_plume.GolderDispersion` that picks the class from
+        the Obukhov length and roughness length.
     domain_x, domain_y, domain_z : tuple of (float, float, int)
         ``(start, stop, n_points)`` for each axis. ``start < stop`` and
         ``n_points ≥ 2``.
@@ -256,7 +264,8 @@ def simulate_plume(
         raise ValueError(
             f"simulate_plume: `wind_speed` must be > 0 (got {wind_speed!r})"
         )
-    if stability_class not in BRIGGS_DISPERSION_PARAMS:
+    is_golder = isinstance(stability_class, GolderDispersion)
+    if not is_golder and stability_class not in BRIGGS_DISPERSION_PARAMS:
         raise ValueError(
             f"simulate_plume: `stability_class` must be one of "
             f"{STABILITY_CLASSES} (got {stability_class!r})"
@@ -291,7 +300,12 @@ def simulate_plume(
                 f"simulate_plume: `{name}` requires n_points ≥ 2 (got n={n!r})"
             )
 
-    dispersion_params = get_dispersion_params(stability_class)
+    if isinstance(stability_class, GolderDispersion):
+        dispersion_params = stability_class
+        stability_attr = "golder"
+    else:
+        dispersion_params = get_dispersion_params(stability_class)
+        stability_attr = stability_class
 
     x = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
     y = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
@@ -345,7 +359,7 @@ def simulate_plume(
             "wind_direction_units": "degrees from North (meteorological)",
             "wind_u": float(wind_u),
             "wind_v": float(wind_v),
-            "stability_class": stability_class,
+            "stability_class": stability_attr,
             "background_concentration": background_conc,
         },
     )

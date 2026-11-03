@@ -75,6 +75,7 @@ nav:
   - Tier I — Gaussian:
       - Gaussian plume: gauss_plume.md
       - Plume rise: gauss_plume_plume_rise.md
+      - Monin–Obukhov dispersion: gauss_plume_mo_dispersion.md
       - Column observation: gauss_plume_observation.md
       - Likelihoods: gauss_plume_likelihoods.md
       - Multi-source: gauss_plume_multi_source.md

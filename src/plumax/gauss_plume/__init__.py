@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 from plumax.gauss_plume import (
     dispersion,
     likelihoods,
+    mo_dispersion,
     multi_source,
     observation,
     plume,
@@ -38,6 +39,12 @@ from plumax.gauss_plume.likelihoods import (
     HeteroscedasticNoise,
     Noise,
     StudentTNoise,
+)
+from plumax.gauss_plume.mo_dispersion import (
+    GolderDispersion,
+    golder_class_boundaries,
+    golder_stability_class,
+    golder_stability_index,
 )
 from plumax.gauss_plume.multi_source import (
     MaskedSources,
@@ -96,6 +103,7 @@ __all__ = [
     "ColumnObservation",
     "EmissionRateSamples",
     "GaussianNoise",
+    "GolderDispersion",
     "HeteroscedasticNoise",
     "MaskedSources",
     "MultiSourcePosterior",
@@ -108,10 +116,14 @@ __all__ = [
     "effective_height",
     "gaussian_plume_model",
     "get_dispersion_params",
+    "golder_class_boundaries",
+    "golder_stability_class",
+    "golder_stability_index",
     "infer_emission_rate",
     "infer_multi_source",
     "inference",
     "likelihoods",
+    "mo_dispersion",
     "multi_source",
     "multi_source_plume_model",
     "observation",
