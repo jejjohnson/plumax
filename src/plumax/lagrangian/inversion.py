@@ -288,7 +288,10 @@ def _blue_update(
         input=innovation[None, None],
         mask=jnp.ones((1, 1, n_obs), dtype=innovation.dtype),
     )
-    posterior = oi.posterior(batch)
+    # P* = (B⁻¹ + Jᵀ R⁻¹ J)⁻¹, named explicitly: since vardax 0.2 the
+    # observation-form default is B − B Jᵀ (J B Jᵀ + R)⁻¹ J B, which cancels
+    # badly when the observations are much more precise than the prior
+    posterior = oi.posterior(batch, vdx.LaplaceCovariance(solver=lx.Cholesky()))
     # P*: one lazy mat-vec per basis vector, (n_grid, n_grid)
     covariance = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
         jnp.eye(n_grid, dtype=prior_cov.dtype)

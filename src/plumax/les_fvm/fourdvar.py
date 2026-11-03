@@ -455,10 +455,14 @@ class FourDVarProblem:
         dtype = self.prior_mean.dtype
         basis = vdx.linear_basis(self.prior_chol, variance=1.0)
         if initial_whitened is None:
-            control = vdx.LinearParameterization(basis, x_b=self.prior_mean[None])
+            control = vdx.LinearParameterization(
+                basis, background=self.prior_mean[None]
+            )
         else:
             control = _warm_start_control()(
-                basis, x_b=self.prior_mean[None], start=jnp.asarray(initial_whitened)
+                basis,
+                background=self.prior_mean[None],
+                start=jnp.asarray(initial_whitened),
             )
         observations = self.observations / jnp.sqrt(self.obs_variance)
         n_flat = observations.size
@@ -783,7 +787,7 @@ def _warm_start_control() -> type:
 
         def init_control(self, *, key: jax.Array | None = None) -> jax.Array:
             del key
-            return self.start.astype(self.x_b.dtype)
+            return self.start.astype(self.background.dtype)
 
     return WarmStartControl
 

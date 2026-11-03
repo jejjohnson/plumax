@@ -292,7 +292,8 @@ make install      # uv sync --all-groups + pre-commit hooks
 - `gaussx` and `pipekit` are not yet on PyPI; from a checkout they resolve
   from git via `[tool.uv.sources]`.
 - Extras: `inference` (NumPyro), `assim` (vardax: the Tier II and Tier III
-  source inversions), `io` (readers) and `notebooks` (matplotlib, IPython):
+  source inversions and the Tier IV fusion), `io` (readers) and `notebooks`
+  (matplotlib, IPython):
   `uv add "plumax[inference,assim]"`.
 
 ## Development
