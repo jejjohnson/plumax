@@ -22,6 +22,8 @@ DOCTESTED_MODULES = (
     "plumax.met._src.surface_layer",
     "plumax.met._src.time",
     "plumax.obs._src.ingest",
+    "plumax.population._src.importance",
+    "plumax.population._src.integrate",
     "plumax.population._src.marks",
     "plumax.population._src.processes",
     "plumax.priors._src.background",

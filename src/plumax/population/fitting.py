@@ -16,6 +16,11 @@ the pure-computation pieces:
 * :func:`pod_powerlaw_model` — the NumPyro generative model.
 * :func:`run_mcmc` — NUTS runner returning a posterior DataFrame.
 
+The importance-corrected models over per-event posteriors (Tier V's
+canonical likelihood, 06a / 06b) are re-exported here from
+``plumax.population._src.fitting_iw``: :func:`mark_iw_model`,
+:func:`tmtpp_iw_model` and :func:`fit_size_distribution_iw`.
+
 This module imports NumPyro at module level; :mod:`plumax.population`
 binds its names lazily so importing the package stays cheap. pandas is
 imported only inside :func:`run_mcmc`.
@@ -36,6 +41,14 @@ from jax.scipy.stats import norm as jax_norm
 from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
+from plumax.population._src.fitting_iw import (
+    MarkPosterior,
+    fit_size_distribution_iw,
+    log_thinned_rate,
+    mark_iw_model,
+    tmtpp_iw_model,
+)
+
 
 if TYPE_CHECKING:  # pandas is imported lazily inside run_mcmc
     import pandas as pd
@@ -44,10 +57,15 @@ if TYPE_CHECKING:  # pandas is imported lazily inside run_mcmc
 __all__ = [
     "X_MAX_DEFAULT",
     "X_MIN_DEFAULT",
+    "MarkPosterior",
+    "fit_size_distribution_iw",
+    "log_thinned_rate",
     "lognorm_cdf",
+    "mark_iw_model",
     "pod_powerlaw_model",
     "power_law",
     "run_mcmc",
+    "tmtpp_iw_model",
 ]
 
 

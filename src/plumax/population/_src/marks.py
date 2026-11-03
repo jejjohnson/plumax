@@ -8,6 +8,8 @@ the same four methods, with θ passed by keyword:
 * ``sample(key, n, **θ)``, n draws of Q;
 * ``truncated_mean(q_min, q_max, **θ)``, the partial first moment
   ∫ q f(q | θ) dq over [q_min, q_max], which the totals need;
+* ``log_survival(q, **θ)``, log P(Q > q | θ), which closes the thinned-rate
+  integral above its last node;
 * ``numpyro_prior(name)``, NumPyro sites for θ under the family's default
   priors, returned as the keyword dict the other three take.
 
@@ -59,7 +61,11 @@ class Mark(Protocol):
         """∫ q f(q | θ) dq over [q_min, q_max]."""
         ...
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def log_survival(self, q: ArrayLike, **theta: Any) -> Array:
+        """log P(Q > q | θ)."""
+        ...
+
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         """NumPyro sites for θ under the default priors."""
         ...
 
@@ -109,6 +115,24 @@ def _log_lognormal_partial_mean(
     from_survival = log_survival_lower + jnp.log1p(-jnp.exp(survival_ratio))
     log_mass = jnp.where(right_of_centre, from_survival, from_cdf)
     return jnp.where(empty, -jnp.inf, mu + 0.5 * sigma**2 + log_mass)
+
+
+def _log_normal_interval(
+    lower_z: Float[Array, "*lower"], upper_z: Float[Array, "*upper"]
+) -> Float[Array, "*out"]:
+    # log[Φ(z_b) − Φ(z_a)] for finite z_a < z_b: from the CDFs left of the
+    # centre, from the survivals right of it, each with a safe log-ratio on
+    # its unused side so jnp.where passes no NaN into the gradient
+    right_of_centre = lower_z > 0.0
+    log_cdf_upper = norm.logcdf(upper_z)
+    log_survival_lower = norm.logcdf(-lower_z)
+    cdf_ratio = jnp.where(right_of_centre, -1.0, norm.logcdf(lower_z) - log_cdf_upper)
+    survival_ratio = jnp.where(
+        right_of_centre, norm.logcdf(-upper_z) - log_survival_lower, -1.0
+    )
+    from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(cdf_ratio))
+    from_survival = log_survival_lower + jnp.log1p(-jnp.exp(survival_ratio))
+    return jnp.where(right_of_centre, from_survival, from_cdf)
 
 
 #: Newton steps of :func:`_normal_quantile_from_log`.
@@ -236,7 +260,14 @@ class PowerLawMark(eqx.Module):
         # a Pareto with index α − 1 and scale q_min
         return _pareto_partial_mean(lower, upper, jnp.asarray(self.q_min), alpha - 1.0)
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def log_survival(self, q: ArrayLike, *, alpha: ArrayLike) -> Float[Array, "*q"]:
+        """log P(Q > q) = (α − 1) log(q_min/q) above q_min, 0 below."""
+        q = jnp.asarray(q, dtype=float)
+        alpha = jnp.asarray(alpha, dtype=float)
+        ratio = jnp.maximum(q, self.q_min) / self.q_min
+        return -(alpha - 1.0) * jnp.log(ratio)
+
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -285,7 +316,17 @@ class LognormalMark(eqx.Module):
             lower, upper, jnp.asarray(mu, dtype=float), jnp.asarray(sigma, dtype=float)
         )
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def log_survival(
+        self, q: ArrayLike, *, mu: ArrayLike, sigma: ArrayLike
+    ) -> Float[Array, "*q"]:
+        """log P(Q > q) = log Φ(−(log q − μ)/σ), 0 for q ≤ 0."""
+        q = jnp.asarray(q, dtype=float)
+        positive = q > 0.0
+        log_q = jnp.log(jnp.where(positive, q, 1.0))
+        standardised = (log_q - jnp.asarray(mu)) / jnp.asarray(sigma)
+        return jnp.where(positive, norm.logcdf(-standardised), 0.0)
+
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -432,7 +473,40 @@ class LognormalParetoMark(eqx.Module):
         tail = _pareto_partial_mean(lower, upper, q_break, alpha)
         return body + jnp.exp(log_tail_weight) * tail
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def log_survival(
+        self,
+        q: ArrayLike,
+        *,
+        mu: ArrayLike,
+        sigma: ArrayLike,
+        alpha: ArrayLike,
+        q_break: ArrayLike,
+    ) -> Float[Array, "*q"]:
+        """log P(Q > q): (1 − w)(Q_b/q)ᵅ above the break, plus the body above.
+
+        P(Q > q) = (1 − w) + w [Φ(z_b) − Φ(z)]/Φ(z_b) below Q_b.
+        """
+        q = jnp.asarray(q, dtype=float)
+        mu, sigma, alpha, q_break = (
+            jnp.asarray(value, dtype=float) for value in (mu, sigma, alpha, q_break)
+        )
+        log_body_weight, log_tail_weight, log_body_mass = _splice_log_weights(
+            mu, sigma, alpha, q_break
+        )
+        above = q >= q_break
+        positive = q > 0.0
+        # tail: log(1 − w) + α log(Q_b/q)
+        safe_tail_q = jnp.where(above, q, q_break)
+        tail = log_tail_weight + alpha * (jnp.log(q_break) - jnp.log(safe_tail_q))
+        # body: log[(1 − w) + w (Φ(z_b) − Φ(z))/Φ(z_b)]
+        safe_body_q = jnp.where(above | ~positive, 0.5 * q_break, q)
+        lower_z = (jnp.log(safe_body_q) - mu) / sigma
+        upper_z = (jnp.log(q_break) - mu) / sigma
+        log_body_above = _log_normal_interval(lower_z, upper_z) - log_body_mass
+        body = jnp.logaddexp(log_tail_weight, log_body_weight + log_body_above)
+        return jnp.where(above, tail, jnp.where(positive, body, 0.0))
+
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 
@@ -538,7 +612,26 @@ class MixtureLognormalMark(eqx.Module):
         )
         return einx.dot("... k, k -> ...", per_component, weights)
 
-    def numpyro_prior(self, name: str) -> dict[str, Array]:
+    def log_survival(
+        self,
+        q: ArrayLike,
+        *,
+        weights: ArrayLike,
+        locs: ArrayLike,
+        scales: ArrayLike,
+    ) -> Float[Array, "*q"]:
+        """log P(Q > q) = log Σₖ wₖ Φ(−(log q − μₖ)/σₖ)."""
+        q = jnp.asarray(q, dtype=float)
+        weights, locs, scales = (
+            jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
+        )
+        positive = q > 0.0
+        log_q = einx.rearrange("... -> ... 1", jnp.log(jnp.where(positive, q, 1.0)))
+        component = norm.logcdf(-(log_q - locs) / scales)
+        mixture = einx.logsumexp("... [k]", component + jnp.log(weights))
+        return jnp.where(positive, mixture, 0.0)
+
+    def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
         import numpyro.distributions as dist
 

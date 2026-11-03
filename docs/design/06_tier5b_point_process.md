@@ -207,8 +207,8 @@ Both have library support; the choice is driven by the scientific question, not 
 | Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
 | TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
-| TMTPP likelihood — full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) — consumes [`population.importance`](#va-modules) |
-| Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| TMTPP likelihood — full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) — consumes [`population.importance`](#va-modules); ground process on xtremax, thinned rate in log space |
+| Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) — log-space Gauss–Hermite and Simpson, Pareto-smoothed weights; in plumax until jejjohnson/xtremax#103 |
 | Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) — beyond the existing kernels |
 | Spatial extension (Cox process) | `plumax.population.spatial` | ☐ — v2; ties to Tier III's $S(\mathbf{x},t)$ |
 

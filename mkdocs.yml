@@ -93,6 +93,7 @@ nav:
       - Source population: population.md
       - Point processes: population_processes.md
       - Mark registry: population_marks.md
+      - Importance correction: population_importance.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
   - pipekit integration:

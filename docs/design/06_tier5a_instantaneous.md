@@ -201,11 +201,11 @@ Same physical leak detected by multiple satellites → multiple catalog rows. v1
 | Per-event posterior (Tier II/III) | `lagrangian.inversion` (closed form) / `les_fvm.fourdvar` (Laplace) | ✓ — `samples` / `prior_logpdf` on the posteriors ([#107](https://github.com/jejjohnson/plumax/issues/107)) |
 | Per-event posterior export adapter | extended `PerEventPosterior` Protocol implemented by every tier | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | Cross-tier posterior catalog (Gaussian-summary v1) | `plumax.population.catalog` (`event_from_posterior` / `EmissionCatalog`) | ✓ — duck-typed adapter over every tier's posterior, filling `q_samples` and `prior_logpdf` ([#107](https://github.com/jejjohnson/plumax/issues/107)) |
-| Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | 🚧 — hierarchical lognormal NUTS fit with per-event uncertainty propagation; importance correction [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Population size distribution (V.A hierarchical fit) | `plumax.population.size_distribution` | ✓ — hierarchical lognormal NUTS fit; `regime=` delegates to the importance-corrected fit ([#108](https://github.com/jejjohnson/plumax/issues/108)) |
 | Per-event payload summariser | `plumax.population.catalog` | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | Per-event prior recall | `plumax.population.catalog` (`prior_logpdf`) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
-| Importance-weight calculator | `plumax.population.importance` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
-| Regime selector | `plumax.population.importance.Regime` | ☐ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Importance-weight calculator | `plumax.population.importance` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) |
+| Regime selector | `plumax.population.importance.Regime` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) (chosen by the caller; the automatic CV rule is not implemented) |
 | De-duplication / spatial-temporal clustering | `plumax.population.dedup` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | Wind-source consistency rescaling | `plumax.population.wind_rescale` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | Catalog ingest — IMEO | `plumax.population.ingest.imeo` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
