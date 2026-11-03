@@ -83,6 +83,7 @@ nav:
       - Lagrangian particles: lagrangian.md
       - Gridded wind: lagrangian_wind_interp.md
       - Met ensemble: lagrangian_met_ensemble.md
+      - Footprint emulator: lagrangian_emulator.md
   - Tier III — Eulerian FV: les_fvm.md
   - Tier IV — Coupled:
       - Coupled inversion: coupled.md

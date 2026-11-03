@@ -254,12 +254,12 @@ so an emulator or an amortised predictor slots in where the physics was.
 |---|---|---|---|
 | 0 | meteorology · averaging kernels | `met` | ✅ WRF loader · 🚧 ERA5 |
 | I | Gaussian plume and puff | `gauss_plume`, `gauss_puff` | ✅ forward · MAP / MCMC |
-| II | Lagrangian particles, backward footprints | `lagrangian` | ✅ forward · Gaussian / lognormal inversion |
+| II | Lagrangian particles, backward footprints | `lagrangian` | ✅ forward · Gaussian / lognormal inversion · footprint emulator |
 | III | Eulerian finite volumes (Arakawa C-grid) | `les_fvm` | ✅ forward · 4D-Var · Laplace posterior |
 | IV | transport + radiative transfer | `coupled` (+ radtrax) | ✅ linear fusion · 🚧 nonlinear inversion |
 | V | event populations and forecasting | `population` | ✅ rates · sizes · POD · 🚧 TMTPP likelihood |
 
-No tier has an emulator or an amortised predictor yet; the
+Only Tier II has an emulator (the footprint emulator), and no tier has an amortised predictor yet; the
 [design pages](docs/design/) set out the plan, maths and open questions for
 each.
 
