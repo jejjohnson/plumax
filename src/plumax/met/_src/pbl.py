@@ -13,7 +13,7 @@ import xarray as xr
 from jaxtyping import Float
 
 from plumax._src.errors import MissingExtraError
-from plumax.lagrangian.turbulence import HannaTurbulence
+from plumax.lagrangian.turbulence import DEFAULT_CORIOLIS_PARAMETER, HannaTurbulence
 from plumax.met._src.surface_layer import CP_DRY, P_REFERENCE, R_DRY, SurfaceLayer
 from plumax.met.field import MetField
 
@@ -112,15 +112,22 @@ def pbl_height_bulk_richardson(
 
 
 def hanna_turbulence_from(
-    field: MetField, layer: SurfaceLayer, *, it: int, iy: int, ix: int
+    field: MetField,
+    layer: SurfaceLayer,
+    *,
+    it: int,
+    iy: int,
+    ix: int,
+    coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER,
 ) -> HannaTurbulence:
     """Hanna (1982) turbulence at one analysis column and met time.
 
     L = 1 / (1/L), passed as 0 at neutral.
 
-    ``HannaTurbulence`` selects its regime by the sign of L and treats L = 0
-    as neutral, so a neutral column (1/L = 0) is passed as L = 0 rather than
-    ±inf.
+    ``HannaTurbulence`` treats L = 0 as neutral (as well as any h/|L| < 1),
+    so a neutral column (1/L = 0) is passed as L = 0 rather than ±inf.
+    ``MetField`` carries no latitude, so the Coriolis parameter f is an
+    argument with FLEXPART's default.
 
     Args:
         field: Met on the analysis grid (for the PBL height h).
@@ -128,6 +135,9 @@ def hanna_turbulence_from(
         it: Met time index.
         iy: Analysis y index.
         ix: Analysis x index.
+        coriolis_parameter: Coriolis parameter f = 2Ω sin φ [1/s] for the
+            neutral profiles; the default 1e-4 s⁻¹ (latitude ≈ 43°) is the
+            value FLEXPART's ``hanna.f90`` hard-codes.
 
     Returns:
         The turbulence model, with plain-float parameters.
@@ -165,4 +175,5 @@ def hanna_turbulence_from(
         pbl_height=float(field.pbl_height[it, iy, ix]),
         obukhov_length=obukhov_length,
         w_star=float(layer.w_star[it, iy, ix]),
+        coriolis_parameter=coriolis_parameter,
     )
