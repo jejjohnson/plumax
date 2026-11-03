@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import zlib
+
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -9,16 +11,21 @@ import numpy as np
 import pytest
 from hypothesis import given, settings, strategies as st
 
+
+pipekit_train = pytest.importorskip("pipekit_train")
+
 from plumax._src.errors import ParameterError
 from plumax.lagrangian import (
     FootprintEmulator,
-    FootprintTrainingSet,
+    FootprintSimulator,
     HomogeneousTurbulence,
+    MetContextPrior,
     assert_emulator_calibrated,
     emulated_footprint,
     emulator_relative_error,
+    ensemble_footprints,
+    footprint_dataset,
     footprint_operator,
-    generate_training_set,
     init_footprint_emulator,
     linear_gaussian_inversion,
     matern32_covariance,
@@ -57,65 +64,111 @@ def _untrained(n_cells: int = 5) -> FootprintEmulator:
     )
 
 
-@pytest.fixture(scope="module")
-def trained():
-    """Emulator trained on 96 cases, and 8 held-out cases at more particles."""
-    common = {
-        "met_sampler": _operational_met,
-        "wind_from_context": _wind,
-        "receptors": RECEPTORS,
-        "turbulence": TURBULENCE,
-        "domain_x": DOMAIN_X,
-        "domain_y": DOMAIN_Y,
+def _simulator(n_particles: int, receptors: jax.Array = RECEPTORS, **grid):
+    return FootprintSimulator(
+        wind_from_context=_wind,
+        receptors=receptors,
+        turbulence=TURBULENCE,
+        domain_x=grid.get("domain_x", DOMAIN_X),
+        domain_y=grid.get("domain_y", DOMAIN_Y),
+        n_particles=n_particles,
         **FOOTPRINT_KWARGS,
-    }
-    data = generate_training_set(
-        jax.random.PRNGKey(0), n_cases=96, n_particles=500, **common
     )
-    held_out = generate_training_set(
-        jax.random.PRNGKey(1), n_cases=8, n_particles=1000, **common
+
+
+def _stack(dataset) -> tuple[jax.Array, jax.Array]:
+    pairs = list(dataset)
+    contexts = jnp.stack([jnp.asarray(context) for context, _ in pairs])
+    footprints = jnp.stack([jnp.asarray(footprint) for _, footprint in pairs])
+    return contexts, footprints
+
+
+@pytest.fixture(scope="module")
+def trained(tmp_path_factory):
+    """Emulator trained on 96 cases (12 for early stopping), 8 held out at 2× particles.
+
+    The pipekit-train splits of 120 cases at 500 particles give 96 training
+    and 12 validation cases; the held-out cases are the test split of 80 other
+    seeds at 1000 particles.
+    """
+    cache = str(tmp_path_factory.mktemp("footprint_cache"))
+    simulator = _simulator(500)
+    data = footprint_dataset(simulator, _operational_met, n_cases=120, cache_dir=cache)
+    val = footprint_dataset(
+        simulator, _operational_met, n_cases=120, cache_dir=cache, split="val"
+    )
+    held_out = footprint_dataset(
+        _simulator(1000),
+        _operational_met,
+        n_cases=80,
+        seed=1000,
+        cache_dir=cache,
+        split="test",
     )
     emulator = init_footprint_emulator(
-        data, width=32, depth=2, key=jax.random.PRNGKey(2)
+        data, RECEPTORS, width=32, depth=2, key=jax.random.PRNGKey(2)
     )
-    emulator = train_footprint_emulator(emulator, data, max_steps=500)
+    emulator = train_footprint_emulator(emulator, data, RECEPTORS, val_dataset=val)
+    met_context, footprints = _stack(held_out)
     emulated = jax.vmap(emulated_footprint, in_axes=(None, 0, None))(
-        emulator, held_out.met_context, RECEPTORS
+        emulator, met_context, RECEPTORS
     )
-    return emulator, held_out, emulated
+    return emulator, met_context, footprints, emulated
 
 
-def test_generate_training_set_shapes():
-    data = generate_training_set(
-        jax.random.PRNGKey(0),
-        met_sampler=_operational_met,
-        wind_from_context=_wind,
-        receptors=RECEPTORS[:2],
-        turbulence=TURBULENCE,
-        domain_x=(-600.0, 0.0, 3),
-        domain_y=(-200.0, 200.0, 2),
-        n_cases=2,
+def test_footprint_dataset_shapes_and_cache(tmp_path):
+    simulator = _simulator(
+        50, RECEPTORS[:2], domain_x=(-600.0, 0.0, 3), domain_y=(-200.0, 200.0, 2)
+    )
+    # 3 cases: the 80 % train split holds 2 of them
+    data = footprint_dataset(
+        simulator, _operational_met, n_cases=3, cache_dir=str(tmp_path)
+    )
+    met_context, footprints = _stack(data)
+    assert met_context.shape == (2, 2)
+    assert footprints.shape == (2, 2, 6)
+    assert bool((footprints >= 0.0).all())
+    assert float(footprints.sum()) > 0.0
+    # a second dataset on the same cache reads the cached footprints back
+    again = footprint_dataset(
+        simulator, _operational_met, n_cases=3, cache_dir=str(tmp_path)
+    )
+    np.testing.assert_array_equal(_stack(again)[1], footprints)
+
+
+def test_simulator_matches_the_particle_model_seeded_by_context():
+    simulator = _simulator(
+        50, RECEPTORS[:1], domain_x=(-600.0, 0.0, 3), domain_y=(-200.0, 200.0, 2)
+    )
+    context = MetContextPrior(_operational_met)(seed=4)
+    first = simulator.step(context, simulator.dt)
+    np.testing.assert_array_equal(simulator.step(context, simulator.dt), first)
+    other = simulator.step(context + 0.01, simulator.dt)
+    assert not bool(jnp.allclose(other, first))
+    assert first.shape == (1, 6)
+    reference = ensemble_footprints(
+        [_wind(context)],
+        RECEPTORS[:1],
+        TURBULENCE,
+        (-600.0, 0.0, 3),
+        (-200.0, 200.0, 2),
         n_particles=50,
+        seed=zlib.crc32(np.asarray(context).tobytes()),
         **FOOTPRINT_KWARGS,
     )
-    assert data.met_context.shape == (2, 2)
-    assert data.footprints.shape == (2, 2, 6)
-    assert bool((data.footprints >= 0.0).all())
-    assert float(data.footprints.sum()) > 0.0
+    np.testing.assert_array_equal(reference[0], first)
 
 
-def test_generate_training_set_rejects_no_cases():
+def test_footprint_dataset_rejects_no_cases(tmp_path):
     with pytest.raises(ParameterError):
-        generate_training_set(
-            jax.random.PRNGKey(0),
-            met_sampler=_operational_met,
-            wind_from_context=_wind,
-            receptors=RECEPTORS,
-            turbulence=TURBULENCE,
-            domain_x=DOMAIN_X,
-            domain_y=DOMAIN_Y,
-            n_cases=0,
+        footprint_dataset(
+            _simulator(10), _operational_met, n_cases=0, cache_dir=str(tmp_path)
         )
+
+
+def test_simulator_rejects_no_particles():
+    with pytest.raises(ParameterError):
+        _simulator(0)
 
 
 @settings(max_examples=20, deadline=None)
@@ -164,41 +217,83 @@ def test_emulator_gradient_matches_finite_differences():
     np.testing.assert_allclose(gradient, central, rtol=1e-6)
 
 
+class _ToyForward:
+    """Smooth toy footprints (3 obs, 5 cells) from a context, a ForwardModel."""
+
+    dt = 1.0
+
+    def step(self, state: jax.Array, dt: float) -> jax.Array:
+        del dt
+        weights = jnp.linspace(0.5, 1.5, 5)
+        row = 0.1 + state[0] * weights + state[1]
+        return jnp.broadcast_to(row, (3, 5))
+
+
+def _uniform_context(key: jax.Array) -> jax.Array:
+    return jax.random.uniform(key, (2,))
+
+
+def _toy_dataset():
+    return pipekit_train.SimulationDataset(
+        forward_model=_ToyForward(),
+        prior=MetContextPrior(_uniform_context),
+        n_samples=10,
+    )
+
+
 def test_training_reduces_the_residual():
-    contexts = jax.random.uniform(jax.random.PRNGKey(0), (6, 2))
-    footprints = 0.1 + _toy_footprints(contexts)
-    data = FootprintTrainingSet(contexts, RECEPTORS[:3], footprints)
-    initial = init_footprint_emulator(data, width=8, depth=1, key=jax.random.PRNGKey(1))
-    trained = train_footprint_emulator(initial, data, max_steps=50)
+    data = _toy_dataset()
+    contexts, footprints = _stack(data)
+    receptors = RECEPTORS[:3]
+    initial = init_footprint_emulator(
+        data, receptors, width=8, depth=1, key=jax.random.PRNGKey(1)
+    )
+    trained = train_footprint_emulator(
+        initial, data, receptors, max_steps=100, batch_size=4
+    )
 
     def residual(emulator: FootprintEmulator) -> float:
         emulated = jax.vmap(emulated_footprint, in_axes=(None, 0, None))(
-            emulator, contexts, RECEPTORS[:3]
+            emulator, contexts, receptors
         )
         return float(emulator_relative_error(emulated, footprints))
 
     assert residual(trained) < 0.5 * residual(initial)
+    # only the network is trained; the standardisation and the scale stay fixed
+    np.testing.assert_array_equal(trained.input_mean, initial.input_mean)
+    np.testing.assert_array_equal(trained.input_scale, initial.input_scale)
+    np.testing.assert_array_equal(trained.footprint_scale, initial.footprint_scale)
 
 
-def _toy_footprints(contexts: jax.Array) -> jax.Array:
-    """Smooth toy footprints (case, 3 obs, 5 cells) from the contexts."""
-    weights = jnp.linspace(0.5, 1.5, 5)
-    rows = contexts[:, :1, None] * weights + contexts[:, 1:, None]
-    return jnp.broadcast_to(rows, (contexts.shape[0], 3, 5))
+def test_early_stopping_ends_training_early():
+    data = _toy_dataset()
+    receptors = RECEPTORS[:3]
+    initial = init_footprint_emulator(
+        data, receptors, width=8, depth=1, key=jax.random.PRNGKey(1)
+    )
+    # a zero learning rate never improves the validation MSE
+    stopped = train_footprint_emulator(
+        initial,
+        data,
+        receptors,
+        val_dataset=data.with_split("val"),
+        max_steps=10_000,
+        batch_size=4,
+        learning_rate=0.0,
+        patience=1,
+        eval_every_n_steps=1,
+    )
+    leaves = jax.tree.leaves(eqx.filter(stopped, eqx.is_inexact_array))
+    initial_leaves = jax.tree.leaves(eqx.filter(initial, eqx.is_inexact_array))
+    for leaf, initial_leaf in zip(leaves, initial_leaves, strict=True):
+        np.testing.assert_array_equal(leaf, initial_leaf)
 
 
 def test_init_rejects_empty_network():
-    data = _untrained_data()
     with pytest.raises(ParameterError):
-        init_footprint_emulator(data, width=0, key=jax.random.PRNGKey(0))
-
-
-def _untrained_data():
-    return FootprintTrainingSet(
-        met_context=jnp.array([[3.0, 0.0], [3.2, 0.1]]),
-        receptors=RECEPTORS[:2],
-        footprints=jnp.full((2, 2, 5), 0.1),
-    )
+        init_footprint_emulator(
+            _toy_dataset(), RECEPTORS[:3], width=0, key=jax.random.PRNGKey(0)
+        )
 
 
 def test_relative_error_is_zero_for_the_reference():
@@ -239,19 +334,19 @@ def test_adjoint_calibration():
 
 @pytest.mark.slow
 def test_residual_below_5pct(trained):
-    _, held_out, emulated = trained
-    error = emulator_relative_error(emulated, held_out.footprints)
+    _, _, footprints, emulated = trained
+    error = emulator_relative_error(emulated, footprints)
     assert float(error) < 0.05
 
 
 @pytest.mark.slow
 def test_trained_emulator_is_adjoint_calibrated(trained):
     pytest.importorskip("vardax")
-    emulator, held_out, _ = trained
+    emulator, met_context, footprints, _ = trained
     assert_emulator_calibrated(
         emulator,
-        held_out.footprints,
-        met_context=held_out.met_context,
+        footprints,
+        met_context=met_context,
         receptors=RECEPTORS,
         key=jax.random.PRNGKey(6),
     )
@@ -262,7 +357,7 @@ def test_step4_matches_step2_posterior(trained):
     vardax = pytest.importorskip("vardax")
     import lineax as lx
 
-    _, held_out, emulated = trained
+    _, _, footprints, emulated = trained
     x_edges = jnp.linspace(DOMAIN_X[0], DOMAIN_X[1], DOMAIN_X[2] + 1)
     y_edges = jnp.linspace(DOMAIN_Y[0], DOMAIN_Y[1], DOMAIN_Y[2] + 1)
     x_centres = 0.5 * (x_edges[:-1] + x_edges[1:])
@@ -276,7 +371,7 @@ def test_step4_matches_step2_posterior(trained):
     # synthetic source: a 3e-6 kg m⁻² s⁻¹ hotspot upwind of the receptors
     true_source = prior_mean.at[N_CELLS // 2].set(3e-6)
     psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
-    for reference, emulated_case in zip(held_out.footprints, emulated, strict=True):
+    for reference, emulated_case in zip(footprints, emulated, strict=True):
         noise_std = 0.02 * float(jnp.max(reference @ true_source))
         noise = noise_std * jax.random.normal(
             jax.random.PRNGKey(7), (RECEPTORS.shape[0],)

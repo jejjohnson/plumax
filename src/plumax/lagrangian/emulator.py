@@ -3,24 +3,28 @@
 from __future__ import annotations
 
 from plumax.lagrangian._src.emulator import (
+    EmulatedFootprint,
     FootprintEmulator,
-    FootprintTrainingSet,
+    FootprintSimulator,
+    MetContextPrior,
     assert_emulator_calibrated,
     emulated_footprint,
     emulator_relative_error,
-    generate_training_set,
+    footprint_dataset,
     init_footprint_emulator,
     train_footprint_emulator,
 )
 
 
 __all__ = [
+    "EmulatedFootprint",
     "FootprintEmulator",
-    "FootprintTrainingSet",
+    "FootprintSimulator",
+    "MetContextPrior",
     "assert_emulator_calibrated",
     "emulated_footprint",
     "emulator_relative_error",
-    "generate_training_set",
+    "footprint_dataset",
     "init_footprint_emulator",
     "train_footprint_emulator",
 ]

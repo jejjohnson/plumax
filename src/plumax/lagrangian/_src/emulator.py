@@ -10,6 +10,12 @@ the rows of every receptor gives the ``(obs, cell)`` matrix that
 :func:`~plumax.lagrangian.linear_gaussian_inversion` takes, so Step 4
 (emulator-based inference) is that inversion with F_emu in place of F.
 
+The training machinery is pipekit-train's (the ``emulate`` extra): the
+particle model is a ``SimulationDataset`` forward model, cached once on disk
+by ``CachedDataset``, and the network is fitted by a ``TrainingLoop`` on the
+Equinox backend with its ``MSE`` loss and ``EarlyStopping`` callback. plumax
+supplies the simulator, the met prior and the network.
+
 The hard test of the design page is the emulator residual on held-out met
 drawn from the operational distribution:
 
@@ -23,14 +29,17 @@ measured by :func:`emulator_relative_error`. Its probed form,
 
 from __future__ import annotations
 
+import zlib
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-import optimistix as optx
+import numpy as np
+import pipekit
 from jaxtyping import Array, Float, PRNGKeyArray
 
 from plumax._src.errors import ParameterError
@@ -43,23 +52,207 @@ if TYPE_CHECKING:
     from plumax.lagrangian.wind_interp import GriddedWind
 
 
-#: Maximum particle-model seed; each case draws its own from the key.
-_MAX_SEED = 2**30
+def _require_pipekit_train(caller: str) -> ModuleType:
+    """Import pipekit-train, or raise an ``ImportError`` naming the extra."""
+    try:
+        import pipekit_train
+    except ImportError as exc:
+        raise ImportError(
+            f"{caller} trains the emulator with pipekit-train; install it with "
+            "`pip install 'plumax[emulate]'`."
+        ) from exc
+    return pipekit_train
 
 
-class FootprintTrainingSet(eqx.Module):
-    """Particle-model footprints for sampled met contexts, the emulator's data.
+class FootprintSimulator:
+    """The particle model as a forward model from met context to footprint.
 
-    Attributes:
-        met_context: Met context u of each case.
-        receptors: Receptor positions (x, y, z) [m], shared by the cases.
-        footprints: Footprint F of each case [s m² kg⁻¹], cells flattened
-            row-major over ``(x, y)`` as in ``ensemble_footprints``.
+    F(u) = compute_footprint(receptors, wind_from_context(u)), one row per
+    receptor, cells flattened row-major over ``(x, y)``.
+
+    It satisfies ``pipekit_cycle.ForwardModel`` structurally (``step`` and
+    ``dt``), so it is the ``forward_model`` of pipekit-train's
+    ``SimulationDataset``. The particle seed of a case is a hash of its
+    context, so a cached case is reproducible and two cases never share
+    their particle noise.
+
+    Args:
+        wind_from_context: Mean wind for a context, a ``GriddedWind`` or a
+            ``t -> (u, v, w)`` callable.
+        receptors: Receptor positions (x, y, z) [m].
+        turbulence: Turbulence model.
+        domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
+        domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
+        n_particles: Particles per receptor and case.
+        t_back: Backward integration time [s].
+        dt: Particle time step [s]; the forward model's ``dt``.
+        pbl_height: Boundary-layer height [m].
+        pbl_fraction: Fraction of the PBL that sees the surface flux.
+        air_density: Air density [kg m⁻³].
+
+    Raises:
+        ParameterError: If ``n_particles`` is below one.
     """
 
-    met_context: Float[Array, "case feature"]
-    receptors: Float[Array, "obs 3"]
-    footprints: Float[Array, "case obs cell"]
+    def __init__(
+        self,
+        *,
+        wind_from_context: Callable[
+            [Float[Array, " feature"]],
+            GriddedWind | Callable[[jax.Array], jax.Array],
+        ],
+        receptors: Float[Array, "obs 3"],
+        turbulence: TurbulenceModel,
+        domain_x: tuple[float, float, int],
+        domain_y: tuple[float, float, int],
+        n_particles: int = 300,
+        t_back: float = 600.0,
+        dt: float = 1.0,
+        pbl_height: float = 1000.0,
+        pbl_fraction: float = 0.5,
+        air_density: float = 1.2,
+    ) -> None:
+        if n_particles < 1:
+            raise ParameterError(f"n_particles must be ≥ 1, got {n_particles}")
+        self.wind_from_context = wind_from_context
+        self.receptors = jnp.asarray(receptors)
+        self.turbulence = turbulence
+        self.domain_x = domain_x
+        self.domain_y = domain_y
+        self.n_particles = int(n_particles)
+        self.t_back = float(t_back)
+        self.dt = float(dt)
+        self.pbl_height = float(pbl_height)
+        self.pbl_fraction = float(pbl_fraction)
+        self.air_density = float(air_density)
+
+    @property
+    def state_signature(self) -> tuple[Any, ...]:
+        """Everything that changes the footprints, for the dataset cache key."""
+        wind = self.wind_from_context
+        return (
+            f"{wind.__module__}.{wind.__qualname__}",
+            np.asarray(self.receptors).tolist(),
+            repr(self.turbulence),
+            self.domain_x,
+            self.domain_y,
+            self.n_particles,
+            self.t_back,
+            self.pbl_height,
+            self.pbl_fraction,
+            self.air_density,
+        )
+
+    def step(
+        self, state: Float[Array, " feature"], dt: float
+    ) -> Float[Array, "obs cell"]:
+        """Footprint F(u) of the met context u = ``state``."""
+        context = np.asarray(state)
+        # receptor i of a case uses seed + i, so a hash of u keeps cases apart
+        seed = zlib.crc32(context.tobytes())
+        member = ensemble_footprints(
+            [self.wind_from_context(jnp.asarray(context))],
+            self.receptors,
+            self.turbulence,
+            self.domain_x,
+            self.domain_y,
+            n_particles=self.n_particles,
+            t_back=self.t_back,
+            dt=dt,
+            pbl_height=self.pbl_height,
+            pbl_fraction=self.pbl_fraction,
+            air_density=self.air_density,
+            seed=seed,
+        )
+        return member[0]
+
+
+class MetContextPrior(pipekit.Operator):
+    """The operational met distribution p(u) as pipekit-train's prior operator.
+
+    u ~ p(u | site, overpass time), one draw per integer seed. Draw u from the
+    operational distribution at the facility, not from a uniform climatology
+    grid: the design page notes a coarse (hour, season, stability) grid
+    covers under 10 % of the operational probability mass.
+
+    Args:
+        met_sampler: One draw u ~ p(u) from a key.
+    """
+
+    __config_mixin_auto__: ClassVar[bool] = False
+    forbid_in_yaml: ClassVar[bool] = True
+
+    def __init__(
+        self, met_sampler: Callable[[PRNGKeyArray], Float[Array, " feature"]]
+    ) -> None:
+        self.met_sampler = met_sampler
+
+    def _apply(self, seed: int = 0) -> Float[Array, " feature"]:
+        key = jax.random.PRNGKey(seed)
+        return self.met_sampler(key)
+
+    def get_config(self) -> dict[str, Any]:
+        sampler = self.met_sampler
+        return {"met_sampler": f"{sampler.__module__}.{sampler.__qualname__}"}
+
+
+def footprint_dataset(
+    simulator: FootprintSimulator,
+    met_sampler: Callable[[PRNGKeyArray], Float[Array, " feature"]],
+    *,
+    n_cases: int,
+    cache_dir: str,
+    seed: int = 0,
+    split: str = "train",
+) -> Any:
+    """Simulated ``(met context, footprint)`` pairs, cached once on disk.
+
+    uᵢ ~ p(u), Fᵢ = simulator.step(uᵢ), as pipekit-train's
+    ``SimulationDataset`` wrapped in its ``CachedDataset``: the particle
+    model runs once per case on first use, and every later epoch reads the
+    zarr cache under ``cache_dir``, keyed on the simulator, the sampler, the
+    seed and the split.
+
+    ``SimulationDataset`` partitions the ``n_cases`` seeds 80 / 10 / 10 into
+    the ``"train"``, ``"val"`` and ``"test"`` splits, so a split holds a
+    fraction of ``n_cases`` and the splits never share a case.
+
+    Args:
+        simulator: The particle model.
+        met_sampler: One draw u ~ p(u) from a key.
+        n_cases: Number of met contexts N over all three splits.
+        cache_dir: Directory (or fsspec URI) of the cache.
+        seed: Seed of the first case.
+        split: ``"train"``, ``"val"`` or ``"test"``.
+
+    Returns:
+        The cached pipekit-train dataset.
+
+    Raises:
+        ParameterError: If ``n_cases`` is below one.
+        ImportError: Without the ``emulate`` extra.
+    """
+    if n_cases < 1:
+        raise ParameterError(f"n_cases must be ≥ 1, got {n_cases}")
+    pt = _require_pipekit_train("footprint_dataset")
+    source = pt.SimulationDataset(
+        forward_model=simulator,
+        prior=MetContextPrior(met_sampler),
+        n_samples=n_cases,
+        seed=seed,
+        split=split,
+    )
+    return pt.CachedDataset(source, cache_dir=cache_dir)
+
+
+def _stack_dataset(
+    dataset: Any,
+) -> tuple[Float[Array, "case feature"], Float[Array, "case obs cell"]]:
+    """Every ``(u, F)`` pair of a dataset, stacked over cases."""
+    pairs = list(dataset)
+    contexts = jnp.stack([jnp.asarray(context) for context, _ in pairs])
+    footprints = jnp.stack([jnp.asarray(footprint) for _, footprint in pairs])
+    return contexts, footprints
 
 
 class FootprintEmulator(eqx.Module):
@@ -114,92 +307,41 @@ class FootprintEmulator(eqx.Module):
         return footprint
 
 
-def generate_training_set(
-    key: PRNGKeyArray,
-    *,
-    met_sampler: Callable[[PRNGKeyArray], Float[Array, " feature"]],
-    wind_from_context: Callable[
-        [Float[Array, " feature"]], GriddedWind | Callable[[jax.Array], jax.Array]
-    ],
-    receptors: Float[Array, "obs 3"],
-    turbulence: TurbulenceModel,
-    domain_x: tuple[float, float, int],
-    domain_y: tuple[float, float, int],
-    n_cases: int,
-    n_particles: int = 300,
-    t_back: float = 600.0,
-    dt: float = 1.0,
-    pbl_height: float = 1000.0,
-    pbl_fraction: float = 0.5,
-    air_density: float = 1.2,
-) -> FootprintTrainingSet:
-    """Sample met contexts and run the particle model for each of them.
+class EmulatedFootprint(eqx.Module):
+    """The emulator at fixed receptors, as the per-case map u ↦ F_emu(u).
 
-    uᵢ ~ p(u), Fᵢ = compute_footprint(receptors, wind_from_context(uᵢ)).
+    F_emu(u)[i, s] = emulator(u, rᵢ)[s]. This is the model pipekit-train's
+    Equinox backend fits: it maps one met context to the ``(obs, cell)``
+    target of a ``SimulationDataset`` pair. Gradients reach the network
+    weights only; the standardisation, the scale s and the receptors are
+    held fixed, as in :func:`train_footprint_emulator`.
 
-    Draw u from the operational distribution at the facility, p(u | site,
-    overpass time), not from a uniform climatology grid: the design page
-    notes a coarse (hour, season, stability) grid covers under 10 % of the
-    operational probability mass.
-
-    Algorithm:
-        1. Split the key into one context key and one seed key per case.
-        2. Draw each context uᵢ with ``met_sampler``.
-        3. Run :func:`~plumax.lagrangian.ensemble_footprints` for the case's
-           wind with its own particle seed.
-
-    Args:
-        key: PRNG key for the contexts and the particle seeds.
-        met_sampler: One draw u ~ p(u) from a key.
-        wind_from_context: Mean wind for a context, a ``GriddedWind`` or a
-            ``t -> (u, v, w)`` callable.
-        receptors: Receptor positions (x, y, z) [m].
-        turbulence: Turbulence model.
-        domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
-        domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
-        n_cases: Number of met contexts N.
-        n_particles: Particles per receptor and case.
-        t_back: Backward integration time [s].
-        dt: Time step [s].
-        pbl_height: Boundary-layer height [m].
-        pbl_fraction: Fraction of the PBL that sees the surface flux.
-        air_density: Air density [kg m⁻³].
-
-    Returns:
-        The contexts, receptors and footprints.
-
-    Raises:
-        ParameterError: If ``n_cases`` is below one.
+    Attributes:
+        emulator: The per-receptor network.
+        receptors: Receptor positions (x, y, z) [m]; z is not an input.
     """
-    if n_cases < 1:
-        raise ParameterError(f"n_cases must be ≥ 1, got {n_cases}")
-    context_key, seed_key = jax.random.split(key)
-    context_keys = jax.random.split(context_key, n_cases)
-    contexts = jax.vmap(met_sampler)(context_keys)
-    # receptor i of a case uses seed + i, so seeds are spaced by the receptor count
-    seeds = jax.random.randint(seed_key, (n_cases,), 0, _MAX_SEED)
-    footprints = []
-    for context, seed in zip(contexts, seeds, strict=True):
-        member = ensemble_footprints(
-            [wind_from_context(context)],
-            receptors,
-            turbulence,
-            domain_x,
-            domain_y,
-            n_particles=n_particles,
-            t_back=t_back,
-            dt=dt,
-            pbl_height=pbl_height,
-            pbl_fraction=pbl_fraction,
-            air_density=air_density,
-            seed=int(seed),
+
+    emulator: FootprintEmulator
+    receptors: Float[Array, "obs 3"]
+
+    def __call__(
+        self, met_context: Float[Array, " feature"]
+    ) -> Float[Array, "obs cell"]:
+        # only the network θ is trained: m, σ, s and the receptors stay fixed
+        emulator = self.emulator
+        fixed = jax.lax.stop_gradient(
+            (
+                emulator.input_mean,
+                emulator.input_scale,
+                emulator.footprint_scale,
+                self.receptors,
+            )
         )
-        footprints.append(member[0])
-    return FootprintTrainingSet(
-        met_context=contexts,
-        receptors=jnp.asarray(receptors, dtype=contexts.dtype),
-        footprints=jnp.stack(footprints),
-    )
+        input_mean, input_scale, footprint_scale, receptors = fixed
+        frozen = FootprintEmulator(
+            emulator.network, input_mean, input_scale, footprint_scale
+        )
+        return emulated_footprint(frozen, met_context, receptors)
 
 
 def _case_inputs(
@@ -224,7 +366,8 @@ def _case_inputs(
 
 
 def init_footprint_emulator(
-    data: FootprintTrainingSet,
+    dataset: Any,
+    receptors: Float[Array, "obs 3"],
     *,
     width: int = 32,
     depth: int = 2,
@@ -233,8 +376,10 @@ def init_footprint_emulator(
     """An untrained emulator, standardised to the training set.
 
     Args:
-        data: The training set; fixes the input and output sizes, the input
-            standardisation and the footprint scale s.
+        dataset: The training ``(u, F)`` pairs, e.g. from
+            :func:`footprint_dataset`; fixes the input and output sizes, the
+            input standardisation and the footprint scale s.
+        receptors: Receptor positions (x, y, z) [m] of the footprints.
         width: Hidden width of the MLP.
         depth: Number of hidden layers.
         key: PRNG key for the MLP weights.
@@ -247,15 +392,16 @@ def init_footprint_emulator(
     """
     if width < 1 or depth < 1:
         raise ParameterError(f"width and depth must be ≥ 1, got {width}, {depth}")
-    inputs = _case_inputs(data.met_context, data.receptors)
+    contexts, footprints = _stack_dataset(dataset)
+    inputs = _case_inputs(contexts, jnp.asarray(receptors, dtype=contexts.dtype))
     input_mean = einx.mean("[case obs] input", inputs)
     input_std = einx.std("[case obs] input", inputs)
     # constant inputs (one case, one receptor) keep a unit scale
     input_scale = jnp.where(input_std > 0.0, input_std, 1.0)
-    footprint_scale = jnp.mean(data.footprints)
+    footprint_scale = jnp.mean(footprints)
     network = eqx.nn.MLP(
         inputs.shape[-1],
-        data.footprints.shape[-1],
+        footprints.shape[-1],
         width,
         depth,
         activation=jax.nn.tanh,
@@ -302,54 +448,77 @@ def emulated_footprint(
 
 def train_footprint_emulator(
     emulator: FootprintEmulator,
-    data: FootprintTrainingSet,
+    dataset: Any,
+    receptors: Float[Array, "obs 3"],
     *,
-    max_steps: int = 500,
+    val_dataset: Any | None = None,
+    max_steps: int = 2000,
+    batch_size: int = 16,
+    learning_rate: float = 1e-2,
+    patience: int = 10,
+    eval_every_n_steps: int = 100,
+    seed: int = 0,
 ) -> FootprintEmulator:
-    """Fit the network weights θ to the training footprints by BFGS.
+    """Fit the network weights θ with pipekit-train's Equinox backend.
 
     θ* = argmin_θ 𝓛(θ),  𝓛(θ) = mean over cases, receptors and cells of
-    ((F_emu(uᵢ, r; θ) − Fᵢ) / s)².
+    (F_emu(uᵢ, r; θ) − Fᵢ)²,
 
-    The standardisation and the scale s stay fixed. Training stops after
-    ``max_steps`` BFGS steps or at convergence, whichever is first.
+    by Adam on mini-batches of cases. The standardisation and the scale s
+    stay fixed.
+
+    Algorithm:
+        1. Wrap the emulator at ``receptors`` as an ``EmulatedFootprint``,
+           the model u ↦ F_emu(u) that matches the dataset's pairs.
+        2. Run a pipekit-train ``TrainingLoop`` on the ``"equinox"`` backend
+           with its ``MSE`` loss for at most ``max_steps`` steps.
+        3. With ``val_dataset``, evaluate every ``eval_every_n_steps`` steps
+           and stop through pipekit-train's ``EarlyStopping`` once the
+           validation MSE has not improved for ``patience`` evaluations.
 
     Args:
         emulator: Initial emulator, e.g. from :func:`init_footprint_emulator`.
-        data: The training set.
-        max_steps: Maximum number of BFGS steps.
+        dataset: The training pairs, e.g. from :func:`footprint_dataset`.
+        receptors: Receptor positions (x, y, z) [m] of the footprints.
+        val_dataset: Optional held-out pairs for early stopping.
+        max_steps: Maximum number of optimiser steps.
+        batch_size: Cases per step; at most the number of training cases.
+        learning_rate: Adam learning rate.
+        patience: Evaluations without improvement before stopping.
+        eval_every_n_steps: Validation cadence in steps.
+        seed: Seed of the batch shuffle.
 
     Returns:
         The emulator with the fitted weights.
+
+    Raises:
+        ImportError: Without the ``emulate`` extra.
     """
-    inputs = _case_inputs(data.met_context, data.receptors)
-    weights, structure = eqx.partition(emulator.network, eqx.is_inexact_array)
+    pt = _require_pipekit_train("train_footprint_emulator")
+    from pipekit_train.adapters.equinox import EquinoxModelOp
 
-    def loss(
-        trainable: eqx.nn.MLP,
-        args: tuple[Float[Array, "case obs input"], Float[Array, "case obs cell"]],
-    ) -> Float[Array, ""]:
-        case_inputs, footprints = args
-        network = eqx.combine(trainable, structure)
-        model = eqx.tree_at(lambda e: e.network, emulator, network)
-        # F_emu(u, r) for every case and receptor
-        standardised = (case_inputs - model.input_mean) / model.input_scale
-        logits = jax.vmap(jax.vmap(network))(standardised)
-        predicted = model.footprint_scale * jax.nn.softplus(logits)
-        # (F_emu − F) / s
-        scaled_residual = (predicted - footprints) / model.footprint_scale
-        return jnp.mean(scaled_residual**2)
-
-    solution = optx.minimise(
-        loss,
-        optx.BFGS(rtol=1e-8, atol=1e-8),
-        weights,
-        args=(inputs, data.footprints),
+    model = EmulatedFootprint(emulator, jnp.asarray(receptors))
+    callbacks = ()
+    if val_dataset is not None:
+        callbacks = (pt.EarlyStopping(metric="mse", patience=patience),)
+    # the loss is in the footprint's units, so Adam's ε must sit below s²
+    epsilon = 1e-8 * float(emulator.footprint_scale) ** 2
+    loop = pt.TrainingLoop(
+        model_op=EquinoxModelOp(model),
+        dataset=dataset,
+        val_dataset=val_dataset,
+        loss=pt.MSE(),
+        optimizer_config={"name": "adam", "lr": learning_rate, "eps": epsilon},
         max_steps=max_steps,
-        throw=False,
+        batch_size=batch_size,
+        backend="equinox",
+        callbacks=callbacks,
+        eval_every_n_steps=eval_every_n_steps,
+        log_every_n_steps=max_steps,
+        seed=seed,
     )
-    network = eqx.combine(solution.value, structure)
-    return eqx.tree_at(lambda e: e.network, emulator, network)
+    trained_op, _ = loop.run()
+    return trained_op.module.emulator
 
 
 def emulator_relative_error(
