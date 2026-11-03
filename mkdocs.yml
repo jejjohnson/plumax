@@ -89,7 +89,9 @@ nav:
       - Transport backends: coupled_backends.md
       - Quality flags: coupled_quality.md
       - Nonlinear inversion: coupled_inversion.md
-  - Tier V — Population: population.md
+  - Tier V — Population:
+      - Source population: population.md
+      - Point processes: population_processes.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
   - pipekit integration:

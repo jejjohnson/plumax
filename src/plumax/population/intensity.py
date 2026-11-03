@@ -81,6 +81,28 @@ class ConstantIntensity(eqx.Module):
         """
         return jnp.full_like(t, self.lambda_0)
 
+    def integrate(self, a: jnp.ndarray, b: jnp.ndarray) -> jnp.ndarray:
+        """Closed-form compensator Λ(b) − Λ(a) = λ₀ · (b − a).
+
+        Args:
+            a: Lower limit [days].
+            b: Upper limit [days].
+
+        Returns:
+            Expected event count on ``[a, b]``.
+        """
+        return self.lambda_0 * (jnp.asarray(b) - jnp.asarray(a))
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(self.lambda_0)
+
     @classmethod
     def sample_priors(cls) -> ConstantIntensity:
         """Sample NumPyro priors.
@@ -146,6 +168,16 @@ class DiurnalSinusoidalIntensity(eqx.Module):
         raw = self.lambda_0 + self.amplitude * jnp.sin(2.0 * jnp.pi * t - phi)
         return jnp.clip(raw, min=0.0)
 
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + |A|.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(self.lambda_0 + jnp.abs(self.amplitude))
+
     @classmethod
     def sample_priors(cls) -> DiurnalSinusoidalIntensity:
         """Sample NumPyro priors.
@@ -208,6 +240,16 @@ class SeasonalSinusoidalIntensity(eqx.Module):
         ω = 2.0 * jnp.pi / 365.25
         raw = self.lambda_0 + self.amplitude * jnp.sin(ω * (t - self.peak_day))
         return jnp.clip(raw, min=0.0)
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + |A|.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(self.lambda_0 + jnp.abs(self.amplitude))
 
     @classmethod
     def sample_priors(cls) -> SeasonalSinusoidalIntensity:
@@ -282,6 +324,18 @@ class DiurnalSeasonalIntensity(eqx.Module):
         )
         return jnp.clip(raw, min=0.0)
 
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + |A_d| + |A_s|.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_0 + jnp.abs(self.amp_diurnal) + jnp.abs(self.amp_seasonal)
+        )
+
     @classmethod
     def sample_priors(cls) -> DiurnalSeasonalIntensity:
         """Sample NumPyro priors.
@@ -354,6 +408,19 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
         A_t = amp_mean + amp_diff * jnp.sin(ω_s * (t - self.peak_day))
         raw = self.lambda_0 + A_t * jnp.sin(2.0 * jnp.pi * t - φ_d)
         return jnp.clip(raw, min=0.0)
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + max(|A_sum|, |A_win|), since A_d(t) lies between the two.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_0
+            + jnp.maximum(jnp.abs(self.amp_summer), jnp.abs(self.amp_winter))
+        )
 
     @classmethod
     def sample_priors(cls) -> SeasonallyModulatedDiurnalIntensity:
@@ -429,6 +496,18 @@ class OperationalScheduleIntensity(eqx.Module):
             1.0 + jnp.exp(-k * (h - self.end_hour))
         )
         return self.lambda_idle + (self.lambda_active - self.lambda_idle) * duty
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ_idle + |λ_active − λ_idle|, since the duty cycle lies in (−1, 1).
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_idle + jnp.abs(self.lambda_active - self.lambda_idle)
+        )
 
     @classmethod
     def sample_priors(cls) -> OperationalScheduleIntensity:
@@ -567,6 +646,16 @@ class PeriodicBatchIntensity(eqx.Module):
             self.lambda_background + (self.lambda_peak - self.lambda_background) * pulse
         )
 
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = max(λ_bg, λ_pk), since the pulse lies in (0, 1].
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(jnp.maximum(self.lambda_background, self.lambda_peak))
+
     @classmethod
     def sample_priors(cls) -> PeriodicBatchIntensity:
         """Sample NumPyro priors.
@@ -647,6 +736,20 @@ class CoalMineVentilationIntensity(eqx.Module):
         maint = jnp.exp(-0.5 * ((d - self.maintenance_day) / 0.3) ** 2)
         return maint * self.lambda_maintenance + (1.0 - maint) * (
             shift * self.lambda_extraction + (1.0 - shift) * self.lambda_idle
+        )
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = |λ_maint| + |λ_ext| + 2|λ_idle|, since gate_m ∈ [0, 1] and gate_s ∈ (−1, 1).
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            jnp.abs(self.lambda_maintenance)
+            + jnp.abs(self.lambda_extraction)
+            + 2.0 * jnp.abs(self.lambda_idle)
         )
 
     @classmethod
@@ -735,6 +838,21 @@ class LandfillIntensity(eqx.Module):
         )
         return jnp.clip(raw, min=0.0)
 
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + |A_s| + |A_d| + |A_b|.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_0
+            + jnp.abs(self.amp_seasonal)
+            + jnp.abs(self.amp_diurnal)
+            + jnp.abs(self.amp_barometric)
+        )
+
     @classmethod
     def sample_priors(cls) -> LandfillIntensity:
         """Sample NumPyro priors.
@@ -821,6 +939,18 @@ class OffshorePlatformIntensity(eqx.Module):
         )
         return jnp.clip(raw, min=0.0)
 
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + |A_tide| + |A_ops|, since the crew gate lies in (−1, 1).
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_0 + jnp.abs(self.amp_tidal) + jnp.abs(self.amp_operational)
+        )
+
     @classmethod
     def sample_priors(cls) -> OffshorePlatformIntensity:
         """Sample NumPyro priors.
@@ -895,6 +1025,16 @@ class WetlandPermafrostIntensity(eqx.Module):
             self.lambda_frozen
             + (self.lambda_peak - self.lambda_frozen) * g_thaw * g_freeze
         )
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = max(λ_frozen, λ_peak), since G_thaw · G_freeze ∈ (0, 1).
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(jnp.maximum(self.lambda_frozen, self.lambda_peak))
 
     @classmethod
     def sample_priors(cls) -> WetlandPermafrostIntensity:
@@ -981,6 +1121,18 @@ class LivestockFeedlotIntensity(eqx.Module):
         )
         raw = self.lambda_0 + self.amp_feeding * (g_am + g_pm) + seasonal
         return jnp.clip(raw, min=0.0)
+
+    def max_intensity(self) -> jnp.ndarray:
+        """Upper bound on λ(t) over all t, the envelope of a thinning sampler.
+
+        λ_max = λ₀ + 2|A_f| + |A_s|, since each feeding gate is ≤ 1.
+
+        Returns:
+            The bound [events day⁻¹].
+        """
+        return jnp.asarray(
+            self.lambda_0 + 2.0 * jnp.abs(self.amp_feeding) + jnp.abs(self.amp_seasonal)
+        )
 
     @classmethod
     def sample_priors(cls) -> LivestockFeedlotIntensity:
