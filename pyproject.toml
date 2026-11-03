@@ -89,6 +89,11 @@ notebooks = ["matplotlib", "ipython"]
 # posterior) through vardax: plumax supplies the source-receptor map, vardax
 # the analysis. Imported lazily, so the base install stays vardax-free.
 assim = ["vardax"]
+# Footprint-emulator training (plumax.lagrangian.emulator) through pipekit-train:
+# its SimulationDataset over the particle model, cached once by CachedDataset
+# (zarr, the `cache` extra), and its TrainingLoop on the Equinox backend (optax,
+# grain, orbax). Imported lazily, so the base install stays trainer-free.
+emulate = ["pipekit-train[equinox,cache]"]
 # Tier V point-process layer: plumax.population builds its generative and
 # likelihood machinery on xtremax.point_processes (Poisson, marked and thinned
 # processes), imported lazily so `import plumax.population` stays light.
@@ -147,6 +152,9 @@ override-dependencies = [
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+# pipekit-train (the `emulate` extra) is not on PyPI; pinned to the same pipekit
+# monorepo rev as pipekit and pipekit-cycle above.
+pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
@@ -186,6 +194,8 @@ dev = [
     "xrtoolz-reader",
     # The `assim` extra, so the vardax inversion tests run in CI.
     "vardax",
+    # The `emulate` extra, so the footprint-emulator training tests run in CI.
+    "pipekit-train[equinox,cache]",
     # The `population` extra, so the xtremax-backed Tier V tests run in CI.
     "xtremax",
     # The `geo` extra, so the plumax.geo tests run in CI.

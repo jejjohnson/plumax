@@ -27,8 +27,9 @@ inference)** and **Steps 3–4 (the footprint emulator and inference on it)**:
   ``OptimalInterpolation`` over ``footprint_operator`` (the ``assim`` extra).
 
 - ``emulator`` — ``FootprintEmulator``, an MLP from met context and receptor to
-  a footprint row, trained on particle-model footprints
-  (``generate_training_set``, ``train_footprint_emulator``) and calibrated
+  a footprint row, trained on particle-model footprints with pipekit-train
+  (``footprint_dataset``, ``train_footprint_emulator``; the ``emulate`` extra)
+  and calibrated
   against them (``emulator_relative_error``, ``assert_emulator_calibrated``).
   ``emulated_footprint`` feeds the inversions unchanged (Step 4).
 
@@ -49,12 +50,14 @@ from plumax.lagrangian import (
 )
 from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
 from plumax.lagrangian.emulator import (
+    EmulatedFootprint,
     FootprintEmulator,
-    FootprintTrainingSet,
+    FootprintSimulator,
+    MetContextPrior,
     assert_emulator_calibrated,
     emulated_footprint,
     emulator_relative_error,
-    generate_training_set,
+    footprint_dataset,
     init_footprint_emulator,
     train_footprint_emulator,
 )
@@ -95,13 +98,15 @@ from plumax.lagrangian.wind_interp import (
 
 
 __all__ = [
+    "EmulatedFootprint",
     "FootprintEmulator",
-    "FootprintTrainingSet",
+    "FootprintSimulator",
     "GaussianPosterior",
     "GriddedWind",
     "HannaTurbulence",
     "HomogeneousTurbulence",
     "LognormalPosterior",
+    "MetContextPrior",
     "ParticleState",
     "assert_emulator_calibrated",
     "bin_positions",
@@ -113,8 +118,8 @@ __all__ = [
     "ensemble_footprints",
     "ensemble_inversion",
     "footprint",
+    "footprint_dataset",
     "footprint_operator",
-    "generate_training_set",
     "gridded_wind_from_met",
     "gridded_wind_from_prescribed",
     "hanna_profiles",
