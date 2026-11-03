@@ -92,6 +92,7 @@ nav:
   - Tier V — Population:
       - Source population: population.md
       - Point processes: population_processes.md
+      - Mark registry: population_marks.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
   - pipekit integration:
