@@ -251,7 +251,7 @@ Conditional flow over images vs. score-based diffusion — same trade-off as Tie
 | 1 | Source injection | [`les_fvm/source.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/source.py) | ✓ |
 | 1 | Boundary conditions | [`les_fvm/boundary.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/boundary.py) | ✓ |
 | 1 | Time integration | [`les_fvm/dynamics.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/dynamics.py), [`simulate.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/simulate.py) | ✓ |
-| 1 | Eddy diffusivity | [`les_fvm/diffusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/diffusion.py) (`EddyDiffusivity`, `pg_eddy_diffusivity`) | 🚧 PG ✓; MO + Smagorinsky ☐ [#94](https://github.com/jejjohnson/plumax/issues/94) |
+| 1 | Eddy diffusivity | [`les_fvm/diffusion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/diffusion.py) (`EddyDiffusivity`, `pg_eddy_diffusivity`, `mo_eddy_diffusivity`, `smagorinsky_k_h`) | ✓ PG, MO + Smagorinsky [#94](https://github.com/jejjohnson/plumax/issues/94) |
 | 1 | Column + AK pipeline | reuse `gauss_plume.observation` from Tier I | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |
 | 2 | 4D-Var cost (prior + time-summed obs) over the FV transport | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`FourDVarProblem`) | ✓ |
 | 2 | Differentiable forward (emission → column-obs series) + exact adjoint via AD | [`les_fvm/fourdvar.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/les_fvm/fourdvar.py) (`EulerianForward4DVar`) | ✓ |

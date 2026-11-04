@@ -23,13 +23,27 @@ into an effective ``(K_h, K_z)`` using the standard Taylor relation
 evaluated at a user-supplied reference travel distance.  This is a
 rough calibration and is exposed primarily as a convenience for
 cross-checks against ``gauss_puff`` at the reference distance.
+
+:func:`mo_eddy_diffusivity` follows the diagnosed boundary layer instead: a
+K-profile ``K_z(z)`` from the :mod:`plumax.met.surface_layer` scales. And
+:func:`smagorinsky_k_h` gives a field-valued ``K_h`` from the resolved horizontal
+deformation of a spatially varying wind.
 """
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import einx
 import equinox as eqx
+import jax
 import jax.numpy as jnp
-from finitevolx import Diffusion3D
+from finitevolx import (
+    Diffusion3D,
+    avg_xy_bwd,
+    shear_strain,
+    tensor_strain,
+)
 from jaxtyping import Array, Float
 
 from plumax.gauss_puff.dispersion import (
@@ -38,6 +52,11 @@ from plumax.gauss_puff.dispersion import (
 )
 from plumax.les_fvm._vertical_ops import vertical_diffusion_tendency
 from plumax.les_fvm.grid import PlumeGrid3D
+
+
+if TYPE_CHECKING:
+    from plumax.les_fvm.wind import PrescribedWindField
+    from plumax.met.surface_layer import SurfaceLayer
 
 
 class EddyDiffusivity(eqx.Module):
@@ -182,6 +201,184 @@ def pg_eddy_diffusivity(
     return EddyDiffusivity(horizontal=k_h, vertical=k_z)
 
 
+def mo_eddy_diffusivity(
+    grid: PlumeGrid3D,
+    surface_layer: SurfaceLayer,
+    pbl_height: float | Float[Array, "time y x"],
+    *,
+    it: int,
+    k_h: float | Float[Array, "nz ny nx"],
+) -> EddyDiffusivity:
+    """Monin–Obukhov K-profile for ``K_z``, with a caller-supplied ``K_h``.
+
+    K_z(z) = κ u* z (1 − min(z/z_i, 1))² / φ_h(z/L).
+
+    The cubic-in-depth profile vanishes at the ground and at the boundary-layer
+    top, and φ_h (:func:`plumax.met.surface_layer.phi_h`) carries the stability:
+    below 1 in unstable air, above 1 in stable air. The ``min`` matters: without
+    it (1 − z/z_i)² grows again above z_i, and the free troposphere would mix.
+
+    Algorithm:
+        1. Take the height above ground of each T-level, z = (k + ½) Δz, the
+           convention :class:`~plumax.met.surface_layer.MoninObukhov` uses.
+        2. Take u*, 1/L and z_i at time index ``it``.
+        3. Evaluate the profile on every T-point of the interior.
+
+    Args:
+        grid: The analysis grid.
+        surface_layer: u* and 1/L on ``(time, y, x)``, from
+            :class:`~plumax.met.surface_layer.MoninObukhov`.
+        pbl_height: Boundary-layer height z_i [m], a scalar or
+            ``MetField.pbl_height``.
+        it: Time index into ``surface_layer`` (and a field ``pbl_height``).
+        k_h: Horizontal diffusivity [m²/s], passed through: a constant, or
+            :func:`smagorinsky_k_h`.
+
+    Returns:
+        ``EddyDiffusivity`` with ``vertical`` on interior T-points.
+
+    Raises:
+        equinox.EquinoxRuntimeError: Under ``jit`` too, if ``pbl_height`` is
+            negative.
+
+    Examples:
+        Neutral air at mid-PBL gives κ u* z_i / 8:
+
+        >>> import jax.numpy as jnp
+        >>> from plumax.les_fvm.grid import make_grid
+        >>> from plumax.met.surface_layer import SurfaceLayer
+        >>> grid = make_grid((0.0, 40.0, 4), (0.0, 40.0, 4), (0.0, 160.0, 4))
+        >>> layer = SurfaceLayer(
+        ...     u_star=jnp.full((1, 4, 4), 0.5),
+        ...     inverse_obukhov_length=jnp.zeros((1, 4, 4)),
+        ...     w_star=jnp.zeros((1, 4, 4)),
+        ... )
+        >>> eddy = mo_eddy_diffusivity(grid, layer, 120.0, it=0, k_h=1.0)
+        >>> eddy.vertical.shape
+        (4, 4, 4)
+        >>> bool(jnp.allclose(eddy.vertical[1], 0.4 * 0.5 * 120.0 / 8.0))
+        True
+
+        Above the boundary-layer top nothing mixes:
+
+        >>> bool((eddy.vertical[3] == 0.0).all())
+        True
+    """
+    # met.field imports les_fvm.grid, so importing met at module level is a cycle
+    from plumax.met.surface_layer import KARMAN, phi_h
+
+    # z = z_k − z_ground = (k + ½) Δz
+    height = grid.z - grid.z[0] + 0.5 * grid.dz
+    u_star = surface_layer.u_star[it]
+    inverse_length = surface_layer.inverse_obukhov_length[it]
+    depth = jnp.asarray(pbl_height, dtype=height.dtype)
+    depth = eqx.error_if(depth, jnp.any(depth < 0.0), "pbl_height must be ≥ 0")
+    if depth.ndim == 3:
+        depth = depth[it]
+    depth = jnp.broadcast_to(depth, u_star.shape)
+
+    # ζ = z / L
+    zeta = einx.multiply("level, y x -> level y x", height, inverse_length)
+    # z / z_i, infinite for a collapsed layer so that K_z = 0 there
+    relative_height = einx.divide("level, y x -> level y x", height, depth)
+    # (1 − min(z/z_i, 1))²
+    depth_shape = (1.0 - jnp.minimum(relative_height, 1.0)) ** 2
+    # κ u* z
+    surface_scale = KARMAN * einx.multiply("level, y x -> level y x", height, u_star)
+    # K_z = κ u* z (1 − min(z/z_i, 1))² / φ_h(ζ)
+    vertical = surface_scale * depth_shape / phi_h(zeta)
+    return EddyDiffusivity(horizontal=k_h, vertical=vertical)
+
+
+def smagorinsky_k_h(
+    wind: PrescribedWindField,
+    grid: PlumeGrid3D,
+    *,
+    c_s: float = 0.2,
+    t: float | Float[Array, ""],
+) -> Float[Array, "nz ny nx"]:
+    """Smagorinsky horizontal diffusivity from the resolved deformation.
+
+    K_h = (c_s Δ)² |D|,  Δ = √(Δx Δy),  |D|² = D_T² + D_S²,
+
+    with the tension D_T = ∂u/∂x − ∂v/∂y and the shear D_S = ∂v/∂x + ∂u/∂y.
+    These are the two independent components of the trace-free horizontal strain,
+    so uniform translation, solid-body rotation and isotropic horizontal
+    divergence all give K_h = 0. Vertical shear is left out on purpose: K_h only
+    mixes along levels, and ∂u/∂z in the boundary layer would swamp it on a grid
+    with Δz ≪ Δx.
+
+    Algorithm:
+        1. Evaluate the wind at ``t`` on its C-grid stagger: u on U-points, v on
+           V-points, level by level.
+        2. D_T lands on T-points; D_S lands on corners, and D_S² is averaged from
+           the four corners to the T-point, so a checkerboard in D_S cannot
+           cancel.
+        3. K_h = (c_s Δ)² |D| on interior T-points.
+
+    The wind's ghost ring is an edge pad, so its normal gradient across the
+    domain edge reads zero and the outermost interior cells are biased low;
+    cells one further in are exact for a linear wind.
+
+    Args:
+        wind: The wind field.
+        grid: The grid it lives on.
+        c_s: Smagorinsky constant c_s (> 0).
+        t: Time [s].
+
+    Returns:
+        K_h [m²/s] on interior T-points, the layout ``EddyDiffusivity`` pads.
+
+    Raises:
+        ValueError: If ``c_s`` is not positive.
+
+    Examples:
+        A uniform wind has no deformation, and a shear flow has K_h = (c_s Δ)² S:
+
+        >>> import jax.numpy as jnp
+        >>> from plumax.les_fvm.grid import make_grid
+        >>> from plumax.les_fvm.wind import uniform_wind_field, wind_field_from_callable
+        >>> grid = make_grid((0.0, 80.0, 8), (0.0, 80.0, 8), (0.0, 40.0, 4))
+        >>> uniform = uniform_wind_field(grid, u=5.0, v=1.0)
+        >>> bool((smagorinsky_k_h(uniform, grid, t=0.0) == 0.0).all())
+        True
+        >>> shear = wind_field_from_callable(
+        ...     grid, lambda t, x, y, z: (0.1 * y, jnp.zeros_like(y), jnp.zeros_like(y))
+        ... )
+        >>> k_h = smagorinsky_k_h(shear, grid, t=0.0)
+        >>> bool(jnp.allclose(k_h[:, 1:-1, 1:-1], (0.2 * 10.0) ** 2 * 0.1, rtol=1e-4))
+        True
+
+    References:
+        Smagorinsky (1963), Mon. Wea. Rev. 91, 99–164.
+    """
+    if c_s <= 0.0:
+        raise ValueError(f"smagorinsky_k_h: c_s must be > 0 (got {c_s!r})")
+    dx, dy = grid.dx, grid.dy
+    u, v, _ = wind(jnp.asarray(t, dtype=grid.x.dtype))
+
+    def squared_deformation(
+        u_level: Float[Array, "Ny Nx"], v_level: Float[Array, "Ny Nx"]
+    ) -> Float[Array, "ny nx"]:
+        # D_T = ∂u/∂x − ∂v/∂y at T-points
+        tension = tensor_strain(u_level, v_level, dx, dy)[1:-1, 1:-1]
+        # D_S = ∂v/∂x + ∂u/∂y at corners
+        shear = shear_strain(u_level, v_level, dx, dy)
+        # ⟨D_S²⟩ at T-points
+        shear_squared = avg_xy_bwd(shear**2)
+        # |D|² = D_T² + ⟨D_S²⟩
+        return tension**2 + shear_squared
+
+    deformation_squared = jax.vmap(squared_deformation)(u[1:-1], v[1:-1])
+    # |D| with a zero gradient at rest: √ has an infinite slope at 0, so take it of
+    # 1 there (the double-where trick), keeping uniform-wind adjoints finite
+    is_at_rest = deformation_squared == 0.0
+    safe_squared = jnp.where(is_at_rest, 1.0, deformation_squared)
+    deformation = jnp.where(is_at_rest, 0.0, jnp.sqrt(safe_squared))
+    # K_h = (c_s Δ)² |D|, with Δ² = Δx Δy
+    return c_s**2 * dx * dy * deformation
+
+
 def make_eddy_diffusivity(
     spec: float | tuple[float, float] | str | EddyDiffusivity,
     stability_class: str | None = None,
@@ -231,5 +428,7 @@ __all__ = [
     "EddyDiffusivity",
     "diffusion_tendency",
     "make_eddy_diffusivity",
+    "mo_eddy_diffusivity",
     "pg_eddy_diffusivity",
+    "smagorinsky_k_h",
 ]
