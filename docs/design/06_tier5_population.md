@@ -153,9 +153,9 @@ The formerly standalone `methane_pod` library (intensity and POD registries, mis
 | Multi-satellite POD union | `plumax.population.pod.pod_union` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Catalog schema (in-memory cross-tier) | `plumax.population.catalog` (`EmissionEvent` / `EmissionCatalog`) | 🚧 — in-memory Gaussian-summary catalog landed; CSV / parquet ingest [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | Real-data CSV ingestion | `plumax.population.ingest` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
-| Population SBC harness | `plumax.population.validation` | ☐ [#114](https://github.com/jejjohnson/plumax/issues/114) |
+| Population SBC harness | `plumax.population.validation` | ✓ [#114](https://github.com/jejjohnson/plumax/issues/114) |
 | Importance-weight ESS diagnostic | `plumax.population.importance.ess_report` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) |
-| Per-event-prior swap-out test | `plumax.population.validation.prior_swap_test` | ☐ [#114](https://github.com/jejjohnson/plumax/issues/114) |
+| Per-event-prior swap-out test | `plumax.population.validation.prior_swap_test` | ✓ [#114](https://github.com/jejjohnson/plumax/issues/114) |
 | Spatial Cox-process extension (v2) | `plumax.population.spatial` | ☐ v2 (temporal LGCP first: [#115](https://github.com/jejjohnson/plumax/issues/115)) |
 
 The `plumax.population` subpackage holds the v1 core (`catalog`, `size_distribution`, `point_process`) and the methane-domain primitives ported from the former `methane_pod` library (`intensity`, `pod`, `paradox`, `fitting`). The *generative* machinery comes from [`xtremax.point_processes`](https://github.com/jejjohnson/xtremax), the git-pinned `population` extra ([#106](https://github.com/jejjohnson/plumax/issues/106)): `plumax.population.processes` turns each intensity kernel into an xtremax `InhomogeneousPoissonProcess` (with its compensator and thinning envelope) and each POD curve into a `ThinningProcess` retention, so compensators, samplers, marked and thinned likelihoods, goodness-of-fit and survival / wait-time primitives are xtremax's. The remaining rows are tracked under the Tier V epic [#75](https://github.com/jejjohnson/plumax/issues/75).

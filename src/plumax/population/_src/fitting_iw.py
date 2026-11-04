@@ -355,7 +355,7 @@ class MarkPosterior:
     ess: np.ndarray = field(repr=False)
     pareto_k: np.ndarray = field(repr=False)
 
-    def posterior_mean(self) -> dict[str, np.ndarray]:
+    def posterior_mean(self) -> dict[str, np.floating | np.ndarray]:
         """θ̄, the posterior mean of every parameter."""
         return {name: np.mean(draws, axis=0) for name, draws in self.samples.items()}
 
