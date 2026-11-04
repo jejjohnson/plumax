@@ -15,7 +15,8 @@ them to a posterior over K and to per-source summaries that
 :func:`plumax.population.event_from_posterior` accepts. Neither needs NumPyro;
 the model and its runner are :func:`plumax.gauss_plume.inference.multi_source_plume_model`
 and :func:`plumax.gauss_plume.inference.infer_multi_source`. The Tier IV
-coupled version (#104) reuses both carriers.
+coupled version (:mod:`plumax.coupled.k_sources`) reuses the posterior carrier, the
+slot prior and the runner.
 """
 
 from __future__ import annotations

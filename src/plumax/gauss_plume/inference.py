@@ -25,6 +25,9 @@ Public surface
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import Any
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -442,6 +445,60 @@ def _check_multi_source_layout(
         )
 
 
+def _masked_source_prior(
+    *,
+    k_max: int,
+    candidate_locations: jnp.ndarray | None,
+    source_bounds: tuple[tuple[float, float], tuple[float, float]] | None,
+    prior_emission_rate_mean: float,
+    prior_emission_rate_std: float,
+    prior_active: float,
+    background_prior_std: float,
+) -> tuple[MaskedSources, jnp.ndarray]:
+    """Sample the slots of the masked-K prior and the background.
+
+    The prior of :func:`multi_source_plume_model`, shared with the Tier IV coupled
+    model (:mod:`plumax.coupled.k_sources`), which differs only in its forward.
+    """
+    if prior_active < 1.0:
+        # a plate, not to_event: the Gibbs step enumerates each a_k's support
+        with numpyro.plate("source", k_max):
+            active = numpyro.sample("active", dist.Bernoulli(probs=prior_active))
+    else:
+        active = numpyro.deterministic("active", jnp.ones(k_max))
+
+    mu_log, sigma_log = _lognormal_from_moments(
+        prior_emission_rate_mean, prior_emission_rate_std
+    )
+    emission_rate = numpyro.sample(
+        "emission_rate", dist.LogNormal(mu_log, sigma_log).expand([k_max]).to_event(1)
+    )
+
+    if candidate_locations is not None:
+        locations = jnp.asarray(candidate_locations)
+        source_x = numpyro.deterministic("source_x", locations[:, 0])
+        source_y = numpyro.deterministic("source_y", locations[:, 1])
+    else:
+        (x_low, x_high), (y_low, y_high) = source_bounds
+        spacing = numpyro.sample("x_spacing", dist.Dirichlet(jnp.ones(k_max + 1)))
+        # x_k = x_low + (x_high − x_low) Σ_{j ≤ k} w_j: ordered west to east
+        ordered = jnp.cumsum(spacing)[:k_max]
+        source_x = numpyro.deterministic("source_x", x_low + (x_high - x_low) * ordered)
+        source_y = numpyro.sample(
+            "source_y", dist.Uniform(y_low, y_high).expand([k_max]).to_event(1)
+        )
+
+    background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
+
+    sources = MaskedSources(
+        emission_rate=emission_rate,
+        x=source_x,
+        y=source_y,
+        active=jnp.asarray(active, dtype=emission_rate.dtype),
+    )
+    return sources, background
+
+
 def multi_source_plume_model(
     observations: jnp.ndarray | None = None,
     *,
@@ -529,41 +586,14 @@ def multi_source_plume_model(
     _check_multi_source_layout(k_max, candidate_locations, source_bounds, prior_active)
     dispersion_params = get_dispersion_params(stability_class)
 
-    if prior_active < 1.0:
-        # a plate, not to_event: the Gibbs step enumerates each a_k's support
-        with numpyro.plate("source", k_max):
-            active = numpyro.sample("active", dist.Bernoulli(probs=prior_active))
-    else:
-        active = numpyro.deterministic("active", jnp.ones(k_max))
-
-    mu_log, sigma_log = _lognormal_from_moments(
-        prior_emission_rate_mean, prior_emission_rate_std
-    )
-    emission_rate = numpyro.sample(
-        "emission_rate", dist.LogNormal(mu_log, sigma_log).expand([k_max]).to_event(1)
-    )
-
-    if candidate_locations is not None:
-        locations = jnp.asarray(candidate_locations)
-        source_x = numpyro.deterministic("source_x", locations[:, 0])
-        source_y = numpyro.deterministic("source_y", locations[:, 1])
-    else:
-        (x_low, x_high), (y_low, y_high) = source_bounds
-        spacing = numpyro.sample("x_spacing", dist.Dirichlet(jnp.ones(k_max + 1)))
-        # x_k = x_low + (x_high − x_low) Σ_{j ≤ k} w_j: ordered west to east
-        ordered = jnp.cumsum(spacing)[:k_max]
-        source_x = numpyro.deterministic("source_x", x_low + (x_high - x_low) * ordered)
-        source_y = numpyro.sample(
-            "source_y", dist.Uniform(y_low, y_high).expand([k_max]).to_event(1)
-        )
-
-    background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
-
-    sources = MaskedSources(
-        emission_rate=emission_rate,
-        x=source_x,
-        y=source_y,
-        active=jnp.asarray(active, dtype=emission_rate.dtype),
+    sources, background = _masked_source_prior(
+        k_max=k_max,
+        candidate_locations=candidate_locations,
+        source_bounds=source_bounds,
+        prior_emission_rate_mean=prior_emission_rate_mean,
+        prior_emission_rate_std=prior_emission_rate_std,
+        prior_active=prior_active,
+        background_prior_std=background_prior_std,
     )
     predicted = sources.concentration(
         receptor_coords,
@@ -680,7 +710,51 @@ def infer_multi_source(
     wind_u = float(-wind_speed * np.sin(theta_rad))
     wind_v = float(-wind_speed * np.cos(theta_rad))
 
-    inner = NUTS(multi_source_plume_model)
+    return _run_masked_k(
+        multi_source_plume_model,
+        jnp.asarray(obs),
+        k_max=k_max,
+        candidate_locations=candidate_locations,
+        prior_active=prior_active,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
+        num_chains=num_chains,
+        seed=seed,
+        progress_bar=progress_bar,
+        receptor_coords=tuple(jnp.asarray(c) for c in coords),
+        wind_u=wind_u,
+        wind_v=wind_v,
+        source_bounds=source_bounds,
+        source_height=source_height,
+        stability_class=stability_class,
+        prior_emission_rate_mean=prior_mean,
+        prior_emission_rate_std=prior_std,
+        background_prior_std=background_prior_std,
+        obs_noise_std=obs_noise_std,
+        noise=noise,
+    )
+
+
+def _run_masked_k(
+    model: Callable[..., Any],
+    observations: Any,
+    *,
+    k_max: int,
+    candidate_locations: NDArray | None,
+    prior_active: float,
+    num_warmup: int,
+    num_samples: int,
+    num_chains: int,
+    seed: int,
+    progress_bar: bool,
+    **model_kwargs: Any,
+) -> MultiSourcePosterior:
+    """NUTS on a masked-K model, Gibbs on its a_k, as a :class:`MultiSourcePosterior`.
+
+    Shared by the Tier I and Tier IV masked-K runners, whose models take the same
+    slot arguments.
+    """
+    inner = NUTS(model)
     kernel = DiscreteHMCGibbs(inner) if prior_active < 1.0 else inner
     mcmc = MCMC(
         kernel,
@@ -694,21 +768,11 @@ def infer_multi_source(
     )
     mcmc.run(
         jax.random.PRNGKey(seed),
-        jnp.asarray(obs),
-        receptor_coords=tuple(jnp.asarray(c) for c in coords),
-        wind_u=wind_u,
-        wind_v=wind_v,
+        observations,
         k_max=k_max,
         candidate_locations=candidates,
-        source_bounds=source_bounds,
-        source_height=source_height,
-        stability_class=stability_class,
-        prior_emission_rate_mean=prior_mean,
-        prior_emission_rate_std=prior_std,
         prior_active=prior_active,
-        background_prior_std=background_prior_std,
-        obs_noise_std=obs_noise_std,
-        noise=noise,
+        **model_kwargs,
     )
     samples = mcmc.get_samples()
     num_draws = samples["emission_rate"].shape[0]
