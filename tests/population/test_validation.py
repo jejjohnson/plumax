@@ -409,6 +409,50 @@ def test_prior_swap_flags_a_missing_correction():
     assert statistic > 3.0
 
 
+def test_prior_swap_refreshes_the_summaries():
+    # conjugate: N(m, s²) on log Q under a flat-ish prior, swapped to a narrow prior
+    captured = []
+
+    class Posterior:
+        def __init__(self, seed):
+            self.seed = seed
+
+        def posterior_mean(self):
+            return {"mu": np.asarray(float(self.seed))}
+
+    def fit(catalog, seed):
+        captured.append(catalog)
+        return Posterior(seed)
+
+    rng = np.random.default_rng(0)
+    draws = np.exp(1.0 + 0.5 * rng.standard_normal(4000))
+    event = EmissionEvent(
+        emission_rate=float(draws.mean()),
+        emission_std=float(draws.std()),
+        x=0.0,
+        y=0.0,
+        time=0.0,
+        tier="I",
+        q_samples=jnp.asarray(draws),
+        prior_logpdf=lambda q: jnp.zeros_like(q),
+    )
+    narrow = LognormalEmission(0.0, 0.5)
+    prior_swap_test(
+        EmissionCatalog.from_events([event]),
+        priors=(narrow.log_prob, narrow.log_prob),
+        fit=fit,
+        n_replicates=2,
+    )
+    swapped = captured[0].events[0]
+    # a flat prior on Q times N(0, 0.5²) on log Q pulls the log-mean towards zero
+    log_draws = np.log(np.asarray(swapped.q_samples))
+    assert log_draws.mean() < 0.9
+    np.testing.assert_allclose(
+        swapped.emission_rate, np.asarray(swapped.q_samples).mean(), rtol=1e-12
+    )
+    assert swapped.emission_rate < event.emission_rate
+
+
 def test_prior_swap_needs_draws_and_priors():
     event = EmissionEvent(
         emission_rate=1.0, emission_std=0.1, x=0.0, y=0.0, time=0.0, tier="I"

@@ -185,9 +185,15 @@ def _swap_prior(
         log_ratio = np.asarray(log_ratio)
         weights = np.exp(log_ratio - log_ratio.max())
         chosen = rng.choice(draws.size, size=draws.size, p=weights / weights.sum())
+        swapped = draws[chosen]
+        # the summaries too: the GAUSSIAN and POINT regimes read them, not the draws
         events.append(
             dataclasses.replace(
-                event, q_samples=jnp.asarray(draws[chosen]), prior_logpdf=log_prior
+                event,
+                emission_rate=float(swapped.mean()),
+                emission_std=float(swapped.std()),
+                q_samples=jnp.asarray(swapped),
+                prior_logpdf=log_prior,
             )
         )
     return EmissionCatalog.from_events(events)
