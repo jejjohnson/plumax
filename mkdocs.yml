@@ -98,6 +98,7 @@ nav:
       - Importance correction: population_importance.md
       - Persistency metrics: population_persistency.md
       - Total emission: population_totals.md
+      - Calibration harnesses: population_validation.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
   - pipekit integration:
