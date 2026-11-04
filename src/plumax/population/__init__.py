@@ -19,6 +19,8 @@ products:
 * :mod:`~plumax.population.processes` — the intensity and POD registries as
   ``xtremax.point_processes`` Poisson, marked and detection-thinned processes
   (the ``population`` extra).
+* :mod:`~plumax.population.persistency` — V.C wait time, occurrence probability
+  and expected count of a fitted intensity, with their posterior samples.
 * :mod:`~plumax.population.paradox` — V.D missing-mass paradox Monte Carlo.
 * :mod:`~plumax.population.importance` — importance-corrected per-event
   evidence (POINT / GAUSSIAN / FULL regimes) and the ESS diagnostic.
@@ -91,6 +93,12 @@ from plumax.population.paradox import (
     run_scenario_grid,
     simulate_paradox,
 )
+from plumax.population.persistency import (
+    expected_count,
+    expected_wait_time,
+    occurrence_probability,
+    posterior_metric,
+)
 from plumax.population.pod import (
     POD_REGISTRY,
     AdditiveMultiCovariatePOD,
@@ -122,6 +130,7 @@ if TYPE_CHECKING:
         X_MAX_DEFAULT,
         X_MIN_DEFAULT,
         MarkPosterior,
+        TMTPPPosterior,
         fit_size_distribution_iw,
         lognorm_cdf,
         mark_iw_model,
@@ -183,6 +192,7 @@ __all__ = [
     "SeasonallyModulatedDiurnalIntensity",
     "SizeDistributionPosterior",
     "SpectralAwarePOD",
+    "TMTPPPosterior",
     "VaryingCoefficientPOD",
     "WeibullRenewalIntensity",
     "WetlandPermafrostIntensity",
@@ -194,6 +204,8 @@ __all__ = [
     "ess_report",
     "event_evidence",
     "event_from_posterior",
+    "expected_count",
+    "expected_wait_time",
     "fit_inhomogeneous_intensity",
     "fit_lognormal_size_distribution",
     "fit_poisson_rate",
@@ -206,9 +218,11 @@ __all__ = [
     "make_mark",
     "make_process",
     "mark_iw_model",
+    "occurrence_probability",
     "padded_event_buffer",
     "pareto_smoothed_log_weights",
     "pod_powerlaw_model",
+    "posterior_metric",
     "power_law",
     "run_mcmc",
     "run_scenario_grid",
@@ -228,6 +242,7 @@ _LAZY = {
     "power_law": "plumax.population.fitting",
     "run_mcmc": "plumax.population.fitting",
     "MarkPosterior": "plumax.population.fitting",
+    "TMTPPPosterior": "plumax.population.fitting",
     "fit_size_distribution_iw": "plumax.population.fitting",
     "mark_iw_model": "plumax.population.fitting",
     "tmtpp_iw_model": "plumax.population.fitting",

@@ -43,6 +43,7 @@ from numpyro.infer import MCMC, NUTS
 
 from plumax.population._src.fitting_iw import (
     MarkPosterior,
+    TMTPPPosterior,
     fit_size_distribution_iw,
     log_thinned_rate,
     mark_iw_model,
@@ -58,6 +59,7 @@ __all__ = [
     "X_MAX_DEFAULT",
     "X_MIN_DEFAULT",
     "MarkPosterior",
+    "TMTPPPosterior",
     "fit_size_distribution_iw",
     "log_thinned_rate",
     "lognorm_cdf",
