@@ -65,6 +65,7 @@ def test_lognormal_from_moments_round_trip():
     assert float(law.log_prob(0.0)) == -np.inf
 
 
+@pytest.mark.slow
 def test_lognormal_total_is_exact_for_one_entry_and_matches_moments():
     single = lognormal_total(jnp.array([0.3]), jnp.array([[0.04]]), jnp.array([2.0]))
     np.testing.assert_allclose(single.loc, np.log(2.0) + 0.3)
@@ -108,6 +109,7 @@ def test_tier_one_payload():
     np.testing.assert_allclose(_prior_mass(posterior, 1e-9, 2.0), 1.0, atol=1e-6)
 
 
+@pytest.mark.slow
 def test_tier_one_runner_returns_the_payload():
     from plumax.gauss_plume.inference import EmissionRateSamples, infer_emission_rate
 
@@ -139,6 +141,7 @@ def _tier_two_problem():
     return footprint, footprint @ truth, prior_cov
 
 
+@pytest.mark.slow
 def test_tier_two_gaussian_payload():
     footprint, observation, prior_cov = _tier_two_problem()
     posterior = linear_gaussian_inversion(
@@ -270,6 +273,7 @@ def _coupled_forward():
     return forward, clean + noise, scale
 
 
+@pytest.mark.slow
 def test_tier_four_fusion_payload():
     from plumax.coupled import fuse_observations
 
@@ -284,6 +288,7 @@ def test_tier_four_fusion_payload():
     np.testing.assert_allclose(_prior_mass(posterior, -23.0, 25.0), 1.0, atol=1e-6)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("block", ["emission_rate", "log_emission_rate"])
 def test_tier_four_coupled_payload(block):
     from plumax.coupled import CoupledPrior, CoupledProblem, solve_coupled

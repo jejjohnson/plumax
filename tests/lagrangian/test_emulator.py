@@ -116,6 +116,7 @@ def trained(tmp_path_factory):
     return emulator, met_context, footprints, emulated
 
 
+@pytest.mark.slow
 def test_footprint_dataset_shapes_and_cache(tmp_path):
     simulator = _simulator(
         50, RECEPTORS[:2], domain_x=(-600.0, 0.0, 3), domain_y=(-200.0, 200.0, 2)
@@ -136,6 +137,7 @@ def test_footprint_dataset_shapes_and_cache(tmp_path):
     np.testing.assert_array_equal(_stack(again)[1], footprints)
 
 
+@pytest.mark.slow
 def test_simulator_matches_the_particle_model_seeded_by_context():
     simulator = _simulator(
         50, RECEPTORS[:1], domain_x=(-600.0, 0.0, 3), domain_y=(-200.0, 200.0, 2)
@@ -171,6 +173,7 @@ def test_simulator_rejects_no_particles():
         _simulator(0)
 
 
+@pytest.mark.slow
 @settings(max_examples=20, deadline=None)
 @given(
     u=st.floats(-10.0, 10.0),
@@ -184,6 +187,7 @@ def test_emulated_rows_are_non_negative(u, v, x, y):
     assert bool((row >= 0.0).all())
 
 
+@pytest.mark.slow
 def test_emulated_footprint_matches_loop_jit_and_vmap():
     emulator = _untrained()
     context = jnp.array([3.1, 0.2])
@@ -241,6 +245,7 @@ def _toy_dataset():
     )
 
 
+@pytest.mark.slow
 def test_training_reduces_the_residual():
     data = _toy_dataset()
     contexts, footprints = _stack(data)
@@ -265,6 +270,7 @@ def test_training_reduces_the_residual():
     np.testing.assert_array_equal(trained.footprint_scale, initial.footprint_scale)
 
 
+@pytest.mark.slow
 def test_early_stopping_ends_training_early():
     data = _toy_dataset()
     receptors = RECEPTORS[:3]
@@ -301,6 +307,7 @@ def test_relative_error_is_zero_for_the_reference():
     assert float(emulator_relative_error(reference, reference)) == 0.0
 
 
+@pytest.mark.slow
 def test_adjoint_calibration():
     pytest.importorskip("vardax")
     emulator = _untrained()

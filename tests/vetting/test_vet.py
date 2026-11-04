@@ -90,6 +90,7 @@ def _scene(
 # ── the composition of the steps ──────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_the_result_is_the_steps_composed() -> None:
     """Each argument reaches its step, and each field is that step's output."""
     rng = np.random.default_rng(0)
@@ -127,6 +128,7 @@ def test_the_result_is_the_steps_composed() -> None:
     assert float(r.residual_ss_no_gas) == float(no_gas.residual_ss)
 
 
+@pytest.mark.slow
 def test_the_no_gas_residual_is_the_fit_at_zero() -> None:
     """``SSE(0)`` is the grid's first row (``E = 1``); ``SSE(ΔX̂)`` is the least."""
     rng = np.random.default_rng(1)
@@ -151,6 +153,7 @@ def test_n_pairs_is_static() -> None:
 # ── a noise-free scene: uniform ΔX over identical surfaces ────────────────
 
 
+@pytest.mark.slow
 def test_a_noise_free_uniform_column_is_returned_within_one_grid_step() -> None:
     """Off the grid, ``ΔX̂`` is within one step of the truth (#156)."""
     for delta in (0.0123, 0.1234, 0.3071):
@@ -159,6 +162,7 @@ def test_a_noise_free_uniform_column_is_returned_within_one_grid_step() -> None:
         assert abs(float(r.delta) - delta) <= STEP
 
 
+@pytest.mark.slow
 def test_a_noise_free_column_on_a_grid_node_is_recovered() -> None:
     """On a node the ratio is ``E`` itself, so the fit finds it.
 

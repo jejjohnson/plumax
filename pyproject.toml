@@ -294,9 +294,9 @@ unsupported-operator = "ignore"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml"
+addopts = "-m 'not slow'"
 markers = [
-    "slow: marks tests as slow (e.g. MCMC sampling); run with -m 'not slow' to skip",
+    "slow: takes over about 2 s in CI (e.g. solves, MCMC, training); skipped by default, run with -m slow, or -m '' for everything",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

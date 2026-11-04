@@ -39,6 +39,7 @@ def _kernel(name: str, seed: int = 1):
     )()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", POISSON_KERNELS)
 def test_analytic_compensator_matches_quadrature(name):
     kernel = _kernel(name)
@@ -59,6 +60,7 @@ def test_max_intensity_bounds_kernel(name):
     assert float(jnp.max(kernel(time))) <= float(kernel.max_intensity()) + 1e-12
 
 
+@pytest.mark.slow
 def test_log_prob_is_the_poisson_likelihood():
     kernel = DiurnalSinusoidalIntensity(lambda_0=3.0, amplitude=1.0)
     window = (10.0, 12.0)
@@ -76,6 +78,7 @@ def test_log_prob_is_the_poisson_likelihood():
     np.testing.assert_allclose(float(process.log_prob(event_times, mask)), expected)
 
 
+@pytest.mark.slow
 def test_log_prob_gradient_matches_finite_differences():
     window = (0.0, 3.0)
     event_times, mask = padded_event_buffer([0.4, 1.2, 2.9], window)
@@ -89,6 +92,7 @@ def test_log_prob_gradient_matches_finite_differences():
     np.testing.assert_allclose(jax.grad(log_likelihood)(2.0), central, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_sampler_count_matches_compensator():
     process = make_process("constant", (0.0, 5.0), lambda_0=2.0)
     keys = jax.random.split(jax.random.key(0), 2000)
@@ -102,6 +106,7 @@ def _hill(q50: float, steepness: float) -> LogLogisticPOD:
     return LogLogisticPOD(beta_0=-steepness * np.log(q50), beta_1=steepness)
 
 
+@pytest.mark.slow
 def test_hill_retention_in_thinning_process():
     rate, horizon = 2.0, 10.0
     marks_law = dist.LogNormal(0.0, 1.0)
@@ -130,6 +135,7 @@ def test_hill_retention_in_thinning_process():
     np.testing.assert_allclose(float(log_prob), expected, atol=0.2)
 
 
+@pytest.mark.slow
 def test_detected_count_matches_thinned_rate():
     rate, horizon = 2.0, 10.0
     retention = PODRetention(_hill(q50=1.0, steepness=2.0))

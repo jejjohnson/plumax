@@ -145,6 +145,7 @@ def _dense_closed_form(forward, observations, prior_mean, prior_cov):
     return mean, covariance
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("n_param", [1, 2])
 def test_matches_the_hand_rolled_posterior(n_param):
     forward, observations, prior_mean, prior_cov = _case(n_param)
@@ -171,6 +172,7 @@ def test_matches_the_dense_closed_form(n_param):
     )
 
 
+@pytest.mark.slow
 def test_jit_and_grad_through_the_vardax_solve():
     forward, observations, prior_mean, prior_cov = _case(1)
 

@@ -131,6 +131,7 @@ def _receptors() -> np.ndarray:
     return np.column_stack([gx.reshape(-1), gy.reshape(-1)])
 
 
+@pytest.mark.slow
 def test_one_layer_on_a_node_equals_the_slab(synthetic_lut):
     nu = synthetic_lut["wavenumber"].values
     slab = RadianceObservationOperator(
@@ -155,6 +156,7 @@ def test_one_layer_on_a_node_equals_the_slab(synthetic_lut):
     assert float(slab.predict(masses).min()) < 0.5  # the lines absorb
 
 
+@pytest.mark.slow
 def test_zero_enhancement_is_ones_and_a_plume_absorbs(synthetic_lut):
     op = LayeredRadianceOperator(
         _two_band_model(synthetic_lut),
@@ -170,6 +172,7 @@ def test_zero_enhancement_is_ones_and_a_plume_absorbs(synthetic_lut):
         op.predict(jnp.ones((2, 2)))
 
 
+@pytest.mark.slow
 def test_linearise_is_the_tangent_at_zero(synthetic_lut):
     op = LayeredRadianceOperator(
         _two_band_model(synthetic_lut),
@@ -184,6 +187,7 @@ def test_linearise_is_the_tangent_at_zero(synthetic_lut):
     np.testing.assert_allclose(np.asarray(lin.gain), np.asarray(central), rtol=1e-7)
 
 
+@pytest.mark.slow
 def test_grad_of_misfit_in_emission_rate_matches_central_differences(synthetic_lut):
     op = LayeredRadianceOperator(
         _two_band_model(synthetic_lut),

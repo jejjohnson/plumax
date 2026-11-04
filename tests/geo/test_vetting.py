@@ -61,6 +61,7 @@ def scores(scene) -> xr.Dataset:
     return _operator(scene, n_null=0)(cube, mf, scene.masks)
 
 
+@pytest.mark.slow
 def test_scores_equal_vet_candidate_bit_for_bit(scene, scores: xr.Dataset) -> None:
     """Gate VT7."""
     assert scores.sizes == {"candidate": 2, "band": 9}
@@ -81,10 +82,12 @@ def test_scores_equal_vet_candidate_bit_for_bit(scene, scores: xr.Dataset) -> No
     )
 
 
+@pytest.mark.slow
 def test_without_a_null_p_null_is_nan(scores: xr.Dataset) -> None:
     assert np.isnan(scores["p_null"]).all()
 
 
+@pytest.mark.slow
 def test_p_null_equals_the_null_run_by_hand(scene) -> None:
     key = jax.random.key(3)
     cube, mf = _carriers(scene)
@@ -120,6 +123,7 @@ def test_nodata_pixels_leave_the_candidates_and_the_pool(scene) -> None:
     assert scores["d_norm"].isel(candidate=0).item() == float(result.d_norm)
 
 
+@pytest.mark.slow
 def test_the_dataset_round_trips_through_netcdf(
     scores: xr.Dataset, tmp_path: Path
 ) -> None:
@@ -129,6 +133,7 @@ def test_the_dataset_round_trips_through_netcdf(
         xr.testing.assert_identical(reloaded.load(), scores)
 
 
+@pytest.mark.slow
 def test_attrs_hold_the_window_and_the_key(scene, scores: xr.Dataset) -> None:
     window = json.loads(scores.attrs["window"])
     assert window["gas"] == "CH4"

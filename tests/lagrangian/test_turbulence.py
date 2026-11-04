@@ -33,6 +33,7 @@ def test_homogeneous_validation():
         HomogeneousTurbulence(1.0, 1.0, 1.0, 10.0, 10.0, 0.0)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("L", [-50.0, 200.0, 1e9])  # unstable, stable, neutral
 def test_hanna_profiles_positive_and_shaped(L):
     z = jnp.linspace(1.0, 900.0, 25)

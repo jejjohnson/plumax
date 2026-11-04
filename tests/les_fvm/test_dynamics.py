@@ -14,6 +14,7 @@ import itertools
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.les_fvm.advection import advection_tendency
 from plumax.les_fvm.boundary import (
@@ -35,6 +36,7 @@ def _interior_mass(c):
     return float(jnp.sum(c[1:-1, 1:-1, 1:-1]))
 
 
+@pytest.mark.slow
 def test_periodic_y_wraps_mass():
     """A blob advecting in +y past the north wall re-enters at the south,
     conserving interior mass (was frozen/lost before wall='open')."""
@@ -61,6 +63,7 @@ def test_periodic_y_wraps_mass():
     assert south_half > 1e-2
 
 
+@pytest.mark.slow
 def test_outflow_mass_budget():
     """Outflow-east + zero-Dirichlet elsewhere: mass leaves ONLY through the
     open east boundary (monotone loss), while a fully-periodic control run

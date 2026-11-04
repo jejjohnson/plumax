@@ -37,6 +37,7 @@ def test_log_gauss_hermite_stays_finite_where_linear_underflows():
     np.testing.assert_allclose(value, -400.0 * 5.0 + 0.5 * 400.0**2 * 0.005**2)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("alpha", [1.5, 2.0, 2.5, 3.0, 4.0])
 def test_log_space_vs_pareto_is(alpha):
     mark = LognormalParetoMark(q_break_loc=2.0)

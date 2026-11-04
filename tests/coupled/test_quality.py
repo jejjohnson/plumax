@@ -67,6 +67,7 @@ def _fuse(instruments, observations, **kwargs):
     )
 
 
+@pytest.mark.slow
 def test_mask_equals_infinite_inflation():
     a, b = _instruments()
     observations = _observations(build_coupled_forward(_LineSource(), [a, b]))
@@ -91,6 +92,7 @@ def test_mask_equals_infinite_inflation():
     ) == {"A": 3, "B": 2}
 
 
+@pytest.mark.slow
 def test_policy_through_fuse_observations_matches_apply_quality():
     a, b = _instruments()
     observations = _observations(build_coupled_forward(_LineSource(), [a, b]))
@@ -107,6 +109,7 @@ def test_policy_through_fuse_observations_matches_apply_quality():
     np.testing.assert_allclose(unscreened.mean, plain.mean, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_fully_flagged_instrument_dropped():
     a, b = _instruments()
     observations = _observations(build_coupled_forward(_LineSource(), [a, b]))
@@ -129,6 +132,7 @@ def test_fully_flagged_instrument_dropped():
     np.testing.assert_allclose(both.bias_std[1], 1.0, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_vardax_consumes_the_mask_and_diagonal_r():
     vdx = pytest.importorskip("vardax")
     a, b = _instruments()

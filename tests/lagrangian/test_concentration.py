@@ -123,6 +123,7 @@ def test_concentration_scales_linearly_with_emission():
     )
 
 
+@pytest.mark.slow
 def test_background_is_added():
     common = dict(
         emission_rate=1.0,

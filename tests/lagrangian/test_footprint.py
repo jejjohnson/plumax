@@ -49,6 +49,7 @@ def test_footprint_integrates_requested_horizon_for_partial_step():
     assert total_residence == pytest.approx(t_back, rel=1e-3)
 
 
+@pytest.mark.slow
 def test_footprint_units_convention():
     # Pin the flux-sensitivity convention dimensionally. Halving either the air
     # density or the mixing-layer depth doubles the footprint (F ∝ 1/(ρ·f·h)),
@@ -129,6 +130,7 @@ def test_footprint_lies_upwind_of_receptor():
     assert x_centroid < receptor_x
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("t_back", [60.0, 60.5])
 def test_time_varying_wind_clock(t_back):
     # For deterministic advection the backward trajectory from a receptor at
@@ -195,6 +197,7 @@ def test_time_varying_wind_clock(t_back):
     assert abs(x_ok - x_bad) > 20.0
 
 
+@pytest.mark.slow
 def test_footprint_scales_inversely_with_air_density():
     wind = wind_from_speed_direction(5.0, 270.0)
     kw = dict(

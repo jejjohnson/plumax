@@ -230,6 +230,7 @@ def test_invalid_layouts_rejected(kwargs):
         )
 
 
+@pytest.mark.slow
 def test_k1_matches_single_source():
     """One always-on slot at the known source is the single-source posterior."""
     x_obs = jnp.linspace(200.0, 2000.0, 24)

@@ -13,7 +13,7 @@
 
 ```bash
 make install     # Install all dependencies (uv sync --all-groups)
-make test        # Run tests (uv run pytest -v)
+make test        # Run the fast tests (uv run pytest -n 4 --dist loadfile)
 make lint        # Lint code (ruff check)
 make format      # Format code (ruff format + ruff check --fix)
 make typecheck   # Type check (ty check)
@@ -27,7 +27,7 @@ make docs-serve  # Build + serve the docs site locally
 
 ```bash
 # 1. Tests — zero failures required
-uv run pytest -v
+uv run pytest -n 4 --dist loadfile
 
 # 2. Lint — run on the ENTIRE repo (includes tests/ and scripts/)
 uv run --group lint ruff check .

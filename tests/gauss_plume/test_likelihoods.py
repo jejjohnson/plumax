@@ -252,6 +252,7 @@ def _puff_inputs():
     }
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model", [gaussian_puff_model, gaussian_puff_rw_model])
 def test_puff_default_is_previous_gaussian_likelihood(model):
     inputs = _puff_inputs()

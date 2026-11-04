@@ -124,6 +124,7 @@ def test_run_mcmc_recovers_alpha_on_synthetic_data():
     assert 0.1 < df["sk"].mean() < 1.5
 
 
+@pytest.mark.slow
 def test_pod_powerlaw_gradient_matches_finite_differences():
     from numpyro.infer.util import log_density
 

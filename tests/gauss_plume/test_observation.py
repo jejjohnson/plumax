@@ -96,6 +96,7 @@ def test_column_response_matches_previous_formula():
     )
 
 
+@pytest.mark.slow
 @settings(max_examples=25, deadline=None)
 @given(
     spacing=st.lists(
@@ -115,6 +116,7 @@ def test_trapezoid_weights_match_jnp_trapezoid(spacing, seed):
     )
 
 
+@pytest.mark.slow
 def test_for_grid_places_instrument_receptors_in_their_cells():
     grid = make_grid((0.0, 400.0, 8), (0.0, 200.0, 4), (0.0, 100.0, 5))
     # Cell centres sit at x = 25, 75, …; y = 25, 75, …

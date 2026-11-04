@@ -4,14 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  # Every PR, stacked ones included.
+  fast:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]
@@ -22,8 +23,25 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Run tests with coverage
-        run: uv run pytest -v
+      - name: Run fast tests
+        run: uv run pytest -n 4 --dist loadfile --durations=15
+
+  # PRs into main run Python 3.12; pushes to main run both versions.
+  full:
+    if: github.event_name == 'push' || github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ${{ fromJSON(github.event_name == 'push' && '["3.12", "3.13"]' || '["3.12"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run all tests with coverage
+        run: uv run pytest -n 4 --dist loadfile -m "" --durations=15 --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v7

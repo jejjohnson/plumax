@@ -61,7 +61,7 @@ check-env-%:
 # ---------------------------------------------------------------------------
 # Phony declarations
 # ---------------------------------------------------------------------------
-.PHONY: help install lint format typecheck test test-cov \
+.PHONY: help install lint format typecheck test test-slow test-all test-cov \
         precommit build clean version docs docs-check docs-api docs-serve
 
 .DEFAULT_GOAL := help
@@ -127,14 +127,24 @@ typecheck: ## 🔬 Type-check with ty
 ##@ Testing
 # ===========================================================================
 
-test: ## 🧪 Run tests with pytest (no coverage)
-	@printf "$(YELLOW)>>> Running tests (no coverage)...$(RESET)\n"
-	uv run pytest -v -o addopts=
+test: ## 🧪 Run the fast tests (everything not marked slow)
+	@printf "$(YELLOW)>>> Running fast tests...$(RESET)\n"
+	uv run pytest -n 4 --dist loadfile
 	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
 
-test-cov: ## 📊 Run tests with coverage report
-	@printf "$(YELLOW)>>> Running tests with coverage...$(RESET)\n"
-	uv run pytest -v
+test-slow: ## 🐢 Run only the tests marked slow
+	@printf "$(YELLOW)>>> Running slow tests...$(RESET)\n"
+	uv run pytest -n 4 --dist loadfile -m slow
+	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
+
+test-all: ## 🧪 Run the full suite, fast and slow
+	@printf "$(YELLOW)>>> Running all tests...$(RESET)\n"
+	uv run pytest -n 4 --dist loadfile -m ""
+	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
+
+test-cov: ## 📊 Run the full suite with a coverage report
+	@printf "$(YELLOW)>>> Running all tests with coverage...$(RESET)\n"
+	uv run pytest -n 4 --dist loadfile -m "" --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
 	@printf "$(GREEN)>>> ✅ Coverage report generated!$(RESET)\n"
 
 # ===========================================================================

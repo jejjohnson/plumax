@@ -77,6 +77,7 @@ def _scale():
 # ── linear limit ─────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_linear_limit_equals_fusion():
     scale = _scale()
     variance = (0.1 * scale) ** 2
@@ -123,6 +124,7 @@ def test_linear_limit_equals_fusion():
     assert result.pixels_used == {"TROPOMI": 9, "B": 9}
 
 
+@pytest.mark.slow
 def test_linear_radiance_laplace_equals_closed_form_gaussian():
     scale = _scale()
     gain = -jnp.array([0.2, 0.5]) / scale
@@ -252,6 +254,7 @@ def _nonlinear_problem(instrument_names, *, seed=1):
     return problem, truth
 
 
+@pytest.mark.slow
 def test_nonlinear_recovery_within_posterior_uncertainty():
     widths = {}
     for names in (("TROPOMI",), ("TROPOMI", "EMIT")):
@@ -267,6 +270,7 @@ def test_nonlinear_recovery_within_posterior_uncertainty():
     assert widths[2] < widths[1]
 
 
+@pytest.mark.slow
 def test_lognormal_q_feeds_tier_v():
     problem, _ = _nonlinear_problem(("TROPOMI",))
     result = solve_coupled(problem)
@@ -283,6 +287,7 @@ def test_lognormal_q_feeds_tier_v():
 # ── masks from coupled.quality ───────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_masked_pixels_match_masked_fusion():
     scale = _scale()
     variance = (0.1 * scale) ** 2

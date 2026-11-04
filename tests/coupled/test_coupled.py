@@ -156,6 +156,7 @@ def _two_instrument_forward():
     return build_coupled_forward(src, [trop, emit])
 
 
+@pytest.mark.slow
 def test_twin_recovery_multi_instrument():
     fwd = _two_instrument_forward()
     q_true, bias_true = 2.5, [0.0, 3e-9]
@@ -175,6 +176,7 @@ def test_twin_recovery_multi_instrument():
     assert post.instrument_names == ("TROPOMI", "EMIT")
 
 
+@pytest.mark.slow
 def test_fusion_reduces_emission_uncertainty():
     # Two instruments must constrain Q at least as tightly as one (more data).
     fwd2 = _two_instrument_forward()

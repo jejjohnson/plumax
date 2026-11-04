@@ -203,6 +203,7 @@ def _constant_wind_schedule(
     )
 
 
+@pytest.mark.slow
 def test_evolve_puffs_constant_wind():
     schedule = _constant_wind_schedule()
     release_times = jnp.array([0.0, 10.0, 20.0, 30.0])
@@ -312,6 +313,7 @@ def test_simulate_puff_conserves_emitted_mass_for_nondivisible_window():
     assert emitted == pytest.approx(q * t_end, rel=1e-6)
 
 
+@pytest.mark.slow
 def test_simulate_puff_nondivisible_window_runs_and_counts_puffs():
     # End-to-end smoke: the non-divisible window builds the field with the
     # ceil'd puff count and a positive late-time concentration.
@@ -333,6 +335,7 @@ def test_simulate_puff_nondivisible_window_runs_and_counts_puffs():
     assert float(ds["concentration"].isel(time=-1).max()) > 0.0
 
 
+@pytest.mark.slow
 def test_simulate_puff_shape_and_attrs():
     n_t = 21
     time_array = np.linspace(0, 60, n_t, dtype=np.float32)
@@ -408,6 +411,7 @@ def test_simulate_puff_rejects_bad_scheme():
         )
 
 
+@pytest.mark.slow
 def test_simulate_puff_background_column_uses_trapezoid():
     # Zero emission + a uniform background must integrate to exactly
     # background * (z_max - z_min) in every frame — trapezoidal vertical
@@ -432,6 +436,7 @@ def test_simulate_puff_background_column_uses_trapezoid():
     np.testing.assert_allclose(col, background * (z1 - z0), rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_simulate_puff_briggs_scheme_runs():
     time_array = np.linspace(0, 30, 7, dtype=np.float32)
     ds = simulate_puff(
@@ -449,6 +454,7 @@ def test_simulate_puff_briggs_scheme_runs():
     assert ds.attrs["dispersion_scheme"] == "briggs"
 
 
+@pytest.mark.slow
 def test_simulate_puff_array_emission_rate_matches_puff_count():
     time_array = np.linspace(0, 20, 5, dtype=np.float32)
     # release_frequency=1 Hz over [0, 20) → 20 puffs.

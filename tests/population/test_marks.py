@@ -65,6 +65,7 @@ def test_normalised_all_families(name):
     np.testing.assert_allclose(_integrate(mark, theta, 0.0), 1.0, rtol=1e-6)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_truncated_mean_matches_quadrature(name):
     mark, theta = CASES[name]
@@ -74,6 +75,7 @@ def test_truncated_mean_matches_quadrature(name):
         np.testing.assert_allclose(value, expected, rtol=1e-5)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_sample_moments_match_closed_form(name):
     mark, theta = CASES[name]
@@ -99,6 +101,7 @@ def test_powerlaw_closed_form_mean():
     np.testing.assert_allclose(mean, 0.5 * 5.5 / 4.5)
 
 
+@pytest.mark.slow
 def test_lognormal_pareto_is_continuous_with_a_pareto_tail():
     mark, theta = CASES["lognormal_pareto"]
     q_break, alpha = theta["q_break"], theta["alpha"]
@@ -193,6 +196,7 @@ def test_lognormal_pareto_samples_a_body_far_below_its_centre():
     assert np.all(np.isfinite(np.asarray(mark.log_prob(jnp.asarray(draws), **theta))))
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", ["lognormal", "mixture_lognormal"])
 def test_full_mean_gradient_is_finite_with_an_open_upper_bound(name):
     mark, theta = CASES[name]
@@ -213,6 +217,7 @@ def _central_difference(fn, x, step=1e-6):
     return (fn(x + step) - fn(x - step)) / (2.0 * step)
 
 
+@pytest.mark.slow
 def test_moment_gradients_in_the_tails_and_at_the_splice():
     lognormal = LognormalMark()
 
@@ -241,6 +246,7 @@ def test_moment_gradients_in_the_tails_and_at_the_splice():
     np.testing.assert_allclose(gradient, np.log(4.0) - np.log(4.0) ** 2 / 2.0)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_log_survival_matches_quadrature(name):
     mark, theta = CASES[name]
