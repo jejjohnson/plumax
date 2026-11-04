@@ -7,6 +7,7 @@ five candidate facilities, three emitting, seen by two instruments.
 from __future__ import annotations
 
 import dataclasses
+import sys
 
 import jax.numpy as jnp
 import numpy as np
@@ -146,7 +147,8 @@ def test_k1_matches_single_source():
         CoupledProblem(
             forward=build_coupled_forward(single_source, instruments),
             prior=CoupledPrior.from_std(
-                {"log_emission_rate": log_mean}, {"log_emission_rate": log_std}
+                {"log_emission_rate": log_mean, "background": 0.0},
+                {"log_emission_rate": log_std, "background": prior.background_std},
             ),
             observations=observations,
         )
@@ -260,6 +262,49 @@ def test_masked_pixels_do_not_enter_the_likelihood():
         model, (corrupted,), {"instruments": masked, **arguments}, {}
     )
     np.testing.assert_allclose(dirty, clean, rtol=1e-12)
+
+
+@pytest.mark.slow
+def test_map_path_infers_the_background():
+    # as the sampler does: a real background must not leak into the source rates
+    instruments = _instruments()
+    only = jnp.array([False, False, True, False, False])
+    background = 5e-6
+    observations = {
+        name: values + background
+        for name, values in _observations(instruments, active=only).items()
+    }
+    prior = MaskedKPrior(
+        k_max=5, emission_mean=0.1, emission_std=0.08, background_std=1e-5
+    )
+    result = solve_coupled(
+        build_masked_k_problem(
+            instruments,
+            transport=SOURCE,
+            prior=prior,
+            observations=observations,
+            active=only,
+            candidate_locations=CANDIDATES,
+        )
+    )
+    spread = result.std["background"]
+    assert abs(result.map_estimate["background"] - background) < 3.0 * spread
+    assert abs(result.emission_rate[0] - TRUE_RATES[2]) < 3.0 * result.emission_std[0]
+
+
+def test_map_problem_does_not_need_numpyro(monkeypatch):
+    # the vardax path works with the `assim` extra alone
+    monkeypatch.setitem(sys.modules, "plumax.gauss_plume.inference", None)
+    instruments = _instruments()
+    problem = build_masked_k_problem(
+        instruments,
+        transport=SOURCE,
+        prior=MaskedKPrior(k_max=5),
+        observations=_observations(instruments),
+        active=TRUE_ACTIVE,
+        candidate_locations=CANDIDATES,
+    )
+    assert problem.prior.mean["log_emission_rate"].shape == (3,)
 
 
 def test_saturation_rate():

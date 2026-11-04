@@ -29,6 +29,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Bool, Float
 
+from plumax._src.scalar_emission import LognormalEmission
 from plumax.coupled._src.inversion import (
     CoupledPrior,
     CoupledProblem,
@@ -296,8 +297,10 @@ def build_masked_k_problem(
 ) -> CoupledProblem:
     """The coupled problem of one active set, for the MAP and Laplace path.
 
-    y_i = Σ_{k active} Q_k r_i(x_k, y_k) + c_bg + ε_i over log Q_k, under the same
-    lognormal prior as the slots. Hand it to :func:`~plumax.coupled.solve_coupled`,
+    y_i = Σ_{k active} Q_k r_i(x_k, y_k) + c_bg + ε_i over log Q_k and c_bg, under the
+    same lognormal prior as the slots. The background is the Gaussian N(0, σ²_bg) here,
+    against the sampler's HalfNormal(σ_bg): the block prior is Gaussian, and the two
+    have the same curvature at zero. Hand it to :func:`~plumax.coupled.solve_coupled`,
     which solves on vardax. This is the operational path; the active set itself comes
     from :func:`infer_masked_k_sources` or from the caller.
 
@@ -310,7 +313,8 @@ def build_masked_k_problem(
         candidate_locations: Fixed ``(x, y)`` per slot [m], for a ``PlumeSource``.
 
     Returns:
-        The problem, with the ``log_emission_rate`` block over the active slots.
+        The problem, with a ``log_emission_rate`` block over the active slots and a
+        ``background`` block.
 
     Raises:
         ValueError: When ``active`` does not match the slots or has none on.
@@ -322,9 +326,7 @@ def build_masked_k_problem(
             f"build_masked_k_problem: active must have shape ({prior.k_max},) with "
             f"at least one slot on, got {mask.tolist()}."
         )
-    from plumax.gauss_plume.inference import _lognormal_from_moments
-
-    log_mean, log_std = _lognormal_from_moments(prior.emission_mean, prior.emission_std)
+    emission = LognormalEmission.from_moments(prior.emission_mean, prior.emission_std)
     n_active = int(mask.sum())
     forward = CoupledForward(
         source=transport,
@@ -332,8 +334,14 @@ def build_masked_k_problem(
         responses=tuple(matrix[:, mask] for matrix in matrices),
     )
     coupled_prior = CoupledPrior.from_std(
-        {"log_emission_rate": log_mean * jnp.ones(n_active)},
-        {"log_emission_rate": log_std * jnp.ones(n_active)},
+        {
+            "log_emission_rate": emission.loc * jnp.ones(n_active),
+            "background": 0.0,
+        },
+        {
+            "log_emission_rate": emission.scale * jnp.ones(n_active),
+            "background": prior.background_std,
+        },
     )
     return CoupledProblem(
         forward=forward, prior=coupled_prior, observations=dict(observations)
