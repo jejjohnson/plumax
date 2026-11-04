@@ -21,6 +21,7 @@ import os
 os.environ.setdefault("JAX_ENABLE_X64", "1")
 
 import jax
+import pytest
 
 
 jax.config.update("jax_enable_x64", True)
@@ -41,3 +42,15 @@ _TYPED_PACKAGES = (
     "plumax.priors._src",
 )
 _type_check_hook = install_import_hook(_TYPED_PACKAGES, "beartype.beartype")
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _release_compiled_code():
+    """Free JAX's compiled code after each module.
+
+    Compiled functions stay mapped for the life of the process, so without this
+    a worker grows to 5–6 GiB over the full suite and XLA can fail with
+    ``LLVM compilation error: Cannot allocate memory``.
+    """
+    yield
+    jax.clear_caches()
