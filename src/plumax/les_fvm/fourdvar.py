@@ -822,21 +822,30 @@ class PosteriorCovariance:
         return jnp.sqrt(jnp.diagonal(self.source_covariance))
 
 
+def _vardax_laplace(problem: FourDVarProblem, source: jax.Array) -> vardax.Posterior:
+    """``vardax.Posterior`` of the Gauss–Newton Laplace approximation at ``source``.
+
+    ``vardax.LaplaceCovariance`` on the linear control, so ``mean = S*`` and
+    ``cov = P_S = L (I + J̃ᵀ J̃)⁻¹ Lᵀ`` with ``J̃ = ∂(𝒢/σ)/∂χ``, both on the
+    ``(1, n_t)`` analysis state.
+    """
+    vdx = require_vardax("posterior_covariance")
+    model, batch = problem.analysis()
+    return vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
+        source[None], model, batch
+    )
+
+
 def _laplace_posterior(
     problem: FourDVarProblem, source: jax.Array
 ) -> PosteriorCovariance:
     """vardax's Gauss–Newton Laplace covariance at the MAP source.
 
-    ``vardax.LaplaceCovariance`` on the linear control gives
-    ``P_S = L (I + J̃ᵀ J̃)⁻¹ Lᵀ`` with ``J̃ = ∂(𝒢/σ)/∂χ``, materialised
-    column by column; ``P_χ = L⁻¹ P_S L⁻ᵀ`` by two triangular solves.
+    ``P_S`` is materialised column by column from the vardax posterior;
+    ``P_χ = L⁻¹ P_S L⁻ᵀ`` by two triangular solves.
     """
-    vdx = require_vardax("posterior_covariance")
-    model, batch = problem.analysis()
     n_t = source.shape[0]
-    posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-        source[None], model, batch
-    )
+    posterior = _vardax_laplace(problem, source)
     p_source = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
         jnp.eye(n_t, dtype=source.dtype)
     )
@@ -882,10 +891,9 @@ def laplace_sample(
 ) -> jax.Array:
     """Draw source-space samples from the Laplace posterior ``N(S*, P_S)``.
 
-    Sampling happens in whitened space — ``χ ~ N(χ*, P_χ)`` via a Cholesky
-    factor of ``P_χ`` — and each draw is mapped through
-    :meth:`FourDVarProblem.source_from_whitened`, which is exactly the affine
-    map that turns ``N(χ*, P_χ)`` into ``N(S*, P_S)``.
+    The draws come from ``vardax.Posterior.sample`` on the Gauss–Newton
+    Laplace posterior at the MAP source, ``S = S* + P_S^½ ξ`` with
+    ``ξ ~ N(0, I)``; ``P_S`` is the covariance of :func:`posterior_covariance`.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -899,18 +907,11 @@ def laplace_sample(
     if not _is_traced(n_samples) and int(n_samples) <= 0:
         raise ValueError("laplace_sample: `n_samples` must be a positive integer.")
     chi_star = jnp.asarray(whitened_map, dtype=float)
-    post = posterior_covariance(problem, chi_star)
-    n_t = chi_star.shape[0]
-    # Adaptive-jitter Cholesky against round-off in the whitened covariance.
-    chol_chi = gx.safe_cholesky(
-        lx.MatrixLinearOperator(
-            post.whitened_covariance,
-            tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
-        )
-    )
-    noise = jax.random.normal(key, (int(n_samples), n_t), dtype=chi_star.dtype)
-    chi_samples = chi_star[None, :] + noise @ chol_chi.T
-    return jax.vmap(problem.source_from_whitened)(chi_samples)
+    source = problem.source_from_whitened(chi_star)
+    posterior = _vardax_laplace(problem, source)
+    # S⁽ᵉ⁾ = S* + P_S^½ ξ⁽ᵉ⁾, ξ⁽ᵉ⁾ ~ N(0, I), on the (1, n_t) analysis state
+    draws = posterior.sample(key, int(n_samples))
+    return draws[:, 0, :]
 
 
 __all__ = [

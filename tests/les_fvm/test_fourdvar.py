@@ -601,6 +601,23 @@ def test_laplace_sample_shape_and_mean():
 
 
 @pytest.mark.slow
+def test_laplace_sample_covariance_matches_posterior_covariance():
+    _, prob, res = _twin_map()
+    n_samples = 20000
+    samples = laplace_sample(
+        prob, res.whitened, jax.random.PRNGKey(1), n_samples=n_samples
+    )
+    post = posterior_covariance(prob, res.whitened)
+    sample_cov = np.cov(np.asarray(samples), rowvar=False)
+    expected = np.asarray(post.source_covariance)
+    # Monte Carlo error of a covariance entry is ~ sqrt(σ_ii σ_jj / N)
+    std = np.sqrt(np.diag(expected))
+    scale = np.outer(std, std)
+    tolerance = 6.0 / np.sqrt(n_samples)
+    assert np.max(np.abs(sample_cov - expected) / scale) < tolerance
+
+
+@pytest.mark.slow
 def test_laplace_sample_rejects_nonpositive_n_samples():
     _, prob, res = _twin_map()
     with pytest.raises(ValueError, match="n_samples"):
