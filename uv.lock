@@ -3268,8 +3268,8 @@ dependencies = [
 
 [[package]]
 name = "pipekit-train"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+version = "0.1.3"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c#7c446f141c23164918e2e8b708428b860206120c" }
 dependencies = [
     { name = "pipekit" },
 ]
@@ -3307,7 +3307,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.2.2"
+version = "0.2.3"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -3414,7 +3414,7 @@ requires-dist = [
     { name = "numpyro", marker = "extra == 'population'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c" },
     { name = "pyproj", marker = "extra == 'io'" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
@@ -3437,7 +3437,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "numpyro", specifier = ">=0.21" },
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },

@@ -152,9 +152,9 @@ override-dependencies = [
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
-# pipekit-train (the `emulate` extra) is not on PyPI; pinned to the same pipekit
-# monorepo rev as pipekit and pipekit-cycle above.
-pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+# pipekit-train (the `emulate` extra) is not on PyPI; pinned ahead of pipekit and
+# pipekit-cycle above, at the merge of pipekit#142 (CachedDataset in_memory).
+pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "7c446f141c23164918e2e8b708428b860206120c" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
