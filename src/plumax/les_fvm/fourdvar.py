@@ -23,8 +23,10 @@ state, so the cost above is ``vardax.ThreeDVar`` with the source–receptor map
 enabler (design §adjoint) is that **JAX reverse-mode autodiff through the diffrax
 FV solve is the exact discrete adjoint** — there is no hand-written adjoint
 model. The diffrax solve defines only a VJP, so the operator is linearised in
-reverse mode (``CallableObs(jac="bwd", materialise=True)``). The incremental / Gauss-Newton
-inner-loop variant (design §incremental) is a separate future addition.
+reverse mode (``CallableObs(jac="bwd", materialise=True)``). The incremental
+variant (design §incremental), Gauss–Newton outer and CG inner iterations, is
+``vardax.IncrementalFourDVar`` over the same map
+(:meth:`FourDVarProblem.incremental_analysis`).
 
 The control vector is either the **time-resolved scalar emission rate** ``S = q``
 at a known source location (:class:`TemporalControl`, or the ``prior_mean`` and
@@ -49,7 +51,7 @@ import functools
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import einx
 import gaussx as gx
@@ -808,6 +810,16 @@ def _check_control_on_grid(
 # ── 4D-Var cost in whitened control space ────────────────────────────────────
 
 
+class _StaticForward:
+    """Identity dynamics: a source control does not evolve over the window."""
+
+    dt = 1.0
+
+    def step(self, state: jax.Array, dt: float) -> jax.Array:
+        del dt
+        return state
+
+
 @dataclass(frozen=True)
 class FourDVarProblem:
     """A strong-constraint 4D-Var problem over a flat source control.
@@ -829,6 +841,7 @@ class FourDVarProblem:
     observations: jax.Array  # y, (n_t, n_obs)
     obs_variance: jax.Array  # R diagonal, broadcast to (n_t, n_obs)
     control: SpatialControl | None = None
+    prior_sqrt_op: lx.AbstractLinearOperator | None = None
 
     @property
     def n_source(self) -> int:
@@ -836,6 +849,12 @@ class FourDVarProblem:
         background = self.forward.background
         n_extra = 0 if background is None else background.size
         return self.prior_mean.shape[0] - n_extra
+
+    def prior_sqrt_operator(self) -> lx.AbstractLinearOperator:
+        """The prior square root L as an operator, structured where it can be."""
+        if self.prior_sqrt_op is not None:
+            return self.prior_sqrt_op
+        return lx.MatrixLinearOperator(self.prior_chol)
 
     def source_from_whitened(self, chi: jax.Array) -> jax.Array:
         """Map whitened control ``χ`` back to the flat control, ``S_b + L χ``."""
@@ -883,6 +902,72 @@ class FourDVarProblem:
             return einx.rearrange("t o -> 1 (t o)", predict(source[0]) / sigma)
 
         return vdx.CallableObs(fn=whitened_prediction, jac="bwd", materialise=True)
+
+    def incremental_analysis(
+        self,
+        *,
+        outer_iters: int = 5,
+        inner_iters: int = 50,
+        rtol: float = 1e-6,
+        atol: float = 1e-8,
+    ) -> tuple[vardax.IncrementalFourDVar, vardax.Batch1D]:
+        """The Gauss–Newton analysis of this problem, and its one-window batch.
+
+        ``vardax.IncrementalFourDVar`` with an identity forward over a
+        one-time window, because the control is a source rather than an initial
+        state, over the whitened source–receptor map with ``R = I``. Each outer
+        iteration forms the Jacobian with one VJP per observation
+        (``jac="bwd"``) and solves I + (J̃ L)ᵀ (J̃ L) in the control-variable
+        transform by CG.
+
+        Args:
+            outer_iters: Gauss–Newton outer iterations.
+            inner_iters: CG iterations per outer iteration.
+            rtol: Relative tolerance of the CG solves.
+            atol: Absolute tolerance of the CG solves.
+
+        Returns:
+            ``(model, batch)``: ``model(batch)`` is the MAP flat control, shape
+            ``(1, n_state)``.
+
+        Raises:
+            ImportError: Without the ``assim`` extra.
+        """
+        vdx = require_vardax("FourDVarProblem.incremental_analysis")
+        sigma = jnp.sqrt(self.obs_variance)
+        predict = self.forward.predict
+
+        def whitened_prediction(state: jax.Array) -> jax.Array:
+            # 𝒢(q) / σ, flattened over (time, receptor)
+            return einx.rearrange("t o -> (t o)", predict(state) / sigma)
+
+        observations = self.observations / sigma
+        n_flat = observations.size
+        dtype = self.prior_mean.dtype
+        prior_sqrt = self.prior_sqrt_operator()
+        model = vdx.IncrementalFourDVar(
+            forward=_StaticForward(),
+            obs_op=whitened_prediction,
+            prior_mean=self.prior_mean,
+            prior_cov_op=prior_sqrt @ prior_sqrt.T,
+            obs_cov_op=lx.IdentityLinearOperator(
+                jax.ShapeDtypeStruct((n_flat,), dtype)
+            ),
+            prior_sqrt_op=prior_sqrt,
+            config=vdx.IncrementalConfig(
+                n_outer=outer_iters,
+                n_inner=inner_iters,
+                cg_rtol=rtol,
+                cg_atol=atol,
+                covariance_tol=atol,
+                jac="bwd",
+            ),
+        )
+        batch = vdx.Batch1D(
+            input=einx.rearrange("t o -> 1 1 (t o)", observations),
+            mask=jnp.ones((1, 1, n_flat), dtype=dtype),
+        )
+        return model, batch
 
     def analysis(
         self,
@@ -1024,7 +1109,7 @@ def _with_background(
     covariance_c = background.B_c.as_matrix()
     # L = blockdiag(L_S, L_c, σ_α I), so B = blockdiag(B_S, B_c, σ_α² I)
     prior_sqrt = gx.BlockDiag(
-        lx.MatrixLinearOperator(problem.prior_chol),
+        problem.prior_sqrt_operator(),
         lx.MatrixLinearOperator(_cholesky(covariance_c)),
         lx.DiagonalLinearOperator(jnp.full(_N_FACES, background.bc_scale_prior[1])),
     )
@@ -1033,6 +1118,7 @@ def _with_background(
         forward=problem.forward.with_background(background),
         prior_mean=jnp.concatenate([problem.prior_mean, background.flat_prior_mean()]),
         prior_chol=prior_sqrt.as_matrix(),
+        prior_sqrt_op=prior_sqrt,
     )
 
 
@@ -1141,6 +1227,7 @@ def _build_spatial_problem(
         observations=y,
         obs_variance=_resolve_obs_variance(obs_variance, y),
         control=control,
+        prior_sqrt_op=prior_sqrt,
     )
 
 
@@ -1320,66 +1407,89 @@ class FourDVarResult:
 def solve_4dvar(
     problem: FourDVarProblem,
     *,
+    method: Literal["lbfgs", "gauss_newton"] = "lbfgs",
     initial_source: jax.Array | None = None,
     rtol: float = 1e-6,
     atol: float = 1e-8,
     max_steps: int = 100,
     solver: optx.AbstractMinimiser | None = None,
     compute_posterior: bool = False,
+    outer_iters: int = 5,
+    inner_iters: int = 50,
 ) -> FourDVarResult:
-    """Minimise the 4D-Var cost with L-BFGS in whitened space, via vardax.
+    """Minimise the 4D-Var cost in whitened space, via vardax.
 
-    Runs :meth:`FourDVarProblem.analysis`: ``vardax.ThreeDVar`` over the
-    whitened control ``χ``, so the prior is the identity Gaussian and the
-    gradient is the exact discrete adjoint of the FV solver. ``source`` and
-    ``whitened`` have the length of the flat control.
+    ``method="lbfgs"`` runs :meth:`FourDVarProblem.analysis`:
+    ``vardax.ThreeDVar`` over the whitened control ``χ``, so the prior is the
+    identity Gaussian and the gradient is the exact discrete adjoint of the FV
+    solver.
+
+    ``method="gauss_newton"`` runs :meth:`FourDVarProblem.incremental_analysis`:
+    ``vardax.IncrementalFourDVar``, Gauss–Newton outer iterations with CG inner
+    iterations over the same whitened cost. The forward is affine in the
+    control, so the linearised cost is the cost itself and one outer iteration
+    with a converged CG solve reaches the MAP. Each outer iteration forms the
+    whole Jacobian, one VJP per observation, so it costs more than L-BFGS when
+    the observations are many and the problem is well conditioned.
+
+    The observation-space dual (PSAS) is not offered: it belongs to vardax
+    (jejjohnson/vardax#72).
 
     Args:
         problem: The assembled 4D-Var problem.
+        method: The minimiser.
         initial_source: Optional first-guess emission signal ``S₀`` (defaults to
-            the prior mean, i.e. ``χ₀ = 0``).
-        rtol: Relative optimiser tolerance.
-        atol: Absolute optimiser tolerance.
-        max_steps: Maximum optimiser iterations.
-        solver: Optional optimistix minimiser (defaults to ``optx.LBFGS``).
+            the prior mean, i.e. ``χ₀ = 0``), for L-BFGS only:
+            ``IncrementalFourDVar`` always starts from the prior mean.
+        rtol: Relative tolerance of the optimiser, or of the CG solves.
+        atol: Absolute tolerance of the optimiser, or of the CG solves.
+        max_steps: Maximum L-BFGS iterations.
+        solver: Optional optimistix minimiser (defaults to ``optx.LBFGS``), for
+            L-BFGS only.
         compute_posterior: When ``True``, also evaluate the Gauss-Newton Laplace
             :func:`posterior_covariance` at the MAP and attach it to the result.
+        outer_iters: Gauss–Newton outer iterations.
+        inner_iters: CG iterations per Gauss–Newton outer iteration.
 
     Returns:
-        The :class:`FourDVarResult` with the MAP source and diagnostics from
-        ``vardax.ThreeDVar.analyse``.
+        The :class:`FourDVarResult` with the MAP source and diagnostics.
+        ``n_steps`` counts L-BFGS iterations or Gauss–Newton outer iterations.
+        ``converged`` is optimistix's verdict for L-BFGS, and for Gauss–Newton
+        whether ‖∇𝒥(χ*)‖ ≤ atol + rtol ‖∇𝒥(0)‖, because vardax reports none.
 
     Raises:
+        ValueError: For an unknown ``method``, ``"psas"`` included, or an option
+            the method cannot honour.
         ImportError: Without the ``assim`` extra (``pip install
             'plumax[assim]'``).
     """
-    import optimistix as optx
-
-    chi0 = None
-    if initial_source is not None:
-        s0 = jnp.asarray(initial_source, dtype=float)
-        # χ₀ = L⁻¹ (S₀ − S_b) — solve the triangular system rather than invert.
-        n_source = problem.n_source
-        first_guess = problem.prior_mean.at[:n_source].set(s0)
-        chi0 = jax.scipy.linalg.solve_triangular(
-            problem.prior_chol, first_guess - problem.prior_mean, lower=True
+    if method == "gauss_newton":
+        if initial_source is not None or solver is not None:
+            raise ValueError(
+                "solve_4dvar: `initial_source` and `solver` apply to L-BFGS only; "
+                "vardax.IncrementalFourDVar starts from the prior mean and solves "
+                "with CG."
+            )
+        flat_map, chi_star, cost, n_steps, converged = _solve_gauss_newton(
+            problem, outer_iters, inner_iters, rtol, atol
         )
-    model, batch = problem.analysis(
-        minimiser=solver or optx.LBFGS(rtol=rtol, atol=atol),
-        max_steps=max_steps,
-        initial_whitened=chi0,
-    )
-    analysis, outcome = model.analyse(batch)
-    flat_map = analysis[0, 0]  # S_b + L χ*, the whole flat control
-    chi_star = outcome.value[0]  # χ*, the whitened control
-    n_steps = int(outcome.num_steps[0])
+    elif method == "lbfgs":
+        flat_map, chi_star, cost, n_steps, converged = _solve_lbfgs(
+            problem, initial_source, rtol, atol, max_steps, solver
+        )
+    elif method == "psas":
+        raise ValueError(
+            "solve_4dvar: dual PSAS belongs to vardax and is not available yet "
+            "(https://github.com/jejjohnson/vardax/issues/72)."
+        )
+    else:
+        raise ValueError(f"solve_4dvar: unknown method {method!r}.")
     finite = bool(jnp.all(jnp.isfinite(flat_map)))
     # `throw=False` hides the optimiser outcome, so surface optimistix's own
     # verdict (`result == successful`). L-BFGS on these stiff transport
     # problems often exhausts `max_steps` while still returning a good, finite
     # MAP, so a bare `converged is False` is common and not alarming on its
     # own; a non-finite MAP is the hazard to flag.
-    converged = bool(outcome.converged[0])
     if not finite:
         warnings.warn(
             "solve_4dvar: the optimiser returned a non-finite source; the "
@@ -1398,7 +1508,7 @@ def solve_4dvar(
     return FourDVarResult(
         source=flat_map[:n_source],
         whitened=chi_star,
-        cost=float(outcome.cost[0]),
+        cost=cost,
         n_steps=n_steps,
         converged=converged,
         posterior=posterior,
@@ -1419,6 +1529,65 @@ def _background_analysis(
     # c₀* = c_b + δc₀*
     initial_concentration = jnp.asarray(background.c_b, increment.dtype) + increment
     return BackgroundAnalysis(initial_concentration, bc_scale)
+
+
+def _solve_lbfgs(
+    problem: FourDVarProblem,
+    initial_source: jax.Array | None,
+    rtol: float,
+    atol: float,
+    max_steps: int,
+    solver: optx.AbstractMinimiser | None,
+) -> tuple[jax.Array, jax.Array, float, int, bool]:
+    """L-BFGS through ``vardax.ThreeDVar``: (q*, χ*, cost, steps, converged)."""
+    import optimistix as optx
+
+    chi0 = None
+    if initial_source is not None:
+        s0 = jnp.asarray(initial_source, dtype=float)
+        # χ₀ = L⁻¹ (S₀ − S_b) — solve the triangular system rather than invert.
+        n_source = problem.n_source
+        first_guess = problem.prior_mean.at[:n_source].set(s0)
+        chi0 = jax.scipy.linalg.solve_triangular(
+            problem.prior_chol, first_guess - problem.prior_mean, lower=True
+        )
+    model, batch = problem.analysis(
+        minimiser=solver or optx.LBFGS(rtol=rtol, atol=atol),
+        max_steps=max_steps,
+        initial_whitened=chi0,
+    )
+    analysis, outcome = model.analyse(batch)
+    return (
+        analysis[0, 0],
+        outcome.value[0],
+        float(outcome.cost[0]),
+        int(outcome.num_steps[0]),
+        bool(outcome.converged[0]),
+    )
+
+
+def _solve_gauss_newton(
+    problem: FourDVarProblem,
+    outer_iters: int,
+    inner_iters: int,
+    rtol: float,
+    atol: float,
+) -> tuple[jax.Array, jax.Array, float, int, bool]:
+    """Gauss–Newton through ``IncrementalFourDVar``: (q*, χ*, cost, steps, converged)."""
+    model, batch = problem.incremental_analysis(
+        outer_iters=outer_iters, inner_iters=inner_iters, rtol=rtol, atol=atol
+    )
+    flat_map = model(batch)[0]
+    # χ* = L⁻¹ (q* − μ_q): vardax returns the state, not its control
+    chi_star = jax.scipy.linalg.solve_triangular(
+        problem.prior_chol, flat_map - problem.prior_mean, lower=True
+    )
+    cost, gradient = problem.value_and_grad(chi_star)
+    _, initial_gradient = problem.value_and_grad(jnp.zeros_like(chi_star))
+    # ‖∇𝒥(χ*)‖ ≤ atol + rtol ‖∇𝒥(0)‖
+    threshold = atol + rtol * jnp.linalg.norm(initial_gradient)
+    converged = bool(jnp.linalg.norm(gradient) <= threshold)
+    return flat_map, chi_star, float(cost), outer_iters, converged
 
 
 @functools.cache
