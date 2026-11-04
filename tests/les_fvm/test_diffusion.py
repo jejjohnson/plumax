@@ -151,21 +151,64 @@ def _sigma_z_d(distance: float) -> float:
     return float(sigma_z)
 
 
-def test_mo_neutral_limit():
+# Boundary-layer depths over which mid-PBL K_z(MO) agrees with K_z(PG class D) to 30 %:
+# the measured crossings of the band are 100.9 m and 300.6 m, rounded inward to 10 m.
+# Physically this is the shallow neutral layer, where the plume fills the layer within
+# about 2–11 km. Below it MO is too weak; above it K_z(MO) = κ u* z_i / 8 keeps growing
+# linearly with z_i, whereas the PG constant σ_z² u / (2 x) saturates near 5.6 m²/s
+# (at 5 m/s) and then falls, so there is no agreement to find in a deep layer.
+MO_PG_AGREEMENT_Z_I = (110.0, 300.0)
+MO_PG_BAND = 0.3
+
+
+def _mo_over_pg_ratio(pbl_height: float, wind_speed: float = 5.0) -> float:
+    """K_z(MO) at z = z_i / 2 over the PG class D constant with σ_z(x) = z_i / 2."""
     # PG class D is defined on the 10 m wind, over rural z₀ = 0.1 m: neutral log law
-    wind_speed = 5.0
     u_star = KARMAN * wind_speed / math.log(10.0 / 0.1)
-    pbl_height = 200.0
-    eddy = mo_eddy_diffusivity(
-        _z_grid(), _surface_layer(u_star, 0.0), pbl_height, it=0, k_h=1.0
+    # Δz = z_i / 5, so that T-level k = 2 sits at z = 2.5 Δz = z_i / 2
+    grid = make_grid(
+        domain_x=(0.0, 400.0, 4),
+        domain_y=(0.0, 400.0, 4),
+        domain_z=(0.0, 2.0 * pbl_height, 10),
+        dtype=jnp.float64,
     )
-    # T-level k = 2 sits at z = 100 m = z_i / 2
+    eddy = mo_eddy_diffusivity(
+        grid, _surface_layer(u_star, 0.0), pbl_height, it=0, k_h=1.0
+    )
     k_mo = float(eddy.vertical[2, 0, 0])
     # Taylor's K = σ²/(2t) is calibrated where the plume has reached that height:
     # the travel distance with σ_z = z_i / 2
-    distance = brentq(lambda x: _sigma_z_d(x) - 0.5 * pbl_height, 1e2, 1e5)
+    distance = brentq(lambda x: _sigma_z_d(x) - 0.5 * pbl_height, 1e2, 1e6)
     pg = pg_eddy_diffusivity("D", wind_speed, reference_distance=distance)
-    np.testing.assert_allclose(k_mo, pg.vertical, rtol=0.3)
+    return k_mo / float(pg.vertical)
+
+
+@pytest.mark.parametrize("pbl_height", np.linspace(*MO_PG_AGREEMENT_Z_I, 5).tolist())
+def test_mo_neutral_limit(pbl_height):
+    ratio = _mo_over_pg_ratio(pbl_height)
+    assert abs(ratio - 1.0) <= MO_PG_BAND
+
+
+@pytest.mark.parametrize(
+    ("pbl_height", "lower", "upper"),
+    [
+        (50.0, 0.5, 1.0 - MO_PG_BAND),
+        (500.0, 1.0 + MO_PG_BAND, np.inf),
+        (1000.0, 4.0, np.inf),
+    ],
+)
+def test_mo_neutral_limit_fails_outside_the_range(pbl_height, lower, upper):
+    # Documents the disagreement: K_z(MO) grows linearly with z_i and PG saturates
+    assert lower < _mo_over_pg_ratio(pbl_height) < upper
+
+
+def test_mo_over_pg_ratio_does_not_depend_on_wind_speed():
+    # u* and σ_z² u / (2 x) are both linear in the wind, and x does not depend on it
+    np.testing.assert_allclose(
+        _mo_over_pg_ratio(200.0, wind_speed=2.0),
+        _mo_over_pg_ratio(200.0, wind_speed=12.0),
+        rtol=1e-10,
+    )
 
 
 def test_mo_neutral_closed_form_on_every_level():

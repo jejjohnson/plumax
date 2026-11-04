@@ -218,6 +218,14 @@ def mo_eddy_diffusivity(
     below 1 in unstable air, above 1 in stable air. The ``min`` matters: without
     it (1 − z/z_i)² grows again above z_i, and the free troposphere would mix.
 
+    In neutral air the mid-PBL value agrees with :func:`pg_eddy_diffusivity` class D
+    to within 30 % only for z_i between 110 m and 300 m, taking u* from a 10 m wind
+    over z₀ = 0.1 m and PG's reference distance where σ_z = z_i / 2; the ratio does
+    not depend on the wind speed. Outside that range they disagree by construction:
+    K_z(z_i / 2) = κ u* z_i / 8 grows linearly with z_i while the PG constant
+    saturates, so the ratio exceeds 4 at z_i = 1000 m. This is a comparison with an
+    empirical curve, not a validity limit of the profile.
+
     Algorithm:
         1. Take the height above ground of each T-level, z = (k + ½) Δz, the
            convention :class:`~plumax.met.surface_layer.MoninObukhov` uses.
