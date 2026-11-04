@@ -1,4 +1,4 @@
-"""Tests for les_fvm.source — Gaussian point-source emission term."""
+"""Tests for les_fvm.source — Gaussian point-source and surface-flux terms."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import pytest
 from plumax.les_fvm.grid import make_grid
 from plumax.les_fvm.source import (
     GaussianSource,
+    SurfaceFluxSource,
     make_gaussian_source,
 )
 
@@ -112,3 +113,16 @@ def test_source_pytree_roundtrips_via_equinox():
     leaves, _ = eqx.tree_flatten_one_level(source)
     assert any(isinstance(leaf, jnp.ndarray) for leaf in leaves)
     assert isinstance(source, GaussianSource)
+
+
+def test_surface_flux_tendency_closes_the_mass_budget():
+    # Σ ∂C/∂t Δx Δy Δz = Σ q Δx Δy, in the lowest layer only
+    grid = make_grid((0.0, 100.0, 5), (0.0, 80.0, 4), (0.0, 40.0, 4))
+    flux = jnp.arange(1.0, 21.0).reshape(4, 5)
+    source = SurfaceFluxSource(lambda t: flux, grid.dz, 4)
+    tendency = source(jnp.asarray(0.0))
+    assert tendency.shape == grid.shape
+    assert float(jnp.abs(tendency[2:]).max()) == 0.0
+    injected = jnp.sum(tendency) * grid.dx * grid.dy * grid.dz
+    expected = jnp.sum(flux) * grid.dx * grid.dy
+    assert float(jnp.abs(injected - expected)) < 1e-10 * float(expected)

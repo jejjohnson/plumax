@@ -14,7 +14,7 @@ Submodules
 ----------
 - ``grid``          : CartesianGrid3D wrapper + coordinate helpers.
 - ``wind``          : prescribed 3-D wind fields (uniform, sheared, time-varying).
-- ``source``        : Gaussian point-source emission term.
+- ``source``        : Gaussian point-source and per-cell surface-flux terms.
 - ``advection``     : horizontal WENO advection (finitevolX) + vertical upwind.
 - ``diffusion``     : K-theory eddy diffusivity + anisotropic Laplacian.
 - ``boundary``      : BC application for 3-D fields (horizontal vmap + vertical).
@@ -57,6 +57,8 @@ from plumax.les_fvm.fourdvar import (
     FourDVarProblem,
     FourDVarResult,
     PosteriorCovariance,
+    SpatialControl,
+    TemporalControl,
     build_forward,
     build_problem,
     laplace_sample,
@@ -73,6 +75,7 @@ from plumax.les_fvm.simulate import (
 )
 from plumax.les_fvm.source import (
     GaussianSource,
+    SurfaceFluxSource,
     make_gaussian_source,
 )
 from plumax.les_fvm.wind import (
@@ -95,6 +98,9 @@ __all__ = [
     "PlumeGrid3D",
     "PosteriorCovariance",
     "PrescribedWindField",
+    "SpatialControl",
+    "SurfaceFluxSource",
+    "TemporalControl",
     "VerticalBC",
     "advection",
     "advection_tendency",
