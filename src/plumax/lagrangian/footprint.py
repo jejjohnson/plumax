@@ -33,6 +33,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 import numpy as np
+from jaxtyping import Array, Float, PRNGKeyArray
 
 from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.concentration import _cell_indices
@@ -65,6 +66,122 @@ def _bin_surface(
     weight = (gx & gy & below).astype(float)
     flat = ix * ny + iy
     return jnp.zeros(nx * ny).at[flat].add(weight).reshape(nx, ny)
+
+
+def _surface_edges(
+    domain_x: tuple[float, float, int],
+    domain_y: tuple[float, float, int],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Cell edges along x and y of the surface grid."""
+    x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
+    y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
+    return x_edges, y_edges
+
+
+def _backward_steps(
+    t_back: float, dt: float, receptor_time: float
+) -> tuple[Float[Array, " time"], Float[Array, " time"]]:
+    """Per-step durations of a backward run and the wind time of each step.
+
+    Per-step durations sum to exactly ``t_back``: the final forward step is
+    shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
+    the footprint integrates over the requested horizon rather than
+    ``n_steps * dt`` (which would over-count surface residence).
+
+    Backward integration undoes the forward intervals in reverse order, so the
+    first backward step consumes the (possibly partial) *final* forward
+    interval, hence the reversal. ``wind_starts[j]`` is the physical start
+    time of the interval step ``j`` undoes; sampling ``−wind(wind_starts[j])``
+    (step-start, matching ``integrate_particles``) makes the backward run the
+    exact discrete reverse of the forward one for any horizon.
+    """
+    n_steps = n_steps_for_horizon(t_back, dt)
+    durations = step_durations(t_back, dt, n_steps)[::-1]
+    wind_starts = receptor_time - jnp.cumsum(durations)
+    return durations, wind_starts
+
+
+def _surface_residence(
+    wind: Callable[[jax.Array], jax.Array] | GriddedWind,
+    receptor: Float[Array, " 3"],
+    key: PRNGKeyArray,
+    turbulence: TurbulenceModel,
+    x_edges: Float[Array, " nx_edge"],
+    y_edges: Float[Array, " ny_edge"],
+    durations: Float[Array, " time"],
+    wind_starts: Float[Array, " time"],
+    *,
+    n_particles: int,
+    pbl_height: float,
+    mix_height: float,
+) -> Float[Array, "nx ny"]:
+    """Summed residence time in the surface layer, a pure function of arrays.
+
+    H(s) = Σ_particles Σ_steps 1[in column s, z < f_pbl·h] · Δt.
+
+    It can be traced in ``wind``, ``receptor``, ``key`` and the steps, so a
+    caller can compile it once and ``vmap`` it over receptors, which
+    :class:`~plumax.lagrangian.FootprintSimulator` does.
+
+    Args:
+        wind: Forward mean wind, reversed here.
+        receptor: Receptor position (x, y, z) [m].
+        key: PRNG key of this receptor's particles.
+        turbulence: Turbulence model.
+        x_edges: Cell edges of the surface grid along x [m].
+        y_edges: Cell edges of the surface grid along y [m].
+        durations: Backward step durations Δt [s].
+        wind_starts: Time [s] at which each backward step samples the wind.
+        n_particles: Ensemble size.
+        pbl_height: Boundary-layer height h [m], the reflecting lid.
+        mix_height: Surface-layer depth f_pbl·h [m].
+
+    Returns:
+        The residence time per surface cell [s], summed over the particles.
+    """
+    key, velocity_key = jax.random.split(key)
+    sigma0, _ = turbulence.at(receptor[2])
+    vel0 = jax.random.normal(velocity_key, (n_particles, 3)) * sigma0
+    pos0 = jnp.broadcast_to(receptor, (n_particles, 3))
+    state = ParticleState(position=pos0, velocity=vel0)
+    step_keys = jax.random.split(key, durations.shape[0])
+    nx, ny = x_edges.shape[0] - 1, y_edges.shape[0] - 1
+
+    def body(carry, inputs):
+        st, hist = carry
+        t_start, k, dt_i = inputs
+        st = langevin_step(
+            st,
+            -mean_wind(wind, st.position, t_start),
+            turbulence,
+            dt_i,
+            k,
+            pbl_height=pbl_height,
+        )
+        below = st.position[:, 2] < mix_height
+        hist = hist + _bin_surface(st.position, x_edges, y_edges, below) * dt_i
+        return (st, hist), None
+
+    (_, residence), _ = jax.lax.scan(
+        body, (state, jnp.zeros((nx, ny))), (wind_starts, step_keys, durations)
+    )
+    return residence
+
+
+def _flux_sensitivity(
+    residence: Float[Array, "... nx ny"],
+    n_particles: int,
+    air_density: float,
+    mix_height: float,
+) -> np.ndarray:
+    """Normalise residence time into the footprint [s m² kg⁻¹].
+
+    F = H / (N ρ_air f_pbl·h): residence time per particle divided by the
+    surface-layer air mass column density (no per-cell-area division), so ``F``
+    pairs with a surface flux in kg m⁻² s⁻¹. It runs on the host so a compiled
+    caller divides exactly as :func:`compute_footprint` does.
+    """
+    return np.asarray(residence) / (n_particles * air_density * mix_height)
 
 
 def compute_footprint(
@@ -115,61 +232,25 @@ def compute_footprint(
         ``(nx, ny)`` and units ``s·m²·kg⁻¹`` (flux sensitivity; see the module
         docstring).
     """
-    x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
-    y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
+    x_edges, y_edges = _surface_edges(domain_x, domain_y)
     x_c = 0.5 * (x_edges[:-1] + x_edges[1:])
     y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
     mix_height = pbl_fraction * pbl_height
-
-    key = jax.random.PRNGKey(seed)
-    key, vkey = jax.random.split(key)
-    rec = jnp.asarray(receptor_location, dtype=float)
-    sigma0, _ = turbulence.at(rec[2])
-    vel0 = jax.random.normal(vkey, (n_particles, 3)) * sigma0
-    pos0 = jnp.broadcast_to(rec, (n_particles, 3))
-    state = ParticleState(position=pos0, velocity=vel0)
-
-    xe, ye = jnp.asarray(x_edges), jnp.asarray(y_edges)
-    n_steps = n_steps_for_horizon(t_back, dt)
-    keys = jax.random.split(key, n_steps)
-    # Per-step durations summing to exactly ``t_back``: the final forward step is
-    # shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
-    # the footprint integrates over the requested horizon rather than
-    # ``n_steps * dt`` (which would over-count surface residence).
-    #
-    # Backward integration undoes the forward intervals in reverse order, so the
-    # first backward step consumes the (possibly partial) *final* forward
-    # interval — hence the reversal. ``wind_starts[j]`` is the physical start
-    # time of the interval step ``j`` undoes; sampling ``−wind(wind_starts[j])``
-    # (step-start, matching ``integrate_particles``) makes the backward run the
-    # exact discrete reverse of the forward one for any horizon.
-    dts = step_durations(t_back, dt, n_steps)[::-1]
-    wind_starts = receptor_time - jnp.cumsum(dts)
-    nx, ny = len(x_c), len(y_c)
-
-    def body(carry, inputs):
-        st, hist = carry
-        t_start, k, dt_i = inputs
-        st = langevin_step(
-            st,
-            -mean_wind(wind, st.position, t_start),
-            turbulence,
-            dt_i,
-            k,
-            pbl_height=pbl_height,
-        )
-        below = st.position[:, 2] < mix_height
-        hist = hist + _bin_surface(st.position, xe, ye, below) * dt_i
-        return (st, hist), None
-
-    (_, residence), _ = jax.lax.scan(
-        body, (state, jnp.zeros((nx, ny))), (wind_starts, keys, dts)
+    durations, wind_starts = _backward_steps(t_back, dt, receptor_time)
+    residence = _surface_residence(
+        wind,
+        jnp.asarray(receptor_location, dtype=float),
+        jax.random.PRNGKey(seed),
+        turbulence,
+        jnp.asarray(x_edges),
+        jnp.asarray(y_edges),
+        durations,
+        wind_starts,
+        n_particles=n_particles,
+        pbl_height=pbl_height,
+        mix_height=mix_height,
     )
-
-    # Flux-sensitivity normalisation: residence-time per particle divided by the
-    # surface-layer air mass column density ρ·h (no per-cell-area division), so
-    # ``F`` has units s·m²·kg⁻¹ and pairs with a surface flux in kg·m⁻²·s⁻¹.
-    footprint = np.asarray(residence) / (n_particles * air_density * mix_height)
+    footprint = _flux_sensitivity(residence, n_particles, air_density, mix_height)
     return footprint, x_c, y_c
 
 
