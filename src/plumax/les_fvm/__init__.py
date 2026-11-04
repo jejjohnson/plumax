@@ -52,6 +52,8 @@ from plumax.les_fvm.diffusion import (
 )
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
 from plumax.les_fvm.fourdvar import (
+    BackgroundAnalysis,
+    BackgroundControl,
     ColumnObservationOperator,
     EulerianForward4DVar,
     FourDVarProblem,
@@ -87,6 +89,8 @@ from plumax.les_fvm.wind import (
 
 
 __all__ = [
+    "BackgroundAnalysis",
+    "BackgroundControl",
     "ColumnObservationOperator",
     "EddyDiffusivity",
     "EulerianDispersionRHS",

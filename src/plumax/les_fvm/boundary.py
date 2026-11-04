@@ -36,6 +36,9 @@ VerticalBCKind = Literal["dirichlet", "neumann", "outflow", "periodic"]
 
 HorizontalFace = Literal["south", "north", "west", "east"]
 
+#: The order of the per-face lateral boundary scaling factors.
+LATERAL_FACES: tuple[HorizontalFace, ...] = ("west", "east", "south", "north")
+
 
 class CellDirichlet1D(eqx.Module):
     """Advective (cell-value) Dirichlet ghost for one horizontal face.
@@ -252,6 +255,41 @@ def apply_boundary_conditions(
     out = horizontal_bc(field, dx=plume_grid.dx, dy=plume_grid.dy)
     out = vertical_bc(out, dz=plume_grid.dz)
     return out
+
+
+def scale_dirichlet_faces(
+    horizontal_bc: HorizontalBC, scale: Float[Array, " 4"]
+) -> HorizontalBC:
+    """Multiply the prescribed value of each Dirichlet face by its own factor.
+
+    c_face ← α_face c_face, the per-face lateral boundary scaling of the
+    4D-Var control. The factors are ordered as :data:`LATERAL_FACES`. Outflow,
+    periodic and Neumann faces prescribe no boundary concentration, so their
+    factors do nothing, and neither does a factor on a zero-valued Dirichlet face.
+
+    Args:
+        horizontal_bc: The boundary conditions to scale.
+        scale: One factor α per face.
+
+    Returns:
+        The boundary conditions with the scaled values.
+    """
+
+    def scaled(atom, factor: Float[Array, ""]):
+        if isinstance(atom, Dirichlet1D):
+            return Dirichlet1D(face=atom.face, value=factor * atom.value)
+        return atom
+
+    bc_set = horizontal_bc.bc_set
+    west, east, south, north = (
+        scaled(getattr(bc_set, face), scale[index])
+        for index, face in enumerate(LATERAL_FACES)
+    )
+    return HorizontalBC(
+        bc_set=BoundaryConditionSet(
+            south=south, north=north, west=west, east=east, mask=bc_set.mask
+        )
+    )
 
 
 def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
