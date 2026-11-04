@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.3](https://github.com/jejjohnson/plumax/compare/v0.2.2...v0.2.3) (2026-11-04)
+
+
+### Features
+
+* **coupled:** nonlinear end-to-end inversion through the radiance operator, on vardax ([#196](https://github.com/jejjohnson/plumax/issues/196)) ([9c780b8](https://github.com/jejjohnson/plumax/commit/9c780b8f3362698eac66ef05fd501b60727f9e85)), closes [#102](https://github.com/jejjohnson/plumax/issues/102)
+* **coupled:** per-instrument quality-flag aggregator feeding R and the masks ([#195](https://github.com/jejjohnson/plumax/issues/195)) ([beb35b9](https://github.com/jejjohnson/plumax/commit/beb35b91b48d65bff5a97674c6edcf15049e43c5)), closes [#105](https://github.com/jejjohnson/plumax/issues/105)
+* **coupled:** tier II and tier III transport backends for CoupledForward ([#194](https://github.com/jejjohnson/plumax/issues/194)) ([a63b4ff](https://github.com/jejjohnson/plumax/commit/a63b4ffde5d1bacc58efa8613e52b3f68f9dcc35)), closes [#101](https://github.com/jejjohnson/plumax/issues/101)
+* **gauss_plume:** briggs plume rise for buoyant and momentum sources ([#190](https://github.com/jejjohnson/plumax/issues/190)) ([8565b7e](https://github.com/jejjohnson/plumax/commit/8565b7eceab0fb1fda22c90c66e94d3e48667fba)), closes [#82](https://github.com/jejjohnson/plumax/issues/82)
+* **gauss_plume:** masked-K multi-source inference ([#191](https://github.com/jejjohnson/plumax/issues/191)) ([2a9cee9](https://github.com/jejjohnson/plumax/commit/2a9cee901b615cbedd646a5aa19e64ed0222f028))
+* **gauss_plume:** pick the Pasquill–Gifford class from the Obukhov and roughness lengths (Golder 1972) ([#211](https://github.com/jejjohnson/plumax/issues/211)) ([c0bd98a](https://github.com/jejjohnson/plumax/commit/c0bd98ac572323ae29f0200bb70cc88e001fd092)), closes [#86](https://github.com/jejjohnson/plumax/issues/86)
+* **gauss_plume:** student-t and heteroscedastic observation noise for Tier I inference ([#189](https://github.com/jejjohnson/plumax/issues/189)) ([0d7b2cb](https://github.com/jejjohnson/plumax/commit/0d7b2cb68f42d304ffa21706b79503fc4ab5fa24)), closes [#84](https://github.com/jejjohnson/plumax/issues/84)
+* **lagrangian:** footprint emulator with vardax calibration gates and emulator-based inversion ([#202](https://github.com/jejjohnson/plumax/issues/202)) ([d3c2677](https://github.com/jejjohnson/plumax/commit/d3c26771bb4004440f3be94c1cfc227907f6d18c))
+* **population:** importance-corrected TMTPP mark likelihood with ESS diagnostic and log-space quadrature ([#201](https://github.com/jejjohnson/plumax/issues/201)) ([f0d46e6](https://github.com/jejjohnson/plumax/commit/f0d46e65fcc05f1f50e68690f0b4ef7da2f9b711)), closes [#108](https://github.com/jejjohnson/plumax/issues/108)
+* **population:** mark registry with lognormal, lognormal-Pareto and mixture families ([#200](https://github.com/jejjohnson/plumax/issues/200)) ([99a18c1](https://github.com/jejjohnson/plumax/commit/99a18c1becb8357cc3a0a48567f58d5708cd3eac)), closes [#109](https://github.com/jejjohnson/plumax/issues/109)
+* **population:** per-event posterior payload v2 from every tier ([#199](https://github.com/jejjohnson/plumax/issues/199)) ([bb9fa86](https://github.com/jejjohnson/plumax/commit/bb9fa8615ba21da15105d18e7b27f010724cbf46)), closes [#107](https://github.com/jejjohnson/plumax/issues/107)
+* **population:** run the intensity and POD registries on xtremax point processes ([#198](https://github.com/jejjohnson/plumax/issues/198)) ([6413d12](https://github.com/jejjohnson/plumax/commit/6413d12acda5f0f66cbcac09d143e16b136566ed)), closes [#106](https://github.com/jejjohnson/plumax/issues/106)
+
+
+### Bug Fixes
+
+* **lagrangian:** match the stable and neutral Hanna profiles to Stohl et al. (2005) and FLEXPART ([#210](https://github.com/jejjohnson/plumax/issues/210)) ([9ae3a22](https://github.com/jejjohnson/plumax/commit/9ae3a229510673175cb38827482a83b929948430)), closes [#209](https://github.com/jejjohnson/plumax/issues/209)
+
 ## [0.2.2](https://github.com/jejjohnson/plumax/compare/v0.2.1...v0.2.2) (2026-10-30)
 
 
