@@ -18,6 +18,7 @@ from plumax._src.errors import ParameterError
 from plumax.lagrangian import (
     FootprintEmulator,
     FootprintSimulator,
+    GriddedWind,
     HomogeneousTurbulence,
     MetContextPrior,
     assert_emulator_calibrated,
@@ -51,7 +52,8 @@ def _operational_met(key: jax.Array) -> jax.Array:
 
 
 def _wind(context: jax.Array):
-    return uniform_wind(float(context[0]), float(context[1]))
+    # traceable: FootprintSimulator compiles once over a traced context
+    return uniform_wind(context[0], context[1])
 
 
 def _untrained(n_cells: int = 5) -> FootprintEmulator:
@@ -159,6 +161,115 @@ def test_simulator_matches_the_particle_model_seeded_by_context():
         **FOOTPRINT_KWARGS,
     )
     np.testing.assert_array_equal(reference[0], first)
+
+
+def test_simulator_compiles_the_particle_scan_once():
+    calls = []
+
+    def counting_wind(context: jax.Array):
+        calls.append(context)
+        return _wind(context)
+
+    simulator = FootprintSimulator(
+        wind_from_context=counting_wind,
+        receptors=RECEPTORS[:2],
+        turbulence=TURBULENCE,
+        domain_x=(-600.0, 0.0, 3),
+        domain_y=(-200.0, 200.0, 2),
+        n_particles=20,
+        **FOOTPRINT_KWARGS,
+    )
+    for offset in (0.0, 0.1, 0.2):
+        simulator.step(jnp.array([3.0 + offset, offset]), simulator.dt)
+    # the wind map runs only while tracing, so one call means one compilation
+    assert len(calls) == 1
+    assert isinstance(calls[0], jax.core.Tracer)
+
+
+@pytest.mark.slow
+def test_simulator_keeps_common_random_numbers_over_receptors():
+    # a whole case, a horizon that is no multiple of dt and two receptors that
+    # would differ only in their seed if they shared a position
+    receptors = jnp.array([[0.0, 0.0, 10.0], [0.0, 0.0, 10.0], [0.0, 75.0, 10.0]])
+    domain_x, domain_y = (-600.0, 0.0, 3), (-200.0, 200.0, 2)
+    options = {"t_back": 95.0, "dt": 10.0, "pbl_height": 200.0}
+    simulator = FootprintSimulator(
+        wind_from_context=_wind,
+        receptors=receptors,
+        turbulence=TURBULENCE,
+        domain_x=domain_x,
+        domain_y=domain_y,
+        n_particles=40,
+        **options,
+    )
+    context = jnp.array([3.0, 0.1])
+    rows = simulator.step(context, simulator.dt)
+    reference = ensemble_footprints(
+        [_wind(context)],
+        receptors,
+        TURBULENCE,
+        domain_x,
+        domain_y,
+        n_particles=40,
+        seed=zlib.crc32(np.asarray(context).tobytes()),
+        **options,
+    )
+    np.testing.assert_array_equal(rows, reference[0])
+    assert not bool(jnp.array_equal(rows[0], rows[1]))
+
+
+@pytest.mark.slow
+def test_simulator_matches_the_particle_model_on_a_gridded_wind():
+    axis = jnp.arange(4.0) * 200.0 - 400.0
+
+    def gridded(context: jax.Array) -> GriddedWind:
+        # u varies along x, so every particle samples its own wind
+        u = context[0] * (1.0 + axis / 2000.0)
+        u_field = jnp.broadcast_to(u, (2, 4, 4, 4))
+        v_field = context[1] * jnp.ones((2, 4, 4, 4))
+        w_field = jnp.zeros((2, 4, 4, 4))
+        times = jnp.array([-300.0, 0.0])
+        return GriddedWind(axis, axis, axis, times, u_field, v_field, w_field)
+
+    domain_x, domain_y = (-600.0, 0.0, 3), (-200.0, 200.0, 2)
+    simulator = FootprintSimulator(
+        wind_from_context=gridded,
+        receptors=RECEPTORS[:2],
+        turbulence=TURBULENCE,
+        domain_x=domain_x,
+        domain_y=domain_y,
+        n_particles=20,
+        **FOOTPRINT_KWARGS,
+    )
+    context = jnp.array([3.0, 0.1])
+    reference = ensemble_footprints(
+        [gridded(context)],
+        RECEPTORS[:2],
+        TURBULENCE,
+        domain_x,
+        domain_y,
+        n_particles=20,
+        seed=zlib.crc32(np.asarray(context).tobytes()),
+        **FOOTPRINT_KWARGS,
+    )
+    np.testing.assert_array_equal(simulator.step(context, simulator.dt), reference[0])
+
+
+def test_simulator_rejects_a_wind_that_cannot_be_traced():
+    def concrete_wind(context: jax.Array):
+        return uniform_wind(float(context[0]), float(context[1]))
+
+    simulator = FootprintSimulator(
+        wind_from_context=concrete_wind,
+        receptors=RECEPTORS[:1],
+        turbulence=TURBULENCE,
+        domain_x=(-600.0, 0.0, 3),
+        domain_y=(-200.0, 200.0, 2),
+        n_particles=10,
+        **FOOTPRINT_KWARGS,
+    )
+    with pytest.raises(jax.errors.ConcretizationTypeError):
+        simulator.step(jnp.array([3.0, 0.0]), simulator.dt)
 
 
 def test_footprint_dataset_rejects_no_cases(tmp_path):
