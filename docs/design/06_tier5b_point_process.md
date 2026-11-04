@@ -203,7 +203,7 @@ Both have library support; the choice is driven by the scientific question, not 
 | POD models $P_d(\cdot)$ (Hill + variants) | `plumax.population.pod` (10 models) | ✓ in tree (logistic / probit / cloglog GLM family) |
 | POD time-of-day binning (v1 time-varying POD) | `plumax.population.pod.InstrumentPOD.tod_bins` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | POD continuous $P_d(Q, t)$ (v2) | `plumax.population.pod.continuous_t` | ☐ v2 |
-| Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
 | TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
