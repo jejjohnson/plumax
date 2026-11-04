@@ -23,6 +23,7 @@ import numpy as np
 from scipy import stats
 
 from plumax.lagrangian.inversion import _is_traced
+from plumax.population._src._xtremax import require_xtremax
 
 
 if TYPE_CHECKING:
@@ -156,6 +157,30 @@ def fit_poisson_rate(
     )
 
 
+def _inhomogeneous_log_likelihood(
+    beta0: Any, beta: Any, x: Any, xq: Any, wq: Any
+) -> Any:
+    """Log-likelihood ``sum_i log lambda(x_i) - sum_q w_q lambda(x_q)``.
+
+    The event term and the compensator are combined by xtremax's
+    ``ipp_spatial_log_prob`` over an all-true event mask; the compensator is
+    the caller's quadrature, since the intensity is over covariates rather
+    than a rectangular domain.
+    """
+    require_xtremax("fit_inhomogeneous_intensity")
+    import jax.numpy as jnp
+    from xtremax.point_processes.primitives.ipp_spatial import ipp_spatial_log_prob
+
+    def log_intensity(covariates: Any) -> Any:
+        # log lambda(x) = beta0 + x . beta
+        return beta0 + covariates @ beta
+
+    # Lambda = sum_q w_q lambda(x_q)
+    integrated = jnp.sum(wq * jnp.exp(log_intensity(xq)))
+    mask = jnp.ones(x.shape[0], dtype=bool)
+    return ipp_spatial_log_prob(x, mask, log_intensity, integrated)
+
+
 def fit_inhomogeneous_intensity(
     covariates: np.ndarray,
     *,
@@ -186,7 +211,8 @@ def fit_inhomogeneous_intensity(
     every observed covariate and the fit cannot estimate an event rate over a
     region / time window. The quadrature weights carry the domain measure
     (area * duration), so the recovered ``beta0`` is a true log-rate density.
-    NumPyro is imported lazily.
+    NumPyro and xtremax are imported lazily; the two-term log-likelihood is
+    xtremax's ``ipp_spatial_log_prob``.
 
     Args:
         covariates: Detected-event covariate matrix ``(n_events, n_covariates)``.
@@ -210,6 +236,7 @@ def fit_inhomogeneous_intensity(
         ValueError: If ``covariates`` / ``quadrature_covariates`` are not 2-D
             with a matching covariate dimension, if either has zero rows, or if
             the quadrature weights are mis-shaped or non-positive.
+        ImportError: Without the ``population`` extra (xtremax).
     """
     cov = np.asarray(covariates, dtype=float)
     if cov.ndim != 2 or cov.shape[0] == 0:
@@ -254,13 +281,9 @@ def fit_inhomogeneous_intensity(
         beta = numpyro.sample(
             "beta", dist.Normal(0.0, beta_prior_scale).expand([n_cov]).to_event(1)
         )
-        # Inhomogeneous-Poisson log-likelihood: sum_i log lambda(x_i) minus the
-        # integrated intensity int lambda(x) dx, the integral approximated by
-        # sum_q w_q lambda(x_q). Added via numpyro.factor because it is not a
-        # per-observation density.
-        log_lambda_events = beta0 + x @ beta
-        integrated = jax.numpy.sum(wq * jax.numpy.exp(beta0 + xq @ beta))
-        numpyro.factor("point_process", jax.numpy.sum(log_lambda_events) - integrated)
+        # Added via numpyro.factor because it is not a per-observation density.
+        log_likelihood = _inhomogeneous_log_likelihood(beta0, beta, x, xq, wq)
+        numpyro.factor("point_process", log_likelihood)
 
     kernel = NUTS(model)
     mcmc = MCMC(

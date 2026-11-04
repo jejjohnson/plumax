@@ -129,3 +129,23 @@ def test_inhomogeneous_intensity_recovers_slope() -> None:
     # rate density identifiable, not just the slope.
     assert abs(float(post.beta_mean[0]) - beta_true) < 0.5
     assert abs(float(post.beta0_mean) - beta0_true) < 0.5
+
+
+def test_inhomogeneous_log_likelihood_matches_hand_formula() -> None:
+    pytest.importorskip("xtremax")
+    import jax
+
+    from plumax.population.point_process import _inhomogeneous_log_likelihood
+
+    with jax.enable_x64(True):
+        rng = np.random.default_rng(3)
+        events = rng.normal(size=(7, 2))
+        quad = rng.normal(size=(11, 2))
+        weights = rng.uniform(0.1, 1.0, size=11)
+        beta0, beta = 0.3, np.array([0.7, -0.4])
+        # sum_i (beta0 + x_i . beta) - sum_q w_q exp(beta0 + x_q . beta)
+        expected = np.sum(beta0 + events @ beta) - np.sum(
+            weights * np.exp(beta0 + quad @ beta)
+        )
+        actual = _inhomogeneous_log_likelihood(beta0, beta, events, quad, weights)
+        np.testing.assert_allclose(float(actual), expected, rtol=1e-12)
