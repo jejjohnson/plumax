@@ -270,7 +270,7 @@ def _check_coverage_arguments(
     coverage_intervals: Sequence[tuple[float, float, Bool[Array, " instrument"]]]
     | None,
     window: tuple[float, float],
-) -> list[tuple[float, float, Bool[Array, " instrument"]]] | None:
+) -> list[tuple[float, float, np.ndarray]] | None:
     if pods is not None and log_pod is not None:
         raise ValueError("tmtpp_iw_model: pass log_pod or pods, not both.")
     if (coverage is None) != (coverage_intervals is None):
@@ -282,9 +282,10 @@ def _check_coverage_arguments(
         return None
     if pods is None:
         raise ValueError("tmtpp_iw_model: coverage needs pods.")
+    # host arrays: this runs under NUTS's trace, where a jnp reduction has no value
     intervals = sorted(
         (
-            (float(start), float(stop), jnp.asarray(covering, dtype=bool))
+            (float(start), float(stop), np.asarray(covering, dtype=bool))
             for start, stop, covering in coverage_intervals
         ),
         key=lambda interval: interval[0],
@@ -310,7 +311,7 @@ def _covered_compensator(
     theta: dict[str, Any],
     pods: Sequence[InstrumentPOD] | None,
     calibration: dict[str, dict[str, Array]] | None,
-    intervals: list[tuple[float, float, Bool[Array, " instrument"]]],
+    intervals: list[tuple[float, float, np.ndarray]],
     support: tuple[float, float],
     n_nodes: int,
 ) -> Float[Array, ""]:
@@ -323,13 +324,15 @@ def _covered_compensator(
     thinned = jnp.zeros(())
     for start, stop, covering in intervals:
         # with nobody looking p̄_w = 0, and log 0 has no gradient to offer
-        if not bool(jnp.any(covering)):
+        if not covering.any():
             continue
         # Λ_w = ∫_w λ(t) dt
         expected_events = LogIntensity(
             kernel, n_integration_points=_quadrature_points(stop - start, NODES_PER_DAY)
         ).integrate(start, stop)
-        log_pod = log_pod_union(pods, coverage=covering, calibration=calibration)
+        log_pod = log_pod_union(
+            pods, coverage=jnp.asarray(covering), calibration=calibration
+        )
         # log p̄_w
         log_rate = log_thinned_rate(mark, theta, log_pod, support, n_nodes=n_nodes)
         # Σ_w Λ_w p̄_w

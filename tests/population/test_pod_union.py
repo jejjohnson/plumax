@@ -318,6 +318,34 @@ def test_coverage_follows_who_was_looking_when():
     np.testing.assert_allclose(density - _prior_density(params), expected, rtol=1e-6)
 
 
+@pytest.mark.slow
+def test_coverage_intervals_run_under_nuts():
+    # the compiled potential, where an interval's emptiness must be known on the host
+    window = (0.0, 10.0)
+    marks = jnp.array([2.0, 20.0, 5.0])
+    event_times, mask = padded_event_buffer([1.0, 7.0, 2.0], window)
+    mcmc = MCMC(NUTS(tmtpp_iw_model), num_warmup=20, num_samples=20, progress_bar=False)
+    mcmc.run(
+        jax.random.PRNGKey(0),
+        event_times,
+        mask,
+        EventEvidence(jnp.zeros((3, 1)), marks[:, None]),
+        mark=LognormalMark(),
+        intensity="constant",
+        window=window,
+        pods=PODS,
+        coverage=jnp.array([[True, False], [False, True], [True, False]]),
+        coverage_intervals=[
+            (0.0, 6.0, jnp.array([True, False])),
+            (6.0, 8.0, jnp.array([False, True])),
+            (8.0, 10.0, jnp.array([False, False])),
+        ],
+        support=(1e-6, 1e6),
+        n_nodes=201,
+    )
+    assert jnp.all(jnp.isfinite(mcmc.get_samples()["pod.a.q50"]))
+
+
 def _tiny_model_arguments():
     window = (0.0, 10.0)
     event_times, mask = padded_event_buffer([1.0], window)
