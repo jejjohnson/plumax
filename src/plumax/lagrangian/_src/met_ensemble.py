@@ -19,6 +19,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 import einx
+import gaussx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -122,6 +123,7 @@ def transport_covariance(
     """Mean footprint F̄ and linearised transport-error covariance at q_a.
 
     R_transport = Σ_e d_e d_eᵀ / (E − 1),   d_e = (F_e − F̄) q_a,
+    computed by ``gaussx.ensemble_covariance(..., bessel=True)`` on F_e q_a,
 
     and zero for a single member.
 
@@ -153,14 +155,15 @@ def transport_covariance(
     # F̄ = F_0 + mean_e(F_e − F_0): identical members give F̄ = F_0 exactly
     offsets = footprints - footprints[0]
     mean_footprint = footprints[0] + einx.mean("member obs cell -> obs cell", offsets)
-    # d_e = (F_e − F̄) q_a
-    deviation = einx.subtract(
-        "member obs cell, obs cell -> member obs cell", footprints, mean_footprint
-    )
-    response = einx.dot("member obs cell, cell -> member obs", deviation, prior_mean)
-    # Σ_e d_e d_eᵀ / (E − 1)
-    scatter = einx.dot("member a, member b -> a b", response, response)
-    covariance = scatter / max(n_members - 1, 1)
+    # r_e = F_e q_a
+    response = einx.dot("member obs cell, cell -> member obs", footprints, prior_mean)
+    if n_members == 1:
+        # gaussx divides by E − 1, so a lone member is an explicit zero
+        n_obs = response.shape[1]
+        return mean_footprint, jnp.zeros((n_obs, n_obs), dtype=response.dtype)
+    # R_transport = Σ_e (r_e − r̄)(r_e − r̄)ᵀ / (E − 1), as a low-rank operator
+    operator = gaussx.ensemble_covariance(response, bessel=True)
+    covariance = operator.as_matrix()
     return mean_footprint, covariance
 
 
