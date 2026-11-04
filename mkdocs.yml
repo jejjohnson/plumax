@@ -97,6 +97,7 @@ nav:
       - Mark registry: population_marks.md
       - Importance correction: population_importance.md
       - Persistency metrics: population_persistency.md
+      - Total emission: population_totals.md
   - Plume vetting: vetting.md
   - Plume operators (geo): geo.md
   - pipekit integration:

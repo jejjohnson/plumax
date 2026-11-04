@@ -22,6 +22,8 @@ products:
 * :mod:`~plumax.population.persistency` — V.C wait time, occurrence probability
   and expected count of a fitted intensity, with their posterior samples.
 * :mod:`~plumax.population.paradox` — V.D missing-mass paradox Monte Carlo.
+* :mod:`~plumax.population.totals` — V.D basin total emission with the
+  missing-mass correction, from a TMTPP posterior.
 * :mod:`~plumax.population.importance` — importance-corrected per-event
   evidence (POINT / GAUSSIAN / FULL regimes) and the ESS diagnostic.
 * :mod:`~plumax.population.integrate` — log-space Gauss–Hermite and Simpson
@@ -123,6 +125,7 @@ from plumax.population.processes import (
     make_process,
     padded_event_buffer,
 )
+from plumax.population.totals import TotalEmission, total_emission
 
 
 if TYPE_CHECKING:
@@ -193,6 +196,7 @@ __all__ = [
     "SizeDistributionPosterior",
     "SpectralAwarePOD",
     "TMTPPPosterior",
+    "TotalEmission",
     "VaryingCoefficientPOD",
     "WeibullRenewalIntensity",
     "WetlandPermafrostIntensity",
@@ -228,6 +232,7 @@ __all__ = [
     "run_scenario_grid",
     "simulate_paradox",
     "tmtpp_iw_model",
+    "total_emission",
 ]
 
 _LAZY = {
