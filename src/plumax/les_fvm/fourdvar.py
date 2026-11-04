@@ -10,9 +10,10 @@ where ``c(S, t)`` is the 3-D tracer field produced by the finite-volume solver
 :func:`~plumax.les_fvm.simulate_eulerian_dispersion` for emission signal ``S``,
 ``H_t`` is the column observation operator (vertical integral → optional spatial
 sampling), ``S_b`` / ``B`` the source prior, and ``R_t`` the observation-error
-covariance at overpass ``t``. (The IC / background term ``½‖c_0 − c_b(0)‖²`` of
-the full three-term design cost is future work — this v1 pins the initial field
-and inverts only the source.)
+covariance at overpass ``t``. By default the initial field is pinned at zero and
+only the source is inverted; a :class:`BackgroundControl` adds the IC / background
+term ``½‖c_0 − c_b‖²_{B_c}`` of the three-term design cost and per-face lateral
+boundary scaling factors to the control.
 
 The solve is a **vardax analysis** (the ``assim`` extra,
 ``pip install 'plumax[assim]'``). The control is a source, not an initial
@@ -43,6 +44,7 @@ vardax's Gauss–Newton Laplace covariance of that linear control.
 
 from __future__ import annotations
 
+import dataclasses
 import functools
 import warnings
 from collections.abc import Callable
@@ -61,7 +63,11 @@ from plumax._src.scalar_emission import GaussianEmission, gaussian_total
 from plumax._vardax import require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import _is_traced, matern32_covariance
-from plumax.les_fvm.boundary import build_default_concentration_bc
+from plumax.les_fvm.boundary import (
+    LATERAL_FACES,
+    build_default_concentration_bc,
+    scale_dirichlet_faces,
+)
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
 from plumax.les_fvm.grid import PlumeGrid3D, make_grid
@@ -367,6 +373,88 @@ def _cholesky(covariance: jax.Array) -> jax.Array:
     return gx.safe_cholesky(operator)
 
 
+@dataclass(frozen=True, eq=False)
+class BackgroundControl:
+    """Initial concentration and per-face inflow scaling in the control.
+
+    The flat control becomes (S, δc₀, α), with priors independent of the source's,
+
+        c₀ = c_b + δc₀,   δc₀ ~ N(0, B_c),   α_f ~ N(α̅, σ_α²) for each face f,
+
+    and every Dirichlet lateral boundary value c_f of the forward becomes
+    α_f c_f (:func:`~plumax.les_fvm.boundary.scale_dirichlet_faces`). The factors
+    are ordered (west, east, south, north). This is the per-face Gaussian of the
+    design page; a per-face Matérn along the boundary is its open v2.
+
+    Attributes:
+        c_b: Background initial concentration c_b on the interior cells [kg m⁻³],
+            shape ``(nz, ny, nx)``.
+        B_c: Covariance of δc₀, a lineax operator on the flattened interior.
+        bc_scale_prior: Mean α̅ and standard deviation σ_α of each factor.
+
+    Raises:
+        ValueError: If ``c_b`` is not a finite 3-D array, ``B_c`` has the wrong
+            size, or ``bc_scale_prior`` has no positive standard deviation.
+
+    Examples:
+        A background on a 2 × 3 × 4 interior adds 24 + 4 entries to the control:
+
+        >>> import jax
+        >>> import jax.numpy as jnp
+        >>> import lineax as lx
+        >>> covariance = lx.DiagonalLinearOperator(jnp.ones(24))
+        >>> background = BackgroundControl(jnp.zeros((2, 3, 4)), covariance)
+        >>> background.size
+        28
+    """
+
+    c_b: jax.Array
+    B_c: lx.AbstractLinearOperator
+    bc_scale_prior: tuple[float, float] = (1.0, 0.1)
+
+    def __post_init__(self) -> None:
+        c_b = np.asarray(self.c_b, dtype=float)
+        if c_b.ndim != 3 or not np.all(np.isfinite(c_b)):
+            raise ValueError(
+                "BackgroundControl: `c_b` must be a finite (nz, ny, nx) array."
+            )
+        if self.B_c.in_size() != c_b.size or self.B_c.out_size() != c_b.size:
+            raise ValueError(
+                f"BackgroundControl: `B_c` must act on {c_b.size} interior cells, "
+                f"got {self.B_c.in_size()} → {self.B_c.out_size()}."
+            )
+        mean, std = self.bc_scale_prior
+        if not (np.isfinite(mean) and np.isfinite(std) and std > 0.0):
+            raise ValueError(
+                "BackgroundControl: `bc_scale_prior` needs a finite mean and a "
+                "finite standard deviation > 0."
+            )
+
+    @property
+    def size(self) -> int:
+        """Length of the control's (δc₀, α) part."""
+        return int(np.size(self.c_b)) + _N_FACES
+
+    def split(self, flat: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+        """Split a flat control into (S, δc₀ as a field, α)."""
+        n_source = flat.shape[-1] - self.size
+        increment = flat[..., n_source:-_N_FACES]
+        increment_field = increment.reshape(
+            (*increment.shape[:-1], *np.shape(self.c_b))
+        )
+        return flat[..., :n_source], increment_field, flat[..., -_N_FACES:]
+
+    def flat_prior_mean(self) -> jax.Array:
+        """Prior mean of the (δc₀, α) part, (0, α̅)."""
+        increment_mean = jnp.zeros(np.size(self.c_b), dtype=float)
+        scale_mean = jnp.full(_N_FACES, self.bc_scale_prior[0], dtype=float)
+        return jnp.concatenate([increment_mean, scale_mean])
+
+
+#: Lateral faces with a boundary scaling factor.
+_N_FACES = len(LATERAL_FACES)
+
+
 # ── differentiable forward: emission signal → column-observation time series ──
 
 
@@ -414,9 +502,10 @@ class EulerianForward4DVar:
     Build with :func:`build_forward` rather than directly.
 
     Attributes:
-        rhs_factory: ``q_series -> EulerianDispersionRHS`` closing over the
-            static transport configuration; the emission rate is the only
-            free input (linearly interpolated between save times).
+        rhs_factory: ``(q_series, bc_scale=None) -> EulerianDispersionRHS``
+            closing over the static transport configuration; the emission rate
+            (linearly interpolated between save times) and the optional
+            per-face boundary scaling are its only free inputs.
         observation_op: The column ``H_t``.
         save_times: Observation/integration times [s], shape ``(n_t,)``.
         initial_concentration: Padded initial field ``(Nz, Ny, Nx)``.
@@ -424,9 +513,11 @@ class EulerianForward4DVar:
         plume_grid: The analysis grid; its T-cells place a spatial prior.
         control: The spatial control the flat control vector is laid out by;
             ``None`` for the emission time series.
+        background: The initial-concentration and boundary-scaling part of the
+            flat control; ``None`` pins both.
     """
 
-    rhs_factory: Callable[[jax.Array], EulerianDispersionRHS]
+    rhs_factory: Callable[..., EulerianDispersionRHS]
     observation_op: ColumnObservationOperator
     save_times: jax.Array
     initial_concentration: jax.Array
@@ -435,6 +526,11 @@ class EulerianForward4DVar:
     solver_kwargs: dict = field(default_factory=dict)
     plume_grid: PlumeGrid3D | None = None
     control: SpatialControl | None = None
+    background: BackgroundControl | None = None
+
+    def with_background(self, background: BackgroundControl) -> EulerianForward4DVar:
+        """This forward over the flat control (S, δc₀, α) of ``background``."""
+        return dataclasses.replace(self, background=background)
 
     def concentration_history(self, q_series: jax.Array) -> jax.Array:
         """Solve the FV transport for ``q_series``; return interior fields.
@@ -444,7 +540,18 @@ class EulerianForward4DVar:
         """
         import diffrax
 
-        rhs = self.rhs_factory(jnp.asarray(q_series))
+        flat = jnp.asarray(q_series)
+        if self.background is None:
+            rhs = self.rhs_factory(flat)
+            initial_concentration = self.initial_concentration
+        else:
+            source, increment, bc_scale = self.background.split(flat)
+            rhs = self.rhs_factory(source, bc_scale)
+            # c₀ = c_b + δc₀ on the interior; the first RHS call fills the ghosts
+            interior = jnp.asarray(self.background.c_b, flat.dtype) + increment
+            initial_concentration = self.initial_concentration.at[1:-1, 1:-1, 1:-1].set(
+                interior
+            )
         kw = {
             "solver": diffrax.Heun(),
             "dt0": 1.0,
@@ -463,7 +570,7 @@ class EulerianForward4DVar:
             t0=self.t0,
             t1=self.t1,
             dt0=kw["dt0"],
-            y0=self.initial_concentration,
+            y0=initial_concentration,
             saveat=diffrax.SaveAt(ts=self.save_times),
             stepsize_controller=kw["stepsize_controller"],
             max_steps=kw["max_steps"],
@@ -502,6 +609,8 @@ def build_forward(
     advection_scheme: str = "upwind1",
     receptor_index: jax.Array | None = None,
     solver_kwargs: dict | None = None,
+    bc_x: str | tuple = ("dirichlet", "outflow"),
+    bc_y: str | tuple = "periodic",
 ) -> EulerianForward4DVar:
     """Assemble a differentiable :class:`EulerianForward4DVar`.
 
@@ -527,6 +636,11 @@ def build_forward(
             cheap default for inversion; WENO variants are available).
         receptor_index: Optional ``(n_obs, 2)`` ``(iy, ix)`` receptor cells.
         solver_kwargs: Overrides for the diffrax solve.
+        bc_x: West and east boundary conditions, as
+            :func:`~plumax.les_fvm.boundary.build_default_concentration_bc`
+            takes them; ``(("dirichlet", c), "outflow")`` prescribes an inflow
+            concentration c on the west face.
+        bc_y: South and north boundary conditions, likewise.
 
     Returns:
         A configured :class:`EulerianForward4DVar`.
@@ -610,7 +724,7 @@ def build_forward(
             )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
-        bc_x=("dirichlet", "outflow"), bc_y="periodic", bc_z=("neumann", "neumann")
+        bc_x=bc_x, bc_y=bc_y, bc_z=("neumann", "neumann")
     )
     save_times = jnp.asarray(save_times, dtype=plume_grid.x.dtype)
 
@@ -641,14 +755,21 @@ def build_forward(
                 density=base_source.density,
             )
 
-    def rhs_factory(q_series: jax.Array) -> EulerianDispersionRHS:
+    def rhs_factory(
+        q_series: jax.Array, bc_scale: jax.Array | None = None
+    ) -> EulerianDispersionRHS:
         source = source_factory(q_series)
+        scaled_bc = (
+            horizontal_bc
+            if bc_scale is None
+            else scale_dirichlet_faces(horizontal_bc, bc_scale)
+        )
         return EulerianDispersionRHS(
             plume_grid=plume_grid,
             wind_field=wind_field,
             eddy_diffusivity=eddy,
             source=source,
-            horizontal_bc=horizontal_bc,
+            horizontal_bc=scaled_bc,
             vertical_bc=vertical_bc,
             advection_scheme=advection_scheme,
         )
@@ -692,8 +813,8 @@ class FourDVarProblem:
     """A strong-constraint 4D-Var problem over a flat source control.
 
     The control is a scalar emission time series or the per-cell flux of a
-    :class:`SpatialControl`; ``n_state`` below is its length, ``n_t`` for the
-    time series. Holds the differentiable forward, the prior ``(S_b, B = L Lᵀ)``,
+    :class:`SpatialControl`, optionally stacked with a :class:`BackgroundControl`;
+    ``n_state`` below is its length. Holds the differentiable forward, the prior ``(S_b, B = L Lᵀ)``,
     and the observations ``(y_t, R_t)``. The cost is evaluated in whitened space
     ``χ = L⁻¹ (S − S_b)`` so the prior term is the identity ``½‖χ‖²`` and the
     Hessian is well-conditioned (design §control-transform). ``observations``
@@ -709,8 +830,15 @@ class FourDVarProblem:
     obs_variance: jax.Array  # R diagonal, broadcast to (n_t, n_obs)
     control: SpatialControl | None = None
 
+    @property
+    def n_source(self) -> int:
+        """Length of the source part of the flat control."""
+        background = self.forward.background
+        n_extra = 0 if background is None else background.size
+        return self.prior_mean.shape[0] - n_extra
+
     def source_from_whitened(self, chi: jax.Array) -> jax.Array:
-        """Map whitened control ``χ`` back to the emission signal ``S``."""
+        """Map whitened control ``χ`` back to the flat control, ``S_b + L χ``."""
         return self.prior_mean + self.prior_chol @ chi
 
     def cost(self, chi: jax.Array) -> jax.Array:
@@ -846,6 +974,7 @@ def build_problem(
     prior_covariance: jax.Array | None = None,
     obs_variance: jax.Array | float,
     control: SpatialControl | TemporalControl | None = None,
+    background: BackgroundControl | None = None,
 ) -> FourDVarProblem:
     """Assemble a :class:`FourDVarProblem`, factorising the prior covariance.
 
@@ -862,14 +991,60 @@ def build_problem(
             to ``observations``); ``R = R_retr + R_repr``.
         control: The control and its prior: the same :class:`SpatialControl`
             that ``forward`` was built with, or a :class:`TemporalControl`.
+        background: Adds the initial concentration and the per-face boundary
+            scaling to the control, with a block-diagonal prior. ``None`` pins
+            both, and leaves the problem as it was without this argument.
 
     Returns:
         The configured :class:`FourDVarProblem`.
     """
     if isinstance(control, SpatialControl):
-        return _build_spatial_problem(
+        problem = _build_spatial_problem(
             forward, observations, prior_mean, prior_covariance, obs_variance, control
         )
+    else:
+        problem = _build_temporal_problem(
+            forward, observations, prior_mean, prior_covariance, obs_variance, control
+        )
+    return problem if background is None else _with_background(problem, background)
+
+
+def _with_background(
+    problem: FourDVarProblem, background: BackgroundControl
+) -> FourDVarProblem:
+    """Stack (δc₀, α) onto a problem's control, with a block-diagonal prior."""
+    grid = problem.forward.plume_grid
+    if grid is None:
+        raise ValueError("build_problem: `background` needs a forward with its grid.")
+    if np.shape(background.c_b) != grid.interior_shape:
+        raise ValueError(
+            f"build_problem: `background.c_b` must be {grid.interior_shape}, got "
+            f"{np.shape(background.c_b)}."
+        )
+    covariance_c = background.B_c.as_matrix()
+    # L = blockdiag(L_S, L_c, σ_α I), so B = blockdiag(B_S, B_c, σ_α² I)
+    prior_sqrt = gx.BlockDiag(
+        lx.MatrixLinearOperator(problem.prior_chol),
+        lx.MatrixLinearOperator(_cholesky(covariance_c)),
+        lx.DiagonalLinearOperator(jnp.full(_N_FACES, background.bc_scale_prior[1])),
+    )
+    return dataclasses.replace(
+        problem,
+        forward=problem.forward.with_background(background),
+        prior_mean=jnp.concatenate([problem.prior_mean, background.flat_prior_mean()]),
+        prior_chol=prior_sqrt.as_matrix(),
+    )
+
+
+def _build_temporal_problem(
+    forward: EulerianForward4DVar,
+    observations: jax.Array,
+    prior_mean: jax.Array | None,
+    prior_covariance: jax.Array | None,
+    obs_variance: jax.Array | float,
+    control: TemporalControl | None,
+) -> FourDVarProblem:
+    """:func:`build_problem` for the emission time series."""
     if forward.control is not None:
         raise ValueError(
             "build_problem: `forward` has a spatial control; pass the same "
@@ -1005,12 +1180,26 @@ def _resolve_obs_variance(obs_variance: jax.Array | float, y: jax.Array) -> jax.
 
 
 @dataclass(frozen=True)
+class BackgroundAnalysis:
+    """The MAP of the :class:`BackgroundControl` part of a 4D-Var control.
+
+    Attributes:
+        initial_concentration: c₀* = c_b + δc₀* on the interior [kg m⁻³], shape
+            ``(nz, ny, nx)``.
+        bc_scale: Per-face factors α*, ordered (west, east, south, north).
+    """
+
+    initial_concentration: jax.Array
+    bc_scale: jax.Array
+
+
+@dataclass(frozen=True)
 class FourDVarResult:
     """Outcome of a 4D-Var minimisation.
 
     Attributes:
         source: MAP emission time series ``S* = S_b + L χ*``, shape ``(n_t,)``.
-        whitened: Optimal whitened control ``χ*``, shape ``(n_t,)``.
+        whitened: Optimal whitened control ``χ*``, of the whole flat control.
         cost: Final cost value ``J(χ*)``.
         n_steps: Optimiser iterations consumed (``-1`` if not reported).
         posterior: Optional :class:`PosteriorCovariance` around the MAP, attached
@@ -1031,6 +1220,8 @@ class FourDVarResult:
         control: The :class:`SpatialControl` of a per-cell flux solve, whose
             ``source`` is a flat vector of length ``control.size``, mapped by
             :attr:`source_field`. ``None`` for the emission time series.
+        background: MAP of the initial concentration and the boundary scaling,
+            when the problem has a :class:`BackgroundControl`.
 
     For an emission time series, the result also carries the Tier V per-event
     payload (``population.PerEventPosterior``) for the event emission rate, the
@@ -1049,6 +1240,7 @@ class FourDVarResult:
     prior_mean: jax.Array | None = None
     prior_covariance: jax.Array | None = None
     control: SpatialControl | None = None
+    background: BackgroundAnalysis | None = None
 
     @property
     def source_field(self) -> jax.Array:
@@ -1167,8 +1359,10 @@ def solve_4dvar(
     if initial_source is not None:
         s0 = jnp.asarray(initial_source, dtype=float)
         # χ₀ = L⁻¹ (S₀ − S_b) — solve the triangular system rather than invert.
+        n_source = problem.n_source
+        first_guess = problem.prior_mean.at[:n_source].set(s0)
         chi0 = jax.scipy.linalg.solve_triangular(
-            problem.prior_chol, s0 - problem.prior_mean, lower=True
+            problem.prior_chol, first_guess - problem.prior_mean, lower=True
         )
     model, batch = problem.analysis(
         minimiser=solver or optx.LBFGS(rtol=rtol, atol=atol),
@@ -1176,10 +1370,10 @@ def solve_4dvar(
         initial_whitened=chi0,
     )
     analysis, outcome = model.analyse(batch)
-    source = analysis[0, 0]  # S* = S_b + L χ*, (n_t,)
+    flat_map = analysis[0, 0]  # S_b + L χ*, the whole flat control
     chi_star = outcome.value[0]  # χ*, the whitened control
     n_steps = int(outcome.num_steps[0])
-    finite = bool(jnp.all(jnp.isfinite(source)))
+    finite = bool(jnp.all(jnp.isfinite(flat_map)))
     # `throw=False` hides the optimiser outcome, so surface optimistix's own
     # verdict (`result == successful`). L-BFGS on these stiff transport
     # problems often exhausts `max_steps` while still returning a good, finite
@@ -1197,19 +1391,34 @@ def solve_4dvar(
     # Skip the posterior on a non-finite MAP: the Gauss-Newton precision at a
     # NaN control would attach a NaN covariance.
     posterior = (
-        _laplace_posterior(problem, source) if compute_posterior and finite else None
+        _laplace_posterior(problem, flat_map) if compute_posterior and finite else None
     )
+    n_source = problem.n_source
+    source_chol = problem.prior_chol[:n_source, :n_source]
     return FourDVarResult(
-        source=source,
+        source=flat_map[:n_source],
         whitened=chi_star,
         cost=float(outcome.cost[0]),
         n_steps=n_steps,
         converged=converged,
         posterior=posterior,
-        prior_mean=problem.prior_mean,
-        prior_covariance=problem.prior_chol @ problem.prior_chol.T,
+        prior_mean=problem.prior_mean[:n_source],
+        prior_covariance=source_chol @ source_chol.T,
         control=problem.control,
+        background=_background_analysis(problem, flat_map),
     )
+
+
+def _background_analysis(
+    problem: FourDVarProblem, flat_map: jax.Array
+) -> BackgroundAnalysis | None:
+    background = problem.forward.background
+    if background is None:
+        return None
+    _, increment, bc_scale = background.split(flat_map)
+    # c₀* = c_b + δc₀*
+    initial_concentration = jnp.asarray(background.c_b, increment.dtype) + increment
+    return BackgroundAnalysis(initial_concentration, bc_scale)
 
 
 @functools.cache
@@ -1246,22 +1455,40 @@ class PosteriorCovariance:
         H_GN = I + J̃ᵀ R⁻¹ J̃,   J̃ = ∂(predicted_obs)/∂χ,
 
     so the whitened posterior covariance is ``P_χ = H_GN⁻¹`` and — because
-    ``S = S_b + L χ`` — the source-space covariance is ``P_S = L P_χ Lᵀ``.
+    ``S = S_b + L χ`` — the source-space covariance is ``P_S = L P_χ Lᵀ``. With
+    a :class:`BackgroundControl`, ``P_S`` is the source block of the covariance
+    of the whole flat control.
 
     Attributes:
         whitened_covariance: ``P_χ``, shape ``(n_state, n_state)``.
-        source_covariance: ``P_S``, shape ``(n_state, n_state)``.
+        source_covariance: ``P_S``, shape ``(n_source, n_source)``.
         control: The :class:`SpatialControl` of a per-cell flux problem.
+        control_covariance: Covariance of the whole flat control, shape
+            ``(n_state, n_state)``, when it has a :class:`BackgroundControl`.
     """
 
     whitened_covariance: jax.Array  # P_χ, (n_state, n_state)
-    source_covariance: jax.Array  # P_S, (n_state, n_state)
+    source_covariance: jax.Array  # P_S, (n_source, n_source)
     control: SpatialControl | None = None
+    control_covariance: jax.Array | None = None
 
     @property
     def source_std(self) -> jax.Array:
         """Marginal source-space posterior standard deviations ``√diag(P_S)``."""
         return jnp.sqrt(jnp.diagonal(self.source_covariance))
+
+    @property
+    def bc_scale_std(self) -> jax.Array:
+        """Posterior sd of the per-face factors, ordered (west, east, south, north).
+
+        Raises:
+            PayloadError: Without a :class:`BackgroundControl`.
+        """
+        if self.control_covariance is None:
+            raise PayloadError(
+                "PosteriorCovariance.bc_scale_std needs a BackgroundControl problem."
+            )
+        return jnp.sqrt(jnp.diagonal(self.control_covariance)[-_N_FACES:])
 
     @property
     def std_field(self) -> jax.Array:
@@ -1308,10 +1535,13 @@ def _laplace_posterior(
     chol = problem.prior_chol
     half = jax.scipy.linalg.solve_triangular(chol, p_source, lower=True)
     p_chi = jax.scipy.linalg.solve_triangular(chol, half.T, lower=True)
+    n_source = problem.n_source
+    has_background = problem.forward.background is not None
     return PosteriorCovariance(
         whitened_covariance=gx.symmetrize(p_chi),
-        source_covariance=p_source,
+        source_covariance=p_source[:n_source, :n_source],
         control=problem.control,
+        control_covariance=p_source if has_background else None,
     )
 
 
@@ -1369,13 +1599,15 @@ def laplace_sample(
     posterior = _vardax_laplace(problem, source)
     # S⁽ᵉ⁾ = S* + P_S^½ ξ⁽ᵉ⁾, ξ⁽ᵉ⁾ ~ N(0, I), on the (1, n_state) analysis state
     draws = posterior.sample(key, int(n_samples))
-    source_draws = draws[:, 0, :]
+    source_draws = draws[:, 0, : problem.n_source]
     if problem.control is not None:
         return problem.control.to_field(source_draws)
     return source_draws
 
 
 __all__ = [
+    "BackgroundAnalysis",
+    "BackgroundControl",
     "ColumnObservationOperator",
     "EulerianForward4DVar",
     "FourDVarProblem",
