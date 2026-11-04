@@ -150,7 +150,7 @@ The formerly standalone `methane_pod` library (intensity and POD registries, mis
 | Per-event posterior summariser | `plumax.population.catalog` (`PerEventPosterior.samples`) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | Per-event prior recall ($\pi_\text{per-event}$ lookup) | `plumax.population.catalog` (`PerEventPosterior.prior_logpdf`) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) — required for importance weighting |
 | Importance-weight calculator | `plumax.population.importance` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) |
-| Multi-satellite POD union | `plumax.population.pod.pod_union` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Multi-satellite POD union | `plumax.population.pod.pod_union` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Catalog schema (in-memory cross-tier) | `plumax.population.catalog` (`EmissionEvent` / `EmissionCatalog`) | 🚧 — in-memory Gaussian-summary catalog landed; CSV / parquet ingest [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | Real-data CSV ingestion | `plumax.population.ingest` | ☐ [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | Population SBC harness | `plumax.population.validation` | ☐ [#114](https://github.com/jejjohnson/plumax/issues/114) |

@@ -97,7 +97,7 @@ emulate = ["pipekit-train[equinox,cache]"]
 # Tier V point-process layer: plumax.population builds its generative and
 # likelihood machinery on xtremax.point_processes (Poisson, marked and thinned
 # processes), imported lazily so `import plumax.population` stays light.
-population = ["numpyro>=0.21", "xtremax>=0.0.4"]
+population = ["numpyro>=0.21", "pyyaml>=6", "xtremax>=0.0.4"]
 # Plume post-processing on GeoTensors (plumax.geo): the ten plume operators
 # ported from geotoolz's `plume` (#134) and the vetting operator (#157), as
 # pipekit Operators built with geoops's public carrier helpers, as radtrax's

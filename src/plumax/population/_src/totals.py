@@ -26,6 +26,11 @@ from jaxtyping import Array, Float
 
 from plumax.population._src.fitting_iw import TMTPPPosterior
 from plumax.population._src.integrate import log_simpson
+from plumax.population._src.pod_union import (
+    InstrumentPOD,
+    calibration_from_draw,
+    log_pod_union,
+)
 from plumax.population._src.processes import (
     NODES_PER_DAY,
     LogIntensity,
@@ -92,6 +97,7 @@ def _stratum_emission(
     windows: list[tuple[float, float]],
     event_duration: float,
     log_pod: Callable[[Array], Array] | None,
+    pods: Sequence[InstrumentPOD] | None,
     q_min: float,
     q_max: float,
     n_nodes: int,
@@ -114,13 +120,18 @@ def _stratum_emission(
         # --- marks ---
         # E_f[Q] = ∫ q f(q | θ) dq, a partial moment on [q_min, q_max]
         mean_rate = posterior.mark.truncated_mean(q_min, q_max, **theta)
-        if log_pod is None:
+        draw_log_pod = log_pod
+        if pods is not None:
+            # this draw's calibration, so the bounds carry its uncertainty
+            calibration = calibration_from_draw(pods, draw)
+            draw_log_pod = log_pod_union(pods, calibration=calibration)
+        if draw_log_pod is None:
             missing_rate = jnp.zeros_like(mean_rate)
         else:
 
             def log_integrand(q: Array) -> Array:
                 # log P_d is near 0 where detection is certain, so 1 − P_d needs expm1
-                log_miss = jnp.log(-jnp.expm1(log_pod(q)))
+                log_miss = jnp.log(-jnp.expm1(draw_log_pod(q)))
                 # log q + log f(q | θ) + log(1 − P_d(q))
                 return jnp.log(q) + posterior.mark.log_prob(q, **theta) + log_miss
 
@@ -147,6 +158,7 @@ def total_emission(
     q_max: float,
     n_nodes: int = 2001,
     nodes_per_day: int = NODES_PER_DAY,
+    pods: Sequence[InstrumentPOD] | None = None,
 ) -> TotalEmission:
     """Posterior samples of the basin total, with the inferred missing mass.
 
@@ -174,19 +186,23 @@ def total_emission(
         event_duration: Mean event duration D > 0, in the reciprocal of Q's time unit.
         log_pod: log P_d on rates in the marks' units, as
             :func:`~plumax.population.fitting.tmtpp_iw_model` takes it, or ``None``
-            for certain detection.
+            for certain detection. A fixed union is ``log_pod_union(pods)``.
         q_min: Lower limit of the mark integrals, > 0.
         q_max: Upper limit of the mark integrals, finite and > ``q_min``.
         n_nodes: Simpson nodes of the missing-mass integral.
         nodes_per_day: Quadrature density of Λ for kernels without a closed form.
             Lower it for long windows when the kernel is smooth.
+        pods: The instruments of a fit with a calibration prior; requires
+            ``log_pod=None``. Each draw then uses its own union P_d^∪, from its
+            ``pod.<name>.*`` sites. Every instrument counts as looking throughout
+            ``horizon``.
 
     Returns:
         The :class:`TotalEmission`.
 
     Raises:
         ValueError: For an empty window, invalid mark limits or duration, no strata,
-            or strata with different numbers of draws.
+            strata with different numbers of draws, or both ``log_pod`` and ``pods``.
 
     Examples:
         Two draws of a constant rate, where a tenth of the events are detected:
@@ -218,6 +234,8 @@ def total_emission(
         >>> total.t_effective_s
         864000.0
     """
+    if log_pod is not None and pods is not None:
+        raise ValueError("total_emission: pass log_pod or pods, not both.")
     strata = (
         [posterior]
         if isinstance(posterior, TMTPPPosterior)
@@ -245,6 +263,7 @@ def total_emission(
             windows=windows,
             event_duration=event_duration,
             log_pod=log_pod,
+            pods=pods,
             q_min=q_min,
             q_max=q_max,
             n_nodes=n_nodes,

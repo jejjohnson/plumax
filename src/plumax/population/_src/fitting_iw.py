@@ -18,16 +18,18 @@ with the thinned rate p̄(θ) = ∫ P_d(q) f(q | θ) dq in log space
 * :class:`TMTPPPosterior`: the draws of :func:`tmtpp_iw_model`, as the intensity
   kernels and mark parameters the persistency and total-emission products take.
 
-The POD is a fixed callable here; its calibration prior is #110.
+The POD is a fixed callable ``log_pod``, or the union of calibrated instruments
+``pods`` (:mod:`~plumax.population.pod`), whose (Q₅₀, k) are then sampled too.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -43,6 +45,11 @@ from plumax.population._src.importance import (
 )
 from plumax.population._src.integrate import log_simpson, pareto_smoothed_log_weights
 from plumax.population._src.marks import MARKS, Mark
+from plumax.population._src.pod_union import (
+    InstrumentPOD,
+    calibration_prior,
+    log_pod_union,
+)
 
 
 if TYPE_CHECKING:
@@ -151,47 +158,186 @@ def tmtpp_iw_model(
     window: tuple[float, float],
     log_pod: Callable[[Array], Array] | None = None,
     support: tuple[float, float] | None = None,
+    pods: Sequence[InstrumentPOD] | None = None,
+    coverage: Bool[Array, "event instrument"] | None = None,
+    coverage_intervals: Sequence[tuple[float, float, Bool[Array, " instrument"]]]
+    | None = None,
+    n_nodes: int = 2001,
 ) -> None:
     """NumPyro model of the full importance-corrected TMTPP likelihood.
 
     log L = Σᵢ [log λ(tᵢ) + mᵢ(θ)] − Λ(T) p̄(θ), with λ a registry intensity
     under its ``sample_priors`` on the xtremax Poisson process of the window.
 
+    With ``pods``, P_d is the union P_d^∪ under :func:`calibration_prior`. With
+    ``coverage``, event i is thinned by the instruments that overpassed it and the
+    compensator follows who was looking when, as 06a § Non-detection events asks:
+    Σ_w Λ_w p̄_w(θ), over intervals w in which the covering set is constant. A
+    per-event mask alone does not fix that integral, so the two come together.
+
     Args:
         event_times: Detection times since t₀ in xtremax's padded buffer
             (:func:`~plumax.population.processes.padded_event_buffer`) [days].
         mask: Its mask.
         evidence: Stacked per-event evidence, one row per detection in the
-            order of the buffer's real entries.
+            order of the buffer's real entries. It may also carry the buffer's
+            padding, one row per buffer entry: the mask drops those rows, so
+            catalogs of different sizes can share one shape under ``vmap``.
         mark: The mark family.
         intensity: A registry name of a Poisson intensity.
         window: ``(t₀, t₁)`` [days].
         log_pod: log P_d on rates in the marks' units, or ``None``.
         support: Rate range of the p̄ integral; default from the evidence.
+        pods: Calibrated instruments, instead of ``log_pod``.
+        coverage: Which instruments overpassed each row of ``evidence``. Default:
+            all of them, at all times.
+        coverage_intervals: ``(start, stop, covering)`` in days, disjoint and inside
+            the window. No detection is possible outside them.
+        n_nodes: Simpson nodes of each p̄ integral.
 
     Raises:
         ImportError: Without the ``population`` extra.
+        ValueError: For ``log_pod`` with ``pods``, ``coverage`` without ``pods`` or
+            without its intervals, or overlapping or out-of-window intervals.
+        equinox.EquinoxRuntimeError: If a detection has no covering instrument.
     """
     import numpyro
 
     from plumax.population._src.processes import make_process
     from plumax.population.intensity import INTENSITY_REGISTRY
 
+    intervals = _check_coverage_arguments(
+        log_pod, pods, coverage, coverage_intervals, window
+    )
     theta = mark.numpyro_prior("mark")
     kernel = INTENSITY_REGISTRY[intensity].sample_priors()
     process = make_process(kernel, window)
     # Σᵢ log λ(tᵢ) over the real events
     log_rates = process.log_intensity_fn(event_times)
     ground = jnp.sum(jnp.where(mask, log_rates, 0.0))
-    # Λ(T)
-    compensator = process.effective_integrated_intensity()
-    integrand = _log_integrand(mark, theta, log_pod)
+
+    # --- detection ---
+    calibration = None
+    event_log_pod = log_pod
+    n_rows = evidence.q_samples.shape[0]
+    # mask is a contiguous prefix, so this is every row of an unpadded evidence
+    event_mask = mask[:n_rows]
+    if pods is not None:
+        calibration = calibration_prior(pods)
+        event_coverage = None
+        if coverage is not None:
+            coverage = jnp.asarray(coverage, dtype=bool)
+            covered = jnp.any(coverage, axis=-1)
+            event_mask = eqx.error_if(
+                event_mask,
+                jnp.any(event_mask & ~covered),
+                "tmtpp_iw_model: a detection has no covering instrument",
+            )
+            # a padding row needs some instrument for a finite log P_d^∪
+            event_coverage = jnp.where(covered[:, None], coverage, True)[:, None, :]
+        event_log_pod = log_pod_union(
+            pods, coverage=event_coverage, calibration=calibration
+        )
+
+    # --- marks ---
+    integrand = _log_integrand(mark, theta, event_log_pod)
     mark_terms = evidence.log_mark_term(integrand)
+    marks = jnp.sum(jnp.where(event_mask, mark_terms, 0.0))
+
+    # --- compensator ---
     support = support or default_support(evidence)
-    log_rate = log_thinned_rate(mark, theta, log_pod, support)
+    if intervals is None:
+        window_log_pod = (
+            log_pod if pods is None else log_pod_union(pods, calibration=calibration)
+        )
+        log_rate = log_thinned_rate(
+            mark, theta, window_log_pod, support, n_nodes=n_nodes
+        )
+        # Λ(T) p̄
+        thinned = process.effective_integrated_intensity() * jnp.exp(log_rate)
+    else:
+        thinned = _covered_compensator(
+            kernel, mark, theta, pods, calibration, intervals, support, n_nodes
+        )
     # Σᵢ [log λ(tᵢ) + mᵢ] − Λ(T) p̄
-    log_likelihood = ground + jnp.sum(mark_terms) - compensator * jnp.exp(log_rate)
-    numpyro.factor("tmtpp", log_likelihood)
+    numpyro.factor("tmtpp", ground + marks - thinned)
+
+
+def _check_coverage_arguments(
+    log_pod: Callable[[Array], Array] | None,
+    pods: Sequence[InstrumentPOD] | None,
+    coverage: Bool[Array, "event instrument"] | None,
+    coverage_intervals: Sequence[tuple[float, float, Bool[Array, " instrument"]]]
+    | None,
+    window: tuple[float, float],
+) -> list[tuple[float, float, np.ndarray]] | None:
+    if pods is not None and log_pod is not None:
+        raise ValueError("tmtpp_iw_model: pass log_pod or pods, not both.")
+    if (coverage is None) != (coverage_intervals is None):
+        raise ValueError(
+            "tmtpp_iw_model: coverage and coverage_intervals come together: a "
+            "per-event mask does not say who was looking when no event was detected."
+        )
+    if coverage_intervals is None:
+        return None
+    if pods is None:
+        raise ValueError("tmtpp_iw_model: coverage needs pods.")
+    # host arrays: this runs under NUTS's trace, where a jnp reduction has no value
+    intervals = sorted(
+        (
+            (float(start), float(stop), np.asarray(covering, dtype=bool))
+            for start, stop, covering in coverage_intervals
+        ),
+        key=lambda interval: interval[0],
+    )
+    previous = float(window[0])
+    for start, stop, _ in intervals:
+        if start < previous or stop <= start:
+            raise ValueError(
+                "tmtpp_iw_model: coverage_intervals must be disjoint and inside the "
+                f"window, got ({start}, {stop}) after {previous}."
+            )
+        previous = stop
+    if previous > float(window[1]):
+        raise ValueError(
+            f"tmtpp_iw_model: coverage_intervals end at {previous}, after the window."
+        )
+    return intervals
+
+
+def _covered_compensator(
+    kernel: Any,
+    mark: Mark,
+    theta: dict[str, Any],
+    pods: Sequence[InstrumentPOD] | None,
+    calibration: dict[str, dict[str, Array]] | None,
+    intervals: list[tuple[float, float, np.ndarray]],
+    support: tuple[float, float],
+    n_nodes: int,
+) -> Float[Array, ""]:
+    from plumax.population._src.processes import (
+        NODES_PER_DAY,
+        LogIntensity,
+        _quadrature_points,
+    )
+
+    thinned = jnp.zeros(())
+    for start, stop, covering in intervals:
+        # with nobody looking p̄_w = 0, and log 0 has no gradient to offer
+        if not covering.any():
+            continue
+        # Λ_w = ∫_w λ(t) dt
+        expected_events = LogIntensity(
+            kernel, n_integration_points=_quadrature_points(stop - start, NODES_PER_DAY)
+        ).integrate(start, stop)
+        log_pod = log_pod_union(
+            pods, coverage=jnp.asarray(covering), calibration=calibration
+        )
+        # log p̄_w
+        log_rate = log_thinned_rate(mark, theta, log_pod, support, n_nodes=n_nodes)
+        # Σ_w Λ_w p̄_w
+        thinned = thinned + expected_events * jnp.exp(log_rate)
+    return thinned
 
 
 @dataclass(frozen=True)

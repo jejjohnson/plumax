@@ -40,6 +40,15 @@ import equinox as eqx
 import jax.numpy as jnp
 from jax.scipy.special import erf as _jax_erf
 
+from plumax.population._src.pod_union import (
+    InstrumentPOD,
+    calibration_from_draw,
+    calibration_prior,
+    load_pod_calibrations,
+    log_pod_union,
+    pod_union,
+)
+
 
 __all__ = [
     "POD_REGISTRY",
@@ -47,16 +56,22 @@ __all__ = [
     "CloglogPOD",
     "ConcentrationProxyPOD",
     "FullVaryingCoefficientPOD",
+    "InstrumentPOD",
     "LogLogisticPOD",
     "LogisticPOD",
     "ProbitPOD",
     "SNRBasedPOD",
     "SpectralAwarePOD",
     "VaryingCoefficientPOD",
+    "calibration_from_draw",
+    "calibration_prior",
     "cos_zenith",
+    "load_pod_calibrations",
     "log_concentration_proxy",
     "log_flux",
     "log_flux_wind_ratio",
+    "log_pod_union",
+    "pod_union",
     "snr_proxy",
 ]
 

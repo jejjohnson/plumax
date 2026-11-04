@@ -87,8 +87,8 @@ Without these, the estimator is just a number.
 | Missing-mass MC simulator | `plumax.population.paradox` | ✓ in tree |
 | Posterior fit | `plumax.population.fitting` | ✓ in tree (synthetic data); real data needs [#111](https://github.com/jejjohnson/plumax/issues/111) |
 | $M_\text{total}$ estimator + uncertainty | `plumax.population.totals` | ✓ [#113](https://github.com/jejjohnson/plumax/issues/113) |
-| Per-satellite calibration loader | `plumax.population.pod.load_pod_calibrations` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
-| Multi-satellite fusion | `plumax.population.pod.pod_union` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Per-satellite calibration loader | `plumax.population.pod.load_pod_calibrations` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| Multi-satellite fusion | `plumax.population.pod.pod_union` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 
 ---
 
