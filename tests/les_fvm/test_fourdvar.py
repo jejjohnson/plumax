@@ -7,6 +7,7 @@ the whitening transform, and end-to-end twin recovery — not large-scale physic
 
 from __future__ import annotations
 
+import functools
 import warnings
 
 import jax
@@ -29,6 +30,7 @@ from plumax.les_fvm.fourdvar import (
 )
 
 
+@functools.cache
 def _forward(n_t: int = 5):
     save_times = jnp.linspace(0.0, 40.0, n_t)
     return build_forward(
@@ -108,10 +110,31 @@ def _problem(fwd, q_true, *, length_scale=20.0, obs_floor=1e-12):
     )
 
 
+@functools.cache
+def _twin():
+    """The twin experiment the tests share: forward, truth and problem."""
+    fwd = _forward()
+    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
+    return fwd, q_true, _problem(fwd, q_true)
+
+
+@functools.cache
+def _twin_map():
+    """The shared twin problem's MAP, solved once for the whole module."""
+    fwd, _, prob = _twin()
+    return fwd, prob, solve_4dvar(prob, max_steps=40)
+
+
+@functools.cache
+def _twin_posterior():
+    """The Gauss-Newton Laplace posterior at the shared MAP."""
+    fwd, prob, res = _twin_map()
+    return fwd, prob, res, posterior_covariance(prob, res.whitened)
+
+
 @pytest.mark.slow
 def test_cost_and_grad_are_finite():
-    fwd = _forward()
-    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    _, _, prob = _twin()
     j, g = prob.value_and_grad(jnp.zeros(5))
     assert np.isfinite(float(j))
     assert g.shape == (5,)
@@ -151,9 +174,7 @@ def test_badly_scaled_prior_cholesky():
 
 @pytest.mark.slow
 def test_cost_minimised_at_truth_in_whitened_space():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
+    _, q_true, prob = _twin()
     # χ that maps exactly to q_true: χ* = L⁻¹ (q_true − S_b).
     chi_true = jax.scipy.linalg.solve_triangular(
         prob.prior_chol, q_true - prob.prior_mean, lower=True
@@ -179,8 +200,7 @@ def test_gradient_matches_finite_difference():
 
 @pytest.mark.slow
 def test_whitening_roundtrip():
-    fwd = _forward()
-    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    _, _, prob = _twin()
     s = jnp.array([0.3, 1.2, 0.8, 0.4, 0.6])
     chi = jax.scipy.linalg.solve_triangular(
         prob.prior_chol, s - prob.prior_mean, lower=True
@@ -195,9 +215,7 @@ def test_whitening_roundtrip():
 
 @pytest.mark.slow
 def test_twin_experiment_recovers_emission_time_series():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
+    _, q_true, prob = _twin()
     res = solve_4dvar(prob, max_steps=60)
     assert isinstance(res, FourDVarResult)
     # The MAP emission signal recovers the truth that generated the obs.
@@ -208,9 +226,7 @@ def test_twin_experiment_recovers_emission_time_series():
 
 @pytest.mark.slow
 def test_solve_from_explicit_initial_source():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
+    _, _, prob = _twin()
     res = solve_4dvar(prob, initial_source=jnp.full(5, 0.5), max_steps=40)
     assert res.source.shape == (5,)
     assert np.all(np.isfinite(np.asarray(res.source)))
@@ -222,8 +238,7 @@ def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
     # result must expose it. A single step cannot meet optx's strict success
     # criterion, so `converged` is False — yet the MAP is still finite (a good
     # partial recovery, not a divergence), so no spurious warning is raised.
-    fwd = _forward()
-    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    _, _, prob = _twin()
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
         res = solve_4dvar(prob, max_steps=1)
@@ -376,8 +391,7 @@ def test_build_problem_shape_validation():
 
 @pytest.mark.slow
 def test_problem_is_a_frozen_dataclass():
-    fwd = _forward()
-    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
+    _, _, prob = _twin()
     assert isinstance(prob, FourDVarProblem)
     with pytest.raises((AttributeError, TypeError)):
         prob.prior_mean = jnp.zeros(5)  # frozen
@@ -543,11 +557,7 @@ def test_build_problem_per_receptor_variance_vector():
 
 @pytest.mark.slow
 def test_posterior_covariance_symmetric_psd_shape():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
-    res = solve_4dvar(prob, max_steps=40)
-    post = posterior_covariance(prob, res.whitened)
+    fwd, _, _, post = _twin_posterior()
     assert isinstance(post, PosteriorCovariance)
     n_t = fwd.save_times.shape[0]
     assert post.whitened_covariance.shape == (n_t, n_t)
@@ -562,11 +572,7 @@ def test_posterior_covariance_symmetric_psd_shape():
 
 @pytest.mark.slow
 def test_posterior_source_std_positive_finite():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
-    res = solve_4dvar(prob, max_steps=40)
-    post = posterior_covariance(prob, res.whitened)
+    fwd, _, _, post = _twin_posterior()
     std = np.asarray(post.source_std)
     assert std.shape == (fwd.save_times.shape[0],)
     assert np.all(np.isfinite(std))
@@ -577,21 +583,14 @@ def test_posterior_source_std_positive_finite():
 def test_observing_data_does_not_increase_whitened_variance():
     # The whitened prior is the identity, so the GN-Hessian update can only
     # shrink (never inflate) the marginal whitened posterior variances.
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
-    res = solve_4dvar(prob, max_steps=40)
-    post = posterior_covariance(prob, res.whitened)
+    *_, post = _twin_posterior()
     whitened_var = np.diagonal(np.asarray(post.whitened_covariance))
     assert np.all(whitened_var <= 1.0 + 1e-6)
 
 
 @pytest.mark.slow
 def test_laplace_sample_shape_and_mean():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
-    res = solve_4dvar(prob, max_steps=40)
+    fwd, prob, res = _twin_map()
     n_t = fwd.save_times.shape[0]
     samples = laplace_sample(prob, res.whitened, jax.random.PRNGKey(0), n_samples=4000)
     assert samples.shape == (4000, n_t)
@@ -603,9 +602,7 @@ def test_laplace_sample_shape_and_mean():
 
 @pytest.mark.slow
 def test_laplace_sample_rejects_nonpositive_n_samples():
-    fwd = _forward()
-    prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
-    res = solve_4dvar(prob, max_steps=20)
+    _, prob, res = _twin_map()
     with pytest.raises(ValueError, match="n_samples"):
         laplace_sample(prob, res.whitened, jax.random.PRNGKey(0), n_samples=0)
 
@@ -644,13 +641,11 @@ def test_posterior_covariance_matches_dense_inverse():
 
 @pytest.mark.slow
 def test_solve_4dvar_attaches_posterior():
-    fwd = _forward()
-    q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
-    prob = _problem(fwd, q_true)
+    fwd, _, prob = _twin()
     res = solve_4dvar(prob, max_steps=40, compute_posterior=True)
     assert isinstance(res.posterior, PosteriorCovariance)
     n_t = fwd.save_times.shape[0]
     assert res.posterior.source_covariance.shape == (n_t, n_t)
     # Default path leaves it unset.
-    res_none = solve_4dvar(prob, max_steps=5)
+    _, _, res_none = _twin_map()
     assert res_none.posterior is None
