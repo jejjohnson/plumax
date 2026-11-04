@@ -46,7 +46,9 @@ from plumax.les_fvm.boundary import (
 from plumax.les_fvm.diffusion import (
     EddyDiffusivity,
     diffusion_tendency,
+    mo_eddy_diffusivity,
     pg_eddy_diffusivity,
+    smagorinsky_k_h,
 )
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
 from plumax.les_fvm.fourdvar import (
@@ -109,10 +111,12 @@ __all__ = [
     "laplace_sample",
     "make_gaussian_source",
     "make_grid",
+    "mo_eddy_diffusivity",
     "pg_eddy_diffusivity",
     "posterior_covariance",
     "simulate",
     "simulate_eulerian_dispersion",
+    "smagorinsky_k_h",
     "solve_4dvar",
     "source",
     "stable_step_bound",
