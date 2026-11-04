@@ -3354,6 +3354,7 @@ notebooks = [
 ]
 population = [
     { name = "numpyro" },
+    { name = "pyyaml" },
     { name = "xtremax" },
 ]
 
@@ -3416,6 +3417,7 @@ requires-dist = [
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c" },
     { name = "pyproj", marker = "extra == 'io'" },
+    { name = "pyyaml", marker = "extra == 'population'", specifier = ">=6" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
     { name = "scipy", specifier = ">=1.11" },
