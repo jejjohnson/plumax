@@ -44,8 +44,13 @@ rate, with the per-instrument bias as a first-class state element:
   forward, prior and masks, vardax solves (``ThreeDVar``, L-BFGS) and gives the
   Laplace posterior. Needs the ``assim`` extra.
 
+- ``k_sources`` — masked-K multi-source handling across instruments
+  (:class:`MaskedKPrior`, :func:`infer_masked_k_sources`,
+  :func:`build_masked_k_problem`, :func:`saturation_rate`), on Tier I's slot prior and
+  posterior carrier.
+
 Later build-order steps (the ``Q(t)`` stochastic
-process, trans-dimensional source count, coupled emulator, operational
+process, coupled emulator, operational
 predictor) are future work; the fusion harness and likelihood structure here
 are designed to stay the same as those blocks are swapped in.
 """
@@ -58,6 +63,7 @@ from plumax.coupled import (
     fusion,
     instrument,
     inversion,
+    k_sources,
     quality,
     rtm,
 )
@@ -76,6 +82,14 @@ from plumax.coupled.inversion import (
     CoupledProblem,
     CoupledResult,
     solve_coupled,
+)
+from plumax.coupled.k_sources import (
+    MaskedKPrior,
+    build_masked_k_problem,
+    infer_masked_k_sources,
+    masked_k_coupled_model,
+    saturation_rate,
+    slot_responses,
 )
 from plumax.coupled.quality import (
     FlagPolicy,
@@ -109,6 +123,7 @@ __all__ = [
     "LagrangianSource",
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
+    "MaskedKPrior",
     "PlumeSource",
     "QualityFlag",
     "QualityPolicy",
@@ -118,6 +133,7 @@ __all__ = [
     "apply_quality",
     "backends",
     "build_coupled_forward",
+    "build_masked_k_problem",
     "column_mass_to_delta_vmr",
     "column_response",
     "contribution_report",
@@ -125,14 +141,19 @@ __all__ = [
     "forward",
     "fuse_observations",
     "fusion",
+    "infer_masked_k_sources",
     "instrument",
     "inversion",
+    "k_sources",
     "linearise",
+    "masked_k_coupled_model",
     "predict_observation",
     "quality",
     "radiance_response",
     "radiance_response_linear",
     "rtm",
+    "saturation_rate",
+    "slot_responses",
     "solve_coupled",
     "stack_observations",
 ]
