@@ -107,8 +107,8 @@ The metric functions take an intensity callable (any of the 13 `equinox` modules
 | Concern | Module | Status |
 | --- | --- | --- |
 | Intensity functions | `plumax.population.intensity` | ✓ in tree |
-| Wait-time / occurrence / cumulative metrics | `plumax.population.persistency` | ☐ [#112](https://github.com/jejjohnson/plumax/issues/112) |
-| Posterior-aware metric wrappers | same module (`posterior_metric`) | ☐ [#112](https://github.com/jejjohnson/plumax/issues/112) |
+| Wait-time / occurrence / cumulative metrics | `plumax.population.persistency` | ✓ [#112](https://github.com/jejjohnson/plumax/issues/112) |
+| Posterior-aware metric wrappers | same module (`posterior_metric`) | ✓ [#112](https://github.com/jejjohnson/plumax/issues/112) |
 | Operational dashboard / report templates | out of scope for `plumax`; lives in `plumax-deploy` (future) | — |
 
 The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few intensity choices (constant, exponential decay) and otherwise needs `jax.scipy.integrate` or a fixed quadrature. Worth wrapping once and reusing across metrics.

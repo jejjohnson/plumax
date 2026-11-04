@@ -130,6 +130,39 @@ def _quadrature_points(window_length: float, nodes_per_day: int) -> int:
     return nodes + 1 if nodes % 2 == 0 else nodes
 
 
+def poisson_kernel(
+    intensity: str | eqx.Module, params: Mapping[str, Any], *, caller: str
+) -> Any:
+    """Resolve a registry name or kernel instance to a Poisson intensity kernel.
+
+    Args:
+        intensity: A registry name or a kernel instance.
+        params: Kernel parameters, when ``intensity`` is a name.
+        caller: The public function's name, for its error messages.
+
+    Returns:
+        The kernel.
+
+    Raises:
+        KeyError: For an unknown registry name.
+        ValueError: For parameters passed with an instance, or the Weibull renewal
+            hazard.
+    """
+    if isinstance(intensity, str):
+        kernel = INTENSITY_REGISTRY[intensity](**params)
+    elif params:
+        raise ValueError(f"{caller}: pass parameters only with a registry name.")
+    else:
+        kernel = intensity
+    if isinstance(kernel, WeibullRenewalIntensity):
+        raise ValueError(
+            f"{caller}: the Weibull renewal hazard depends on the time since "
+            "the last event, so it is a renewal process, not a Poisson intensity; "
+            "use xtremax.point_processes.operators.RenewalProcess."
+        )
+    return kernel
+
+
 def make_process(
     intensity: str | eqx.Module,
     window: tuple[float, float],
@@ -171,18 +204,7 @@ def make_process(
         True
     """
     point_processes = require_xtremax("make_process")
-    if isinstance(intensity, str):
-        kernel = INTENSITY_REGISTRY[intensity](**params)
-    elif params:
-        raise ValueError("make_process: pass parameters only with a registry name.")
-    else:
-        kernel = intensity
-    if isinstance(kernel, WeibullRenewalIntensity):
-        raise ValueError(
-            "make_process: the Weibull renewal hazard depends on the time since "
-            "the last event, so it is a renewal process, not a Poisson intensity; "
-            "use xtremax.point_processes.operators.RenewalProcess."
-        )
+    kernel = poisson_kernel(intensity, params, caller="make_process")
     start, stop = (float(edge) for edge in window)
     if not stop > start:
         raise ValueError(f"make_process: window must have t₁ > t₀, got {window}.")

@@ -15,6 +15,8 @@ with the thinned rate p̄(θ) = ∫ P_d(q) f(q | θ) dq in log space
   intensity registry on xtremax (:func:`~plumax.population.processes.make_process`).
 * :func:`fit_size_distribution_iw`: NUTS on :func:`mark_iw_model`, with the
   per-event ESS and Pareto k̂ at the posterior-mean θ and a collapse warning.
+* :class:`TMTPPPosterior`: the draws of :func:`tmtpp_iw_model`, as the intensity
+  kernels and mark parameters the persistency and total-emission products take.
 
 The POD is a fixed callable here; its calibration prior is #110.
 """
@@ -213,6 +215,63 @@ class MarkPosterior:
     def posterior_mean(self) -> dict[str, np.ndarray]:
         """θ̄, the posterior mean of every parameter."""
         return {name: np.mean(draws, axis=0) for name, draws in self.samples.items()}
+
+
+@dataclass(frozen=True)
+class TMTPPPosterior:
+    """Posterior draws of the full TMTPP, by the site names of its model.
+
+    Attributes:
+        intensity: The registry name of the ground intensity.
+        mark: The mark family.
+        samples: Draws from :func:`tmtpp_iw_model` by site name, as
+            ``MCMC.get_samples()`` returns them: the kernel's ``sample_priors``
+            sites, and the mark's under ``mark.``.
+    """
+
+    intensity: str
+    mark: Mark
+    samples: dict[str, Array] = field(repr=False)
+
+    @property
+    def num_samples(self) -> int:
+        """The number of posterior draws."""
+        return len(next(iter(self.samples.values())))
+
+    def kernel(self, draw: dict[str, Array]) -> Any:
+        """The intensity kernel of one draw.
+
+        A kernel's site names need not match its fields (``lambda_bg`` is the
+        field ``lambda_background``), so the draw goes through ``sample_priors``.
+
+        Args:
+            draw: One draw of :attr:`samples`.
+
+        Returns:
+            The kernel at that draw.
+        """
+        from numpyro import handlers
+
+        from plumax.population.intensity import INTENSITY_REGISTRY
+
+        prior = INTENSITY_REGISTRY[self.intensity].sample_priors
+        return handlers.substitute(prior, data=draw)()
+
+    def theta(self, draw: dict[str, Array]) -> dict[str, Array]:
+        """The mark parameters θ of one draw.
+
+        Args:
+            draw: One draw of :attr:`samples`.
+
+        Returns:
+            θ by parameter name, as the mark's methods take it.
+        """
+        prefix = "mark."
+        return {
+            name[len(prefix) :]: value
+            for name, value in draw.items()
+            if name.startswith(prefix) and not name.startswith(f"{prefix}raw_")
+        }
 
 
 def fit_size_distribution_iw(
