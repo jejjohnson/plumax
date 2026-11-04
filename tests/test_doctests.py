@@ -31,6 +31,7 @@ DOCTESTED_MODULES = (
 )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", DOCTESTED_MODULES)
 def test_docstring_examples(name: str) -> None:
     pytest.importorskip("pyproj")

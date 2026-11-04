@@ -91,6 +91,7 @@ def _grid_posterior_mean(surface):
     return mu, sigma
 
 
+@pytest.mark.slow
 def test_prior_swap_invariance_of_the_likelihood():
     broad = _grid_log_likelihood(_catalog(1.5), Regime.FULL)
     narrow = _grid_log_likelihood(_catalog(0.5), Regime.FULL)
@@ -109,6 +110,7 @@ def test_prior_swap_invariance_of_the_likelihood():
         assert abs(broad_value - narrow_value) < 0.01
 
 
+@pytest.mark.slow
 def test_uncorrected_likelihood_is_not_prior_invariant():
     # the same fit without dividing out π moves with the per-event prior
     def uncorrected(prior_scale):
@@ -128,6 +130,7 @@ def test_uncorrected_likelihood_is_not_prior_invariant():
     assert abs(broad[0] - narrow[0]) > 0.05
 
 
+@pytest.mark.slow
 def test_regimes_agree():
     catalog = _catalog(1.5, noise=0.05)
     means = {
@@ -140,6 +143,7 @@ def test_regimes_agree():
         assert abs(sigma - reference[1]) < 0.02, regime
 
 
+@pytest.mark.slow
 def test_gaussian_regime_matches_full_for_lognormal_posteriors():
     catalog = _catalog(1.5, n_events=5, n_draws=200_000)
     full = catalog_evidence(catalog, regime=Regime.FULL)
@@ -153,6 +157,7 @@ def test_gaussian_regime_matches_full_for_lognormal_posteriors():
     )
 
 
+@pytest.mark.slow
 def test_reduces_to_the_plain_average_when_the_prior_is_the_population():
     # π = f(· | θ₀): at θ₀ every weight f/π is one, so the corrected mark term
     # is the plain posterior average of P_d
@@ -183,6 +188,7 @@ def test_reduces_to_the_plain_average_when_the_prior_is_the_population():
     np.testing.assert_allclose(no_pod, 0.0, atol=1e-10)
 
 
+@pytest.mark.slow
 def test_point_regime_with_identity_pod_is_the_point_likelihood():
     catalog = _catalog(1.5, n_events=12)
     surface = _grid_log_likelihood(catalog, Regime.POINT)
@@ -206,6 +212,7 @@ def test_ess_limits():
     assert float(effective_sample_size(two_equal)) == pytest.approx(2.0)
 
 
+@pytest.mark.slow
 def test_ess_warns_on_collapse():
     # wide per-event posteriors against a narrow population f: the weights
     # f/π concentrate on the few draws near f's bulk
@@ -247,6 +254,7 @@ def test_evidence_needs_the_payload():
     assert event_evidence(no_draws, regime="gaussian").q_samples.shape == (32,)
 
 
+@pytest.mark.slow
 def test_mark_likelihood_gradient_matches_finite_differences():
     from numpyro.infer.util import log_density
 
@@ -269,6 +277,7 @@ def test_mark_likelihood_gradient_matches_finite_differences():
     np.testing.assert_allclose(jax.grad(value)(0.4), central, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_tmtpp_model_composes_ground_marks_and_thinned_rate():
     from plumax.population.fitting import log_thinned_rate, tmtpp_iw_model
     from plumax.population.processes import padded_event_buffer
@@ -358,6 +367,7 @@ def test_thinned_rate_keeps_the_tail_beyond_the_grid():
     np.testing.assert_allclose(rate, 1.0, atol=1e-3)
 
 
+@pytest.mark.slow
 def test_gaussian_fit_warns_on_collapse():
     from plumax.population.fitting import fit_size_distribution_iw
 
@@ -418,6 +428,7 @@ def test_nodes_at_non_positive_rates_carry_no_weight():
     assert bool(jnp.isfinite(term))
 
 
+@pytest.mark.slow
 def test_a_pod_undefined_below_zero_does_not_poison_the_term():
     from plumax._src.scalar_emission import GaussianEmission
 

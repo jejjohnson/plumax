@@ -66,6 +66,7 @@ def _eulerian_forward(receptor_index=None):
 # ── Tier I is unchanged ──────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_plume_source_forward_and_fusion_unchanged():
     # Reference values computed on feat/85-masked-k-multisource (20735d1),
     # before the backends existed.
@@ -136,6 +137,7 @@ def test_plume_source_forward_and_fusion_unchanged():
 # ── identity composition: coupled forward == bare transport forward ──────────
 
 
+@pytest.mark.slow
 def test_identity_composition_all_tiers():
     instrument = Instrument("single", RECEPTORS)
     emission_rate, background = 2.0, 3e-7
@@ -215,6 +217,7 @@ class _MatrixSource:
         return jnp.stack([1.0 + x / 100.0, 2.0 - x / 200.0], axis=1)
 
 
+@pytest.mark.slow
 def test_fusion_with_design_matrix_matches_closed_form():
     instruments = [
         Instrument("A", np.array([[0.0, 0.0], [100.0, 0.0], [200.0, 0.0]])),
@@ -246,6 +249,7 @@ def test_fusion_with_design_matrix_matches_closed_form():
     np.testing.assert_allclose(posterior.covariance, covariance, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_lagrangian_patterns_give_a_design_matrix():
     point = _lagrangian()
     n_cells = DOMAIN_X[2] * DOMAIN_Y[2]

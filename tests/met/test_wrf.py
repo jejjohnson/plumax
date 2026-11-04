@@ -147,6 +147,7 @@ def test_grid_outside_wrf_domain_raises(synthetic_wrf):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=too_far)
 
 
+@pytest.mark.slow
 def test_simulate_eulerian_dispersion_runs_on_loaded_met(loaded_f32):
     _grid, field = loaded_f32
     ds = simulate_eulerian_dispersion(

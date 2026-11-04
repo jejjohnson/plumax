@@ -254,6 +254,7 @@ def test_select_seeds_rejects_an_empty_or_unscored_mask(mf: np.ndarray) -> None:
         select_seeds(np.full((H, W), np.nan), mask)
 
 
+@pytest.mark.slow
 def test_background_pool_rejects_an_empty_pool_and_a_negative_box(
     mf: np.ndarray, mask: np.ndarray
 ) -> None:

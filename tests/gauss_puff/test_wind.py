@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.gauss_puff.wind import (
     WindSchedule,
@@ -40,6 +41,7 @@ def test_constant_wind_cumulative_integrals():
     np.testing.assert_allclose(S, 5.0 * save_at, atol=1e-3)
 
 
+@pytest.mark.slow
 def test_piecewise_linear_wind_integrals():
     # u(t) is 5 for [0,10], linearly 5→3 for [10,20], 3 for [20,30].
     # Analytical cumulative:

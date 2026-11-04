@@ -66,6 +66,7 @@ WIND = make_field(
 # ---- stability functions --------------------------------------------------
 
 
+@pytest.mark.slow
 def test_phi_equals_one_minus_zeta_dpsi():
     zeta = jnp.concatenate([jnp.linspace(-5.0, -1e-3, 40), jnp.linspace(1e-3, 2.0, 40)])
     for phi, psi in ((phi_m, psi_m), (phi_h, psi_h)):
@@ -82,6 +83,7 @@ def test_neutral_limits_and_continuity():
 # ---- u*, L, w* ------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_neutral_is_the_log_law():
     layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=0.0)
     z_ref = 0.5 * GRID.dz
@@ -92,6 +94,7 @@ def test_neutral_is_the_log_law():
     assert np.all(np.asarray(layer.w_star) == 0.0)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("heat", [200.0, -20.0])
 def test_fixed_point_satisfies_both_similarity_equations(heat):
     layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=heat)
@@ -118,6 +121,7 @@ def test_convective_velocity_scale():
     np.testing.assert_allclose(layer.w_star, expected, rtol=1e-12)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("heat", [0.0, -20.0, 200.0])
 def test_gradients_are_finite(heat):
     def total(h):
@@ -130,6 +134,7 @@ def test_gradients_are_finite(heat):
 # ---- Hanna factory ----------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_hanna_factory_regimes():
     neutral = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=0.0)
     turb = hanna_turbulence_from(WIND, neutral, it=0, iy=1, ix=2)
@@ -210,6 +215,7 @@ def test_calm_columns_stay_finite(heat):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("heat", [0.0, 100.0, -20.0])
 def test_calm_columns_have_finite_wind_gradients(heat):
     calm = make_field(
@@ -228,6 +234,7 @@ def test_calm_columns_have_finite_wind_gradients(heat):
 # ---- house-style quartet for the forward: property, gradient, transforms ----
 
 
+@pytest.mark.slow
 @settings(max_examples=100, deadline=None)
 @given(zeta=st.floats(-10.0, 5.0).filter(lambda z: abs(z) > 1e-6))
 def test_phi_identity_property(zeta):
@@ -237,6 +244,7 @@ def test_phi_identity_property(zeta):
         np.testing.assert_allclose(phi(z), 1.0 - z * dpsi, rtol=1e-9)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("heat", [-20.0, 50.0, 200.0])
 def test_gradient_matches_central_differences(heat):
     def friction(h):
@@ -249,6 +257,7 @@ def test_gradient_matches_central_differences(heat):
     np.testing.assert_allclose(analytic, numeric, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_eager_jit_and_vmap_agree_with_a_loop():
     heats = jnp.array([-20.0, 0.0, 50.0, 200.0])
     diagnose = lambda h: MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=h).u_star

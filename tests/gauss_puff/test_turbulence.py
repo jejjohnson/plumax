@@ -103,6 +103,7 @@ def test_x_and_y_are_independent_components():
     assert abs(corr) < 0.1
 
 
+@pytest.mark.slow
 def test_simulate_puff_accepts_turbulence_and_changes_field():
     """End-to-end: passing turbulence to simulate_puff changes the output.
 

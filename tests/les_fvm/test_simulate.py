@@ -36,6 +36,7 @@ def _common_kwargs(**overrides):
     return base
 
 
+@pytest.mark.slow
 def test_simulate_returns_xarray_dataset_with_expected_vars():
     ds = simulate_eulerian_dispersion(**_common_kwargs())
     assert isinstance(ds, xr.Dataset)
@@ -45,6 +46,7 @@ def test_simulate_returns_xarray_dataset_with_expected_vars():
     assert ds.sizes == {"time": 3, "z": 8, "y": 8, "x": 16}
 
 
+@pytest.mark.slow
 def test_simulate_zero_emission_yields_zero_concentration():
     ds = simulate_eulerian_dispersion(**_common_kwargs(emission_rate=0.0))
     np.testing.assert_allclose(ds["concentration"].values, 0.0, atol=1e-10)
@@ -133,6 +135,7 @@ def test_simulate_pg_diffusivity_requires_nonzero_wind():
         )
 
 
+@pytest.mark.slow
 def test_simulate_pg_accepts_calm_start_then_windy_schedule():
     # Regression test for PR #16: the PG calibration used to take the
     # first schedule knot only, which rejected a calm-start-then-windy
@@ -166,6 +169,7 @@ def test_simulate_pg_accepts_calm_start_then_windy_schedule():
     assert float(ds["concentration"].max()) >= 0.0  # no NaNs + valid dataset
 
 
+@pytest.mark.slow
 def test_simulate_save_interval_not_dividing_window_does_not_overshoot():
     # Regression test for PR #16 (second round): save_interval=6 and
     # window 0..10 used to build save_times=[0, 6, 12], and 12 > t_end
@@ -192,6 +196,7 @@ def test_simulate_save_interval_not_dividing_window_does_not_overshoot():
     assert times.size >= 2
 
 
+@pytest.mark.slow
 def test_simulate_pg_calibration_uses_simulation_window_only():
     # Regression test for PR #16 (second round): the PG calibration mean
     # speed must depend only on the simulated window, not on schedule knot

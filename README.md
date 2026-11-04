@@ -301,8 +301,10 @@ make install      # uv sync --all-groups + pre-commit hooks
 | Command | Description |
 |---|---|
 | `make install` | Install all dependency groups + pre-commit hooks |
-| `make test` | Run tests (no coverage) |
-| `make test-cov` | Run tests with the 80 % coverage gate |
+| `make test` | Run the fast tests (everything not marked `slow`) |
+| `make test-slow` | Run only the tests marked `slow` |
+| `make test-all` | Run the fast and slow tests |
+| `make test-cov` | Run the fast and slow tests with the 80 % coverage gate |
 | `make lint` / `make format` | Lint / format with ruff (entire repo) |
 | `make typecheck` | Type-check `src/plumax` with ty |
 | `make docs` / `make docs-serve` | Build (and preview) the docs: mystmd prose + MkDocs API reference |

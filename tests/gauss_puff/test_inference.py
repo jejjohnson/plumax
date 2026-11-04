@@ -62,6 +62,7 @@ def test_gaussian_puff_model_rejects_missing_release_params():
         )
 
 
+@pytest.mark.slow
 def test_gaussian_puff_model_predictive_runs_forward_with_full_inputs():
     # Predictive (observations=None) + all forward inputs present should
     # produce model-driven obs draws, not just background-only samples.
@@ -188,6 +189,7 @@ def test_infer_emission_timeseries_validates_inputs():
         )
 
 
+@pytest.mark.slow
 def test_simulate_puff_allows_zero_scalar_emission_rate():
     # Previously rejected; aligned with the array branch which allows 0.
     from plumax.gauss_puff import simulate_puff
@@ -252,6 +254,7 @@ def test_infer_emission_rate_rejects_bad_prior_mean():
 # ── #35: shared wind-integral solve equals the per-observation path ───────────
 
 
+@pytest.mark.slow
 def test_predict_observations_matches_per_obs_evolve_puffs():
     # The forward model solves the cumulative wind integrals ONCE over
     # release ∪ observation times and gathers per observation. This must be
@@ -340,6 +343,7 @@ def test_partial_interval_mass_weights_trailing_puff():
     assert float(duration_mass[-1]) < float(flat_mass[-1])
 
 
+@pytest.mark.slow
 def test_model_forward_matches_simulate_puff_on_partial_window():
     # End-to-end: the model's forward (shared-solve + duration-weighted mass)
     # must reproduce the trusted `simulate_puff` field, which also weights the

@@ -21,8 +21,10 @@ inference → amortized predictor). The full roadmap lives in
 
 ```bash
 make install              # Install all deps (uv sync --all-groups) + pre-commit hooks
-make test                 # Run tests: uv run pytest -v -o addopts=
-make test-cov             # Tests with coverage gate
+make test                 # Fast tests only: uv run pytest -n 4 --dist loadfile
+make test-slow            # Only the tests marked slow
+make test-all             # Fast and slow
+make test-cov             # Fast and slow, with the 80 % coverage gate
 make format               # Auto-fix: ruff format . && ruff check --fix .
 make lint                 # Lint code: ruff check .
 make typecheck            # Type check: ty check src/plumax
@@ -35,6 +37,7 @@ make docs-serve           # Build, then serve the assembled site at :8000
 
 ```bash
 uv run pytest tests/gauss_plume/test_plume.py::test_name -v
+uv run pytest tests/gauss_plume/test_plume.py -m "" -v   # include slow tests
 ```
 
 Skip the slow MCMC tests with `-m 'not slow'`.
@@ -42,7 +45,8 @@ Skip the slow MCMC tests with `-m 'not slow'`.
 ### Pre-commit checklist (all four must pass)
 
 ```bash
-uv run pytest -v                              # Tests
+uv run pytest -n 4 --dist loadfile --durations=15             # Fast tests (every PR)
+uv run pytest -n 4 --dist loadfile -m "" --cov=src/plumax      # All tests with coverage (PRs into main, pushes to main)
 uv run --group lint ruff check .              # Lint — ENTIRE repo, not just src/plumax/
 uv run --group lint ruff format --check .     # Format — ENTIRE repo
 uv run --group typecheck ty check src/plumax  # Typecheck — package only

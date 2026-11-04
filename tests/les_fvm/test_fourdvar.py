@@ -67,6 +67,7 @@ def test_column_operator_receptor_subset():
 # ── forward ──────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_forward_predict_shape_and_positivity():
     fwd = _forward()
     assert isinstance(fwd, EulerianForward4DVar)
@@ -80,6 +81,7 @@ def test_forward_predict_shape_and_positivity():
     assert float(y.max()) > 0.0
 
 
+@pytest.mark.slow
 def test_forward_scales_with_emission():
     fwd = _forward()
     q = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -106,6 +108,7 @@ def _problem(fwd, q_true, *, length_scale=20.0, obs_floor=1e-12):
     )
 
 
+@pytest.mark.slow
 def test_cost_and_grad_are_finite():
     fwd = _forward()
     prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -115,6 +118,7 @@ def test_cost_and_grad_are_finite():
     assert np.all(np.isfinite(np.asarray(g)))
 
 
+@pytest.mark.slow
 def test_badly_scaled_prior_cholesky():
     # A prior covariance with a slightly-negative eigenvalue (round-off scale):
     # the old fixed-1e-9 jitter still leaves the Cholesky NaN, but gx.safe_cholesky
@@ -145,6 +149,7 @@ def test_badly_scaled_prior_cholesky():
     np.testing.assert_allclose(chol, np.tril(chol), atol=1e-12)
 
 
+@pytest.mark.slow
 def test_cost_minimised_at_truth_in_whitened_space():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -157,6 +162,7 @@ def test_cost_minimised_at_truth_in_whitened_space():
     assert float(prob.cost(chi_true)) < float(prob.cost(jnp.zeros(5)))
 
 
+@pytest.mark.slow
 def test_gradient_matches_finite_difference():
     fwd = _forward(n_t=4)
     prob = _problem(fwd, jnp.array([0.0, 1.0, 0.5, 0.5]), obs_floor=1e-6)
@@ -171,6 +177,7 @@ def test_gradient_matches_finite_difference():
     np.testing.assert_allclose(np.asarray(g), g_fd, rtol=1e-2, atol=1e-2)
 
 
+@pytest.mark.slow
 def test_whitening_roundtrip():
     fwd = _forward()
     prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -186,6 +193,7 @@ def test_whitening_roundtrip():
 # ── end-to-end twin experiment ───────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_twin_experiment_recovers_emission_time_series():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -198,6 +206,7 @@ def test_twin_experiment_recovers_emission_time_series():
     assert res.cost < float(prob.cost(jnp.zeros(5)))
 
 
+@pytest.mark.slow
 def test_solve_from_explicit_initial_source():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -207,6 +216,7 @@ def test_solve_from_explicit_initial_source():
     assert np.all(np.isfinite(np.asarray(res.source)))
 
 
+@pytest.mark.slow
 def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
     # Regression for #30: `throw=False` hides the optimiser outcome, so the
     # result must expose it. A single step cannot meet optx's strict success
@@ -295,6 +305,7 @@ def test_build_forward_rejects_nonfinite_uniform_wind():
         )
 
 
+@pytest.mark.slow
 def test_build_forward_stepto_runs_with_stable_intervals():
     # A stable StepTo config must actually run: dt0 is forced to None per
     # diffrax's StepTo contract, so predict() succeeds instead of failing on the
@@ -340,6 +351,7 @@ def test_build_forward_skips_guard_for_implicit_solver():
 # ── validation ───────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_build_problem_shape_validation():
     fwd = _forward()
     y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -362,6 +374,7 @@ def test_build_problem_shape_validation():
         )
 
 
+@pytest.mark.slow
 def test_problem_is_a_frozen_dataclass():
     fwd = _forward()
     prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -385,6 +398,7 @@ def test_build_forward_rejects_bad_save_times():
         build_forward(save_times=jnp.array([0.0, 10.0, 5.0]), **common)  # non-monotone
 
 
+@pytest.mark.slow
 def test_build_problem_rejects_nonpositive_obs_variance():
     fwd = _forward()
     y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -432,6 +446,7 @@ def test_build_problem_per_overpass_variance_vector():
         )
 
 
+@pytest.mark.slow
 def test_build_problem_rejects_ambiguous_square_variance_vector():
     # When n_t == n_obs a bare 1-D obs_variance is ambiguous (per-overpass vs
     # per-receptor); build_problem must reject it and demand an explicit shape.
@@ -489,6 +504,7 @@ def test_build_problem_rejects_nonfinite_obs_variance():
         )
 
 
+@pytest.mark.slow
 def test_build_problem_rejects_nonfinite_observations():
     # A NaN observation would leave `source` finite but the cost/posterior NaN.
     fwd = _forward()
@@ -525,6 +541,7 @@ def test_build_problem_per_receptor_variance_vector():
 # ── posterior covariance (Gauss-Newton Laplace) ──────────────────────────────
 
 
+@pytest.mark.slow
 def test_posterior_covariance_symmetric_psd_shape():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -543,6 +560,7 @@ def test_posterior_covariance_symmetric_psd_shape():
         assert eig.min() > -1e-8
 
 
+@pytest.mark.slow
 def test_posterior_source_std_positive_finite():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -555,6 +573,7 @@ def test_posterior_source_std_positive_finite():
     assert np.all(std > 0.0)
 
 
+@pytest.mark.slow
 def test_observing_data_does_not_increase_whitened_variance():
     # The whitened prior is the identity, so the GN-Hessian update can only
     # shrink (never inflate) the marginal whitened posterior variances.
@@ -567,6 +586,7 @@ def test_observing_data_does_not_increase_whitened_variance():
     assert np.all(whitened_var <= 1.0 + 1e-6)
 
 
+@pytest.mark.slow
 def test_laplace_sample_shape_and_mean():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])
@@ -581,6 +601,7 @@ def test_laplace_sample_shape_and_mean():
     np.testing.assert_allclose(sample_mean, np.asarray(res.source), atol=0.05)
 
 
+@pytest.mark.slow
 def test_laplace_sample_rejects_nonpositive_n_samples():
     fwd = _forward()
     prob = _problem(fwd, jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
@@ -600,6 +621,7 @@ def _dense_gauss_newton_hessian(prob, chi):
     return jnp.eye(chi.shape[0]) + jac.T @ (r_inv[:, None] * jac)
 
 
+@pytest.mark.slow
 def test_posterior_covariance_matches_dense_inverse():
     # vardax's Laplace covariance of the whitened control must agree with a
     # dense jnp.linalg.inv reference (P_χ = H_GN⁻¹, P_S = L P_χ Lᵀ).
@@ -620,6 +642,7 @@ def test_posterior_covariance_matches_dense_inverse():
     )
 
 
+@pytest.mark.slow
 def test_solve_4dvar_attaches_posterior():
     fwd = _forward()
     q_true = jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])

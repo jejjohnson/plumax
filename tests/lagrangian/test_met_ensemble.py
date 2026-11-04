@@ -58,6 +58,7 @@ def _toy_problem():
     return footprint, prior_mean, prior_cov, obs_variance
 
 
+@pytest.mark.slow
 def test_ensemble_footprints_shape_and_common_draws():
     winds = [_gridded(3.0, 0.0), _gridded(3.0, 0.0), uniform_wind(3.0, 0.0)]
     footprints = ensemble_footprints(
@@ -75,6 +76,7 @@ def test_ensemble_footprints_shape_and_common_draws():
     assert float(footprints.sum()) > 0.0
 
 
+@pytest.mark.slow
 def test_ensemble_footprints_differ_with_the_wind():
     winds = [_gridded(3.0, 0.0), _gridded(3.0, 1.5)]
     footprints = ensemble_footprints(
@@ -90,6 +92,7 @@ def test_ensemble_footprints_differ_with_the_wind():
         ensemble_footprints([], RECEPTORS, TURBULENCE, (0.0, 1.0, 1), (0.0, 1.0, 1))
 
 
+@pytest.mark.slow
 def test_identical_members_reduce_to_single():
     footprint, prior_mean, prior_cov, obs_variance = _toy_problem()
     observation = footprint @ jnp.array([1.4, 1.8, 1.0])
@@ -113,6 +116,7 @@ def test_identical_members_reduce_to_single():
         np.testing.assert_array_equal(posterior.covariance, single.covariance)
 
 
+@pytest.mark.slow
 def test_transport_covariance_is_the_sample_covariance():
     footprint, prior_mean, _, _ = _toy_problem()
     perturbation = jax.random.normal(jax.random.PRNGKey(0), (5, *footprint.shape))
@@ -125,6 +129,7 @@ def test_transport_covariance_is_the_sample_covariance():
     )
 
 
+@pytest.mark.slow
 def test_cv_grows_with_spread():
     # y = F̄ q_a: the innovation is zero, the posterior mean stays at q_a and
     # CV(q) = std / q_a tracks the posterior spread alone.

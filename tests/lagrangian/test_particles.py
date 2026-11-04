@@ -102,6 +102,7 @@ def test_zero_turbulence_follows_streamline():
     )
 
 
+@pytest.mark.slow
 def test_well_mixed_velocity_variance_is_stationary():
     """Homogeneous OU started at stationarity keeps Var[v] ≈ σ² (well mixed)."""
     turb = HomogeneousTurbulence.isotropic(sigma=1.0, tau=20.0)
@@ -136,6 +137,7 @@ def test_velocity_variance_grows_from_rest_to_sigma_squared():
     assert abs(var_u - expected) < 0.05
 
 
+@pytest.mark.slow
 def test_ground_reflection_keeps_particles_above_zero():
     turb = HomogeneousTurbulence.isotropic(sigma=2.0, tau=10.0)
     n = 5000
@@ -161,6 +163,7 @@ def test_wind_from_speed_direction_west_wind_flows_east():
     np.testing.assert_allclose(vec, [5.0, 0.0, 0.0], atol=1e-6)
 
 
+@pytest.mark.slow
 def test_well_mixed_condition_hanna():
     """An initially uniform slab stays uniform under inhomogeneous Hanna turbulence.
 
@@ -205,6 +208,7 @@ def test_well_mixed_condition_hanna():
     assert abs(float(zf.mean()) - 0.5 * h) < 0.1 * h
 
 
+@pytest.mark.slow
 def test_hanna_ground_level_drift_is_finite():
     # The convective Hanna σ_w² carries a (z/h)^{2/3} factor whose ∂/∂z is
     # singular at z = 0, so a ground-level particle (or one reflected exactly to

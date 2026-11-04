@@ -79,6 +79,7 @@ def _toy_problem(n_grid=8, n_obs=12, seed=0):
     return coords, f, q_true
 
 
+@pytest.mark.slow
 def test_linear_inversion_recovers_truth_low_noise():
     # Twin experiment: synthesise obs from a known source, invert, recover it.
     coords, f, q_true = _toy_problem()
@@ -94,6 +95,7 @@ def test_linear_inversion_recovers_truth_low_noise():
     np.testing.assert_allclose(np.asarray(post.mean), q_true, rtol=5e-2, atol=5e-2)
 
 
+@pytest.mark.slow
 def test_linear_inversion_returns_to_prior_when_obs_uninformative():
     coords, f, _ = _toy_problem()
     n_obs, n_grid = f.shape
@@ -123,6 +125,7 @@ def test_linear_inversion_reduces_variance():
     assert np.min(np.linalg.eigvalsh(p)) > -1e-8
 
 
+@pytest.mark.slow
 def test_posterior_cov_psd_ill_conditioned():
     # Near-collinear observation rows + an extremely tight R make the innovation
     # system S = F B Fᵀ + R badly ill-conditioned. The difference-form update
@@ -227,6 +230,7 @@ def test_lognormal_zero_innovation_returns_prior_mean():
     np.testing.assert_allclose(np.asarray(post.mean), qa, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_inversion_with_real_footprint_matrix():
     # End-to-end: build F from actual backward footprints (one row per
     # receptor), synthesise observations from a known surface source, and
@@ -318,6 +322,7 @@ def test_lognormal_inversion_is_jittable_over_prior_mean():
     assert np.all(np.asarray(out) > 0.0)
 
 
+@pytest.mark.slow
 def test_lognormal_inversion_is_vmappable_over_prior_mean():
     import jax
 

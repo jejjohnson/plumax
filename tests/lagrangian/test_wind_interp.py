@@ -46,6 +46,7 @@ def _linear_wind(t, x, y, z):
     return 0.01 * x - 0.02 * y + 0.03 * z, -0.04 * x + 0.05 * z, 0.001 * y
 
 
+@pytest.mark.slow
 def test_uniform_field_no_stagger_offset():
     times = jnp.array([0.0, 3600.0])
     wind = GriddedWind.from_grid(
@@ -62,6 +63,7 @@ def test_uniform_field_no_stagger_offset():
         np.testing.assert_array_equal(sampled, expected)
 
 
+@pytest.mark.slow
 def test_uniform_gridded_wind_integrates_like_uniform_wind():
     times = jnp.array([0.0, 3600.0])
     gridded = GriddedWind.from_grid(
@@ -83,6 +85,7 @@ def test_uniform_gridded_wind_integrates_like_uniform_wind():
     )
 
 
+@pytest.mark.slow
 def test_linear_field_is_interpolated_exactly():
     wind_field = wind_field_from_callable(
         GRID, lambda t, x, y, z: _linear_wind(t, x, y, z)
@@ -97,6 +100,7 @@ def test_linear_field_is_interpolated_exactly():
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("component", [0, 1])
 def test_staggering_catches_a_half_cell_shift(component):
     # u = x on U-points and v = y on V-points. Read at a T-point they give the
@@ -118,6 +122,7 @@ def test_staggering_catches_a_half_cell_shift(component):
     assert np.all(np.abs(sampled - unstaggered) >= 0.49 * GRID.dx)
 
 
+@pytest.mark.slow
 def test_piecewise_linear_in_time_and_held_outside():
     times = jnp.array([0.0, 100.0, 300.0])
     u = jnp.stack([_constant(1.0, 1)[0], _constant(3.0, 1)[0], _constant(-1.0, 1)[0]])
@@ -127,6 +132,7 @@ def test_piecewise_linear_in_time_and_held_outside():
         np.testing.assert_allclose(np.asarray(wind(point, t))[0, 0], expected)
 
 
+@pytest.mark.slow
 def test_edge_value_is_held_beyond_the_walls():
     times = jnp.array([0.0])
     nz, ny, nx = GRID.interior_shape
@@ -138,6 +144,7 @@ def test_edge_value_is_held_beyond_the_walls():
     assert float(wind(west, 0.0)[0, 0]) == 0.0
 
 
+@pytest.mark.slow
 def test_streamlines_solid_body_rotation():
     # u = −ω y, v = ω x is linear, so the gridded wind is the analytic wind and
     # the zero-turbulence trajectory is the integrator's own: forward Euler,
@@ -186,6 +193,7 @@ def test_streamlines_solid_body_rotation():
     np.testing.assert_allclose(np.asarray(angle), [jnp.pi / 2, 0.0], atol=0.02)
 
 
+@pytest.mark.slow
 def test_from_met_and_from_prescribed_agree():
     times = jnp.array([0.0, 3600.0])
     nz, ny, nx = GRID.interior_shape
@@ -221,6 +229,7 @@ def test_from_met_and_from_prescribed_agree():
     )
 
 
+@pytest.mark.slow
 def test_jit_and_vmap_agree_with_a_loop():
     wind_field = wind_field_from_callable(GRID, _linear_wind)
     wind = gridded_wind_from_prescribed(wind_field, jnp.array([0.0, 60.0]))
@@ -230,6 +239,7 @@ def test_jit_and_vmap_agree_with_a_loop():
     np.testing.assert_allclose(np.asarray(sampled), looped, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_position_gradient_matches_central_differences():
     wind_field = wind_field_from_callable(GRID, _linear_wind)
     wind = gridded_wind_from_prescribed(wind_field, jnp.array([0.0]))
@@ -260,6 +270,7 @@ def test_position_gradient_matches_central_differences():
     )
 
 
+@pytest.mark.slow
 def test_footprint_and_concentration_accept_a_gridded_wind():
     times = jnp.array([0.0, 3600.0])
     gridded = GriddedWind.from_grid(

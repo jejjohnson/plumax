@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 import xarray as xr
 from pipekit import Operator
 
@@ -9,6 +10,7 @@ from plumax.lagrangian import HomogeneousTurbulence
 from plumax.operators import LagrangianDispersion
 
 
+@pytest.mark.slow
 def test_lagrangian_operator_runs_and_is_operator():
     op = LagrangianDispersion(
         turbulence=HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0),

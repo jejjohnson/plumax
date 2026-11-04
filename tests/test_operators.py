@@ -64,6 +64,7 @@ def test_gaussian_plume_config_round_trip(small_domain):
     assert rebuilt.domain_x == small_domain["domain_x"]
 
 
+@pytest.mark.slow
 def test_gaussian_puff_apply_returns_time_resolved_field(small_domain):
     time_array = np.array([0.0, 30.0, 60.0])
     puff = GaussianPuff(

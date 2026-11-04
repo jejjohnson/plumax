@@ -16,6 +16,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 
 # A meta-path finder that makes `import <top>` and `import <top>.<sub>` fail
 # with the same ModuleNotFoundError (name=<top>) as an uninstalled package.
@@ -46,6 +48,7 @@ def _run(code: str) -> subprocess.CompletedProcess:
     )
 
 
+@pytest.mark.slow
 def test_no_vardax_without_extra():
     result = _run(
         """
@@ -57,6 +60,7 @@ def test_no_vardax_without_extra():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_imports_without_either_extra():
     result = _run(
         """
@@ -67,6 +71,7 @@ def test_imports_without_either_extra():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_noise_models_without_numpyro():
     # The likelihoods import NumPyro only to sample a site; building a noise
     # model and its plain-JAX log-density need neither extra.
@@ -82,6 +87,7 @@ def test_noise_models_without_numpyro():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_inversion_without_vardax_names_the_extra():
     result = _run(
         """
@@ -102,6 +108,7 @@ def test_inversion_without_vardax_names_the_extra():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_fusion_without_vardax_names_the_extra():
     result = _run(
         """
@@ -132,6 +139,7 @@ def test_fusion_without_vardax_names_the_extra():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_no_geo_carrier_without_extra():
     result = _run(
         """
@@ -144,6 +152,7 @@ def test_no_geo_carrier_without_extra():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_geo_operator_without_extra_names_it():
     result = _run(
         """
@@ -161,6 +170,7 @@ def test_geo_operator_without_extra_names_it():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.slow
 def test_population_without_xtremax():
     # xtremax (the `population` extra) is imported only when a process is
     # built, and its absence is reported with the extra's name.

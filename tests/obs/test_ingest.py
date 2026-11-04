@@ -215,6 +215,7 @@ def test_bbox_crop(files, frame):
         load_tropomi_l2(tropomi, frame=frame, bbox=(0.0, 0.0, 1.0, 1.0))
 
 
+@pytest.mark.slow
 def test_fused_twin_recovers_the_emission_rate(files, frame):
     tropomi, emit = files
     trop = load_tropomi_l2(tropomi, frame=frame, background_ppb=BACKGROUND)

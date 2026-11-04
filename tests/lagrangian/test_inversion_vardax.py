@@ -69,6 +69,7 @@ def test_source_receptor_shapes():
     np.testing.assert_allclose(predicted[0], f @ q, rtol=1e-14)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scene", SCENES)
 def test_oi_matches_blue(scene):
     f, y, qa, b, r = _scene(*SCENES[scene])
@@ -78,6 +79,7 @@ def test_oi_matches_blue(scene):
     assert _rel(post.covariance, covariance) < 1e-10
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scene", SCENES)
 def test_lognormal_matches_linearised_blue(scene):
     f, y, qa, b, r = _scene(*SCENES[scene])
