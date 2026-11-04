@@ -213,6 +213,9 @@ def footprint_dataset(
     zarr cache under ``cache_dir``, keyed on the simulator, the sampler, the
     seed and the split.
 
+    The cache is held in memory after its first read, because training reads
+    it case by case and a zarr read costs about 1 ms per array.
+
     ``SimulationDataset`` partitions the ``n_cases`` seeds 80 / 10 / 10 into
     the ``"train"``, ``"val"`` and ``"test"`` splits, so a split holds a
     fraction of ``n_cases`` and the splits never share a case.
@@ -242,7 +245,7 @@ def footprint_dataset(
         seed=seed,
         split=split,
     )
-    return pt.CachedDataset(source, cache_dir=cache_dir)
+    return pt.CachedDataset(source, cache_dir=cache_dir, in_memory=True)
 
 
 def _stack_dataset(
