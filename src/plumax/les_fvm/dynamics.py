@@ -21,7 +21,7 @@ from plumax.les_fvm.boundary import (
 )
 from plumax.les_fvm.diffusion import EddyDiffusivity, diffusion_tendency
 from plumax.les_fvm.grid import PlumeGrid3D
-from plumax.les_fvm.source import GaussianSource
+from plumax.les_fvm.source import GaussianSource, SurfaceFluxSource
 from plumax.les_fvm.wind import PrescribedWindField
 
 
@@ -35,7 +35,7 @@ class EulerianDispersionRHS(eqx.Module):
         Time-queryable prescribed wind.
     eddy_diffusivity : EddyDiffusivity
         ``(K_h, K_z)`` eddy diffusivity.
-    source : GaussianSource
+    source : GaussianSource or SurfaceFluxSource
         Methane source term.
     horizontal_bc : HorizontalBC
     vertical_bc : VerticalBC
@@ -47,7 +47,7 @@ class EulerianDispersionRHS(eqx.Module):
     plume_grid: PlumeGrid3D
     wind_field: PrescribedWindField
     eddy_diffusivity: EddyDiffusivity
-    source: GaussianSource
+    source: GaussianSource | SurfaceFluxSource
     horizontal_bc: HorizontalBC
     vertical_bc: VerticalBC
     advection_scheme: str = eqx.field(static=True, default="weno5")

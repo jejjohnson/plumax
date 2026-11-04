@@ -1,4 +1,4 @@
-"""Methane source term for the Eulerian dispersion solver.
+"""Methane source terms for the Eulerian dispersion solver.
 
 The source enters the tracer equation as
 
@@ -10,6 +10,9 @@ use a Gaussian profile centred at the release point with a small
 isotropic radius; this is the standard way to regularise a Dirac point
 source on a finite grid, and the radius should be comparable to the
 grid spacing.
+
+:class:`SurfaceFluxSource` is the distributed alternative, a per-cell surface
+flux map, which is the control of the spatial 4D-Var inversion.
 """
 
 from __future__ import annotations
@@ -45,6 +48,45 @@ class GaussianSource(eqx.Module):
         """Source tendency ``q(t) * density`` at interior T-points, zero-padded."""
         q = self.emission_fn(t)
         interior = q * self.density
+        return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="constant")
+
+
+class SurfaceFluxSource(eqx.Module):
+    """Per-cell surface flux injected into the lowest interior layer.
+
+    ∂C/∂t ⊇ q(s, t) / Δz in the lowest layer and 0 above it, so the tendency
+    integrated over the cell volume Δx Δy Δz is the flux through the cell's
+    base area, q Δx Δy [kg/s], whatever the layer thickness.
+
+    Attributes:
+        flux_fn: Pure function ``t -> q(·, t)`` returning the surface flux
+            [kg m⁻² s⁻¹] on the interior T-cells, shape ``(ny, nx)``.
+        layer_thickness: Thickness Δz of the lowest layer [m].
+        n_layers: Number of interior layers.
+
+    Examples:
+        The tendency sits in the lowest layer, scaled by the thickness:
+
+        >>> import jax.numpy as jnp
+        >>> source = SurfaceFluxSource(lambda t: 2.0 * jnp.ones((3, 4)), 4.0, 2)
+        >>> tendency = source(jnp.asarray(0.0))
+        >>> tendency.shape
+        (4, 5, 6)
+        >>> float(tendency[1, 1, 1]), float(tendency[2, 1, 1])
+        (0.5, 0.0)
+    """
+
+    flux_fn: Callable[[Float[Array, ""]], Float[Array, "ny nx"]]
+    layer_thickness: float
+    n_layers: int = eqx.field(static=True)
+
+    def __call__(self, t: Float[Array, ""]) -> Float[Array, "Nz Ny Nx"]:
+        """Source tendency at interior T-points, zero-padded."""
+        flux = self.flux_fn(t)
+        ny, nx = flux.shape
+        interior = jnp.zeros((self.n_layers, ny, nx), dtype=flux.dtype)
+        # ∂C/∂t = q / Δz in the lowest layer
+        interior = interior.at[0].set(flux / self.layer_thickness)
         return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="constant")
 
 

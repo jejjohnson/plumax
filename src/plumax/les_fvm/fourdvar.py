@@ -25,11 +25,11 @@ model. The diffrax solve defines only a VJP, so the operator is linearised in
 reverse mode (``CallableObs(jac="bwd", materialise=True)``). The incremental / Gauss-Newton
 inner-loop variant (design §incremental) is a separate future addition.
 
-The control vector here is the **time-resolved scalar emission rate** ``S = q``
-at a known source location — the v1 scope. A per-cell space–time source field is
-a natural extension (the forward already accepts an arbitrary
-``emission_fn(t)``); the analysis is written against a flat control vector so
-that extension does not change the solver.
+The control vector is either the **time-resolved scalar emission rate** ``S = q``
+at a known source location (:class:`TemporalControl`, or the ``prior_mean`` and
+``prior_covariance`` arguments of :func:`build_problem`), or a **per-cell surface
+flux map** with a Matérn-3/2 prior (:class:`SpatialControl`). The analysis is
+written against a flat control vector, so both share one solver.
 
 Control-variable transform (design §control-transform): optimisation runs in
 **whitened space** ``χ = L⁻¹ (S − S_b)`` where ``B = L Lᵀ``, through
@@ -60,18 +60,311 @@ from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total
 from plumax._vardax import require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
-from plumax.lagrangian.inversion import _is_traced
+from plumax.lagrangian.inversion import _is_traced, matern32_covariance
 from plumax.les_fvm.boundary import build_default_concentration_bc
 from plumax.les_fvm.diffusion import make_eddy_diffusivity
 from plumax.les_fvm.dynamics import EulerianDispersionRHS
-from plumax.les_fvm.grid import make_grid
-from plumax.les_fvm.source import GaussianSource, make_gaussian_source
+from plumax.les_fvm.grid import PlumeGrid3D, make_grid
+from plumax.les_fvm.source import (
+    GaussianSource,
+    SurfaceFluxSource,
+    make_gaussian_source,
+)
 from plumax.les_fvm.wind import uniform_wind_field
 
 
 if TYPE_CHECKING:
     import optimistix as optx
     import vardax
+
+
+# ── control layouts ──────────────────────────────────────────────────────────
+
+
+#: Tags of a covariance operator or a covariance factor built from one.
+_PSD_TAGS = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
+
+
+@dataclass(frozen=True)
+class TemporalControl:
+    """Prior of the scalar emission time series at a known source.
+
+    The control of :func:`build_problem` when the forward has a source location.
+
+    Attributes:
+        prior_mean: Source prior mean ``S_b``, shape ``(n_t,)``.
+        prior_covariance: Source prior covariance ``B``, shape ``(n_t, n_t)``.
+    """
+
+    prior_mean: jax.Array
+    prior_covariance: jax.Array
+
+
+@dataclass(frozen=True, eq=False)
+class SpatialControl:
+    """Per-cell surface flux control with a Matérn-3/2 prior.
+
+    q(s, t) = Σ_k φ_k(t) q_k(s) on the active cells and 0 elsewhere, with
+    independent coefficient fields sharing the spatial covariance,
+
+        q_k(s) ~ N(a_k m(s), B_s),   B_s = Σ_σ ρ Σ_σ,   Φ a = 1.
+
+    The coefficients a make the prior mean of the flux m(s) at every save time,
+    so the time basis must span the constant. The flux at the save times then
+    has covariance Φ Φᵀ ⊗ B_s, so a dense temporal prior B_t = L_t L_tᵀ is the
+    basis Φ = L_t.
+
+    The correlation ρ depends on ``separable``, and the two are different
+    kernels. With d = s − s′ and h(r) = (1 + √3 r / ℓ) exp(−√3 r / ℓ):
+
+    - ``separable=True`` is the product kernel ρ = h(|d_y|) h(|d_x|), stored as
+      ``gaussx.Kronecker(ρ_y, ρ_x)`` when every cell is active.
+    - ``separable=False`` is the isotropic kernel ρ = h(‖d‖), the dense
+      :func:`~plumax.lagrangian.inversion.matern32_covariance`.
+
+    The prior is Gaussian, so the MAP flux is not constrained to be positive.
+
+    Attributes:
+        mask: Active T-cells, shape ``(ny, nx)``. Flat control vectors list them
+            row-major over ``(y, x)``, one block per basis function.
+        prior_mean: Prior mean flux m [kg m⁻² s⁻¹], shape ``(ny, nx)``.
+        length_scale_m: Correlation length ℓ [m].
+        prior_std: Prior standard deviation σ [kg m⁻² s⁻¹], shape ``(ny, nx)``.
+        time_basis: Basis Φ at the save times, shape ``(n_t, K)``, linearly
+            interpolated between them. ``None`` makes the flux constant in time.
+        separable: Use the product kernel rather than the isotropic one.
+
+    Raises:
+        ValueError: If the shapes disagree, no cell is active, ``length_scale_m``
+            or an active ``prior_std`` is not positive, an input is not finite,
+            or the basis does not span the constant.
+
+    Examples:
+        Two active cells of a 2 × 2 grid, constant in time:
+
+        >>> import jax.numpy as jnp
+        >>> control = SpatialControl(
+        ...     mask=jnp.array([[True, False], [False, True]]),
+        ...     prior_mean=jnp.ones((2, 2)),
+        ...     length_scale_m=100.0,
+        ...     prior_std=0.5 * jnp.ones((2, 2)),
+        ... )
+        >>> control.size
+        2
+        >>> control.to_field(jnp.array([2.0, 3.0])).tolist()
+        [[[2.0, 0.0], [0.0, 3.0]]]
+    """
+
+    mask: jax.Array
+    prior_mean: jax.Array
+    length_scale_m: float
+    prior_std: jax.Array
+    time_basis: jax.Array | None = None
+    separable: bool = True
+
+    def __post_init__(self) -> None:
+        shape = np.shape(self.mask)
+        if len(shape) != 2:
+            raise ValueError(f"SpatialControl: `mask` must be 2-D, got {shape}.")
+        for name in ("prior_mean", "prior_std"):
+            if np.shape(getattr(self, name)) != shape:
+                raise ValueError(
+                    f"SpatialControl: `{name}` must have the mask's shape {shape}, "
+                    f"got {np.shape(getattr(self, name))}."
+                )
+        active = np.asarray(self.mask, dtype=bool)
+        if not active.any():
+            raise ValueError("SpatialControl: `mask` has no active cell.")
+        if not self.length_scale_m > 0.0:
+            raise ValueError("SpatialControl: `length_scale_m` must be > 0.")
+        mean = np.asarray(self.prior_mean, dtype=float)[active]
+        std = np.asarray(self.prior_std, dtype=float)[active]
+        if not (np.all(np.isfinite(mean)) and np.all(np.isfinite(std))):
+            raise ValueError("SpatialControl: priors must be finite on active cells.")
+        if np.any(std <= 0.0):
+            raise ValueError("SpatialControl: `prior_std` must be > 0 on active cells.")
+        if self.time_basis is not None:
+            self._mean_coefficients()
+
+    @property
+    def n_active(self) -> int:
+        """Number of active cells."""
+        return int(np.count_nonzero(np.asarray(self.mask, dtype=bool)))
+
+    @property
+    def n_basis(self) -> int:
+        """Number K of basis functions."""
+        return 1 if self.time_basis is None else int(np.shape(self.time_basis)[1])
+
+    @property
+    def size(self) -> int:
+        """Length of the flat control vector, n_active · K."""
+        return self.n_active * self.n_basis
+
+    def _mean_coefficients(self) -> jax.Array:
+        """Coefficients a with Φ a = 1, shape ``(K,)``."""
+        if self.time_basis is None:
+            return jnp.ones(1, dtype=float)
+        basis = np.asarray(self.time_basis, dtype=float)
+        if basis.ndim != 2:
+            raise ValueError("SpatialControl: `time_basis` must be 2-D (n_t, K).")
+        constant = np.ones(basis.shape[0])
+        coefficients, *_ = np.linalg.lstsq(basis, constant, rcond=None)
+        # 1 ∈ span(Φ): otherwise no coefficient mean makes the flux mean m(s)
+        if not np.allclose(basis @ coefficients, constant, rtol=0.0, atol=1e-8):
+            raise ValueError(
+                "SpatialControl: `time_basis` must span the constant, so that the "
+                "prior mean of the flux is `prior_mean` at every save time."
+            )
+        return jnp.asarray(coefficients, dtype=float)
+
+    def flat_prior_mean(self) -> jax.Array:
+        """Prior mean μ_q of the flat control, shape ``(size,)``."""
+        mean = jnp.asarray(self.prior_mean, dtype=float)[np.asarray(self.mask, bool)]
+        # μ_q = a ⊗ m
+        return jnp.kron(self._mean_coefficients(), mean)
+
+    def to_field(self, flat: jax.Array) -> jax.Array:
+        """Map a flat control vector onto the grid, with 0 on inactive cells.
+
+        Args:
+            flat: Flat control values, shape ``(..., size)``.
+
+        Returns:
+            The coefficient fields, shape ``(..., K, ny, nx)``.
+        """
+        ny, nx = np.shape(self.mask)
+        rows, columns = np.nonzero(np.asarray(self.mask, dtype=bool))
+        per_cell = einx.rearrange(
+            "... (basis cell) -> ... basis cell", flat, basis=self.n_basis
+        )
+        field_shape = (*per_cell.shape[:-1], ny, nx)
+        return (
+            jnp.zeros(field_shape, dtype=flat.dtype)
+            .at[..., rows, columns]
+            .set(per_cell)
+        )
+
+    def flux_function(
+        self, flat: jax.Array, save_times: jax.Array
+    ) -> Callable[[jax.Array], jax.Array]:
+        """The flux t -> q(·, t) of a flat control, on the ``(ny, nx)`` grid."""
+        fields = self.to_field(flat)
+        if self.time_basis is None:
+            constant_flux = fields[0]
+
+            def flux(t: jax.Array) -> jax.Array:
+                del t
+                return constant_flux
+
+            return flux
+
+        basis = einx.rearrange(
+            "time basis -> basis time", jnp.asarray(self.time_basis, dtype=flat.dtype)
+        )
+
+        def flux(t: jax.Array) -> jax.Array:
+            # φ_k(t), linear between the save times
+            basis_at_t = jax.vmap(lambda phi: jnp.interp(t, save_times, phi))(basis)
+            # q(s, t) = Σ_k φ_k(t) q_k(s)
+            return einx.dot("basis, basis y x -> y x", basis_at_t, fields)
+
+        return flux
+
+    def _correlation_factors(
+        self, y: jax.Array, x: jax.Array
+    ) -> tuple[jax.Array, jax.Array]:
+        """The 1-D correlation matrices ρ_y and ρ_x of the product kernel."""
+        rho_y = matern32_covariance(y, variance=1.0, length_scale=self.length_scale_m)
+        rho_x = matern32_covariance(x, variance=1.0, length_scale=self.length_scale_m)
+        return rho_y, rho_x
+
+    def _active_correlation(self, y: jax.Array, x: jax.Array) -> jax.Array:
+        """Dense correlation matrix ρ over the active cells."""
+        active = np.flatnonzero(np.asarray(self.mask, dtype=bool))
+        if self.separable:
+            rho_y, rho_x = self._correlation_factors(y, x)
+            return jnp.kron(rho_y, rho_x)[np.ix_(active, active)]
+        grid_y, grid_x = jnp.meshgrid(y, x, indexing="ij")
+        coordinates = jnp.stack([grid_y.ravel(), grid_x.ravel()], axis=-1)
+        return matern32_covariance(
+            coordinates[active], variance=1.0, length_scale=self.length_scale_m
+        )
+
+    def _is_kronecker(self) -> bool:
+        # a mask breaks the product structure of the matrix over the active cells
+        return self.separable and bool(np.all(np.asarray(self.mask, dtype=bool)))
+
+    def _scale(self) -> lx.DiagonalLinearOperator:
+        # I_K ⊗ Σ_σ over the flat control
+        std = jnp.asarray(self.prior_std, dtype=float)[np.asarray(self.mask, bool)]
+        return lx.DiagonalLinearOperator(jnp.tile(std, self.n_basis))
+
+    def _over_basis(
+        self, block: lx.AbstractLinearOperator
+    ) -> lx.AbstractLinearOperator:
+        # I_K ⊗ block: the coefficient fields are independent
+        if self.n_basis == 1:
+            return block
+        identity = lx.IdentityLinearOperator(
+            jax.ShapeDtypeStruct((self.n_basis,), block.out_structure().dtype)
+        )
+        return gx.Kronecker(identity, block)
+
+    def prior_covariance(self, y: jax.Array, x: jax.Array) -> lx.AbstractLinearOperator:
+        """Prior covariance of the flat control, I_K ⊗ Σ_σ ρ Σ_σ.
+
+        Args:
+            y: T-cell centres along y [m], shape ``(ny,)``.
+            x: T-cell centres along x [m], shape ``(nx,)``.
+
+        Returns:
+            The covariance, with ρ a ``gaussx.Kronecker(ρ_y, ρ_x)`` when the
+            kernel is separable and every cell is active, dense otherwise.
+        """
+        if self._is_kronecker():
+            rho_y, rho_x = self._correlation_factors(y, x)
+            rho = gx.Kronecker(
+                lx.MatrixLinearOperator(rho_y, _PSD_TAGS),
+                lx.MatrixLinearOperator(rho_x, _PSD_TAGS),
+            )
+        else:
+            rho = lx.MatrixLinearOperator(self._active_correlation(y, x), _PSD_TAGS)
+        # B = (I_K ⊗ Σ_σ) (I_K ⊗ ρ) (I_K ⊗ Σ_σ)
+        covariance = self._scale() @ self._over_basis(rho) @ self._scale()
+        return lx.TaggedLinearOperator(covariance, lx.positive_semidefinite_tag)
+
+    def prior_sqrt(self, y: jax.Array, x: jax.Array) -> lx.AbstractLinearOperator:
+        """Lower-triangular square root S of :meth:`prior_covariance`, S Sᵀ = B.
+
+        Factorises each block with ``gaussx.safe_cholesky``, whose adaptive
+        jitter survives a smooth Matérn on a fine grid; a Kronecker block needs
+        only its two 1-D factors.
+
+        Args:
+            y: T-cell centres along y [m], shape ``(ny,)``.
+            x: T-cell centres along x [m], shape ``(nx,)``.
+
+        Returns:
+            S = (I_K ⊗ Σ_σ) (I_K ⊗ chol ρ).
+        """
+        if self._is_kronecker():
+            rho_y, rho_x = self._correlation_factors(y, x)
+            root = gx.Kronecker(
+                lx.MatrixLinearOperator(_cholesky(rho_y)),
+                lx.MatrixLinearOperator(_cholesky(rho_x)),
+            )
+        else:
+            rho = self._active_correlation(y, x)
+            root = lx.MatrixLinearOperator(_cholesky(rho))
+        # S = (I_K ⊗ Σ_σ) (I_K ⊗ chol ρ)
+        return self._scale() @ self._over_basis(root)
+
+
+def _cholesky(covariance: jax.Array) -> jax.Array:
+    # adaptive jitter: a fixed kick fails on badly scaled Matérn priors
+    operator = lx.MatrixLinearOperator(covariance, _PSD_TAGS)
+    return gx.safe_cholesky(operator)
 
 
 # ── differentiable forward: emission signal → column-observation time series ──
@@ -115,7 +408,8 @@ class EulerianForward4DVar:
     Bundles the fixed transport configuration (grid, wind, diffusivity, BCs,
     source geometry, save times) so that :meth:`predict` is a pure function of
     the control vector ``q`` — the time-resolved emission rate at the save
-    times — and is therefore ``jax.grad`` / ``jax.linearize``-able for 4D-Var.
+    times, or the flat per-cell flux of a :class:`SpatialControl` — and is
+    therefore ``jax.grad`` / ``jax.linearize``-able for 4D-Var.
 
     Build with :func:`build_forward` rather than directly.
 
@@ -127,6 +421,9 @@ class EulerianForward4DVar:
         save_times: Observation/integration times [s], shape ``(n_t,)``.
         initial_concentration: Padded initial field ``(Nz, Ny, Nx)``.
         solver_kwargs: diffrax solve settings (solver, dt0, tolerances).
+        plume_grid: The analysis grid; its T-cells place a spatial prior.
+        control: The spatial control the flat control vector is laid out by;
+            ``None`` for the emission time series.
     """
 
     rhs_factory: Callable[[jax.Array], EulerianDispersionRHS]
@@ -136,6 +433,8 @@ class EulerianForward4DVar:
     t0: float
     t1: float
     solver_kwargs: dict = field(default_factory=dict)
+    plume_grid: PlumeGrid3D | None = None
+    control: SpatialControl | None = None
 
     def concentration_history(self, q_series: jax.Array) -> jax.Array:
         """Solve the FV transport for ``q_series``; return interior fields.
@@ -195,8 +494,9 @@ def build_forward(
     domain_y: tuple[float, float, int],
     domain_z: tuple[float, float, int],
     save_times: jax.Array,
-    source_location: tuple[float, float, float],
+    source_location: tuple[float, float, float] | None = None,
     uniform_wind: tuple[float, float, float],
+    control: SpatialControl | None = None,
     eddy_diffusivity: float | tuple[float, float] = 1.0,
     source_radius: float | None = None,
     advection_scheme: str = "upwind1",
@@ -216,8 +516,11 @@ def build_forward(
         domain_y: ``(min, max, n_interior)`` along y.
         domain_z: ``(min, max, n_interior)`` along z.
         save_times: Observation/integration times [s], shape ``(n_t,)``.
-        source_location: ``(x, y, z)`` release point [m].
+        source_location: ``(x, y, z)`` release point [m] of the emission time
+            series. Exactly one of this and ``control`` is given.
         uniform_wind: Constant ``(u, v, w)`` [m/s].
+        control: Per-cell surface flux control, injected through
+            :class:`~plumax.les_fvm.source.SurfaceFluxSource`.
         eddy_diffusivity: Constant scalar ``K`` or ``(K_h, K_z)`` [m²/s].
         source_radius: Gaussian source radius [m] (defaults to ``2·max(dx,…)``).
         advection_scheme: Reconstruction scheme (``"upwind1"`` is the robust,
@@ -231,6 +534,10 @@ def build_forward(
     # Validate the time grid up front: t0/t1, SaveAt(ts=...) and jnp.interp all
     # assume ≥ 2 strictly-increasing save times. Catching it here gives a clear
     # error instead of an opaque diffrax / interpolation failure later.
+    if (source_location is None) == (control is None):
+        raise ValueError(
+            "build_forward: pass exactly one of `source_location` and `control`."
+        )
     st = np.asarray(save_times, dtype=float)
     if st.ndim != 1 or st.size < 2:
         raise ValueError(
@@ -307,23 +614,35 @@ def build_forward(
     )
     save_times = jnp.asarray(save_times, dtype=plume_grid.x.dtype)
 
-    # Build the source *geometry* once, with a placeholder unit rate. This runs
-    # the (eager) source-location bounds check and fixes the static ``density``
-    # profile outside the differentiated path; only the emission rate ``q``
-    # flows through the trace, so the per-call factory just swaps ``emission_fn``
-    # and never re-runs the host-side ``float(...)`` validation.
-    base_source = make_gaussian_source(
-        plume_grid=plume_grid,
-        emission_rate=1.0,
-        source_location=source_location,
-        source_radius=source_radius,
-    )
+    nz, ny, nx = plume_grid.shape
+    if control is not None:
+        n_layers, *surface_shape = plume_grid.interior_shape
+        _check_control_on_grid(control, tuple(surface_shape), save_times.shape[0])
+
+        def source_factory(q_series: jax.Array) -> SurfaceFluxSource:
+            flux_fn = control.flux_function(q_series, save_times)
+            return SurfaceFluxSource(flux_fn, plume_grid.dz, n_layers)
+    else:
+        # Build the source *geometry* once, with a placeholder unit rate. This
+        # runs the (eager) source-location bounds check and fixes the static
+        # ``density`` profile outside the differentiated path; only the emission
+        # rate ``q`` flows through the trace, so the per-call factory just swaps
+        # ``emission_fn`` and never re-runs the host-side ``float(...)`` validation.
+        base_source = make_gaussian_source(
+            plume_grid=plume_grid,
+            emission_rate=1.0,
+            source_location=source_location,
+            source_radius=source_radius,
+        )
+
+        def source_factory(q_series: jax.Array) -> GaussianSource:
+            return GaussianSource(
+                emission_fn=_interpolated_emission(q_series, save_times),
+                density=base_source.density,
+            )
 
     def rhs_factory(q_series: jax.Array) -> EulerianDispersionRHS:
-        source = GaussianSource(
-            emission_fn=_interpolated_emission(q_series, save_times),
-            density=base_source.density,
-        )
+        source = source_factory(q_series)
         return EulerianDispersionRHS(
             plume_grid=plume_grid,
             wind_field=wind_field,
@@ -334,7 +653,6 @@ def build_forward(
             advection_scheme=advection_scheme,
         )
 
-    nz, ny, nx = plume_grid.shape
     observation_op = ColumnObservationOperator(
         dz=plume_grid.dz, receptor_index=receptor_index
     )
@@ -346,7 +664,24 @@ def build_forward(
         t0=float(save_times[0]),
         t1=float(save_times[-1]),
         solver_kwargs=dict(solver_kwargs or {}),
+        plume_grid=plume_grid,
+        control=control,
     )
+
+
+def _check_control_on_grid(
+    control: SpatialControl, grid_shape: tuple[int, int], n_times: int
+) -> None:
+    if np.shape(control.mask) != grid_shape:
+        raise ValueError(
+            f"build_forward: `control.mask` must be (ny, nx) = {grid_shape}, got "
+            f"{np.shape(control.mask)}."
+        )
+    if control.time_basis is not None and np.shape(control.time_basis)[0] != n_times:
+        raise ValueError(
+            f"build_forward: `control.time_basis` must have one row per save time "
+            f"({n_times}), got {np.shape(control.time_basis)[0]}."
+        )
 
 
 # ── 4D-Var cost in whitened control space ────────────────────────────────────
@@ -354,10 +689,12 @@ def build_forward(
 
 @dataclass(frozen=True)
 class FourDVarProblem:
-    """A strong-constraint 4D-Var problem over a scalar emission time series.
+    """A strong-constraint 4D-Var problem over a flat source control.
 
-    Holds the differentiable forward, the prior ``(S_b, B = L Lᵀ)``, and the
-    observations ``(y_t, R_t)``. The cost is evaluated in whitened space
+    The control is a scalar emission time series or the per-cell flux of a
+    :class:`SpatialControl`; ``n_state`` below is its length, ``n_t`` for the
+    time series. Holds the differentiable forward, the prior ``(S_b, B = L Lᵀ)``,
+    and the observations ``(y_t, R_t)``. The cost is evaluated in whitened space
     ``χ = L⁻¹ (S − S_b)`` so the prior term is the identity ``½‖χ‖²`` and the
     Hessian is well-conditioned (design §control-transform). ``observations``
     has shape ``(n_t, n_obs)`` and ``obs_variance`` broadcasts to it.
@@ -366,10 +703,11 @@ class FourDVarProblem:
     """
 
     forward: EulerianForward4DVar
-    prior_mean: jax.Array  # S_b, (n_t,)
-    prior_chol: jax.Array  # L with B = L Lᵀ, (n_t, n_t)
+    prior_mean: jax.Array  # S_b, (n_state,)
+    prior_chol: jax.Array  # L with B = L Lᵀ, (n_state, n_state)
     observations: jax.Array  # y, (n_t, n_obs)
     obs_variance: jax.Array  # R diagonal, broadcast to (n_t, n_obs)
+    control: SpatialControl | None = None
 
     def source_from_whitened(self, chi: jax.Array) -> jax.Array:
         """Map whitened control ``χ`` back to the emission signal ``S``."""
@@ -399,11 +737,11 @@ class FourDVarProblem:
         so the observation-error covariance is the identity. The diffrax
         solve defines only a VJP, whose ``while_loop`` JAX cannot transpose,
         so the operator linearises by forming the Jacobian with one VJP per
-        observation (``jac="bwd", materialise=True``); the control is
-        ``n_t`` long, so that is small.
+        observation (``jac="bwd", materialise=True``), so the cost scales with
+        the number of observations rather than the length of the control.
 
         Returns:
-            A ``vardax.CallableObs`` ``(1, n_t) → (1, n_t·n_obs)``.
+            A ``vardax.CallableObs`` ``(1, n_state) → (1, n_t·n_obs)``.
 
         Raises:
             ImportError: Without the ``assim`` extra.
@@ -441,7 +779,7 @@ class FourDVarProblem:
 
         Returns:
             ``(model, batch)``: ``model(batch)`` is the MAP source, shape
-            ``(1, 1, n_t)``, ``model.analyse(batch)`` adds the minimiser's
+            ``(1, 1, n_state)``, ``model.analyse(batch)`` adds the minimiser's
             diagnostics, and ``model.posterior(batch)`` is its Laplace
             posterior.
 
@@ -451,7 +789,7 @@ class FourDVarProblem:
         import optimistix as optx
 
         vdx = require_vardax("FourDVarProblem.analysis")
-        n_t = self.prior_mean.shape[0]
+        n_state = self.prior_mean.shape[0]
         dtype = self.prior_mean.dtype
         basis = vdx.linear_basis(self.prior_chol, variance=1.0)
         if initial_whitened is None:
@@ -481,7 +819,8 @@ class FourDVarProblem:
             # unused by the solve and the posterior (the control's prior is
             # ½‖χ‖²); B = L Lᵀ for consistency
             prior_cov_op=row_operator(
-                lx.MatrixLinearOperator(self.prior_chol @ self.prior_chol.T, psd), n_t
+                lx.MatrixLinearOperator(self.prior_chol @ self.prior_chol.T, psd),
+                n_state,
             ),
             obs_cov_op=lx.IdentityLinearOperator(
                 jax.ShapeDtypeStruct((1, n_flat), dtype)
@@ -503,26 +842,52 @@ def build_problem(
     *,
     forward: EulerianForward4DVar,
     observations: jax.Array,
-    prior_mean: jax.Array,
-    prior_covariance: jax.Array,
+    prior_mean: jax.Array | None = None,
+    prior_covariance: jax.Array | None = None,
     obs_variance: jax.Array | float,
+    control: SpatialControl | TemporalControl | None = None,
 ) -> FourDVarProblem:
     """Assemble a :class:`FourDVarProblem`, factorising the prior covariance.
 
     Args:
         forward: The differentiable transport forward.
         observations: Column observations ``y``, shape ``(n_t, n_obs)``.
-        prior_mean: Source prior mean ``S_b``, shape ``(n_t,)``.
+        prior_mean: Source prior mean ``S_b``, shape ``(n_t,)``, for the emission
+            time series. Give either this and ``prior_covariance``, or ``control``.
         prior_covariance: Source prior covariance ``B``, shape ``(n_t, n_t)``
             (e.g. a Matérn-3/2 temporal prior from
             :func:`plumax.lagrangian.inversion.matern32_covariance`). Cholesky
             -factorised once here.
         obs_variance: Observation-error variance ``R`` (scalar or broadcastable
             to ``observations``); ``R = R_retr + R_repr``.
+        control: The control and its prior: the same :class:`SpatialControl`
+            that ``forward`` was built with, or a :class:`TemporalControl`.
 
     Returns:
         The configured :class:`FourDVarProblem`.
     """
+    if isinstance(control, SpatialControl):
+        return _build_spatial_problem(
+            forward, observations, prior_mean, prior_covariance, obs_variance, control
+        )
+    if forward.control is not None:
+        raise ValueError(
+            "build_problem: `forward` has a spatial control; pass the same "
+            "SpatialControl as `control`."
+        )
+    if isinstance(control, TemporalControl):
+        if prior_mean is not None or prior_covariance is not None:
+            raise ValueError(
+                "build_problem: pass either `control` or `prior_mean` and "
+                "`prior_covariance`, not both."
+            )
+        prior_mean = control.prior_mean
+        prior_covariance = control.prior_covariance
+    if prior_mean is None or prior_covariance is None:
+        raise ValueError(
+            "build_problem: pass `control`, or both `prior_mean` and "
+            "`prior_covariance`."
+        )
     sb = jnp.asarray(prior_mean, dtype=float)
     b = jnp.asarray(prior_covariance, dtype=float)
     y = jnp.asarray(observations, dtype=float)
@@ -558,6 +923,55 @@ def build_problem(
         )
     )
 
+    return FourDVarProblem(
+        forward=forward,
+        prior_mean=sb,
+        prior_chol=chol,
+        observations=y,
+        obs_variance=_resolve_obs_variance(obs_variance, y),
+    )
+
+
+def _build_spatial_problem(
+    forward: EulerianForward4DVar,
+    observations: jax.Array,
+    prior_mean: jax.Array | None,
+    prior_covariance: jax.Array | None,
+    obs_variance: jax.Array | float,
+    control: SpatialControl,
+) -> FourDVarProblem:
+    """:func:`build_problem` for a per-cell flux control."""
+    if prior_mean is not None or prior_covariance is not None:
+        raise ValueError(
+            "build_problem: pass either `control` or `prior_mean` and "
+            "`prior_covariance`, not both."
+        )
+    if forward.control is not control or forward.plume_grid is None:
+        raise ValueError(
+            "build_problem: `forward` must be built with this same SpatialControl."
+        )
+    y = jnp.asarray(observations, dtype=float)
+    n_t = forward.save_times.shape[0]
+    if y.ndim != 2 or y.shape[0] != n_t:
+        raise ValueError(
+            f"build_problem: `observations` must be (n_t={n_t}, n_obs), got {y.shape}."
+        )
+    if not bool(jnp.all(jnp.isfinite(y))):
+        raise ValueError("build_problem: `observations` must be finite (NaN/inf).")
+    prior_sqrt = control.prior_sqrt(forward.plume_grid.y, forward.plume_grid.x)
+    return FourDVarProblem(
+        forward=forward,
+        prior_mean=control.flat_prior_mean(),
+        prior_chol=prior_sqrt.as_matrix(),
+        observations=y,
+        obs_variance=_resolve_obs_variance(obs_variance, y),
+        control=control,
+    )
+
+
+def _resolve_obs_variance(obs_variance: jax.Array | float, y: jax.Array) -> jax.Array:
+    """``R``, the ``(n_t, n_obs)`` diagonal, from any accepted ``obs_variance``."""
+    n_t, n_obs = y.shape
     # Resolve obs_variance to R, the (n_t, n_obs) diagonal. A length-n_t 1-D
     # input is treated as one variance *per overpass* (R_t), so reshape it to a
     # column before broadcasting — otherwise numpy would align it with the
@@ -566,7 +980,6 @@ def build_problem(
     # genuinely ambiguous between the two, so reject it and require an explicit
     # 2-D shape rather than silently picking one and changing the objective.
     r_in = np.asarray(obs_variance, dtype=float)
-    n_obs = y.shape[1]
     if r_in.ndim == 1 and n_t == n_obs and r_in.shape[0] == n_t:
         raise ValueError(
             f"build_problem: `obs_variance` of length {n_t} is ambiguous when "
@@ -583,19 +996,12 @@ def build_problem(
             "build_problem: `obs_variance` entries must be finite and > 0."
         )
     try:
-        r = jnp.broadcast_to(jnp.asarray(r_in), y.shape)
+        return jnp.broadcast_to(jnp.asarray(r_in), y.shape)
     except (ValueError, TypeError) as exc:
         raise ValueError(
             f"build_problem: `obs_variance` shape {np.shape(obs_variance)} is not "
             f"broadcastable to observations {y.shape}."
         ) from exc
-    return FourDVarProblem(
-        forward=forward,
-        prior_mean=sb,
-        prior_chol=chol,
-        observations=y,
-        obs_variance=r,
-    )
 
 
 @dataclass(frozen=True)
@@ -622,11 +1028,16 @@ class FourDVarResult:
             (``None`` when built by hand).
         prior_covariance: Source prior covariance ``B = L Lᵀ``, shape
             ``(n_t, n_t)`` (``None`` when built by hand).
+        control: The :class:`SpatialControl` of a per-cell flux solve, whose
+            ``source`` is a flat vector of length ``control.size``, mapped by
+            :attr:`source_field`. ``None`` for the emission time series.
 
-    The result also carries the Tier V per-event payload
-    (``population.PerEventPosterior``) for the event emission rate, the time
-    mean Q = wᵀS with w = 1/n_t: its Laplace posterior N(wᵀS*, wᵀP_S w) and
-    its prior N(wᵀS_b, wᵀBw) are exact images of the Gaussian source laws.
+    For an emission time series, the result also carries the Tier V per-event
+    payload (``population.PerEventPosterior``) for the event emission rate, the
+    time mean Q = wᵀS with w = 1/n_t: its Laplace posterior N(wᵀS*, wᵀP_S w) and
+    its prior N(wᵀS_b, wᵀBw) are exact images of the Gaussian source laws. That
+    time mean means nothing over cells, so a per-cell result raises
+    ``PayloadError`` there.
     """
 
     source: jax.Array
@@ -637,15 +1048,38 @@ class FourDVarResult:
     converged: bool = True
     prior_mean: jax.Array | None = None
     prior_covariance: jax.Array | None = None
+    control: SpatialControl | None = None
+
+    @property
+    def source_field(self) -> jax.Array:
+        """MAP flux coefficient fields [kg m⁻² s⁻¹], shape ``(K, ny, nx)``.
+
+        Raises:
+            PayloadError: For an emission time series.
+        """
+        if self.control is None:
+            raise PayloadError(
+                "FourDVarResult.source_field needs a SpatialControl solve."
+            )
+        return self.control.to_field(self.source)
+
+    def _require_time_series(self) -> None:
+        if self.control is not None:
+            raise PayloadError(
+                "FourDVarResult: the Tier V payload is the time mean of an emission "
+                "time series; this result is a per-cell flux control."
+            )
 
     @property
     def emission_rate(self) -> jax.Array:
         """Time-mean MAP emission rate Q* = wᵀS*."""
+        self._require_time_series()
         return jnp.mean(self.source)
 
     @property
     def emission_std(self) -> jax.Array:
         """Laplace posterior sd of Q, √(wᵀP_S w); NaN without the posterior."""
+        self._require_time_series()
         if self.posterior is None:
             return jnp.full_like(self.emission_rate, jnp.nan)
         return self._mean_law(self.source, self.posterior.source_covariance).std
@@ -657,8 +1091,10 @@ class FourDVarResult:
         time, without re-solving for the covariance.
 
         Raises:
-            PayloadError: Without the posterior (``compute_posterior=False``).
+            PayloadError: Without the posterior (``compute_posterior=False``), or
+                for a per-cell flux control.
         """
+        self._require_time_series()
         if self.posterior is None:
             raise PayloadError(
                 "FourDVarResult.samples needs the Laplace posterior; solve with "
@@ -671,8 +1107,10 @@ class FourDVarResult:
         """log π(Q) of the time-mean source prior, N(wᵀS_b, wᵀBw).
 
         Raises:
-            PayloadError: If the result was built without its prior.
+            PayloadError: If the result was built without its prior, or for a
+                per-cell flux control.
         """
+        self._require_time_series()
         if self.prior_mean is None or self.prior_covariance is None:
             raise PayloadError(
                 "FourDVarResult.prior_logpdf: this result carries no prior; "
@@ -701,7 +1139,8 @@ def solve_4dvar(
 
     Runs :meth:`FourDVarProblem.analysis`: ``vardax.ThreeDVar`` over the
     whitened control ``χ``, so the prior is the identity Gaussian and the
-    gradient is the exact discrete adjoint of the FV solver.
+    gradient is the exact discrete adjoint of the FV solver. ``source`` and
+    ``whitened`` have the length of the flat control.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -769,6 +1208,7 @@ def solve_4dvar(
         posterior=posterior,
         prior_mean=problem.prior_mean,
         prior_covariance=problem.prior_chol @ problem.prior_chol.T,
+        control=problem.control,
     )
 
 
@@ -809,17 +1249,32 @@ class PosteriorCovariance:
     ``S = S_b + L χ`` — the source-space covariance is ``P_S = L P_χ Lᵀ``.
 
     Attributes:
-        whitened_covariance: ``P_χ``, shape ``(n_t, n_t)``.
-        source_covariance: ``P_S``, shape ``(n_t, n_t)``.
+        whitened_covariance: ``P_χ``, shape ``(n_state, n_state)``.
+        source_covariance: ``P_S``, shape ``(n_state, n_state)``.
+        control: The :class:`SpatialControl` of a per-cell flux problem.
     """
 
-    whitened_covariance: jax.Array  # P_χ, (n_t, n_t)
-    source_covariance: jax.Array  # P_S, (n_t, n_t)
+    whitened_covariance: jax.Array  # P_χ, (n_state, n_state)
+    source_covariance: jax.Array  # P_S, (n_state, n_state)
+    control: SpatialControl | None = None
 
     @property
     def source_std(self) -> jax.Array:
         """Marginal source-space posterior standard deviations ``√diag(P_S)``."""
         return jnp.sqrt(jnp.diagonal(self.source_covariance))
+
+    @property
+    def std_field(self) -> jax.Array:
+        """Marginal posterior sd as fields [kg m⁻² s⁻¹], shape ``(K, ny, nx)``.
+
+        Raises:
+            PayloadError: For an emission time series.
+        """
+        if self.control is None:
+            raise PayloadError(
+                "PosteriorCovariance.std_field needs a SpatialControl problem."
+            )
+        return self.control.to_field(self.source_std)
 
 
 def _vardax_laplace(problem: FourDVarProblem, source: jax.Array) -> vardax.Posterior:
@@ -844,17 +1299,19 @@ def _laplace_posterior(
     ``P_S`` is materialised column by column from the vardax posterior;
     ``P_χ = L⁻¹ P_S L⁻ᵀ`` by two triangular solves.
     """
-    n_t = source.shape[0]
+    n_state = source.shape[0]
     posterior = _vardax_laplace(problem, source)
     p_source = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
-        jnp.eye(n_t, dtype=source.dtype)
+        jnp.eye(n_state, dtype=source.dtype)
     )
     p_source = gx.symmetrize(p_source)
     chol = problem.prior_chol
     half = jax.scipy.linalg.solve_triangular(chol, p_source, lower=True)
     p_chi = jax.scipy.linalg.solve_triangular(chol, half.T, lower=True)
     return PosteriorCovariance(
-        whitened_covariance=gx.symmetrize(p_chi), source_covariance=p_source
+        whitened_covariance=gx.symmetrize(p_chi),
+        source_covariance=p_source,
+        control=problem.control,
     )
 
 
@@ -871,7 +1328,7 @@ def posterior_covariance(
     Args:
         problem: The assembled 4D-Var problem.
         whitened_map: The MAP whitened control ``χ*`` (e.g.
-            :attr:`FourDVarResult.whitened`), shape ``(n_t,)``.
+            :attr:`FourDVarResult.whitened`), shape ``(n_state,)``.
 
     Returns:
         The :class:`PosteriorCovariance` holding ``P_χ`` and ``P_S``.
@@ -897,21 +1354,25 @@ def laplace_sample(
 
     Args:
         problem: The assembled 4D-Var problem.
-        whitened_map: The MAP whitened control ``χ*``, shape ``(n_t,)``.
+        whitened_map: The MAP whitened control ``χ*``, shape ``(n_state,)``.
         key: A ``jax.random`` PRNG key.
         n_samples: Number of posterior draws to return.
 
     Returns:
-        Source-space samples, shape ``(n_samples, n_t)``.
+        Source-space samples, shape ``(n_samples, n_t)``, or the flux fields
+        ``(n_samples, K, ny, nx)`` of a :class:`SpatialControl` problem.
     """
     if not _is_traced(n_samples) and int(n_samples) <= 0:
         raise ValueError("laplace_sample: `n_samples` must be a positive integer.")
     chi_star = jnp.asarray(whitened_map, dtype=float)
     source = problem.source_from_whitened(chi_star)
     posterior = _vardax_laplace(problem, source)
-    # S⁽ᵉ⁾ = S* + P_S^½ ξ⁽ᵉ⁾, ξ⁽ᵉ⁾ ~ N(0, I), on the (1, n_t) analysis state
+    # S⁽ᵉ⁾ = S* + P_S^½ ξ⁽ᵉ⁾, ξ⁽ᵉ⁾ ~ N(0, I), on the (1, n_state) analysis state
     draws = posterior.sample(key, int(n_samples))
-    return draws[:, 0, :]
+    source_draws = draws[:, 0, :]
+    if problem.control is not None:
+        return problem.control.to_field(source_draws)
+    return source_draws
 
 
 __all__ = [
@@ -920,6 +1381,8 @@ __all__ = [
     "FourDVarProblem",
     "FourDVarResult",
     "PosteriorCovariance",
+    "SpatialControl",
+    "TemporalControl",
     "build_forward",
     "build_problem",
     "laplace_sample",
