@@ -81,8 +81,8 @@ $$
 
 where $Q_{50}$ is the leak size at which detection probability is 0.5 and $k$ controls the steepness.
 
-:::{caution} Hill ≠ logistic-on-log-Q
-**This is *not* the same as a logistic on $\log Q$** — Hill is rational in $Q$, logistic is sigmoidal in $\log Q$. Doc previously listed "logistic"; the operational convention is Hill. (`plumax.population.pod` currently implements both; the population fitter should default to Hill.)
+:::{caution} Hill = logistic-on-log-Q
+**This is the same as a logistic on $\log Q$**, since $1 / (1 + (Q_{50}/Q)^{k}) = \sigma(k \log(Q / Q_{50}))$; it is *not* a logistic on $Q$ itself. Doc previously listed "logistic"; the operational convention is Hill. (`plumax.population.pod` currently implements both; the population fitter should default to Hill.)
 :::
 
 (vb-pod-calibration)=
