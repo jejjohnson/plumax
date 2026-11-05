@@ -41,17 +41,20 @@ import jax.numpy as jnp
 from jax.scipy.special import erf as _jax_erf
 
 from plumax.population._src.pod_union import (
+    TOD_BINS,
     InstrumentPOD,
     calibration_from_draw,
     calibration_prior,
     load_pod_calibrations,
     log_pod_union,
     pod_union,
+    tod_bin_index,
 )
 
 
 __all__ = [
     "POD_REGISTRY",
+    "TOD_BINS",
     "AdditiveMultiCovariatePOD",
     "CloglogPOD",
     "ConcentrationProxyPOD",
@@ -73,6 +76,7 @@ __all__ = [
     "log_pod_union",
     "pod_union",
     "snr_proxy",
+    "tod_bin_index",
 ]
 
 

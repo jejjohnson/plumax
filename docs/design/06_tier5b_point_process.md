@@ -201,7 +201,7 @@ Both have library support; the choice is driven by the scientific question, not 
 | Intensity registry — log-Gaussian Cox process | `plumax.population.point_process.fit_lgcp` | ☐ v1.5 [#115](https://github.com/jejjohnson/plumax/issues/115) |
 | Mark registry | `plumax.population.marks` | ✓ [#109](https://github.com/jejjohnson/plumax/issues/109) — power law, lognormal, lognormal-Pareto (continuous splice at $Q_\text{break}$), mixture of lognormals, each with `log_prob`, `sample`, `truncated_mean` and default NumPyro priors |
 | POD models $P_d(\cdot)$ (Hill + variants) | `plumax.population.pod` (10 models) | ✓ in tree (logistic / probit / cloglog GLM family) |
-| POD time-of-day binning (v1 time-varying POD) | `plumax.population.pod.InstrumentPOD.tod_bins` | ☐ [#110](https://github.com/jejjohnson/plumax/issues/110) |
+| POD time-of-day binning (v1 time-varying POD) | `plumax.population.pod.InstrumentPOD.tod_bins` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | POD continuous $P_d(Q, t)$ (v2) | `plumax.population.pod.continuous_t` | ☐ v2 |
 | Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |

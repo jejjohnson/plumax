@@ -13,11 +13,19 @@ parameters, and is v2.
 Calibration is the v1 hierarchical prior of 06b § POD calibration uncertainty:
 
     Q₅₀,k ~ LogNormal(log Q₅₀,pub, σ²_Q₅₀,pub),  k_k ~ LogNormal(log k_pub, σ²_k,pub).
+
+Time of day is the v1 time-varying option, as a per-bin shift of Q₅₀ on the log-Q scale:
+
+    log Q₅₀,k(b) = log Q₅₀,k + δ_k,b,  for each hour-of-day bin b.
+
+A shift, not a factor on P_d: poor illumination raises the detection threshold while
+large plumes stay detectable, whereas a factor would cap P_d below 1 at every size.
 """
 
 from __future__ import annotations
 
 import csv
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,11 +34,14 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
-from jaxtyping import Array, ArrayLike, Bool, Float
+from jaxtyping import Array, ArrayLike, Bool, Float, Int
 
 
 #: Below this η, log softplus(η) = η and log(1 − e^{−a}) = log a to double precision.
 _TAIL = -20.0
+
+#: Hour-of-day bins of an instrument's ``tod_bins`` table.
+TOD_BINS = 24
 
 #: The registry curves that depend on Q alone, so a union over instruments is defined.
 _FLUX_ONLY_MODELS = ("log_logistic", "logistic")
@@ -51,9 +62,13 @@ class InstrumentPOD:
         q50_std: σ_Q₅₀,pub ≥ 0, on the log scale; 0 fixes Q₅₀ at its published value.
         slope: Published k_pub > 0.
         slope_std: σ_k,pub ≥ 0, on the log scale; 0 fixes k at its published value.
+        tod_bins: The shift δ_b of log Q₅₀ per hour-of-day bin, ``TOD_BINS`` values,
+            so that Q₅₀(b) = Q₅₀ exp(δ_b); ``None`` for no time-of-day dependence. The
+            shifts are fixed, not sampled.
 
     Raises:
-        ValueError: For another model, or a parameter out of range.
+        ValueError: For another model, a parameter out of range, or a table of the
+            wrong length or with a non-finite shift.
     """
 
     name: str
@@ -62,6 +77,7 @@ class InstrumentPOD:
     q50_std: float
     slope: float
     slope_std: float = 0.0
+    tod_bins: tuple[float, ...] | None = None
 
     def __post_init__(self) -> None:
         if self.model not in _FLUX_ONLY_MODELS:
@@ -79,18 +95,69 @@ class InstrumentPOD:
                 f"InstrumentPOD: q50_std and slope_std must be ≥ 0, got "
                 f"({self.q50_std}, {self.slope_std})."
             )
+        if self.tod_bins is not None:
+            shifts = tuple(float(shift) for shift in self.tod_bins)
+            if len(shifts) != TOD_BINS or not all(map(math.isfinite, shifts)):
+                raise ValueError(
+                    f"InstrumentPOD: tod_bins needs {TOD_BINS} finite shifts, got "
+                    f"{self.tod_bins}."
+                )
+            # a tuple, so the record stays hashable and comparable
+            object.__setattr__(self, "tod_bins", shifts)
+
+
+def tod_bin_index(times: ArrayLike, *, tod_origin: float = 0.0) -> Int[Array, "*time"]:
+    """The hour-of-day bin of each time.
+
+    b(t) = ⌊24 (t + h₀ / 24)⌋ mod 24, with t in days and h₀ the hour of day at t = 0.
+
+    Args:
+        times: Times t [days].
+        tod_origin: Local hour of day h₀ at t = 0 [hours].
+
+    Returns:
+        The bin b, in 0, …, 23.
+
+    Examples:
+        >>> import jax.numpy as jnp
+        >>> tod_bin_index(jnp.array([0.0, 0.5, 1.25])).tolist()
+        [0, 12, 6]
+        >>> tod_bin_index(jnp.array([0.0]), tod_origin=23.5).tolist()
+        [23]
+    """
+    # ⌊24 t + h₀⌋ mod 24
+    hours = TOD_BINS * jnp.asarray(times, dtype=float) + tod_origin
+    return jnp.floor(hours).astype(int) % TOD_BINS
+
+
+def is_tod_binned(pods: Sequence[InstrumentPOD]) -> bool:
+    """Whether any instrument has a time-of-day table."""
+    return any(pod.tod_bins is not None for pod in pods)
+
+
+def _require_bin(pods: Sequence[InstrumentPOD], tod_bin: ArrayLike | None) -> None:
+    if tod_bin is None and is_tod_binned(pods):
+        raise ValueError(
+            "pod_union: an instrument has tod_bins, so P_d^∪ needs a tod_bin; "
+            "see tod_bin_index."
+        )
 
 
 def _logits(
     pods: Sequence[InstrumentPOD],
     q: Float[Array, "*q"],
     calibration: Calibration | None,
+    tod_bin: ArrayLike | None = None,
 ) -> Float[Array, "*q instrument"]:
     per_instrument = []
     for pod in pods:
         values = calibration[pod.name] if calibration else {}
         q50 = jnp.asarray(values.get("q50", pod.q50), dtype=q.dtype)
         slope = jnp.asarray(values.get("slope", pod.slope), dtype=q.dtype)
+        if pod.tod_bins is not None:
+            # log Q₅₀(b) = log Q₅₀ + δ_b
+            shift = jnp.asarray(pod.tod_bins, dtype=q.dtype)[tod_bin]
+            q50 = q50 * jnp.exp(shift)
         if pod.model == "log_logistic":
             # η_k = k log(Q / Q₅₀)
             logit = slope * (jnp.log(q) - jnp.log(q50))
@@ -142,6 +209,7 @@ def pod_union(
     q: ArrayLike,
     *,
     coverage: Bool[Array, "event instrument"] | None = None,
+    tod_bin: Int[Array, "*bin"] | None = None,
 ) -> Float[Array, "*q"]:
     """Probability that any covering instrument detects a rate Q, at published values.
 
@@ -152,12 +220,15 @@ def pod_union(
         q: Rates Q > 0, in the marks' units.
         coverage: The mask c_k, broadcast against ``q`` with instruments last; default
             every instrument. A row with no instrument gives P_d^∪ = 0.
+        tod_bin: The hour-of-day bin b, broadcast against ``q``; needed when an
+            instrument has ``tod_bins``, and ignored by those without.
 
     Returns:
         P_d^∪ at each rate.
 
     Raises:
-        ValueError: With no instruments, or a mask of the wrong width.
+        ValueError: With no instruments, a mask of the wrong width, or an instrument
+            with ``tod_bins`` and no ``tod_bin``.
 
     Examples:
         One instrument is its own curve; at Q₅₀ that is one half:
@@ -181,8 +252,9 @@ def pod_union(
         True
     """
     mask = _resolve_coverage(pods, coverage)
+    _require_bin(pods, tod_bin)
     rates = jnp.asarray(q, dtype=float)
-    logits = _logits(pods, rates, None)
+    logits = _logits(pods, rates, None, tod_bin)
     # a = Σ_k c_k log(1 + e^η_k)
     miss_scale = jnp.sum(jnp.where(mask, jax.nn.softplus(logits), 0.0), axis=-1)
     # P^∪ = 1 − e^{−a}
@@ -194,6 +266,7 @@ def log_pod_union(
     *,
     coverage: Bool[Array, "*event instrument"] | None = None,
     calibration: Calibration | None = None,
+    tod_bin: Int[Array, "*bin"] | None = None,
 ) -> Callable[[Array], Array]:
     """log P_d^∪ as the callable the TMTPP model and ``total_emission`` take.
 
@@ -206,12 +279,15 @@ def log_pod_union(
             default every instrument. Every row needs at least one instrument.
         calibration: Q₅₀ and k per instrument (``{name: {"q50": …, "slope": …}}``), as
             :func:`calibration_prior` returns; default the published values.
+        tod_bin: The hour-of-day bin b, broadcast against the rates; needed when an
+            instrument has ``tod_bins``, and ignored by those without.
 
     Returns:
         log P_d^∪ on rates in the marks' units.
 
     Raises:
-        ValueError: With no instruments, or a mask of the wrong width.
+        ValueError: With no instruments, a mask of the wrong width, or an instrument
+            with ``tod_bins`` and no ``tod_bin``.
 
     Examples:
         >>> import math
@@ -222,9 +298,11 @@ def log_pod_union(
         True
     """
     mask = _resolve_coverage(pods, coverage)
+    _require_bin(pods, tod_bin)
 
     def log_pod(q: Array) -> Array:
-        return _log_union(_logits(pods, jnp.asarray(q, dtype=float), calibration), mask)
+        rates = jnp.asarray(q, dtype=float)
+        return _log_union(_logits(pods, rates, calibration, tod_bin), mask)
 
     return log_pod
 
@@ -290,6 +368,14 @@ def calibration_from_draw(
     }
 
 
+def _tod_table(cell: Any) -> tuple[float, ...] | None:
+    # a YAML list, or a CSV cell of space-separated values
+    if cell is None or cell == "":
+        return None
+    values = cell.split() if isinstance(cell, str) else cell
+    return tuple(float(value) for value in values)
+
+
 def _from_record(record: Mapping[str, Any]) -> InstrumentPOD:
     return InstrumentPOD(
         name=str(record["name"]),
@@ -298,6 +384,7 @@ def _from_record(record: Mapping[str, Any]) -> InstrumentPOD:
         q50_std=float(record["q50_std"]),
         slope=float(record["slope"]),
         slope_std=float(record.get("slope_std") or 0.0),
+        tod_bins=_tod_table(record.get("tod_bins")),
     )
 
 
@@ -305,8 +392,9 @@ def load_pod_calibrations(path: str | Path) -> list[InstrumentPOD]:
     """Read per-instrument calibrations from a CSV or YAML table.
 
     A CSV has a header naming ``name, model, q50, q50_std, slope`` and optionally
-    ``slope_std``; a YAML file is a list of mappings with the same keys. plumax ships
-    no values: the table is the caller's record of the campaign it trusts.
+    ``slope_std`` and ``tod_bins`` (24 space-separated shifts); a YAML file is a list of
+    mappings with the same keys, ``tod_bins`` a list. plumax ships no values: the table
+    is the caller's record of the campaign it trusts.
 
     Args:
         path: The ``.csv``, ``.yaml`` or ``.yml`` file.

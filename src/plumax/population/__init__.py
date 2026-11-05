@@ -118,6 +118,7 @@ from plumax.population.pod import (
     load_pod_calibrations,
     log_pod_union,
     pod_union,
+    tod_bin_index,
 )
 from plumax.population.point_process import (
     PoissonRatePosterior,
@@ -242,6 +243,7 @@ __all__ = [
     "run_scenario_grid",
     "simulate_paradox",
     "tmtpp_iw_model",
+    "tod_bin_index",
     "total_emission",
 ]
 
