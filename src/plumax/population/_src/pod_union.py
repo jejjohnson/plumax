@@ -211,7 +211,7 @@ def pod_union(
     *,
     coverage: Bool[Array, "event instrument"] | None = None,
     tod_bin: Int[Array, "*bin"] | None = None,
-) -> Float[Array, ...]:
+) -> Array:
     """Probability that any covering instrument detects a rate Q, at published values.
 
     P_d^∪(Q) = 1 − ∏_k (1 − P_d^k(Q))^{c_k}, with c_k = 1 where instrument k overpassed.
