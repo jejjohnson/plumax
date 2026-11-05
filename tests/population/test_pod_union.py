@@ -48,20 +48,27 @@ PODS = [SATELLITE_A, SATELLITE_B]
 TWIN_N_BASINS = 100
 # Three binomial standard deviations about 0.95 at TWIN_N_BASINS.
 TWIN_COVERAGE_BAND = 3.0 * math.sqrt(0.95 * 0.05 / TWIN_N_BASINS)
-# Long enough that the catalog moves the Q₅₀ posterior off its prior: coverage of a
-# posterior that is still the prior would pass whatever the likelihood did.
-TWIN_WINDOW = (0.0, 100.0)
-# Far above the prior predictive counts: λ₀ ~ HalfNormal(3) over 100 days
-TWIN_MAX_GROUND = 2000
-TWIN_MAX_DETECTED = 800
+# Each instrument gets days of its own, which is what informs both: a union seen only
+# as a whole barely tells a second instrument's threshold from the first's.
+TWIN_WINDOW = (0.0, 200.0)
+TWIN_INTERVALS = (
+    (0.0, 80.0, jnp.array([True, False])),
+    (80.0, 160.0, jnp.array([False, True])),
+    (160.0, 200.0, jnp.array([True, True])),
+)
+# Far above the prior predictive counts: λ₀ ~ HalfNormal(3) over 200 days
+TWIN_MAX_GROUND = 3000
+TWIN_MAX_DETECTED = 2000
+# Thresholds inside the mark prior's bulk, and steep: information on log Q₅₀ per event
+# grows as k².
 TWIN_PODS = [
-    InstrumentPOD("a", "log_logistic", 1.0, 0.5, 2.0, 0.2),
-    InstrumentPOD("b", "log_logistic", 3.0, 0.5, 2.0, 0.2),
+    InstrumentPOD("a", "log_logistic", 1.0, 0.5, 4.0, 0.2),
+    InstrumentPOD("b", "log_logistic", 1.5, 0.5, 4.0, 0.2),
 ]
-# The better observed instrument's median posterior spread of log Q₅₀ must fall below
-# this share of its prior spread. The other instrument detects little that the first
-# does not, so its posterior stays near its prior.
-TWIN_MAX_POSTERIOR_SPREAD = 0.9
+# "Informed" means the catalog says at least as much about log Q₅₀ as the prior does:
+# posterior precision ≥ 2 × prior precision, so spread ≤ 1/√2 of the prior's, for each
+# instrument. test_coverage_twin_is_informed_by_design computes the expectation.
+TWIN_MAX_POSTERIOR_SPREAD = 1.0 / math.sqrt(2.0)
 TWIN_MARK = LognormalMark(mu_prior_scale=1.0, sigma_prior_scale=1.0)
 TWIN_SUPPORT = (1e-6, 1e6)
 
@@ -509,8 +516,95 @@ def test_calibration_from_draw_falls_back_to_published_values():
     assert float(calibration["a"]["slope"]) == 2.0
 
 
+def _twin_log_intensity(
+    params: jax.Array, log_q: jax.Array, covering: jax.Array
+) -> jax.Array:
+    log_rate, mu, log_sigma = params[:3]
+    log_q50 = params[jnp.array([3, 5])]
+    log_slope = params[jnp.array([4, 6])]
+    # log f(log Q | μ, σ)
+    sigma = jnp.exp(log_sigma)
+    log_mark = -0.5 * ((log_q - mu) / sigma) ** 2 - log_sigma - 0.9189385332046727
+    # a = Σ_k c_k log(1 + e^{k_k (log Q − log Q₅₀,k)})
+    miss_scale = jnp.sum(
+        covering * jax.nn.softplus(jnp.exp(log_slope) * (log_q - log_q50))
+    )
+    # log r = log λ + log f + log(1 − e^{−a})
+    return log_rate + log_mark + jnp.log(-jnp.expm1(-miss_scale))
+
+
+def _expected_spread_ratios(n_truths: int, *, key: jax.Array) -> jax.Array:
+    """Median expected posterior spread of log Q₅₀ per instrument, over its prior's.
+
+    A Poisson process of intensity r(t, Q; ψ) has Fisher information
+    F = Σ_w T_w ∫ r (∂_ψ log r)(∂_ψ log r)ᵀ d log Q, and Laplace puts the posterior
+    covariance of ψ = (log λ, μ, log σ, log Q₅₀,k, log k_k) at (F + Λ_ψ)⁻¹. The half-normal
+    priors of λ and σ count as no information, which errs towards a larger spread.
+    """
+    q50_std = jnp.array([pod.q50_std for pod in TWIN_PODS])
+    slope_std = jnp.array([pod.slope_std for pod in TWIN_PODS])
+    log_q50 = jnp.log(jnp.array([pod.q50 for pod in TWIN_PODS]))
+    log_slope = jnp.log(jnp.array([pod.slope for pod in TWIN_PODS]))
+    keys = jax.random.split(key, 5)
+    rate = 3.0 * jnp.abs(jax.random.normal(keys[0], (n_truths,)))
+    mu = jax.random.normal(keys[1], (n_truths,))
+    sigma = jnp.abs(jax.random.normal(keys[2], (n_truths,)))
+    q50_truth = log_q50 + q50_std * jax.random.normal(keys[3], (n_truths, 2))
+    slope_truth = log_slope + slope_std * jax.random.normal(keys[4], (n_truths, 2))
+    truths = jnp.column_stack(
+        [
+            jnp.log(rate),
+            mu,
+            jnp.log(sigma),
+            q50_truth[:, 0],
+            slope_truth[:, 0],
+            q50_truth[:, 1],
+            slope_truth[:, 1],
+        ]
+    )
+    log_q = jnp.linspace(math.log(TWIN_SUPPORT[0]), math.log(TWIN_SUPPORT[1]), 1201)
+    step = log_q[1] - log_q[0]
+    # Λ_ψ, in the order of ψ
+    prior_precision = jnp.diag(
+        jnp.array(
+            [
+                0.0,
+                1.0,
+                0.0,
+                1.0 / q50_std[0] ** 2,
+                1.0 / slope_std[0] ** 2,
+                1.0 / q50_std[1] ** 2,
+                1.0 / slope_std[1] ** 2,
+            ]
+        )
+    )
+
+    def ratios(params: jax.Array) -> jax.Array:
+        fisher = prior_precision
+        for start, stop, covering in TWIN_INTERVALS:
+            per_node = jax.vmap(_twin_log_intensity, (None, 0, None))
+            gradients = jax.vmap(jax.grad(_twin_log_intensity), (None, 0, None))(
+                params, log_q, jnp.asarray(covering, dtype=float)
+            )
+            intensity = jnp.exp(per_node(params, log_q, jnp.asarray(covering, float)))
+            # F_w = T_w ∫ r (∂_ψ log r)(∂_ψ log r)ᵀ d log Q
+            fisher = fisher + (stop - start) * step * jnp.einsum(
+                "n,ni,nj->ij", intensity, gradients, gradients
+            )
+        posterior = jnp.linalg.inv(fisher)
+        return jnp.sqrt(jnp.diag(posterior)[jnp.array([3, 5])]) / q50_std
+
+    return jnp.nanmedian(jax.lax.map(ratios, truths), axis=0)
+
+
+def test_coverage_twin_is_informed_by_design():
+    # the calculation behind TWIN_PODS and TWIN_INTERVALS, which needs no MCMC
+    ratios = _expected_spread_ratios(100, key=jax.random.PRNGKey(0))
+    assert jnp.all(ratios < TWIN_MAX_POSTERIOR_SPREAD), ratios
+
+
 def _simulate_basin(key: jax.Array):
-    keys = jax.random.split(key, 10)
+    keys = jax.random.split(key, 11)
     # truths from the fit's prior: Q₅₀,k and k_k under the calibration
     truth = {}
     for index, pod in enumerate(TWIN_PODS):
@@ -530,21 +624,27 @@ def _simulate_basin(key: jax.Array):
     n_ground = jax.random.poisson(keys[7], rate * span)
     marks = jnp.exp(mu + sigma * jax.random.normal(keys[8], (TWIN_MAX_GROUND,)))
     calibration = calibration_from_draw(TWIN_PODS, truth)
-    log_pod = log_pod_union(TWIN_PODS, calibration=calibration)
+    # who was looking when each event happened
+    event_times = span * jax.random.uniform(keys[10], (TWIN_MAX_GROUND,))
+    coverage = jnp.zeros((TWIN_MAX_GROUND, 2), dtype=bool)
+    for start, stop, covering in TWIN_INTERVALS:
+        inside = (start <= event_times) & (event_times < stop)
+        coverage = jnp.where(inside[:, None], jnp.asarray(covering), coverage)
+    log_pod = log_pod_union(TWIN_PODS, coverage=coverage, calibration=calibration)
     uniforms = jax.random.uniform(keys[9], (TWIN_MAX_GROUND,))
     detected = (jnp.arange(TWIN_MAX_GROUND) < n_ground) & (
         jnp.log(uniforms) < log_pod(marks)
     )
-    # a constant λ's likelihood depends on the times only through their count
     order = jnp.argsort(~detected)[:TWIN_MAX_DETECTED]
     n_detected = jnp.sum(detected)
     mask = detected[order]
-    times = jnp.where(mask, 0.5 * span, span)
+    times = jnp.where(mask, event_times[order], span)
     q_samples = jnp.where(mask, marks[order], 1.0)[:, None]
-    return times, mask, q_samples, truth, n_ground, n_detected
+    coverage = jnp.where(mask[:, None], coverage[order], True)
+    return times, mask, q_samples, coverage, truth, n_ground, n_detected
 
 
-def _fit_basin(key: jax.Array, times, mask, q_samples):
+def _fit_basin(key: jax.Array, times, mask, q_samples, coverage):
     # one compile for every basin, through lax.map rather than vmap: under vmap every
     # basin pays for the deepest NUTS tree of any basin at each step
     mcmc = MCMC(
@@ -559,6 +659,8 @@ def _fit_basin(key: jax.Array, times, mask, q_samples):
         intensity="constant",
         window=TWIN_WINDOW,
         pods=TWIN_PODS,
+        coverage=coverage,
+        coverage_intervals=TWIN_INTERVALS,
         support=TWIN_SUPPORT,
         n_nodes=801,
     )
@@ -567,23 +669,31 @@ def _fit_basin(key: jax.Array, times, mask, q_samples):
 
 
 @pytest.mark.validation
-def test_hierarchical_calibration_coverage():
+def test_hierarchical_calibration_coverage(record_property):
     keys = jax.random.split(jax.random.PRNGKey(110), 2 * TWIN_N_BASINS)
-    times, mask, q_samples, truth, n_ground, n_detected = jax.vmap(_simulate_basin)(
-        keys[:TWIN_N_BASINS]
-    )
+    simulated = jax.vmap(_simulate_basin)(keys[:TWIN_N_BASINS])
+    times, mask, q_samples, coverage, truth, n_ground, n_detected = simulated
     assert int(jnp.max(n_ground)) < TWIN_MAX_GROUND
     assert int(jnp.max(n_detected)) <= TWIN_MAX_DETECTED
     draws = jax.lax.map(
         lambda inputs: _fit_basin(*inputs),
-        (keys[TWIN_N_BASINS:], times, mask, q_samples),
+        (keys[TWIN_N_BASINS:], times, mask, q_samples, coverage),
     )
-    for name in ("a", "b"):
+    measured = {"median_detected": float(jnp.median(n_detected))}
+    for pod in TWIN_PODS:
+        name = pod.name
         low, high = jnp.quantile(draws[name], jnp.array([0.025, 0.975]), axis=1)
         true_value = truth[f"pod.{name}.q50"]
-        coverage = float(jnp.mean((low < true_value) & (true_value < high)))
-        assert abs(coverage - 0.95) <= TWIN_COVERAGE_BAND, (name, coverage)
-    # the catalog informs Q₅₀, so this is not just the prior's coverage
-    log_q50 = jnp.log(draws["a"])
-    spread = jnp.median(jnp.std(log_q50, axis=1))
-    assert spread < TWIN_MAX_POSTERIOR_SPREAD * TWIN_PODS[0].q50_std
+        inside = (low < true_value) & (true_value < high)
+        measured[f"coverage_{name}"] = float(jnp.mean(inside))
+        # the catalog informs this instrument's Q₅₀: not just its prior's coverage
+        spread = jnp.median(jnp.std(jnp.log(draws[name]), axis=1))
+        measured[f"spread_ratio_{name}"] = float(spread) / pod.q50_std
+    for measure, value in measured.items():
+        record_property(measure, value)
+    for pod in TWIN_PODS:
+        coverage_error = abs(measured[f"coverage_{pod.name}"] - 0.95)
+        assert coverage_error <= TWIN_COVERAGE_BAND, measured
+        assert measured[f"spread_ratio_{pod.name}"] < TWIN_MAX_POSTERIOR_SPREAD, (
+            measured
+        )
