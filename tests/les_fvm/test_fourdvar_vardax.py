@@ -68,10 +68,15 @@ def _reference(problem, max_steps):
     return problem.source_from_whitened(chi), std, int(solution.stats["num_steps"])
 
 
+@pytest.fixture(scope="module")
+def free_solution(problem):
+    return solve_4dvar(problem, max_steps=500, compute_posterior=True)
+
+
 @pytest.mark.slow
-def test_map_and_laplace_match(problem):
+def test_map_and_laplace_match(problem, free_solution):
     source_ref, std_ref, steps_ref = _reference(problem, max_steps=500)
-    result = solve_4dvar(problem, max_steps=500, compute_posterior=True)
+    result = free_solution
     np.testing.assert_allclose(result.source, source_ref, rtol=1e-6, atol=1e-9)
     np.testing.assert_allclose(result.posterior.source_std, std_ref, rtol=1e-3)
     # same optimiser on the same whitened cost: same iteration count
@@ -80,12 +85,12 @@ def test_map_and_laplace_match(problem):
 
 
 @pytest.mark.slow
-def test_converged_is_the_optimiser_verdict(problem):
+def test_converged_is_the_optimiser_verdict(problem, free_solution):
     """Tolerance met on the last allowed step: converged, though n == max_steps.
 
     The step-count rule (``n_steps < max_steps``) got this case wrong.
     """
-    free = solve_4dvar(problem, max_steps=500)
+    free = free_solution
     capped = solve_4dvar(problem, max_steps=free.n_steps)
     assert capped.n_steps == free.n_steps
     assert capped.converged

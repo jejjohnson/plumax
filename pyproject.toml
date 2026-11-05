@@ -294,9 +294,10 @@ unsupported-operator = "ignore"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-m 'not slow'"
+addopts = "-m 'not slow and not validation'"
 markers = [
-    "slow: takes over about 2 s in CI (e.g. solves, MCMC, training); skipped by default, run with -m slow, or -m '' for everything",
+    "slow: takes over about 2 s in CI (e.g. solves, MCMC, training); skipped by default, run with -m slow, or -m 'not validation' for fast and slow",
+    "validation: statistical validation and other tests too long for every PR; skipped by default, runs nightly on main and on workflow_dispatch, run with -m validation, or -m '' for everything",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

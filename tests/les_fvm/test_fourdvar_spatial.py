@@ -289,7 +289,7 @@ def test_map_and_posterior_match_the_dense_linear_gaussian_solution():
     assert draws.shape == (4, 1, NY, NX)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_two_source_recovery():
     ny, nx, spacing = 20, 20, 20.0
     y = (jnp.arange(ny) + 0.5) * spacing

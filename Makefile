@@ -127,7 +127,7 @@ typecheck: ## 🔬 Type-check with ty
 ##@ Testing
 # ===========================================================================
 
-test: ## 🧪 Run the fast tests (everything not marked slow)
+test: ## 🧪 Run the fast tests (everything not marked slow or validation)
 	@printf "$(YELLOW)>>> Running fast tests...$(RESET)\n"
 	uv run pytest -n 4 --dist loadfile
 	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
@@ -137,14 +137,19 @@ test-slow: ## 🐢 Run only the tests marked slow
 	uv run pytest -n 4 --dist loadfile -m slow
 	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
 
-test-all: ## 🧪 Run the full suite, fast and slow
+test-validation: ## 🔬 Run only the tests marked validation (statistical, nightly in CI)
+	@printf "$(YELLOW)>>> Running validation tests...$(RESET)\n"
+	uv run pytest -n 2 --dist loadfile -m validation
+	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
+
+test-all: ## 🧪 Run everything: fast, slow and validation
 	@printf "$(YELLOW)>>> Running all tests...$(RESET)\n"
 	uv run pytest -n 4 --dist loadfile -m ""
 	@printf "$(GREEN)>>> ✅ Tests passed!$(RESET)\n"
 
-test-cov: ## 📊 Run the full suite with a coverage report
-	@printf "$(YELLOW)>>> Running all tests with coverage...$(RESET)\n"
-	uv run pytest -n 4 --dist loadfile -m "" --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
+test-cov: ## 📊 Run the fast and slow tests with a coverage report, as CI's full job does
+	@printf "$(YELLOW)>>> Running fast and slow tests with coverage...$(RESET)\n"
+	uv run pytest -n 4 --dist loadfile -m "not validation" --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
 	@printf "$(GREEN)>>> ✅ Coverage report generated!$(RESET)\n"
 
 # ===========================================================================

@@ -42,8 +42,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: uv sync --group dev
-      - name: Run all tests with coverage
-        run: uv run pytest -n 2 --dist loadfile -m "" --durations=15 --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
+      - name: Run fast and slow tests with coverage
+        run: uv run pytest -n 2 --dist loadfile -m "not validation" --durations=15 --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
         uses: actions/upload-artifact@v7

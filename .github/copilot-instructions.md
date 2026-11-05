@@ -14,6 +14,7 @@
 ```bash
 make install     # Install all dependencies (uv sync --all-groups)
 make test        # Run the fast tests (uv run pytest -n 4 --dist loadfile)
+make test-validation  # Run the statistical validation tier (nightly on main in CI)
 make lint        # Lint code (ruff check)
 make format      # Format code (ruff format + ruff check --fix)
 make typecheck   # Type check (ty check)
