@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.4](https://github.com/jejjohnson/plumax/compare/v0.2.3...v0.2.4) (2026-11-04)
+
+
+### Features
+
+* **coupled:** add masked-k multi-source handling across instruments ([#236](https://github.com/jejjohnson/plumax/issues/236)) ([0507550](https://github.com/jejjohnson/plumax/commit/0507550c91bcd2120166b7a2521574bcddbda36b))
+* **les_fvm:** add a per-cell surface flux control with a matern prior ([#226](https://github.com/jejjohnson/plumax/issues/226)) ([67788e9](https://github.com/jejjohnson/plumax/commit/67788e9b617a79b013812cebbe25986e9b5fb7dc))
+* **les_fvm:** add initial concentration and inflow scaling to the 4d-var control ([#227](https://github.com/jejjohnson/plumax/issues/227)) ([a92f9a1](https://github.com/jejjohnson/plumax/commit/a92f9a136c01c25fb346b80668d7bc3f775341a9))
+* **les_fvm:** add monin-obukhov and smagorinsky eddy diffusivity ([#221](https://github.com/jejjohnson/plumax/issues/221)) ([efc6bf3](https://github.com/jejjohnson/plumax/commit/efc6bf3fddba59b752b04bbf394462a05ef129ac)), closes [#94](https://github.com/jejjohnson/plumax/issues/94)
+* **les_fvm:** route solve_4dvar through gauss-newton on vardax ([#229](https://github.com/jejjohnson/plumax/issues/229)) ([1181678](https://github.com/jejjohnson/plumax/commit/1181678b37869131f32f7902783b425e247e6c28))
+* **population:** add multi-satellite pod union and hierarchical calibration prior ([#233](https://github.com/jejjohnson/plumax/issues/233)) ([296e30d](https://github.com/jejjohnson/plumax/commit/296e30d708fbbc5a2421b1f2a9f334ec0d21ceff))
+* **population:** add persistency metrics for a fitted intensity ([#222](https://github.com/jejjohnson/plumax/issues/222)) ([f3b129a](https://github.com/jejjohnson/plumax/commit/f3b129a6b122a2b2f177a484aac8fc6599356a23)), closes [#112](https://github.com/jejjohnson/plumax/issues/112)
+* **population:** add simulation-based calibration and prior-swap harnesses ([#235](https://github.com/jejjohnson/plumax/issues/235)) ([c8fe472](https://github.com/jejjohnson/plumax/commit/c8fe472bbf9ea9f6dda33b20c977ca5c3a37a679))
+* **population:** add total-emission estimator with missing-mass correction ([#223](https://github.com/jejjohnson/plumax/issues/223)) ([228494e](https://github.com/jejjohnson/plumax/commit/228494e3ba18569185c1856dee3361d2c50f6cc1)), closes [#113](https://github.com/jejjohnson/plumax/issues/113)
+
+
+### Bug Fixes
+
+* **ci:** stop the full test job running out of memory ([#214](https://github.com/jejjohnson/plumax/issues/214)) ([61697f5](https://github.com/jejjohnson/plumax/commit/61697f52fcaa07691d6b88faeecdbccde6617472))
+
+
+### Performance Improvements
+
+* **lagrangian:** compile the footprint simulator once ([#224](https://github.com/jejjohnson/plumax/issues/224)) ([c5dcf15](https://github.com/jejjohnson/plumax/commit/c5dcf151d44eb56a78c841016586b55f8c6c54a8))
+* **lagrangian:** hold the footprint dataset cache in memory ([#216](https://github.com/jejjohnson/plumax/issues/216)) ([99605de](https://github.com/jejjohnson/plumax/commit/99605dee7826307c652b62fbb44ab5c2ce2de39f))
+
 ## [0.2.3](https://github.com/jejjohnson/plumax/compare/v0.2.2...v0.2.3) (2026-11-04)
 
 
