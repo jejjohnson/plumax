@@ -265,14 +265,16 @@ def tmtpp_iw_model(
     # --- compensator ---
     support = support or default_support(evidence)
     if binned:
+        # no coverage given: every instrument looks throughout; an empty list stays empty
         everyone = np.ones(len(pods), dtype=bool)
+        whole_window = [(float(window[0]), float(window[1]), everyone)]
         thinned = _binned_compensator(
             kernel,
             mark,
             theta,
             pods,
             calibration,
-            intervals or [(float(window[0]), float(window[1]), everyone)],
+            whole_window if intervals is None else intervals,
             support,
             n_nodes,
             tod_origin,

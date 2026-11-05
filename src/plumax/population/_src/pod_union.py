@@ -148,7 +148,7 @@ def _logits(
     q: Float[Array, "*q"],
     calibration: Calibration | None,
     tod_bin: ArrayLike | None = None,
-) -> Float[Array, "*q instrument"]:
+) -> Float[Array, "... instrument"]:
     per_instrument = []
     for pod in pods:
         values = calibration[pod.name] if calibration else {}
@@ -165,7 +165,8 @@ def _logits(
             # η_k = k (Q − Q₅₀)
             logit = slope * (q - q50)
         per_instrument.append(logit)
-    return jnp.stack(per_instrument, axis=-1)
+    # one rate over many bins: only the binned instruments carry the bins' shape
+    return jnp.stack(jnp.broadcast_arrays(*per_instrument), axis=-1)
 
 
 def _log_softplus(logit: Float[Array, "*q"]) -> Float[Array, "*q"]:
@@ -210,7 +211,7 @@ def pod_union(
     *,
     coverage: Bool[Array, "event instrument"] | None = None,
     tod_bin: Int[Array, "*bin"] | None = None,
-) -> Float[Array, "*q"]:
+) -> Float[Array, "..."]:
     """Probability that any covering instrument detects a rate Q, at published values.
 
     P_d^∪(Q) = 1 − ∏_k (1 − P_d^k(Q))^{c_k}, with c_k = 1 where instrument k overpassed.
