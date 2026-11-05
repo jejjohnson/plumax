@@ -581,6 +581,16 @@ def test_an_unbinned_instrument_ignores_the_bin_in_a_union():
     )
 
 
+def test_one_rate_over_many_bins_broadcasts_a_mixed_union():
+    plain = InstrumentPOD("plain", "log_logistic", 10.0, 0.0, 1.5)
+    bins = jnp.arange(TOD_BINS)
+    union = pod_union([_binned(), plain], jnp.array(4.0), tod_bin=bins)
+    assert union.shape == (TOD_BINS,)
+    np.testing.assert_allclose(
+        union[6], pod_union([_binned(), plain], jnp.array(4.0), tod_bin=bins[6])
+    )
+
+
 def test_a_binned_instrument_needs_a_bin():
     with pytest.raises(ValueError, match="needs a tod_bin"):
         pod_union([_binned()], jnp.array(1.0))
@@ -636,6 +646,27 @@ def test_binned_likelihood_with_zero_shifts_is_the_unbinned_one():
         _binned_model_density([plain]),
         rtol=1e-10,
     )
+
+
+@pytest.mark.slow
+def test_binned_likelihood_with_no_intervals_has_no_compensator():
+    # an empty coverage_intervals means nobody looked, with or without bins
+    window = (0.0, 2.0)
+    event_times, mask = padded_event_buffer([], window)
+    density = _model_log_density(
+        _no_prior_params(),
+        event_times=event_times,
+        mask=mask,
+        evidence=EventEvidence(jnp.zeros((0, 1)), jnp.zeros((0, 1))),
+        mark=LognormalMark(),
+        intensity="constant",
+        window=window,
+        pods=[_binned()],
+        coverage=jnp.zeros((0, 1), dtype=bool),
+        coverage_intervals=[],
+        support=(1e-8, 1e8),
+    )
+    np.testing.assert_allclose(density, _prior_density(_no_prior_params()), rtol=1e-12)
 
 
 @pytest.mark.slow
