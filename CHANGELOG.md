@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/jejjohnson/plumax/compare/v0.2.4...v0.2.5) (2026-11-06)
+
+
+### Features
+
+* **population:** add time-of-day bins as a shift of the detection threshold ([#239](https://github.com/jejjohnson/plumax/issues/239)) ([c2e2575](https://github.com/jejjohnson/plumax/commit/c2e2575faef2c2683c9162d51a7e2b9436cc5b6d))
+
 ## [0.2.4](https://github.com/jejjohnson/plumax/compare/v0.2.3...v0.2.4) (2026-11-04)
 
 
