@@ -27,14 +27,17 @@ from jaxtyping import Array, Float
 from plumax.population._src.fitting_iw import TMTPPPosterior
 from plumax.population._src.integrate import log_simpson
 from plumax.population._src.pod_union import (
+    TOD_BINS,
     InstrumentPOD,
     calibration_from_draw,
+    is_tod_binned,
     log_pod_union,
 )
 from plumax.population._src.processes import (
     NODES_PER_DAY,
     LogIntensity,
     _quadrature_points,
+    expected_events_by_tod_bin,
 )
 
 
@@ -102,6 +105,7 @@ def _stratum_emission(
     q_max: float,
     n_nodes: int,
     nodes_per_day: int,
+    tod_origin: float,
 ) -> tuple[Float[Array, " member"], Float[Array, " member"]]:
     def member(draw: dict[str, Array]) -> tuple[Array, Array]:
         kernel = posterior.kernel(draw)
@@ -120,26 +124,54 @@ def _stratum_emission(
         # --- marks ---
         # E_f[Q] = ∫ q f(q | θ) dq, a partial moment on [q_min, q_max]
         mean_rate = posterior.mark.truncated_mean(q_min, q_max, **theta)
-        draw_log_pod = log_pod
-        if pods is not None:
-            # this draw's calibration, so the bounds carry its uncertainty
-            calibration = calibration_from_draw(pods, draw)
-            draw_log_pod = log_pod_union(pods, calibration=calibration)
-        if draw_log_pod is None:
-            missing_rate = jnp.zeros_like(mean_rate)
-        else:
+        calibration = None if pods is None else calibration_from_draw(pods, draw)
 
+        def missing_rate_of(curve: Callable[[Array], Array]) -> Array:
             def log_integrand(q: Array) -> Array:
                 # log P_d is near 0 where detection is certain, so 1 − P_d needs expm1
-                log_miss = jnp.log(-jnp.expm1(draw_log_pod(q)))
+                log_miss = jnp.log(-jnp.expm1(curve(q)))
                 # log q + log f(q | θ) + log(1 − P_d(q))
                 return jnp.log(q) + posterior.mark.log_prob(q, **theta) + log_miss
 
             # E_f[Q (1 − P_d(Q))], in log space: a heavy tail underflows in linear Q
-            missing_rate = jnp.exp(log_simpson(log_integrand, q_min, q_max, n=n_nodes))
+            return jnp.exp(log_simpson(log_integrand, q_min, q_max, n=n_nodes))
 
         # M_total = Λ E_f[Q] D
         total = expected_events * mean_rate * event_duration
+        if pods is not None and is_tod_binned(pods):
+            # Λ_b = Σ_w ∫_{w ∩ b} λ(t) dt
+            events_by_bin = sum(
+                expected_events_by_tod_bin(
+                    kernel,
+                    start,
+                    stop,
+                    n_bins=TOD_BINS,
+                    tod_origin=tod_origin,
+                    nodes_per_day=nodes_per_day,
+                )
+                for start, stop in windows
+            )
+
+            def bin_rate(tod_bin: Array) -> Array:
+                # this draw's calibration, so the bounds carry its uncertainty
+                return missing_rate_of(
+                    log_pod_union(pods, calibration=calibration, tod_bin=tod_bin)
+                )
+
+            # M_missing = Σ_b Λ_b E_f[Q (1 − P_d(Q; b))] D
+            rates_by_bin = jax.vmap(bin_rate)(jnp.arange(TOD_BINS))
+            missing = jnp.sum(events_by_bin * rates_by_bin) * event_duration
+            return total, missing
+        if pods is not None:
+            # this draw's calibration, so the bounds carry its uncertainty
+            draw_log_pod = log_pod_union(pods, calibration=calibration)
+        else:
+            draw_log_pod = log_pod
+        if draw_log_pod is None:
+            missing_rate = jnp.zeros_like(mean_rate)
+        else:
+            missing_rate = missing_rate_of(draw_log_pod)
+
         # M_missing = Λ E_f[Q (1 − P_d(Q))] D
         missing = expected_events * missing_rate * event_duration
         return total, missing
@@ -159,6 +191,7 @@ def total_emission(
     n_nodes: int = 2001,
     nodes_per_day: int = NODES_PER_DAY,
     pods: Sequence[InstrumentPOD] | None = None,
+    tod_origin: float = 0.0,
 ) -> TotalEmission:
     """Posterior samples of the basin total, with the inferred missing mass.
 
@@ -195,7 +228,9 @@ def total_emission(
         pods: The instruments of a fit with a calibration prior; requires
             ``log_pod=None``. Each draw then uses its own union P_d^∪, from its
             ``pod.<name>.*`` sites. Every instrument counts as looking throughout
-            ``horizon``.
+            ``horizon``. With ``tod_bins``, the missing mass sums over the hours:
+            Σ_b Λ_b E_f[Q (1 − P_d(Q; b))] D.
+        tod_origin: Local hour of day at t = 0 [hours], for ``tod_bins``.
 
     Returns:
         The :class:`TotalEmission`.
@@ -268,6 +303,7 @@ def total_emission(
             q_max=q_max,
             n_nodes=n_nodes,
             nodes_per_day=nodes_per_day,
+            tod_origin=tod_origin,
         )
         for stratum in strata
     ]

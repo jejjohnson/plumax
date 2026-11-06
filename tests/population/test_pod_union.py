@@ -15,6 +15,7 @@ from scipy.stats import lognorm
 from plumax.population.importance import EventEvidence
 from plumax.population.marks import LognormalMark
 from plumax.population.pod import (
+    TOD_BINS,
     InstrumentPOD,
     LogisticPOD,
     LogLogisticPOD,
@@ -23,8 +24,12 @@ from plumax.population.pod import (
     load_pod_calibrations,
     log_pod_union,
     pod_union,
+    tod_bin_index,
 )
-from plumax.population.processes import padded_event_buffer
+from plumax.population.processes import (
+    expected_events_by_tod_bin,
+    padded_event_buffer,
+)
 from plumax.population.totals import total_emission
 
 
@@ -514,6 +519,260 @@ def test_calibration_from_draw_falls_back_to_published_values():
     assert float(calibration["a"]["q50"]) == 4.0
     assert float(calibration["b"]["q50"]) == 10.0
     assert float(calibration["a"]["slope"]) == 2.0
+
+
+TOD_SHIFTS = tuple(0.5 * math.sin(2.0 * math.pi * hour / 24.0) for hour in range(24))
+
+
+def _binned(shifts=TOD_SHIFTS, model="log_logistic"):
+    return InstrumentPOD("binned", model, 3.0, 0.0, 2.0, tod_bins=shifts)
+
+
+def test_tod_bin_index_counts_hours_from_the_origin():
+    times = jnp.array([0.0, 1.0 / 24.0, 0.5, 1.25, 2.999])
+    assert tod_bin_index(times).tolist() == [0, 1, 12, 6, 23]
+    assert tod_bin_index(jnp.array([0.0, 0.25]), tod_origin=20.0).tolist() == [20, 2]
+
+
+@pytest.mark.parametrize("model", ["log_logistic", "logistic"])
+def test_zero_shifts_are_the_unbinned_curve(model):
+    binned = _binned((0.0,) * 24, model)
+    plain = InstrumentPOD("plain", model, 3.0, 0.0, 2.0)
+    q = jnp.logspace(-2.0, 2.0, 41)
+    for tod_bin in (0, 7, 23):
+        selected = jnp.array(tod_bin)
+        np.testing.assert_allclose(
+            pod_union([binned], q, tod_bin=selected), pod_union([plain], q), rtol=1e-14
+        )
+        np.testing.assert_allclose(
+            log_pod_union([binned], tod_bin=selected)(q),
+            log_pod_union([plain])(q),
+            rtol=1e-14,
+        )
+
+
+@pytest.mark.parametrize("model", ["log_logistic", "logistic"])
+def test_every_bin_reaches_certain_detection_at_large_rates(model):
+    # the reason for a shift: a factor on P_d would stop short of 1
+    binned = _binned(model=model)
+    bins = jnp.arange(TOD_BINS)
+    detected = pod_union([binned], jnp.full(TOD_BINS, 1e6), tod_bin=bins)
+    np.testing.assert_allclose(detected, 1.0, atol=1e-10)
+
+
+def test_each_bin_is_half_detected_at_its_shifted_threshold():
+    binned = _binned()
+    bins = jnp.arange(TOD_BINS)
+    thresholds = 3.0 * jnp.exp(jnp.asarray(TOD_SHIFTS))
+    np.testing.assert_allclose(
+        pod_union([binned], thresholds, tod_bin=bins), 0.5, rtol=1e-12
+    )
+
+
+def test_an_unbinned_instrument_ignores_the_bin_in_a_union():
+    plain = InstrumentPOD("plain", "log_logistic", 10.0, 0.0, 1.5)
+    q = jnp.array(4.0)
+    tod_bin = jnp.array(6)
+    missed = (1.0 - _hill(4.0, 3.0 * math.exp(TOD_SHIFTS[6]), 2.0)) * (
+        1.0 - _hill(4.0, 10.0, 1.5)
+    )
+    np.testing.assert_allclose(
+        pod_union([_binned(), plain], q, tod_bin=tod_bin), 1.0 - missed, rtol=1e-12
+    )
+
+
+def test_one_rate_over_many_bins_broadcasts_a_mixed_union():
+    plain = InstrumentPOD("plain", "log_logistic", 10.0, 0.0, 1.5)
+    bins = jnp.arange(TOD_BINS)
+    union = pod_union([_binned(), plain], jnp.array(4.0), tod_bin=bins)
+    assert union.shape == (TOD_BINS,)
+    np.testing.assert_allclose(
+        union[6], pod_union([_binned(), plain], jnp.array(4.0), tod_bin=bins[6])
+    )
+
+
+def test_a_binned_instrument_needs_a_bin():
+    with pytest.raises(ValueError, match="needs a tod_bin"):
+        pod_union([_binned()], jnp.array(1.0))
+    with pytest.raises(ValueError, match="needs a tod_bin"):
+        log_pod_union([_binned()])
+
+
+@pytest.mark.parametrize("shifts", [(0.0,) * 23, (0.0,) * 23 + (math.inf,)])
+def test_a_bad_table_is_rejected(shifts):
+    with pytest.raises(ValueError, match="24 finite shifts"):
+        _binned(shifts)
+
+
+def test_load_calibrations_reads_the_table(tmp_path):
+    cells = " ".join(str(shift) for shift in TOD_SHIFTS)
+    table = tmp_path / "pods.csv"
+    table.write_text(
+        f"name,model,q50,q50_std,slope,tod_bins\nbinned,log_logistic,3,0,2,{cells}\n"
+    )
+    assert load_pod_calibrations(table) == [_binned()]
+    listing = tmp_path / "pods.yaml"
+    listing.write_text(
+        "- {name: binned, model: log_logistic, q50: 3, q50_std: 0, slope: 2, "
+        f"tod_bins: {list(TOD_SHIFTS)}}}\n"
+    )
+    assert load_pod_calibrations(listing) == [_binned()]
+
+
+def _binned_model_density(pods, **kwargs):
+    window = (0.0, 2.0)
+    marks = jnp.array([2.0, 20.0])
+    event_times, mask = padded_event_buffer([0.25, 1.5], window)
+    evidence = EventEvidence(jnp.zeros((2, 1)), marks[:, None])
+    return _model_log_density(
+        _no_prior_params(),
+        event_times=event_times,
+        mask=mask,
+        evidence=evidence,
+        mark=LognormalMark(),
+        intensity="constant",
+        window=window,
+        pods=pods,
+        support=(1e-8, 1e8),
+        **kwargs,
+    )
+
+
+@pytest.mark.slow
+def test_binned_likelihood_with_zero_shifts_is_the_unbinned_one():
+    plain = InstrumentPOD("binned", "log_logistic", 3.0, 0.0, 2.0)
+    np.testing.assert_allclose(
+        _binned_model_density([_binned((0.0,) * 24)]),
+        _binned_model_density([plain]),
+        rtol=1e-10,
+    )
+
+
+@pytest.mark.slow
+def test_binned_likelihood_with_no_intervals_has_no_compensator():
+    # an empty coverage_intervals means nobody looked, with or without bins
+    window = (0.0, 2.0)
+    event_times, mask = padded_event_buffer([], window)
+    density = _model_log_density(
+        _no_prior_params(),
+        event_times=event_times,
+        mask=mask,
+        evidence=EventEvidence(jnp.zeros((0, 1)), jnp.zeros((0, 1))),
+        mark=LognormalMark(),
+        intensity="constant",
+        window=window,
+        pods=[_binned()],
+        coverage=jnp.zeros((0, 1), dtype=bool),
+        coverage_intervals=[],
+        support=(1e-8, 1e8),
+    )
+    np.testing.assert_allclose(density, _prior_density(_no_prior_params()), rtol=1e-12)
+
+
+@pytest.mark.slow
+def test_binned_likelihood_is_the_closed_form():
+    # two days from 06:00: events at 12:00 and 18:00, hours 12 and 18, with every bin
+    # looked at for two hours in total
+    params = _no_prior_params()
+    density = _binned_model_density([_binned()], tod_origin=6.0)
+    law = lognorm(s=0.8, scale=math.exp(0.5))
+    expected = (
+        2.0 * math.log(2.0)
+        + law.logpdf(2.0)
+        + math.log(_hill(2.0, 3.0 * math.exp(TOD_SHIFTS[12]), 2.0))
+        + law.logpdf(20.0)
+        + math.log(_hill(20.0, 3.0 * math.exp(TOD_SHIFTS[18]), 2.0))
+    )
+    for shift in TOD_SHIFTS:
+        threshold = 3.0 * math.exp(shift)
+        rate = _thinned_rate(lambda q, q50=threshold: _hill(q, q50, 2.0))
+        expected -= 2.0 * (2.0 / 24.0) * rate
+    np.testing.assert_allclose(density - _prior_density(params), expected, rtol=1e-6)
+
+
+@pytest.mark.slow
+def test_total_emission_sums_the_missing_mass_over_the_hours():
+    posterior = TMTPPPosterior(
+        intensity="constant",
+        mark=LognormalMark(),
+        samples={
+            "lambda_0": jnp.array([2.0]),
+            "mark.mu": jnp.array([0.5]),
+            "mark.sigma": jnp.array([0.8]),
+        },
+    )
+    result = total_emission(
+        posterior,
+        horizon=(0.0, 2.0),
+        event_duration=1.0,
+        log_pod=None,
+        q_min=1e-6,
+        q_max=1e6,
+        pods=[_binned()],
+    )
+    law = lognorm(s=0.8, scale=math.exp(0.5))
+    expected = 0.0
+    for shift in TOD_SHIFTS:
+        threshold = 3.0 * math.exp(shift)
+
+        def integrand(log_q, q50=threshold):
+            q = math.exp(log_q)
+            return q * (1.0 - _hill(q, q50, 2.0)) * law.pdf(q) * q
+
+        rate = quad(integrand, math.log(1e-6), math.log(1e6), limit=200)[0]
+        expected += 2.0 * (2.0 / 24.0) * rate
+    np.testing.assert_allclose(result.missing_kg, [expected], rtol=1e-5)
+
+
+def test_expected_events_by_bin_add_up_and_follow_the_clock():
+    # a 1.5-day window from 06:00 over λ(t) = 2 + sin(2πt)
+    def intensity(time):
+        return 2.0 + jnp.sin(2.0 * jnp.pi * time)
+
+    by_bin = expected_events_by_tod_bin(
+        intensity, 0.25, 1.75, n_bins=TOD_BINS, tod_origin=0.0
+    )
+
+    # ∫ (2 + sin 2πt) dt on [a, b]
+    def exact(start, stop):
+        return 2.0 * (stop - start) + (
+            math.cos(2.0 * math.pi * start) - math.cos(2.0 * math.pi * stop)
+        ) / (2.0 * math.pi)
+
+    np.testing.assert_allclose(jnp.sum(by_bin), exact(0.25, 1.75), rtol=1e-10)
+    # hour 6 is seen twice in the window, hour 2 once
+    twice = exact(0.25, 0.25 + 1.0 / 24.0) + exact(1.25, 1.25 + 1.0 / 24.0)
+    once = exact(1.0 + 2.0 / 24.0, 1.0 + 3.0 / 24.0)
+    np.testing.assert_allclose(by_bin[6], twice, rtol=1e-10)
+    np.testing.assert_allclose(by_bin[2], once, rtol=1e-10)
+
+
+@pytest.mark.slow
+def test_tod_bins_with_coverage_run_under_nuts():
+    # the compiled potential, with the shifts and the intervals together
+    window = (0.0, 10.0)
+    marks = jnp.array([2.0, 20.0, 5.0])
+    event_times, mask = padded_event_buffer([1.0, 7.0, 2.0], window)
+    other = InstrumentPOD("other", "log_logistic", 10.0, 0.2, 1.5, 0.2)
+    mcmc = MCMC(NUTS(tmtpp_iw_model), num_warmup=20, num_samples=20, progress_bar=False)
+    mcmc.run(
+        jax.random.PRNGKey(0),
+        event_times,
+        mask,
+        EventEvidence(jnp.zeros((3, 1)), marks[:, None]),
+        mark=LognormalMark(),
+        intensity="constant",
+        window=window,
+        pods=[_binned(), other],
+        coverage=jnp.array([[True, False], [False, True], [True, False]]),
+        coverage_intervals=[
+            (0.0, 6.0, jnp.array([True, False])),
+            (6.0, 8.0, jnp.array([False, True])),
+        ],
+        support=(1e-6, 1e6),
+        n_nodes=201,
+    )
+    assert jnp.all(jnp.isfinite(mcmc.get_samples()["lambda_0"]))
 
 
 def _twin_log_intensity(

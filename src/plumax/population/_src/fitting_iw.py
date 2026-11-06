@@ -46,9 +46,12 @@ from plumax.population._src.importance import (
 from plumax.population._src.integrate import log_simpson, pareto_smoothed_log_weights
 from plumax.population._src.marks import MARKS, Mark
 from plumax.population._src.pod_union import (
+    TOD_BINS,
     InstrumentPOD,
     calibration_prior,
+    is_tod_binned,
     log_pod_union,
+    tod_bin_index,
 )
 
 
@@ -162,6 +165,7 @@ def tmtpp_iw_model(
     coverage: Bool[Array, "event instrument"] | None = None,
     coverage_intervals: Sequence[tuple[float, float, Bool[Array, " instrument"]]]
     | None = None,
+    tod_origin: float = 0.0,
     n_nodes: int = 2001,
 ) -> None:
     """NumPyro model of the full importance-corrected TMTPP likelihood.
@@ -173,7 +177,9 @@ def tmtpp_iw_model(
     ``coverage``, event i is thinned by the instruments that overpassed it and the
     compensator follows who was looking when, as 06a § Non-detection events asks:
     Σ_w Λ_w p̄_w(θ), over intervals w in which the covering set is constant. A
-    per-event mask alone does not fix that integral, so the two come together.
+    per-event mask alone does not fix that integral, so the two come together. An
+    instrument with ``tod_bins`` shifts its Q₅₀ by the hour of each event, and the
+    compensator sums over the hours too: Σ_w Σ_b Λ_w,b p̄_w,b(θ).
 
     Args:
         event_times: Detection times since t₀ in xtremax's padded buffer
@@ -193,6 +199,7 @@ def tmtpp_iw_model(
             all of them, at all times.
         coverage_intervals: ``(start, stop, covering)`` in days, disjoint and inside
             the window. No detection is possible outside them.
+        tod_origin: Local hour of day at t = 0 of ``window`` [hours], for ``tod_bins``.
         n_nodes: Simpson nodes of each p̄ integral.
 
     Raises:
@@ -217,6 +224,7 @@ def tmtpp_iw_model(
     ground = jnp.sum(jnp.where(mask, log_rates, 0.0))
 
     # --- detection ---
+    binned = pods is not None and is_tod_binned(pods)
     calibration = None
     event_log_pod = log_pod
     n_rows = evidence.q_samples.shape[0]
@@ -235,8 +243,18 @@ def tmtpp_iw_model(
             )
             # a padding row needs some instrument for a finite log P_d^∪
             event_coverage = jnp.where(covered[:, None], coverage, True)[:, None, :]
+        event_tod_bin = None
+        if binned:
+            # event_times count from t₀, the bins from t = 0
+            event_bins = tod_bin_index(
+                window[0] + event_times[:n_rows], tod_origin=tod_origin
+            )
+            event_tod_bin = event_bins[:, None]
         event_log_pod = log_pod_union(
-            pods, coverage=event_coverage, calibration=calibration
+            pods,
+            coverage=event_coverage,
+            calibration=calibration,
+            tod_bin=event_tod_bin,
         )
 
     # --- marks ---
@@ -246,7 +264,22 @@ def tmtpp_iw_model(
 
     # --- compensator ---
     support = support or default_support(evidence)
-    if intervals is None:
+    if binned:
+        # no coverage given: every instrument looks throughout; an empty list stays empty
+        everyone = np.ones(len(pods), dtype=bool)
+        whole_window = [(float(window[0]), float(window[1]), everyone)]
+        thinned = _binned_compensator(
+            kernel,
+            mark,
+            theta,
+            pods,
+            calibration,
+            whole_window if intervals is None else intervals,
+            support,
+            n_nodes,
+            tod_origin,
+        )
+    elif intervals is None:
         window_log_pod = (
             log_pod if pods is None else log_pod_union(pods, calibration=calibration)
         )
@@ -337,6 +370,47 @@ def _covered_compensator(
         log_rate = log_thinned_rate(mark, theta, log_pod, support, n_nodes=n_nodes)
         # Σ_w Λ_w p̄_w
         thinned = thinned + expected_events * jnp.exp(log_rate)
+    return thinned
+
+
+def _binned_compensator(
+    kernel: Any,
+    mark: Mark,
+    theta: dict[str, Any],
+    pods: Sequence[InstrumentPOD],
+    calibration: dict[str, dict[str, Array]] | None,
+    intervals: list[tuple[float, float, np.ndarray]],
+    support: tuple[float, float],
+    n_nodes: int,
+    tod_origin: float,
+) -> Float[Array, ""]:
+    from plumax.population._src.processes import expected_events_by_tod_bin
+
+    bins = jnp.arange(TOD_BINS)
+    thinned = jnp.zeros(())
+    for start, stop, covering in intervals:
+        if not covering.any():
+            continue
+        # Λ_w,b = ∫_{w ∩ b} λ(t) dt
+        expected_events = expected_events_by_tod_bin(
+            kernel, start, stop, n_bins=TOD_BINS, tod_origin=tod_origin
+        )
+
+        mask = jnp.asarray(covering)
+        # log p̄_w,b
+        log_rates = jax.vmap(
+            lambda tod_bin, mask=mask: log_thinned_rate(
+                mark,
+                theta,
+                log_pod_union(
+                    pods, coverage=mask, calibration=calibration, tod_bin=tod_bin
+                ),
+                support,
+                n_nodes=n_nodes,
+            )
+        )(bins)
+        # Σ_b Λ_w,b p̄_w,b
+        thinned = thinned + jnp.sum(expected_events * jnp.exp(log_rates))
     return thinned
 
 

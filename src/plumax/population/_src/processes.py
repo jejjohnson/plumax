@@ -28,6 +28,7 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Float
@@ -122,6 +123,50 @@ class LogIntensity(eqx.Module):
     def max_intensity(self) -> Float[Array, ""]:
         """Thinning envelope λ_max ≥ λ(t) for all t, from the kernel."""
         return self.intensity.max_intensity()
+
+
+def expected_events_by_tod_bin(
+    intensity: Callable[[Array], Array],
+    start: float,
+    stop: float,
+    *,
+    n_bins: int,
+    tod_origin: float = 0.0,
+    nodes_per_day: int = NODES_PER_DAY,
+) -> Float[Array, " bin"]:
+    """Expected events in each hour-of-day bin over a time interval.
+
+    Λ_b = Σ_c ∫_c λ(t) dt, over the cells c of [start, stop] that fall in bin b.
+
+    Args:
+        intensity: The rate λ(t) [events per day].
+        start: Start of the interval [days].
+        stop: End of the interval [days].
+        n_bins: Bins per day.
+        tod_origin: Local hour of day at t = 0 [hours].
+        nodes_per_day: Simpson nodes per day, without an exact ``integrate``.
+
+    Returns:
+        Λ_b for each bin.
+    """
+    # host arithmetic: the edges depend on the interval, never on a traced parameter
+    bins_per_hour = n_bins / 24.0
+    shift = bins_per_hour * tod_origin
+    first = math.floor(n_bins * float(start) + shift)
+    last = math.ceil(n_bins * float(stop) + shift)
+    indices = np.arange(first, last + 1)
+    edges = np.clip((indices - shift) / n_bins, float(start), float(stop))
+    cell_bins = jnp.asarray(indices[:-1] % n_bins)
+    log_intensity = LogIntensity(
+        intensity,
+        n_integration_points=_quadrature_points(1.0 / n_bins, nodes_per_day),
+    )
+    # ∫_c λ(t) dt
+    per_cell = jax.vmap(log_intensity.integrate)(
+        jnp.asarray(edges[:-1]), jnp.asarray(edges[1:])
+    )
+    # Λ_b
+    return jax.ops.segment_sum(per_cell, cell_bins, num_segments=n_bins)
 
 
 def _quadrature_points(window_length: float, nodes_per_day: int) -> int:
