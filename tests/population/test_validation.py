@@ -226,7 +226,7 @@ def _fit_soft(key: jax.Array, data) -> dict[str, jax.Array]:
     return _fit(key, data, log_weights)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_sbc_point_regime():
     result = run_sbc(
         prior_sample=_prior_sample,
@@ -239,7 +239,7 @@ def test_sbc_point_regime():
     assert jnp.all(result.ks_pvalues > SBC_MIN_PVALUE), result
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_sbc_soft_observation():
     result = run_sbc(
         prior_sample=_prior_sample,
@@ -251,7 +251,7 @@ def test_sbc_soft_observation():
     assert jnp.all(result.ks_pvalues > SBC_MIN_PVALUE), result
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_sbc_flags_a_fit_that_ignores_the_pod():
     # the negative control: thinned catalogs fitted as if every event were seen
     def fit_without_pod(key, data):

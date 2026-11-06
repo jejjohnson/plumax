@@ -23,7 +23,8 @@ inference → amortized predictor). The full roadmap lives in
 make install              # Install all deps (uv sync --all-groups) + pre-commit hooks
 make test                 # Fast tests only: uv run pytest -n 4 --dist loadfile
 make test-slow            # Only the tests marked slow
-make test-all             # Fast and slow
+make test-validation      # Only the tests marked validation (nightly in CI, 2 workers)
+make test-all             # Everything: fast, slow and validation
 make test-cov             # Fast and slow, with the 80 % coverage gate
 make format               # Auto-fix: ruff format . && ruff check --fix .
 make lint                 # Lint code: ruff check .
@@ -37,16 +38,17 @@ make docs-serve           # Build, then serve the assembled site at :8000
 
 ```bash
 uv run pytest tests/gauss_plume/test_plume.py::test_name -v
-uv run pytest tests/gauss_plume/test_plume.py -m "" -v   # include slow tests
+uv run pytest tests/gauss_plume/test_plume.py -m "not validation" -v   # include slow tests
+uv run pytest tests/population/test_validation.py -m validation -v    # only validation tests
 ```
 
-Skip the slow MCMC tests with `-m 'not slow'`.
+Plain `pytest` skips tests marked `slow` and `validation`. A `validation` test is statistical validation or anything else too long for every PR: mark it `validation` alone, not `slow` as well, so `-m slow` stays free of it. CI runs that tier nightly on main and on `workflow_dispatch` (`.github/workflows/validation.yml`), never on a PR.
 
 ### Pre-commit checklist (all four must pass)
 
 ```bash
 uv run pytest -n 4 --dist loadfile --durations=15             # Fast tests (every PR)
-uv run pytest -n 4 --dist loadfile -m "" --cov=src/plumax      # All tests with coverage (PRs into main, pushes to main)
+uv run pytest -n 4 --dist loadfile -m "not validation" --cov=src/plumax      # Fast and slow with coverage (PRs into main, pushes to main)
 uv run --group lint ruff check .              # Lint — ENTIRE repo, not just src/plumax/
 uv run --group lint ruff format --check .     # Format — ENTIRE repo
 uv run --group typecheck ty check src/plumax  # Typecheck — package only

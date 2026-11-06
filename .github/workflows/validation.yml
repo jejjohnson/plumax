@@ -1,0 +1,24 @@
+name: Validation
+
+# Statistical validation and other tests too long for every PR: never on a PR.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Run validation tests
+        run: uv run pytest -n 2 --dist loadfile -m validation --durations=15

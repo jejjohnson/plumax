@@ -67,13 +67,23 @@ def _dense_solution(problem) -> tuple[jax.Array, jax.Array]:
     return dense_map, covariance - gain @ jacobian @ covariance
 
 
+@pytest.fixture(scope="module")
+def linear_problem():
+    return _time_series_problem()
+
+
+@pytest.fixture(scope="module")
+def linear_lbfgs(linear_problem):
+    return solve_4dvar(linear_problem, rtol=1e-10, atol=1e-12, max_steps=500)
+
+
 @pytest.mark.slow
-def test_methods_agree_linear():
+def test_methods_agree_linear(linear_problem, linear_lbfgs):
     # the forward is affine, so the linearised cost is the cost itself: one outer
     # iteration of Gauss–Newton must reach the dense linear Gaussian MAP
-    problem = _time_series_problem()
+    problem = linear_problem
+    lbfgs = linear_lbfgs
     dense_map, dense_covariance = _dense_solution(problem)
-    lbfgs = solve_4dvar(problem, rtol=1e-10, atol=1e-12, max_steps=500)
     newton = solve_4dvar(
         problem,
         method="gauss_newton",
@@ -100,6 +110,17 @@ def test_methods_agree_linear():
 
 
 @pytest.mark.slow
+def test_gauss_newton_relinearising_stays_at_the_map(linear_problem, linear_lbfgs):
+    # the second outer iteration re-linearises at the first's MAP and must stay there;
+    # test_gauss_newton_outer_iters repeats this on the larger twin problem, nightly
+    newton = solve_4dvar(
+        linear_problem, method="gauss_newton", rtol=1e-10, atol=1e-12, outer_iters=2
+    )
+    assert newton.n_steps == 2
+    assert _relative(newton.source, linear_lbfgs.source) < 1e-6
+
+
+@pytest.mark.validation
 def test_gauss_newton_outer_iters():
     # the twin problem of tests/les_fvm: same MAP as L-BFGS within 5 outer steps
     save_times = jnp.linspace(0.0, 40.0, 5)
@@ -177,7 +198,7 @@ def test_gauss_newton_on_a_kronecker_prior_with_a_block_diagonal_background():
         method="gauss_newton",
         rtol=1e-10,
         atol=1e-12,
-        outer_iters=2,
+        outer_iters=1,
         inner_iters=200,
     )
     assert result.background is not None

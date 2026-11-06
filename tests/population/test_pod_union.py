@@ -566,7 +566,7 @@ def _fit_basin(key: jax.Array, times, mask, q_samples):
     return {name: samples[f"pod.{name}.q50"] for name in ("a", "b")}
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_hierarchical_calibration_coverage():
     keys = jax.random.split(jax.random.PRNGKey(110), 2 * TWIN_N_BASINS)
     times, mask, q_samples, truth, n_ground, n_detected = jax.vmap(_simulate_basin)(

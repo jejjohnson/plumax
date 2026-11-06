@@ -301,9 +301,10 @@ make install      # uv sync --all-groups + pre-commit hooks
 | Command | Description |
 |---|---|
 | `make install` | Install all dependency groups + pre-commit hooks |
-| `make test` | Run the fast tests (everything not marked `slow`) |
+| `make test` | Run the fast tests (everything not marked `slow` or `validation`) |
 | `make test-slow` | Run only the tests marked `slow` |
-| `make test-all` | Run the fast and slow tests |
+| `make test-validation` | Run only the tests marked `validation`: statistical validation and other tests too long for every PR, which CI runs nightly on main |
+| `make test-all` | Run everything: fast, slow and validation |
 | `make test-cov` | Run the fast and slow tests with the 80 % coverage gate |
 | `make lint` / `make format` | Lint / format with ruff (entire repo) |
 | `make typecheck` | Type-check `src/plumax` with ty |
