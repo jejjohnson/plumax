@@ -87,8 +87,9 @@ io = ["xrtoolz", "xrtoolz-reader", "pyproj"]
 notebooks = ["matplotlib", "ipython"]
 # Variational source inversion (Tier II OI, Tier III 3D-Var with a Laplace
 # posterior) through vardax: plumax supplies the source-receptor map, vardax
-# the analysis. Imported lazily, so the base install stays vardax-free.
-assim = ["vardax"]
+# the analysis, and argminax the Laplace posterior at the MAP. Imported lazily,
+# so the base install stays free of both.
+assim = ["argminax", "vardax"]
 # Footprint-emulator training (plumax.lagrangian.emulator) through pipekit-train:
 # its SimulationDataset over the particle model, cached once by CachedDataset
 # (zarr, the `cache` extra), and its TrainingLoop on the Equinox backend (optax,
@@ -122,7 +123,7 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # rev. Force the whole graph onto plumax's gaussx (the pattern somax uses);
 # every symbol those two packages import still exists at this rev.
 override-dependencies = [
-    "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.5",
+    "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.12",
     # xrtoolz (the `io` extra) sources pipekit from its unpinned main; hold the
     # graph on plumax's pin, the same commit xrtoolz's own lock resolves to.
     "pipekit @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit",
@@ -137,7 +138,8 @@ override-dependencies = [
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 # Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
 # unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
-# release commit); gaussx is pinned to the v0.6.5 tag; radtrax to its v0.1.0
+# release commit); gaussx is pinned to the v0.6.12 tag (the one argminax
+# v0.0.4 requires); radtrax to its v0.1.0
 # tag (the first release, with `radtrax.retrieval.absorption`, which
 # `plumax.vetting` needs; radtrax is not on PyPI).
 # geonnax is radtrax's own git dependency, which uv does not read from
@@ -155,7 +157,7 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 # pipekit-train (the `emulate` extra) is not on PyPI; pinned ahead of pipekit and
 # pipekit-cycle above, at the merge of pipekit#142 (CachedDataset in_memory).
 pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "7c446f141c23164918e2e8b708428b860206120c" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.5" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
@@ -164,6 +166,9 @@ geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 # state-space form of OptimalInterpolation (jejjohnson/vardax#163, which
 # coupled.fuse_observations solves with).
 vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.2.1" }
+# argminax v0.0.4 (the `assim` extra): the first release with
+# argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
+argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
 # geotoolz-ops (the `geo` extra) is pinned to the rev radtrax's [geo] uses: the
 # rename commit (geotoolz#489), the last GeoTensor-carrier release line with the
 # public `geoops.carrier` helpers (geotoolz#480) and pipekit 0.0.2.
@@ -193,6 +198,7 @@ dev = [
     "xrtoolz",
     "xrtoolz-reader",
     # The `assim` extra, so the vardax inversion tests run in CI.
+    "argminax",
     "vardax",
     # The `emulate` extra, so the footprint-emulator training tests run in CI.
     "pipekit-train[equinox,cache]",

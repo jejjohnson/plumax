@@ -14,6 +14,7 @@ from plumax.les_fvm import (
     SpatialControl,
     build_forward,
     build_problem,
+    posterior_covariance,
     solve_4dvar,
 )
 
@@ -106,6 +107,21 @@ def test_methods_agree_linear(linear_problem, linear_lbfgs):
     assert newton.posterior is not None
     np.testing.assert_allclose(
         newton.posterior.source_covariance, dense_covariance, rtol=1e-6, atol=1e-12
+    )
+
+
+@pytest.mark.slow
+def test_whitened_covariance_matches_dense_inverse(linear_problem, linear_lbfgs):
+    # P_χ is read from argminax's Laplace, not backed out of P_S, so it must
+    # equal L⁻¹ P_S L⁻ᵀ of the dense linear-Gaussian posterior
+    problem = linear_problem
+    _, dense_covariance = _dense_solution(problem)
+    chol = problem.prior_chol
+    half = jax.scipy.linalg.solve_triangular(chol, dense_covariance, lower=True)
+    dense_whitened = jax.scipy.linalg.solve_triangular(chol, half.T, lower=True)
+    posterior = posterior_covariance(problem, linear_lbfgs.whitened)
+    np.testing.assert_allclose(
+        posterior.whitened_covariance, dense_whitened, rtol=1e-6, atol=1e-12
     )
 
 
