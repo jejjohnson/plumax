@@ -147,8 +147,8 @@ Its mark part, with $\lambda$ profiled out, is `plumax.population.fitting.pod_po
 
 The integral $\int P_d(Q)\, f(Q)\, \mathrm{d}Q$ over heavy-tailed $f$ (power-law tail, Pareto) and saturating $P_d$ (Hill) must not be evaluated by naive quadrature in linear $Q$, because the heavy tail underflows.
 
-:::{important} Standard fix: log-space Gauss-Hermite quadrature
-Hill × LogNormal becomes a tractable polynomial-times-sigmoid in log-space; ≤ 16 nodes give 4-decimal accuracy. For Pareto tails, switch to importance sampling with a Pareto proposal.
+:::{important} Standard fix: quadrature in $\log Q$
+plumax integrates in $u = \log Q$ with integrix's log-space Simpson rule (`integrix.expect.log_simpson`, 2001 nodes in `log_thinned_rate`) and adds the mass beyond the last node as $P_d(Q_\text{hi})\, P(Q > Q_\text{hi})$. Why a grid in $\log Q$ resolves a lognormal body and a power-law tail together, and a grid in $Q$ cannot, is derived in integrix's [Heavy tails in log space](https://jejjohnson.github.io/integrix/expectations/#heavy-tails-in-log-space).
 
 **Bug class:** any $\alpha > 2$ power-law silently underestimates the thinned-rate integral with linear quadrature, biasing $\lambda$ low. Add as a hard regression test.
 :::
@@ -208,7 +208,7 @@ Both have library support; the choice is driven by the scientific question, not 
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧: `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
 | TMTPP likelihood: point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
 | TMTPP likelihood: full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108); consumes [`population.importance`](#va-modules); ground process on xtremax, thinned rate in log space |
-| Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108); log-space Gauss-Hermite and Simpson, Pareto-smoothed weights; in plumax until jejjohnson/xtremax#103 |
+| Numerical integration helpers (log-space Gauss-Hermite and Simpson, Pareto-smoothed weights, ESS) | `integrix.expect` (from integrix 0.0.5); `plumax.population.integrate` keeps deprecated aliases for one release | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108), moved to integrix in [#253](https://github.com/jejjohnson/plumax/issues/253) |
 | Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115); beyond the existing kernels |
 | Spatial extension (Cox process) | `plumax.population.spatial` | ☐: v2; ties to Tier III's $S(\mathbf{x},t)$ |
 
