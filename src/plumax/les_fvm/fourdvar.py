@@ -41,7 +41,8 @@ is then the identity ``½‖χ‖²``, which is what makes the problem well-cond
 the Matérn-3/2 temporal prior from :mod:`plumax.lagrangian.inversion` supplies
 ``B``. The observations are whitened too (``y / σ`` with ``R = I``), so the
 tiny concentration-scale variances never enter a linear solve. The posterior is
-vardax's Gauss–Newton Laplace covariance of that linear control.
+the Gauss–Newton Laplace approximation of that whitened control, an argminax
+``Laplace``.
 """
 
 from __future__ import annotations
@@ -62,7 +63,7 @@ import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total
-from plumax._vardax import require_vardax
+from plumax._vardax import require_argminax, require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import _is_traced, matern32_covariance
 from plumax.les_fvm.boundary import (
@@ -82,6 +83,7 @@ from plumax.les_fvm.wind import uniform_wind_field
 
 
 if TYPE_CHECKING:
+    import argminax.curvature
     import optimistix as optx
     import vardax
 
@@ -1501,7 +1503,7 @@ def solve_4dvar(
     # Skip the posterior on a non-finite MAP: the Gauss-Newton precision at a
     # NaN control would attach a NaN covariance.
     posterior = (
-        _laplace_posterior(problem, flat_map) if compute_posterior and finite else None
+        _laplace_posterior(problem, chi_star) if compute_posterior and finite else None
     )
     n_source = problem.n_source
     source_chol = problem.prior_chol[:n_source, :n_source]
@@ -1673,41 +1675,47 @@ class PosteriorCovariance:
         return self.control.to_field(self.source_std)
 
 
-def _vardax_laplace(problem: FourDVarProblem, source: jax.Array) -> vardax.Posterior:
-    """``vardax.Posterior`` of the Gauss–Newton Laplace approximation at ``source``.
+def _gauss_newton_laplace(
+    problem: FourDVarProblem, chi: jax.Array
+) -> argminax.curvature.Laplace:
+    """argminax's Gauss–Newton Laplace posterior of the whitened control at ``χ``.
 
-    ``vardax.LaplaceCovariance`` on the linear control, so ``mean = S*`` and
-    ``cov = P_S = L (I + J̃ᵀ J̃)⁻¹ Lᵀ`` with ``J̃ = ∂(𝒢/σ)/∂χ``, both on the
-    ``(1, n_t)`` analysis state.
+    ``N(χ, Ĥ_χ⁻¹)`` with ``Ĥ_χ = I + J̃ᵀ J̃`` and ``J̃ = ∂(𝒢(S_b + L χ)/σ)/∂χ``.
+    The diffrax solve defines only a VJP, so ``J̃`` is formed by one reverse
+    pass per observation (``jax.jacrev``); the prior adds the identity without
+    a pass through the forward, which a stacked residual ``(𝒢/σ − y/σ, χ)``
+    would cost.
     """
-    vdx = require_vardax("posterior_covariance")
-    model, batch = problem.analysis()
-    return vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-        source[None], model, batch
-    )
+    amx = require_argminax("posterior_covariance")
+    sigma = jnp.sqrt(problem.obs_variance)  # (n_t, n_obs)
+    predict = problem.forward.predict
+
+    def whitened_prediction(control: jax.Array) -> jax.Array:
+        # 𝒢(S_b + L χ) / σ, flattened over (time, receptor)
+        source = problem.source_from_whitened(control)
+        return einx.rearrange("t o -> (t o)", predict(source) / sigma)
+
+    jacobian = jax.jacrev(whitened_prediction)(chi)  # J̃, (n_t·n_obs, n_state)
+    identity = jnp.eye(chi.shape[0], dtype=chi.dtype)
+    # Ĥ_χ = I + J̃ᵀ J̃, symmetrised so the PSD tag is exact
+    precision = gx.symmetrize(identity + jacobian.T @ jacobian)
+    return amx.curvature.Laplace(chi, lx.MatrixLinearOperator(precision, _PSD_TAGS))
 
 
-def _laplace_posterior(
-    problem: FourDVarProblem, source: jax.Array
-) -> PosteriorCovariance:
-    """vardax's Gauss–Newton Laplace covariance at the MAP source.
+def _laplace_posterior(problem: FourDVarProblem, chi: jax.Array) -> PosteriorCovariance:
+    """The dense :class:`PosteriorCovariance` at the MAP whitened control ``χ``.
 
-    ``P_S`` is materialised column by column from the vardax posterior;
-    ``P_χ = L⁻¹ P_S L⁻ᵀ`` by two triangular solves.
+    ``P_χ`` is the covariance of argminax's Laplace posterior, and
+    ``P_S = L P_χ Lᵀ`` is one product with the prior factor.
     """
-    n_state = source.shape[0]
-    posterior = _vardax_laplace(problem, source)
-    p_source = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
-        jnp.eye(n_state, dtype=source.dtype)
-    )
-    p_source = gx.symmetrize(p_source)
+    laplace = _gauss_newton_laplace(problem, chi)
+    p_chi = gx.symmetrize(laplace.covariance().as_matrix())  # (n_state, n_state)
     chol = problem.prior_chol
-    half = jax.scipy.linalg.solve_triangular(chol, p_source, lower=True)
-    p_chi = jax.scipy.linalg.solve_triangular(chol, half.T, lower=True)
+    p_source = gx.symmetrize(chol @ p_chi @ chol.T)  # P_S = L P_χ Lᵀ
     n_source = problem.n_source
     has_background = problem.forward.background is not None
     return PosteriorCovariance(
-        whitened_covariance=gx.symmetrize(p_chi),
+        whitened_covariance=p_chi,
         source_covariance=p_source[:n_source, :n_source],
         control=problem.control,
         control_covariance=p_source if has_background else None,
@@ -1719,10 +1727,9 @@ def posterior_covariance(
 ) -> PosteriorCovariance:
     """Gauss-Newton Laplace posterior covariance around a 4D-Var MAP.
 
-    vardax's ``LaplaceCovariance`` of the whitened control at
-    ``whitened_map``: the Gauss–Newton precision ``I + J̃ᵀ R⁻¹ J̃`` in ``χ``,
-    mapped to the source as ``P_S = L P_χ Lᵀ`` for the prior Cholesky factor
-    ``L``.
+    argminax's ``Laplace`` of the whitened control at ``whitened_map``: the
+    Gauss–Newton precision ``I + J̃ᵀ R⁻¹ J̃`` in ``χ``, mapped to the source as
+    ``P_S = L P_χ Lᵀ`` for the prior Cholesky factor ``L``.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -1735,8 +1742,7 @@ def posterior_covariance(
     Raises:
         ImportError: Without the ``assim`` extra.
     """
-    chi = jnp.asarray(whitened_map, dtype=float)
-    return _laplace_posterior(problem, problem.source_from_whitened(chi))
+    return _laplace_posterior(problem, jnp.asarray(whitened_map, dtype=float))
 
 
 def laplace_sample(
@@ -1747,9 +1753,10 @@ def laplace_sample(
 ) -> jax.Array:
     """Draw source-space samples from the Laplace posterior ``N(S*, P_S)``.
 
-    The draws come from ``vardax.Posterior.sample`` on the Gauss–Newton
-    Laplace posterior at the MAP source, ``S = S* + P_S^½ ξ`` with
-    ``ξ ~ N(0, I)``; ``P_S`` is the covariance of :func:`posterior_covariance`.
+    The draws come from argminax's ``Laplace.sample`` on the Gauss–Newton
+    Laplace posterior of the whitened control, ``χ = χ* + C⁻ᵀ ξ`` with
+    ``Ĥ_χ = C Cᵀ`` and ``ξ ~ N(0, I)``, mapped to the source as ``S = S_b + L χ``; their
+    covariance is the ``P_S`` of :func:`posterior_covariance`.
 
     Args:
         problem: The assembled 4D-Var problem.
@@ -1764,11 +1771,11 @@ def laplace_sample(
     if not _is_traced(n_samples) and int(n_samples) <= 0:
         raise ValueError("laplace_sample: `n_samples` must be a positive integer.")
     chi_star = jnp.asarray(whitened_map, dtype=float)
-    source = problem.source_from_whitened(chi_star)
-    posterior = _vardax_laplace(problem, source)
-    # S⁽ᵉ⁾ = S* + P_S^½ ξ⁽ᵉ⁾, ξ⁽ᵉ⁾ ~ N(0, I), on the (1, n_state) analysis state
-    draws = posterior.sample(key, int(n_samples))
-    source_draws = draws[:, 0, : problem.n_source]
+    laplace = _gauss_newton_laplace(problem, chi_star)
+    # χ⁽ᵉ⁾ ~ N(χ*, Ĥ_χ⁻¹), then S⁽ᵉ⁾ = S_b + L χ⁽ᵉ⁾
+    chi_draws = laplace.sample(int(n_samples), key=key)  # (n_samples, n_state)
+    draws = jax.vmap(problem.source_from_whitened)(chi_draws)
+    source_draws = draws[:, : problem.n_source]
     if problem.control is not None:
         return problem.control.to_field(source_draws)
     return source_draws

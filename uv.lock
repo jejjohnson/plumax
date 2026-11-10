@@ -18,7 +18,7 @@ resolution-markers = [
 
 [manifest]
 overrides = [
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
@@ -225,6 +225,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/35/5d/752690df9ef5b76e169e68d6a129fa6d08a7100ca7f754c89495db3c6019/appnope-0.1.4.tar.gz", hash = "sha256:1de3860566df9caf38f01f86f65e0e13e379af54f9e4bee1e66b48f2efffd1ee", size = 4170, upload-time = "2024-02-06T09:43:11.258Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/29/5ecc3a15d5a33e31b26c11426c45c501e439cb865d0bff96315d86443b78/appnope-0.1.4-py2.py3-none-any.whl", hash = "sha256:502575ee11cd7a28c0205f379b525beefebab9d161b7c964670864014ed7213c", size = 4321, upload-time = "2024-02-06T09:43:09.663Z" },
+]
+
+[[package]]
+name = "argminax"
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/argminax?tag=v0.0.4#5992322c0c8ed06744254e7d331a83549fb69b21" }
+dependencies = [
+    { name = "equinox" },
+    { name = "gaussx" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+    { name = "optimistix" },
 ]
 
 [[package]]
@@ -1156,8 +1170,8 @@ wheels = [
 
 [[package]]
 name = "gaussx"
-version = "0.6.5"
-source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5#12ff91a68da2886478e9b3a1d0d4c0745d74ca41" }
+version = "0.6.12"
+source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12#1adbf077f6fdf8b19a3f8484c9dc8781b515ee1d" }
 dependencies = [
     { name = "einx" },
     { name = "equinox" },
@@ -3328,6 +3342,7 @@ dependencies = [
 
 [package.optional-dependencies]
 assim = [
+    { name = "argminax" },
     { name = "vardax" },
 ]
 emulate = [
@@ -3360,6 +3375,7 @@ population = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "argminax" },
     { name = "beartype" },
     { name = "georeader-spaceml" },
     { name = "geotoolz-ops" },
@@ -3398,11 +3414,12 @@ typecheck = [
 
 [package.metadata]
 requires-dist = [
+    { name = "argminax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
     { name = "diffrax", specifier = ">=0.6" },
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.5" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
     { name = "ipython", marker = "extra == 'notebooks'" },
@@ -3433,6 +3450,7 @@ provides-extras = ["inference", "io", "notebooks", "assim", "emulate", "populati
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "argminax", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
     { name = "beartype", specifier = ">=0.22" },
     { name = "georeader-spaceml", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
