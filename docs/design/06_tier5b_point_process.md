@@ -1,11 +1,11 @@
-# Tier V.B — Point process model (TMTPP)
+# Tier V.B: Point process model (TMTPP)
 
-**Generative model:** events arrive in time according to an intensity $\lambda(t)$, each carries a mark $Q \sim f(Q)$, and each is observed with probability $P_d(Q; \text{satellite})$. The "thinned marked temporal point process" (TMTPP) is the mathematical object on which everything else at Tier V is built — see [daley2003,daleyVereJones2008] for foundations.
+**Generative model:** events arrive in time according to an intensity $\lambda(t)$, each carries a mark $Q \sim f(Q)$, and each is observed with probability $P_d(Q; \text{satellite})$. The "thinned marked temporal point process" (TMTPP) is the mathematical object on which everything else at Tier V is built (see [daley2003,daleyVereJones2008] for foundations).
 
-The full mathematical derivation lives in the [TMTPP theory page](../theory/population/01_mttpp_theory.md). This page gives the architectural view: the components, their interfaces, and where they plug into the rest of `plumax`.
+The full mathematical derivation lives in the [TMTPP theory page](../theory/population/01_mttpp_theory.md). This page gives the architectural view, namely the components, their interfaces, and where they plug into the rest of `plumax`.
 
 :::{tip} Units convention
-Everything in SI internally — $Q$ in kg/s, time in seconds. Catalog ingestion ([06a](06_tier5a_instantaneous.md)) normalises to SI; rendering layers convert to operational units (t/h, kg/h) on display.
+Everything is SI internally, with $Q$ in kg/s and time in seconds. Catalog ingestion ([06a](06_tier5a_instantaneous.md)) normalises to SI; rendering layers convert to operational units (t/h, kg/h) on display.
 :::
 
 ---
@@ -14,7 +14,7 @@ Everything in SI internally — $Q$ in kg/s, time in seconds. Catalog ingestion 
 ## The three components
 
 (vb-temporal)=
-### Temporal — $\lambda(t)$ (events / second)
+### Temporal: $\lambda(t)$ (events / second)
 
 The intensity function tells you how rapidly events arrive at time $t$. Examples from the catalogue in `02_intensity_zoo.md`:
 
@@ -42,38 +42,38 @@ $$
 \log \lambda(t) \;\sim\; \mathcal{GP}(\mu, K) \qquad \text{(log-Gaussian Cox process; environmentally-driven clustering)}
 $$
 
-13 deterministic kernels currently implemented in `plumax.population.intensity` (catalogued in the [intensity zoo](../theory/population/02_intensity_zoo.md)); LGCP is the v1.5 next kernel — it's the natural model when clustering is environmental rather than self-exciting.
+13 deterministic kernels currently implemented in `plumax.population.intensity` (catalogued in the [intensity zoo](../theory/population/02_intensity_zoo.md)); LGCP is the next kernel (v1.5), as it is the natural model when clustering is environmental rather than self-exciting.
 
 Each kernel is an `equinox.Module` exposing the same `__call__(t) → λ` and `sample_priors()` interface. Adding a new kernel is a one-file PR.
 
 (vb-marks)=
-### Marks — $f(Q)$ (probability density on kg/s)
+### Marks: $f(Q)$ (probability density on kg/s)
 
 The mark distribution gives the size of an event conditional on it happening.
 
-*Mark families — form and operational fit.*
+*Mark families, form and operational fit.*
 
 | Family | Form | When to use |
 | --- | --- | --- |
 | **Lognormal** | $Q \sim \operatorname{LN}(\mu, \sigma^{2})$ | single-class facility populations |
 | **Pure power-law** | $f(Q) \propto Q^{-\alpha}$ for $Q > Q_\text{min}$ | baseline only; over-emphasises the tail |
-| **Lognormal-Pareto** | $\operatorname{LN}(\mu, \sigma^{2})$ body, $\operatorname{Pareto}(\alpha, Q_\text{break})$ tail | **v1 default** — Cusworth 2021 / Sherwin 2024 operational standard |
+| **Lognormal-Pareto** | $\operatorname{LN}(\mu, \sigma^{2})$ body, $\operatorname{Pareto}(\alpha, Q_\text{break})$ tail | v1 default; Cusworth 2021 / Sherwin 2024 operational standard |
 | **Mixture-of-lognormals** | $\sum_k \pi_k \cdot \operatorname{LN}(\mu_k, \sigma_k^{2})$ | multi-class facility populations (wells + tanks + pipelines) |
 
 $Q_\text{min}$ (power-law) and $Q_\text{break}$ (lognormal-Pareto) are themselves parameters.
 
 :::{tip} v1 default for $Q_\text{break}$
-$Q_\text{break} \sim \operatorname{LogNormal}(\log Q_{\text{break,published}}, 0.5^{2})$ — informative prior from instrument-class detection floor, not a hard constraint. Joint inference is cleaner but adds an identifiability concern with $\alpha$.
+$Q_\text{break} \sim \operatorname{LogNormal}(\log Q_{\text{break,published}}, 0.5^{2})$, an informative prior from the instrument-class detection floor rather than a hard constraint. Joint inference is cleaner but adds an identifiability concern with $\alpha$.
 :::
 
-The mark distribution is what Tier V actually wants to recover — it's the population-scale answer to "how big are the leaks at this kind of facility?"
+The mark distribution is what Tier V actually wants to recover, as it is the population-scale answer to "how big are the leaks at this kind of facility?"
 
 (vb-pod)=
-### Detection thinning — $P_d(Q; \text{satellite})$ (probability)
+### Detection thinning: $P_d(Q; \text{satellite})$ (probability)
 
 Not every event is observed. Each satellite has a probability of detection that depends on the leak size, viewing geometry, surface, and atmospheric state.
 
-The operational form in the methane literature is the **Hill function** (Cusworth 2021, Sherwin 2024):
+The operational form in the methane literature is the Hill function (Cusworth 2021, Sherwin 2024):
 
 $$
 P_d(Q) \;=\; \frac{1}{1 + (Q_{50}/Q)^{k}}
@@ -82,13 +82,13 @@ $$
 where $Q_{50}$ is the leak size at which detection probability is 0.5 and $k$ controls the steepness.
 
 :::{caution} Hill = logistic-on-log-Q
-**This is the same as a logistic on $\log Q$**, since $1 / (1 + (Q_{50}/Q)^{k}) = \sigma(k \log(Q / Q_{50}))$; it is *not* a logistic on $Q$ itself. Doc previously listed "logistic"; the operational convention is Hill. (`plumax.population.pod` currently implements both; the population fitter should default to Hill.)
+This is the same as a logistic on $\log Q$, since $1 / (1 + (Q_{50}/Q)^{k}) = \sigma(k \log(Q / Q_{50}))$; it is *not* a logistic on $Q$ itself. Doc previously listed "logistic"; the operational convention is Hill. (`plumax.population.pod` currently implements both; the population fitter should default to Hill.)
 :::
 
 (vb-pod-calibration)=
-#### POD calibration uncertainty — hierarchical prior
+#### POD calibration uncertainty: hierarchical prior
 
-Per-instrument controlled-release campaigns (Sherwin et al. 2024) deliver a **posterior** on $(Q_{50}, k)$, not a point. v1 default: hierarchical prior carrying calibration-campaign uncertainty:
+Per-instrument controlled-release campaigns (Sherwin et al. 2024) deliver a posterior on $(Q_{50}, k)$ rather than a point. v1 default: hierarchical prior carrying calibration-campaign uncertainty:
 
 $$
 Q_{50,\text{inst}} \sim \operatorname{LogNormal}(\log Q_{50,\text{pub}}, \sigma^{2}_{Q_{50},\text{pub}}), \qquad
@@ -99,15 +99,15 @@ This is the middle ground between (a) hard-coding published values (biased when 
 
 10 POD models currently in `plumax.population.pod`, described visually in the [POD gallery](../notebooks/population/03_pod_gallery.ipynb). Variants:
 
-- **Hill** — operational standard.
-- **Varying-coefficient Hill** — $Q_{50} = g(\text{albedo}, \text{SZA}, \text{scene class})$.
-- **Spectral-aware** — explicitly carries the SWIR retrieval noise floor as a function of column XCH₄.
-- **Full GLM** — generalised linear model with multiple scene covariates.
+- **Hill:** operational standard.
+- **Varying-coefficient Hill:** $Q_{50} = g(\text{albedo}, \text{SZA}, \text{scene class})$.
+- **Spectral-aware:** explicitly carries the SWIR retrieval noise floor as a function of column XCH₄.
+- **Full GLM:** generalised linear model with multiple scene covariates.
 
 ---
 
 (vb-likelihood)=
-## TMTPP likelihood — canonical form
+## TMTPP likelihood: canonical form
 
 For a set of detected events with per-event posteriors $\{p(Q \mid \text{observation}_i)\}_{i=1}^{n}$ and detection times $\{t_i\}$ over a window $[0, T]$:
 
@@ -117,7 +117,7 @@ $$
 \;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
 $$
 
-The first sum scores each detected event under: (a) the temporal intensity at the detection time, and (b) the integrated mark contribution that combines the per-event likelihood with the population mark distribution and the satellite POD. The second integral is the **expected number of events that would have been detected** under the model — subtracts the right amount so the posterior is consistent.
+The first sum scores each detected event under (a) the temporal intensity at the detection time and (b) the integrated mark contribution that combines the per-event likelihood with the population mark distribution and the satellite POD. The second integral is the expected number of events that would have been detected under the model, which subtracts the right amount so the posterior is consistent.
 
 (vb-practical-eval)=
 ### Practical evaluation
@@ -128,26 +128,26 @@ $$
 \int P_d(Q)\, L_i(Q)\, f(Q)\, \mathrm{d}Q \;\approx\; \frac{1}{S}\, \sum_{s} P_d(Q_i^{(s)}) \cdot \frac{f(Q_i^{(s)})}{\pi_\text{per-event}(Q_i^{(s)})}
 $$
 
-with samples $Q_i^{(s)} \sim p(Q \mid \text{observation}_i)$ and $\pi_\text{per-event}(Q)$ the per-event prior used at Tier I–IV. The $1 / \pi_\text{per-event}$ factor is the importance weight; without it the population fit double-counts the per-event prior.
+with samples $Q_i^{(s)} \sim p(Q \mid \text{observation}_i)$ and $\pi_\text{per-event}(Q)$ the per-event prior used at Tier I-IV. The $1 / \pi_\text{per-event}$ factor is the importance weight; without it the population fit double-counts the per-event prior.
 
 (vb-point-regime)=
 ### Point-regime simplification
 
-When per-event posteriors are tightly concentrated ($\operatorname{CV} < 20\%$) and $f$ is smooth on that scale, the importance-weighted MC reduces to the **Point regime** of 06a:
+When per-event posteriors are tightly concentrated ($\operatorname{CV} < 20\%$) and $f$ is smooth on that scale, the importance-weighted MC reduces to the Point regime of 06a:
 
 $$
 \log L_\text{point} \;=\; \sum_{i} \!\Bigl[ \log \lambda(t_i) + \log f(Q_i) + \log P_d(Q_i) \Bigr]
 \;-\; \int_{0}^{T} \lambda(t) \!\!\int P_d(Q)\, f(Q)\, \mathrm{d}Q\, \mathrm{d}t
 $$
 
-Its mark part, with $\lambda$ profiled out, is `plumax.population.fitting.pod_powerlaw_model`; the full form with a temporal ground process is `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess`, built by `plumax.population.processes.detection_process` ([#106](https://github.com/jejjohnson/plumax/issues/106)). It's the **simplification**, not the canonical form — explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it's safe to use.
+Its mark part, with $\lambda$ profiled out, is `plumax.population.fitting.pod_powerlaw_model`; the full form with a temporal ground process is `xtremax.point_processes.ThinningProcess` over a `MarkedTemporalPointProcess`, built by `plumax.population.processes.detection_process` ([#106](https://github.com/jejjohnson/plumax/issues/106)). This is the simplification rather than the canonical form, and explicit regime selection per [06a § Regime selection rule](#va-regime-rule) decides when it is safe to use.
 
 (vb-numerical-stability)=
 ### Numerical stability of the integrated thinned-rate term
 
-The integral $\int P_d(Q)\, f(Q)\, \mathrm{d}Q$ over heavy-tailed $f$ (power-law tail, Pareto) and saturating $P_d$ (Hill) **must not** be evaluated by naive quadrature in linear $Q$ — the heavy tail underflows.
+The integral $\int P_d(Q)\, f(Q)\, \mathrm{d}Q$ over heavy-tailed $f$ (power-law tail, Pareto) and saturating $P_d$ (Hill) must not be evaluated by naive quadrature in linear $Q$, because the heavy tail underflows.
 
-:::{important} Standard fix — log-space Gauss-Hermite quadrature
+:::{important} Standard fix: log-space Gauss-Hermite quadrature
 Hill × LogNormal becomes a tractable polynomial-times-sigmoid in log-space; ≤ 16 nodes give 4-decimal accuracy. For Pareto tails, switch to importance sampling with a Pareto proposal.
 
 **Bug class:** any $\alpha > 2$ power-law silently underestimates the thinned-rate integral with linear quadrature, biasing $\lambda$ low. Add as a hard regression test.
@@ -162,24 +162,24 @@ Hill × LogNormal becomes a tractable polynomial-times-sigmoid in log-space; ≤
 
 | Input | Source |
 | --- | --- |
-| $(t_i, \text{instrument\_id}_i, \text{per-event payload})$ per detection | [`06_tier5a_instantaneous.md`](06_tier5a_instantaneous.md) — Tier V.A adapter |
-| Per-event $L_i(Q)$ (samples + $\pi_\text{per-event,logpdf}$) | Tiers I–IV inversion + posterior export |
+| $(t_i, \text{instrument\_id}_i, \text{per-event payload})$ per detection | [`06_tier5a_instantaneous.md`](06_tier5a_instantaneous.md): Tier V.A adapter |
+| Per-event $L_i(Q)$ (samples + $\pi_\text{per-event,logpdf}$) | Tiers I-IV inversion + posterior export |
 | Per-instrument POD calibration $(Q_{50,\text{pub}}, \sigma_{Q_{50},\text{pub}}, k_\text{pub}, \sigma_{k,\text{pub}})$ | Sherwin 2024 / Cusworth 2021 / Kamdar IMEO controlled-release campaigns; alternatively joint inference with the population |
-| Per-instrument overpass coverage (for the integrated rate) | [`06a § Non-detection events`](#va-detection-floor) — catalog ingest |
+| Per-instrument overpass coverage (for the integrated rate) | [`06a § Non-detection events`](#va-detection-floor), catalog ingest |
 
 *TMTPP outputs.*
 
 | Output | Consumer |
 | --- | --- |
-| Posterior $\lambda(t)$ | [`06_tier5c_persistency.md`](06_tier5c_persistency.md) — wait times, dispatch windows |
-| Posterior $f(Q)$ | [`06_tier5d_total_emission.md`](06_tier5d_total_emission.md) — total mass under POD-thinning correction |
+| Posterior $\lambda(t)$ | [`06_tier5c_persistency.md`](06_tier5c_persistency.md): wait times, dispatch windows |
+| Posterior $f(Q)$ | [`06_tier5d_total_emission.md`](06_tier5d_total_emission.md): total mass under POD-thinning correction |
 | Per-instrument POD posterior $(Q_{50}, k)_\text{inst}$ | instrument-design and cross-mission calibration questions; multi-satellite fusion (06d) |
 | Joint $(\lambda, f, P_d)$ posterior | sensitivity studies, satellite-tasking optimisation |
 
 ---
 
 (vb-population-vs-source)=
-## Population vs. per-source — the v1 commitment
+## Population vs. per-source: the v1 commitment
 
 The TMTPP fits *aggregate* the population. Two distinct framings:
 
@@ -193,37 +193,37 @@ Both have library support; the choice is driven by the scientific question, not 
 (vb-modules)=
 ## Module layout
 
-*Tier V.B module layout — concern, target module, status.*
+*Tier V.B module layout, concern, target module, status.*
 
 | Concern | Module | Status |
 | --- | --- | --- |
-| Intensity registry — deterministic + Hawkes | `plumax.population.intensity` (13 kernels) | 🚧 — deterministic kernels in tree; Hawkes ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) |
-| Intensity registry — log-Gaussian Cox process | `plumax.population.point_process.fit_lgcp` | ☐ v1.5 [#115](https://github.com/jejjohnson/plumax/issues/115) |
-| Mark registry | `plumax.population.marks` | ✓ [#109](https://github.com/jejjohnson/plumax/issues/109) — power law, lognormal, lognormal-Pareto (continuous splice at $Q_\text{break}$), mixture of lognormals, each with `log_prob`, `sample`, `truncated_mean` and default NumPyro priors |
+| Intensity registry: deterministic + Hawkes | `plumax.population.intensity` (13 kernels) | 🚧: deterministic kernels in tree; Hawkes ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) |
+| Intensity registry: log-Gaussian Cox process | `plumax.population.point_process.fit_lgcp` | ☐ v1.5 [#115](https://github.com/jejjohnson/plumax/issues/115) |
+| Mark registry | `plumax.population.marks` | ✓ [#109](https://github.com/jejjohnson/plumax/issues/109); power law, lognormal, lognormal-Pareto (continuous splice at $Q_\text{break}$), mixture of lognormals, each with `log_prob`, `sample`, `truncated_mean` and default NumPyro priors |
 | POD models $P_d(\cdot)$ (Hill + variants) | `plumax.population.pod` (10 models) | ✓ in tree (logistic / probit / cloglog GLM family) |
 | POD time-of-day binning (v1 time-varying POD) | `plumax.population.pod.InstrumentPOD.tod_bins` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
 | POD continuous $P_d(Q, t)$ (v2) | `plumax.population.pod.continuous_t` | ☐ v2 |
 | Hierarchical POD calibration prior | `plumax.population.pod.calibration_prior` | ✓ [#110](https://github.com/jejjohnson/plumax/issues/110) |
-| Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧 — pure-NumPy conjugate posterior on λ landed |
-| Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧 — `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
-| TMTPP likelihood — point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
-| TMTPP likelihood — full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) — consumes [`population.importance`](#va-modules); ground process on xtremax, thinned rate in log space |
-| Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108) — log-space Gauss–Hermite and Simpson, Pareto-smoothed weights; in plumax until jejjohnson/xtremax#103 |
-| Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115) — beyond the existing kernels |
-| Spatial extension (Cox process) | `plumax.population.spatial` | ☐ — v2; ties to Tier III's $S(\mathbf{x},t)$ |
+| Homogeneous Poisson rate (closed-form Gamma-Poisson) | `plumax.population.point_process.fit_poisson_rate` | 🚧: pure-NumPy conjugate posterior on λ landed |
+| Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧: `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
+| TMTPP likelihood: point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are xtremax's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
+| TMTPP likelihood: full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108); consumes [`population.importance`](#va-modules); ground process on xtremax, thinned rate in log space |
+| Numerical integration helpers (log-space Gauss-Hermite, Pareto IS) | `plumax.population.integrate` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108); log-space Gauss-Hermite and Simpson, Pareto-smoothed weights; in plumax until jejjohnson/xtremax#103 |
+| Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115); beyond the existing kernels |
+| Spatial extension (Cox process) | `plumax.population.spatial` | ☐: v2; ties to Tier III's $S(\mathbf{x},t)$ |
 
 ---
 
 (vb-validation)=
 ## Validation strategy
 
-- **Likelihood gradient.** `jax.grad` matches finite differences within tolerance. Cheap unit test.
-- **Synthetic recovery — Point regime.** Already in `06_stationary_numpyro_mcmc` for power-law mark.
-- **Synthetic recovery — Full regime with importance correction.** Generate per-event posteriors with a known $\pi_\text{per-event}$, fit population, recover $(\lambda^{*}, f^{*}, P_d^{*})$ within reported posterior. Mirrors the importance-correction round trip from [06a § Validation](#va-validation).
-- **SBC — point.** Across 1000 simulated populations, per-parameter rank statistics uniform.
-- **SBC — soft observation.** Same SBC but with the soft-observation layer (per-event posteriors as input). Validates the cross-tier inference end-to-end.
-- **Identifiability stress test.** Generate data where $\lambda$ is high but $P_d$ is low (vs. the opposite). Quantitative target: posterior correlation $\operatorname{corr}(\lambda_0, Q_{50}) > 0.5$ when confounded; $< 0.2$ when well-separated. Confirms the model knows what it can't disentangle.
-- **Log-space integration test.** Compare log-space Gauss–Hermite to Pareto importance sampling for $\int \mathrm{Hill}(Q) \cdot \mathrm{LN\text{-}Pareto}(Q)\, \mathrm{d}Q$ across $\alpha \in [1.5, 4]$. Linear quadrature should fail loudly past $\alpha > 2$. Catches the silent thinned-rate underflow bug.
+- **Likelihood gradient.** `jax.grad` matches finite differences within tolerance. This is a cheap unit test.
+- **Synthetic recovery (Point regime).** This is already covered in `06_stationary_numpyro_mcmc` for the power-law mark.
+- **Synthetic recovery (Full regime with importance correction).** Generate per-event posteriors with a known $\pi_\text{per-event}$, fit population, recover $(\lambda^{*}, f^{*}, P_d^{*})$ within reported posterior. Mirrors the importance-correction round trip from [06a § Validation](#va-validation).
+- **SBC (point).** Across 1000 simulated populations, the per-parameter rank statistics should be uniform.
+- **SBC (soft observation).** This is the same SBC but with the soft-observation layer (per-event posteriors as input), and it validates the cross-tier inference end-to-end.
+- **Identifiability stress test.** Generate data where $\lambda$ is high but $P_d$ is low (vs. the opposite). Quantitative target: posterior correlation $\operatorname{corr}(\lambda_0, Q_{50}) > 0.5$ when confounded; $< 0.2$ when well-separated. This confirms the model knows what it can't disentangle.
+- **Log-space integration test.** Compare log-space Gauss-Hermite to Pareto importance sampling for $\int \mathrm{Hill}(Q) \cdot \mathrm{LN\text{-}Pareto}(Q)\, \mathrm{d}Q$ across $\alpha \in [1.5, 4]$. Linear quadrature should fail loudly past $\alpha > 2$. This catches the silent thinned-rate underflow bug.
 - **Hierarchical POD coverage.** With known controlled-release calibration injected as $(Q_{50,\text{pub}}, \sigma_{Q_{50},\text{pub}})$, the hierarchical POD prior should produce $Q_{50}$ posteriors that contain the true value at 95% CI ~95% of the time across simulated basins.
 
 ---
@@ -236,7 +236,7 @@ Both are v1.5 candidates. Pick by basin diagnostic: event-driven clustering (com
 :::
 
 :::{attention} Mark / temporal coupling
-TMTPP currently assumes marks are i.i.d. given the temporal process. Tier IV's $Q(t)$ stochastic process per source is the right object to lift here — a per-source $Q(t)$ becomes a per-source contribution to the spatial population intensity. Promote when Tier IV $Q(t)$ lands.
+TMTPP currently assumes marks are i.i.d. given the temporal process. Tier IV's $Q(t)$ stochastic process per source is the right object to lift here, a per-source $Q(t)$ becomes a per-source contribution to the spatial population intensity. Promote when Tier IV $Q(t)$ lands.
 :::
 
 :::{attention} Per-instrument POD prior depth
@@ -252,5 +252,5 @@ Currently informative prior from detection floor. Open: when basin data warrants
 :::
 
 :::{attention} Numerical integration choice
-Log-space Gauss–Hermite is the v1 default. Open: when does adaptive quadrature pay off (highly-variable $f$ shapes)?
+Log-space Gauss-Hermite is the v1 default. Open: when does adaptive quadrature pay off (highly-variable $f$ shapes)?
 :::

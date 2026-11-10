@@ -1,5 +1,5 @@
 ---
-title: "Plume vetting — a spectral test for matched-filter candidates"
+title: "Plume vetting: a spectral test for matched-filter candidates"
 ---
 
 # Plume vetting
@@ -8,9 +8,9 @@ title: "Plume vetting — a spectral test for matched-filter candidates"
 This page describes `plumax.vetting` ([#153](https://github.com/jejjohnson/plumax/issues/153)): [`select_seeds`](xref:api#plumax.vetting.select_seeds) and [`background_pool`](xref:api#plumax.vetting.background_pool) ([#154](https://github.com/jejjohnson/plumax/issues/154)), [`null_masks`](xref:api#plumax.vetting.null_masks) and [`null_pvalue`](xref:api#plumax.vetting.null_pvalue) ([#155](https://github.com/jejjohnson/plumax/issues/155)), [`vet_candidate`](xref:api#plumax.vetting.vet_candidate) and [`VettingResult`](xref:api#plumax.vetting.VettingResult) ([#156](https://github.com/jejjohnson/plumax/issues/156)). It runs radtrax's plume-agnostic [absorption-shape test](https://jejjohnson.github.io/radtrax/absorption-test/) (`radtrax.retrieval.absorption`) on plume candidates; the maths of that test (the pair ratio, the transmittance from the forward model, the profile fit and $D_{\text{norm}}$) is on radtrax's page and is not repeated here. The [plume vetting notebook](../notebooks/vetting/01_vetting_one_scene.ipynb) runs every function on one scene; the numbers below are that notebook's.
 :::
 
-A matched filter scores each pixel by one projection of its spectrum onto methane's target, so anything that removes light under methane's 2.3 μm band scores: carbonate and clay soils, salt pans, dark water, shadows, striping. A segmentation network on the matched-filter map learns plume shapes, which a plume-shaped confounder also has. **Plume vetting** (Xiang et al. [^xiang2024]; Růžička et al. [^ruzicka2026]) goes back to the radiances behind a candidate. It pairs the candidate's strongest pixels with pixels outside it that have the same surface, divides them, and asks whether the ratio has the shape of methane's transmittance. EMIT's daily methane digest alerts without review when the misfit score $D_{\text{norm}}$ is below 0.3.
+A matched filter scores each pixel by one projection of its spectrum onto methane's target, so anything that removes light under methane's 2.3 μm band scores: carbonate and clay soils, salt pans, dark water, shadows, striping. A segmentation network on the matched-filter map learns plume shapes, which a plume-shaped confounder also has. *Plume vetting* (Xiang et al. [^xiang2024]; Růžička et al. [^ruzicka2026]) goes back to the radiances behind a candidate. It pairs the candidate's strongest pixels with pixels outside it that have the same surface, divides them, and asks whether the ratio has the shape of methane's transmittance. EMIT's daily methane digest alerts without review when the misfit score $D_{\text{norm}}$ is below 0.3.
 
-The work splits along a package boundary, "radiative transfer does not know about plumes". **radtrax** answers a question about spectra: given two sets of pixels, how similar is the ratio of their paired mean radiances to a gas's transmittance? It returns the fitted column $\widehat{\Delta X}$ and $D_{\text{norm}}$, and knows nothing of candidates. **plumax** answers the questions about plume objects: which of a candidate's pixels are in (the seeds) and which are out (the background pool), how this scene's clutter scores in the candidate's shape (the null), and what to decide.
+The work splits along a package boundary, "radiative transfer does not know about plumes". radtrax answers a question about spectra: given two sets of pixels, how similar is the ratio of their paired mean radiances to a gas's transmittance? It returns the fitted column $\widehat{\Delta X}$ and $D_{\text{norm}}$, and knows nothing of candidates. plumax answers the questions about plume objects: which of a candidate's pixels are in (the seeds) and which are out (the background pool), how this scene's clutter scores in the candidate's shape (the null), and what to decide.
 
 Vetting is a second test on the same data, not an independent one: its pixels are chosen by the matched filter and come from the same cube. It is more selective because it tests the shape of the absorption across a window of bands, where the matched filter tests one projection.
 
@@ -94,7 +94,7 @@ $\widehat{\Delta X}$ is the column of the *mean* transmittance over the pairs, n
 
 ## 5. One scene
 
-The [notebook](../notebooks/vetting/01_vetting_one_scene.ipynb) builds a 64 × 64 EMIT-like scene: 30 bands outside methane's band, 9 inside it (2296–2356 nm), three surface classes, noise at SNR 300. Candidate A is a methane plume; candidate B is a plume-shaped patch of a surface whose reflectance dips by 6 % at 2335 nm, as a carbonate's does.
+The [notebook](../notebooks/vetting/01_vetting_one_scene.ipynb) builds a 64 × 64 EMIT-like scene: 30 bands outside methane's band, 9 inside it (2296-2356 nm), three surface classes, noise at SNR 300. Candidate A is a methane plume; candidate B is a plume-shaped patch of a surface whose reflectance dips by 6 % at 2335 nm, as a carbonate's does.
 
 | | Matched filter, mean | $\widehat{\Delta X}$ | $D_{\text{norm}}$ | $\hat p$ |
 |---|---|---|---|---|

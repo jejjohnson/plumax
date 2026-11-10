@@ -66,12 +66,12 @@
 
     <div class="row cut">
       <div class="row-label"><div class="verb">segment</div><div class="pkg">plumax[geo]</div><div class="q">where is it?</div></div>
-      <div class="node proposed c2" id="mask"><span class="step">2</span>
-        <div class="name"><code>PlumeMask</code><span class="tag proposed">proposed</span></div>
-        <div class="desc">threshold + connectivity to the source</div>
+      <div class="node c2" id="mask"><span class="step">2</span>
+        <div class="name"><code>PlumeMask</code><span class="tag today">today</span></div>
+        <div class="desc">threshold + connected components</div>
         <div class="chips"><span class="chip"><span class="t">mask</span><span class="s">(H, W) bool</span></span></div>
       </div>
-      <div class="node proposed c3" id="shape">
+      <div class="node c3" id="shape">
         <div class="name"><code>PlumeContours</code> · <code>PlumeFootprint</code></div>
         <div class="desc">outline, length, shape filters, wind cone</div>
         <div class="chips"><span class="chip"><span class="t">L</span><span class="s">() m</span></span></div>
@@ -80,8 +80,8 @@
 
     <div class="row compute">
       <div class="row-label"><div class="verb">quantify</div><div class="pkg">plumax</div><div class="q">how much?</div></div>
-      <div class="node proposed c2" id="ime"><span class="step">3</span>
-        <div class="name"><code>IMEEstimate</code> · <code>CrossSectionalFlux</code><span class="tag proposed">proposed</span></div>
+      <div class="node c2" id="ime"><span class="step">3</span>
+        <div class="name"><code>IMEEstimate</code> · <code>CrossSectionalFlux</code><span class="tag today">today</span></div>
         <div class="desc">image-based rate from mask, column and wind</div>
         <div class="chips"><span class="chip"><span class="t">Q</span><span class="s">() kg s⁻¹</span></span></div>
       </div>
@@ -123,10 +123,10 @@
         <div class="desc">event rate, detection probability, size distribution</div>
         <div class="chips"><span class="chip"><span class="t">λ</span><span class="s">Gamma(α, β)</span></span></div>
       </div>
-      <div class="node proposed c4" id="persistency">
-        <div class="name">persistency metrics<span class="tag proposed">proposed</span></div>
-        <div class="desc">TMTPP likelihood · total emission</div>
-        <div class="chips"><span class="chip"><span class="t">#75</span><span class="s">Tier V epic</span></span></div>
+      <div class="node c4" id="persistency">
+        <div class="name"><code>population.persistency</code> · <code>total_emission</code><span class="tag today">today</span></div>
+        <div class="desc">wait time, occurrence probability · total emission</div>
+        <div class="chips"><span class="chip"><span class="t">𝔼[Δt] · P(N ≥ 1)</span><span class="s">posterior quantiles</span></span></div>
       </div>
     </div>
   </div>
@@ -141,8 +141,7 @@
 
   <div class="legend">
     <span><i></i> data flow</span>
-    <span><i class="dash"></i> planned</span>
-    <span>solid card: ships today · dashed card: moving in from geotoolz (#482) or designed (plumax #75) · every tier's posterior becomes a catalogue event</span>
+    <span>every card ships today · every tier's posterior becomes a catalogue event</span>
   </div>
 </div>
 <script src="_connect.js"></script>

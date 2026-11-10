@@ -1,10 +1,10 @@
 ---
-title: "Eulerian 3-D dispersion (L2) — derivation and numerical scheme"
+title: "Eulerian 3-D dispersion (L2): derivation and numerical scheme"
 ---
 
 # Eulerian 3-D dispersion: derivation and finite-volume discretisation
 
-This note derives the equations solved by `plumax.les_fvm` and explains how the terms map onto the `finitevolX` Arakawa C-grid operators. The L2 model sits between the analytic Gaussian puff (L1, `plumax.gauss_puff`) and a full resolved-flow LES (L3, future port): it evolves a passive methane tracer on a 3-D Cartesian grid under a **prescribed** wind field with a **K-theory** (gradient-diffusion) closure. No turbulence is resolved; the model pays for full 3-D transport with spatially-varying wind and physically realistic boundaries (ground, inlet, outlet) that the Gaussian puff cannot represent.
+This note derives the equations solved by `plumax.les_fvm` and explains how the terms map onto the `finitevolX` Arakawa C-grid operators. The L2 model sits between the analytic Gaussian puff (L1, `plumax.gauss_puff`) and a full resolved-flow LES (L3, future port): it evolves a passive methane tracer on a 3-D Cartesian grid under a prescribed wind field with a K-theory (gradient-diffusion) closure. No turbulence is resolved, but we get full 3-D transport with spatially varying wind and physically realistic boundaries (ground, inlet, outlet) that the Gaussian puff cannot represent.
 
 ## 1. Governing equation
 
@@ -14,12 +14,12 @@ $$
 \frac{\partial C}{\partial t} + \nabla \cdot (\vec u\, C) \;=\; \nabla \cdot (\mathbf K\, \nabla C) + S(\vec x, t),
 $$ (eq-fvm-ad)
 
-with prescribed 3-D wind $\vec u(\vec x, t) = (u, v, w)$, diagonal eddy diffusivity $\mathbf K = \operatorname{diag}(K_h, K_h, K_z)$ (horizontally isotropic), and source $S$. Equation {eq}`eq-fvm-ad` is Stockie equation (2.2) [^stockie2011] without the A3 / A4 / A5 simplifications of the Gaussian plume — we keep every transport term and impose physically meaningful boundaries instead.
+with prescribed 3-D wind $\vec u(\vec x, t) = (u, v, w)$, diagonal eddy diffusivity $\mathbf K = \operatorname{diag}(K_h, K_h, K_z)$ (horizontally isotropic), and source $S$. Equation {eq}`eq-fvm-ad` is Stockie equation (2.2) [^stockie2011] without the A3 / A4 / A5 simplifications of the Gaussian plume, so we keep every transport term and impose physically meaningful boundaries instead.
 
 ## 2. Closure assumptions
 
-- **(E1) Prescribed flow.** $\vec u(\vec x, t)$ is an external input (no momentum equation solved). The wind need not be divergence-free — incompressibility is *not* enforced, since the model treats $\vec u$ as a kinematic input; breaking $\nabla \cdot \vec u = 0$ only affects the tracer continuity slightly and is typically $< 10\%$ for realistic atmospheric inputs.
-- **(E2) K-theory.** Turbulent fluxes are modelled by the gradient closure $\overline{u'C'} = -\mathbf K \nabla C$, with $\mathbf K$ specified directly (as a scalar, anisotropic pair $(K_h, K_z)$, or field) or derived from Pasquill-Gifford σ curves via the Taylor identity $K = \sigma^2 / (2t)$ — see `les_fvm.diffusion.pg_eddy_diffusivity`.
+- **(E1) Prescribed flow.** $\vec u(\vec x, t)$ is an external input (no momentum equation solved). The wind need not be divergence-free, as incompressibility is *not* enforced and the model treats $\vec u$ as a kinematic input; breaking $\nabla \cdot \vec u = 0$ only affects the tracer continuity slightly and is typically $< 10\%$ for realistic atmospheric inputs.
+- **(E2) K-theory.** Turbulent fluxes are modelled by the gradient closure $\overline{u'C'} = -\mathbf K \nabla C$, with $\mathbf K$ specified directly (as a scalar, anisotropic pair $(K_h, K_z)$, or field) or derived from Pasquill-Gifford σ curves via the Taylor identity $K = \sigma^2 / (2t)$ (see `les_fvm.diffusion.pg_eddy_diffusivity`).
 - **(E3) Boundary conditions.** Unlike the Gaussian puff (unbounded, ground reflection by method of images), L2 lives in a bounded box with user-chosen BCs per face. The defaults are ``Dirichlet-clean`` on the inlet, ``outflow`` on the downstream face, ``periodic`` laterally, and ``Neumann`` (no flux) on the ground and top.
 - **(E4) Passive scalar.** No buoyancy, decay, or chemistry; $S$ is a Gaussian-regularised point source with user-specified constant or time-varying emission rate.
 
@@ -29,11 +29,11 @@ with prescribed 3-D wind $\vec u(\vec x, t) = (u, v, w)$, diagonal eddy diffusiv
 
 Fields live on a Cartesian 3-D Arakawa C-grid (`finitevolx.CartesianGrid3D`). The horizontal stagger is classical:
 
-- $C, w, K$ at **T-points** (cell centres);
-- $u$ at **U-points** (east faces);
-- $v$ at **V-points** (north faces).
+- $C, w, K$ at T-points (cell centres);
+- $u$ at U-points (east faces);
+- $v$ at V-points (north faces).
 
-The vertical is collocated at T-points — finitevolX's 3-D operators treat $z$ as a batch axis, so there is no vertical staggering inside a field array. Arrays have shape ``[Nz, Ny, Nx]`` with one ghost cell per axis for boundary conditions; the interior spans `[1:-1, 1:-1, 1:-1]`.
+The vertical is collocated at T-points, as finitevolX's 3-D operators treat $z$ as a batch axis and so there is no vertical staggering inside a field array. Arrays have shape ``[Nz, Ny, Nx]`` with one ghost cell per axis for boundary conditions; the interior spans `[1:-1, 1:-1, 1:-1]`.
 
 ### 3.2 Advection term
 
@@ -43,7 +43,7 @@ $$
 \nabla \cdot (\vec u C) \;=\; \partial_x(u C) + \partial_y(v C) + \partial_z(w C).
 $$
 
-The horizontal part — **two terms per z-level**, always acting in the (y, x) plane — is delegated to `finitevolx.Advection3D`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is built by `les_fvm._vertical_ops.vertical_advection_tendency` as a first-order upwind flux at k-faces:
+The horizontal part (two terms per z-level, always acting in the (y, x) plane) is delegated to `finitevolx.Advection3D`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is built by `les_fvm._vertical_ops.vertical_advection_tendency` as a first-order upwind flux at k-faces:
 
 $$
 \widehat{F}_{k+1/2} \;=\; \begin{cases} w_{k+1/2}\, C_k, & w_{k+1/2} > 0, \\ w_{k+1/2}\, C_{k+1}, & w_{k+1/2} \leq 0, \end{cases}
@@ -75,14 +75,14 @@ $$
 S(\vec x, t) = q(t) \cdot \rho_s(\vec x), \qquad \rho_s(\vec x) = \frac{1}{Z}\exp\!\left(-\frac{|\vec x - \vec x_s|^2}{2 r_s^2}\right),
 $$
 
-with $Z$ chosen so that $\int \rho_s\, \mathrm d V = 1$ over the interior (discrete cell-sum $\times \Delta x \Delta y \Delta z$). The default radius is $r_s = 2 \max(\Delta x, \Delta y, \Delta z)$ — wide enough to avoid single-cell aliasing on coarse grids. A time-varying rate $q(t)$ is supplied as a JAX-compatible callable; a scalar rate is treated as a closure that discards $t$. See `les_fvm.source.make_gaussian_source`.
+with $Z$ chosen so that $\int \rho_s\, \mathrm d V = 1$ over the interior (discrete cell-sum $\times \Delta x \Delta y \Delta z$). The default radius is $r_s = 2 \max(\Delta x, \Delta y, \Delta z)$, which is wide enough to avoid single-cell aliasing on coarse grids. A time-varying rate $q(t)$ is supplied as a JAX-compatible callable; a scalar rate is treated as a closure that discards $t$. See `les_fvm.source.make_gaussian_source`.
 
 ## 4. Boundary conditions
 
 finitevolX ships 2-D BC atoms (`Dirichlet1D`, `Neumann1D`, `Outflow1D`, `Periodic1D`, ...) that update a ghost ring on a `[Ny, Nx]` field. Applying them to a 3-D field needs two composable helpers that live in `les_fvm.boundary`:
 
-1. `HorizontalBC` — wraps a `finitevolx.BoundaryConditionSet` and vectorises it with `eqx.filter_vmap` over the z-axis, so every z-slice receives the same per-face BC update.
-2. `VerticalBC` — directly updates the `[0, :, :]` and `[-1, :, :]` ghost slices with `{Dirichlet, Neumann, Outflow, Periodic}` flavours.
+1. `HorizontalBC`: wraps a `finitevolx.BoundaryConditionSet` and vectorises it with `eqx.filter_vmap` over the z-axis, so every z-slice receives the same per-face BC update.
+2. `VerticalBC`: directly updates the `[0, :, :]` and `[-1, :, :]` ghost slices with `{Dirichlet, Neumann, Outflow, Periodic}` flavours.
 
 The default concentration BCs are:
 
@@ -94,7 +94,7 @@ These are all overridable at the `simulate_eulerian_dispersion` call site.
 
 ## 5. Time integration
 
-The tendency is assembled in `les_fvm.dynamics.EulerianDispersionRHS` and wrapped in a `diffrax.ODETerm`. The default solver is `diffrax.Tsit5` (adaptive 5th-order Runge-Kutta) with PID step control; fixed-step alternatives (`diffrax.Heun`, `finitevolx.RK3SSP`) are available for benchmarking. Because the RHS is pure, monolithically JIT-compiled, and operates entirely on JAX arrays, the entire simulation — grid construction, wind evaluation, advection-diffusion tendencies, BC application, and source injection — runs inside a single compiled graph.
+The tendency is assembled in `les_fvm.dynamics.EulerianDispersionRHS` and wrapped in a `diffrax.ODETerm`. The default solver is `diffrax.Tsit5` (adaptive 5th-order Runge-Kutta) with PID step control; fixed-step alternatives (`diffrax.Heun`, `finitevolx.RK3SSP`) are available for benchmarking. Because the RHS is pure, monolithically JIT-compiled, and operates entirely on JAX arrays, the entire simulation (grid construction, wind evaluation, advection-diffusion tendencies, BC application and source injection) runs inside a single compiled graph.
 
 ## 6. CFL and stability
 

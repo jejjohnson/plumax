@@ -1,4 +1,4 @@
-# Part I — The real problem and the real data
+# Part I: The real problem and the real data
 
 Before any mathematics: what is physically out there, what the instruments return, and the one running example carried through every later page.
 
@@ -12,9 +12,9 @@ flowchart LR
 
 | Phase | Question | What is random |
 |---|---|---|
-| **A — Discovery** | Where are the sources we don't yet know about? | **Locations** |
-| **B — Monitoring** | For sources we know, when are they emitting? | **State over time** |
-| **C — Estimation** | How much does each emit, and what is the total? | **Rates and their sum** |
+| **A: Discovery** | Where are the sources we don't yet know about? | **Locations** |
+| **B: Monitoring** | For sources we know, when are they emitting? | **State over time** |
+| **C: Estimation** | How much does each emit, and what is the total? | **Rates and their sum** |
 
 The three phases need different mathematical objects because a different thing is uncertain in each. [Part II](02_inventory_objects.md) builds those objects; [Part III](03_inventory_phases.md) maps them back onto the phases.
 
@@ -25,10 +25,10 @@ Methane sources in an oil-and-gas basin come in two physical kinds, and the dist
 
 ::::{grid} 1 1 2 2
 :::{card} Point sources
-A single failed valve, an unlit flare, a tank vent. Spatial extent of metres; a compact, high-contrast plume. Rates from tens of $\mathrm{kg\,h^{-1}}$ to several $\mathrm{t\,h^{-1}}$. Often **intermittent**: on for hours, off for days.
+A single failed valve, an unlit flare, a tank vent. Spatial extent of metres; a compact, high-contrast plume. Rates from tens of $\mathrm{kg\,h^{-1}}$ to several $\mathrm{t\,h^{-1}}$. Often intermittent: on for hours, off for days.
 :::
 :::{card} Area (diffuse) sources
-Thousands of small leaks across an old field, a landfill face, a wetland. Extent of kilometres; a broad, low-contrast enhancement. Individually tiny, collectively large. Usually **persistent**.
+Thousands of small leaks across an old field, a landfill face, a wetland. Extent of kilometres; a broad, low-contrast enhancement. Individually tiny, collectively large. Usually persistent.
 :::
 ::::
 
@@ -44,9 +44,9 @@ Every instrument is characterised by four numbers.[^specs]
 
 | Quantity | Symbol | Coarse mapper | Fine imager | Units |
 |---|:---:|:---:|:---:|---|
-| pixel size | $\Delta x$ | $\approx 5$–$7$ | $\approx 0.03$ | km |
+| pixel size | $\Delta x$ | $\approx 5$-$7$ | $\approx 0.03$ | km |
 | revisit | $\Delta t$ | $\approx 1$ | $\approx 5$ (or tasked) | d |
-| per-source detection limit | $s_{\min}$ | $\approx$ several $\times 10^3$ | $\approx 10^2$–$10^3$ | $\mathrm{kg\,h^{-1}}$ |
+| per-source detection limit | $s_{\min}$ | $\approx$ several $\times 10^3$ | $\approx 10^2$-$10^3$ | $\mathrm{kg\,h^{-1}}$ |
 | per-pixel precision | $\sigma_r$ | $\approx 10$ | $\approx 100+$ | ppb |
 
 Consequences:
@@ -69,14 +69,14 @@ Resolves individual point plumes but revisits rarely, so it **samples** an inter
 |---|---|---|
 | L2 $\mathrm{XCH_4}$ | column-mean mole fraction per pixel | ppb |
 | enhancement $f(x)$ | $\mathrm{XCH_4}$ minus local background | ppb |
-| plume mask | pixels flagged as plume | — |
+| plume mask | pixels flagged as plume | - |
 | rate estimate | per-plume flux from mask + wind (e.g. IME method) | $\mathrm{kg\,h^{-1}}$ |
 | wind $\mathbf{U}$ | 10 m wind vector from reanalysis | $\mathrm{m\,s^{-1}}$ |
 | bottom-up inventory | gridded prior emission density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
 | infrastructure database | candidate site coordinates $c_j$ (pads, compressors) | km, km |
 
 :::{note} The infrastructure database changes the maths
-It turns some of Phase A's "unknown locations" into "known candidate locations with unknown state". That is a different mathematical object ([§II.4.4](#ii-4-4 "Beta process — persistence prior")).
+It turns some of Phase A's "unknown locations" into "known candidate locations with unknown state". That is a different mathematical object ([§II.4.4](#ii-4-4 "Beta process: persistence prior")).
 :::
 
 (i-5)=
@@ -155,45 +155,45 @@ Fixed for the whole section.
 :class: dropdown
 | Symbol | Meaning | Units |
 |---|---|---|
-| $S$ | spatial domain | — |
+| $S$ | spatial domain | - |
 | $x \in S$ | location (easting, northing) | km, km |
 | $T = [0, T_{\mathrm{end}}]$ | time window | d |
 | $t \in T$ | a time | d |
-| $X$ | generic index set: $S$, $T$, or $S \times T$ | — |
-| $A \subset X$ | a region or interval | — |
+| $X$ | generic index set: $S$, $T$, or $S \times T$ | - |
+| $A \subset X$ | a region or interval | - |
 | $\lvert A \rvert$ | area (or length) of $A$ | $\mathrm{km^2}$ (d) |
-| $\delta_x$ | point mass at $x$ | — |
-| $N(A)$ | number of point sources in $A$ | — |
-| $\lambda(A)$, $\lambda(x)$ | expected count in $A$; source density | —, $\mathrm{km^{-2}}$ |
+| $\delta_x$ | point mass at $x$ | - |
+| $N(A)$ | number of point sources in $A$ | - |
+| $\lambda(A)$, $\lambda(x)$ | expected count in $A$; source density | -, $\mathrm{km^{-2}}$ |
 | $\lambda(t)$ | event rate | $\mathrm{d^{-1}}$ |
 | $s_k$ | on-state rate of point source $k$ | $\mathrm{kg\,h^{-1}}$ |
 | $s_0$ | reference rate, $1\ \mathrm{kg\,h^{-1}}$ | $\mathrm{kg\,h^{-1}}$ |
-| $\pi_k$ | persistence (fraction of time on) of source $k$ | — |
-| $G(\mathrm{d}\pi \mid u)$ | distribution of persistence given on-state rate | — |
-| $p_{\mathrm{camp}}$ | probability a source is detected at least once over a campaign | — |
-| $\lambda_{\ge}$, $R$ | count intensity of sources above the floor $u_{\mathrm{floor}}$; $R = \rho([u_{\mathrm{floor}},\infty))$ | $\mathrm{km^{-2}}$, — |
+| $\pi_k$ | persistence (fraction of time on) of source $k$ | - |
+| $G(\mathrm{d}\pi \mid u)$ | distribution of persistence given on-state rate | - |
+| $p_{\mathrm{camp}}$ | probability a source is detected at least once over a campaign | - |
+| $\lambda_{\ge}$, $R$ | count intensity of sources above the floor $u_{\mathrm{floor}}$; $R = \rho([u_{\mathrm{floor}},\infty))$ | $\mathrm{km^{-2}}$, - |
 | $e(x)$ | diffuse flux density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
 | $\mu(A)$ | total emission rate from $A$ (point + diffuse) | $\mathrm{kg\,h^{-1}}$ |
 | $\mu_{\mathrm{pt}}$, $\mu_{\mathrm{df}}$ | atomic and diffuse parts of $\mu$ | $\mathrm{kg\,h^{-1}}$ |
 | $H(A)$ | prior expected emission from $A$ | $\mathrm{kg\,h^{-1}}$ |
-| $u_k$ | dimensionless rate $s_k/s_0$ | — |
-| $\rho(\mathrm{d}u)$ | Lévy measure over dimensionless rates $u$ | — |
-| $G(A)$ | fraction of basin total from $A$ | — |
+| $u_k$ | dimensionless rate $s_k/s_0$ | - |
+| $\rho(\mathrm{d}u)$ | Lévy measure over dimensionless rates $u$ | - |
+| $G(A)$ | fraction of basin total from $A$ | - |
 | $f(x)$ | $\mathrm{XCH_4}$ enhancement | ppb |
 | $m(x)$, $k(x,x')$ | mean, covariance kernel of a field | ppb, $\mathrm{ppb^2}$ |
-| $g(x)$ | log source density, $\log\lambda(x)$ | — |
+| $g(x)$ | log source density, $\log\lambda(x)$ | - |
 | $\Delta x$, $\Delta t$ | pixel size, revisit interval | km, d |
-| $C_\Delta$ | coarsening operator: $\mu \mapsto$ pixel totals | — |
+| $C_\Delta$ | coarsening operator: $\mu \mapsto$ pixel totals | - |
 | $\mathcal{T}$ | atmospheric transport operator: $\mu \mapsto f$ | ppb per $\mathrm{kg\,h^{-1}}$ |
 | $\mathbf{U}$, $U$ | 10 m wind vector (east, north); its speed $U = \lVert\mathbf{U}\rVert$ | $\mathrm{m\,s^{-1}}$ |
-| $p(x,s)$ | detection probability | — |
+| $p(x,s)$ | detection probability | - |
 | $s_{\min}$ | detection limit | $\mathrm{kg\,h^{-1}}$ |
-| $c_j$, $Z_j$ | candidate site $j$; its emitting indicator | km km, — |
+| $c_j$, $Z_j$ | candidate site $j$; its emitting indicator | km km, - |
 | $m_k$, $M(t)$ | event mass; cumulative mass by $t$ | kg |
-| $\lambda^*(t)$, $\mathcal{H}_t$ | conditional intensity; history before $t$ | $\mathrm{d^{-1}}$, — |
+| $\lambda^*(t)$, $\mathcal{H}_t$ | conditional intensity; history before $t$ | $\mathrm{d^{-1}}$, - |
 :::
 
 :::{note} Two conventions
 - Inside $\rho(\mathrm{d}u)$ and Gamma shape parameters, rates are **dimensionless**: $u = s/s_0$, and physical totals carry the factor $s_0$ back.
-- Wind enters space–time kernels as the velocity vector $\mathbf{v} = 86.4\,\mathbf{U}$, converting $\mathrm{m\,s^{-1}}$ to $\mathrm{km\,d^{-1}}$.
+- Wind enters space-time kernels as the velocity vector $\mathbf{v} = 86.4\,\mathbf{U}$, converting $\mathrm{m\,s^{-1}}$ to $\mathrm{km\,d^{-1}}$.
 :::

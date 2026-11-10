@@ -4,7 +4,7 @@
 # + mkdocstrings and mounted at `/reference/`. See `docs/README.md`.
 #
 # `references.api` points at a LOCAL server because mystmd only loads
-# intersphinx inventories over http(s) — a filesystem path is rejected and a
+# intersphinx inventories over http(s); a filesystem path is rejected and a
 # `file://` URL is silently ignored. `scripts/build_docs.py` serves the freshly
 # built MkDocs `site/` on this exact port, then rewrites the resulting
 # localhost URLs to the deployed `/reference/` path. Keep the port in sync

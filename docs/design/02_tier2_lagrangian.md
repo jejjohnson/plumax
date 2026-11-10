@@ -1,10 +1,8 @@
-# Tier II — Lagrangian particle transport
+# Tier II: Lagrangian particle transport
 
-**Forward model:** stochastic particle trajectories driven by wind + turbulence. The bridge between the analytical Tier I (no real wind variability) and the full PDE Tier III (no statistical efficiency). This is what FLEXPART ([stohl2005flexpart]) and STILT do operationally — see also HYSPLIT ([stein2015hysplit]).
+**Forward model:** stochastic particle trajectories driven by wind + turbulence. It is the bridge between the analytical Tier I (no real wind variability) and the full PDE Tier III (no statistical efficiency), and it is what FLEXPART ([stohl2005flexpart]) and STILT do operationally (see also HYSPLIT, [stein2015hysplit]).
 
-**Status:** the forward model (Step 1) is implemented in
-[`plumax.lagrangian`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/lagrangian);
-the inference, emulator and predictor steps (2–5) are proposed below.
+**Status:** the forward model (Step 1) is implemented in [`plumax.lagrangian`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/lagrangian); Step 2 (inference), Steps 3-4 (footprint emulator and emulator-based inversion) and the met-ensemble runner are implemented too, and only the Step 5 predictor is still proposed below.
 
 ---
 
@@ -12,9 +10,9 @@ the inference, emulator and predictor steps (2–5) are proposed below.
 ## (1) Simple model
 
 (tier2-langevin)=
-### Stochastic dynamics — Markov-1 Langevin
+### Stochastic dynamics: Markov-1 Langevin
 
-Operational LPDMs (FLEXPART, STILT, HYSPLIT) use **Markov-1**: a Langevin equation on particle *velocity*, then position from velocity. We commit to Markov-1 because it's required for near-source super-emitter work and for non-stationary turbulence:
+Operational LPDMs (FLEXPART, STILT, HYSPLIT) use Markov-1: a Langevin equation on particle *velocity*, then position from velocity. We commit to Markov-1 because it's required for near-source super-emitter work and for non-stationary turbulence:
 
 $$
 \begin{aligned}
@@ -23,33 +21,33 @@ $$
 \end{aligned}
 $$
 
-- $\mathbf{u}(\mathbf{x},t)$ — mean wind from the [met field](#prereqs-met) (WRF / ERA5 / HRRR).
-- $\mathbf{v}$ — turbulent velocity perturbation, the actual stochastic state.
-- $\mathbf{a}, \mathbf{b}$ — drift and diffusion coefficients constructed from the Reynolds-stress tensor $\sigma_{ij}(\mathbf{x},t)$ and Lagrangian timescale $\tau_L(\mathbf{x},t)$. Reference: [thomson1987], [wilson1996] (well-mixed condition).
-- $\sigma_{ij}, \tau_L$ come from MO similarity ([monin1954]) parameterised by $(u_*, L_\text{Obukhov}, z_0)$ plus WRF TKE — see [MO prereqs](#prereqs-mo-similarity).
+- $\mathbf{u}(\mathbf{x},t)$: mean wind from the [met field](#prereqs-met) (WRF / ERA5 / HRRR).
+- $\mathbf{v}$: turbulent velocity perturbation, the actual stochastic state.
+- $\mathbf{a}, \mathbf{b}$: drift and diffusion coefficients constructed from the Reynolds-stress tensor $\sigma_{ij}(\mathbf{x},t)$ and Lagrangian timescale $\tau_L(\mathbf{x},t)$. Reference: [thomson1987], [wilson1996] (well-mixed condition).
+- $\sigma_{ij}, \tau_L$ come from MO similarity ([monin1954]) parameterised by $(u_*, L_\text{Obukhov}, z_0)$ plus WRF TKE; see [MO prereqs](#prereqs-mo-similarity).
 
 :::{important} Markov-0 is not the model
-Markov-0 (random-displacement on position only) is **not** the model; it shows up as the well-mixed limit at long $\Delta t$. Don't bake Markov-0 into the API as a "fast option" — implement the well-mixed limit explicitly when needed.
+Markov-0 (random-displacement on position only) is not the model; it shows up as the well-mixed limit at long $\Delta t$. Don't bake Markov-0 into the API as a "fast option"; implement the well-mixed limit explicitly when needed.
 :::
 
 ### Sub-grid wind interpolation
 
-WRF velocities are gridded at hourly snapshots; particles are continuous in space and time. Naïve bilinear interpolation of $\mathbf{u}$ is **not divergence-free**, which causes mass-conservation drift over long integrations. Use a **C-grid-aware interpolator** that reconstructs $\mathbf{u}$ consistently with the WRF staggered grid (operational STILT pattern). Document the chosen scheme on the integrator API; assume divergence preservation is load-bearing.
+WRF velocities are gridded at hourly snapshots; particles are continuous in space and time. Naïve bilinear interpolation of $\mathbf{u}$ is not divergence-free, which causes mass-conservation drift over long integrations, so we use a C-grid-aware interpolator that reconstructs $\mathbf{u}$ consistently with the WRF staggered grid (operational STILT pattern). We document the chosen scheme on the integrator API and treat divergence preservation as load-bearing.
 
 ### Time-stepping
 
-Default to **Euler–Maruyama** with adaptive step bounded by
+Default to Euler-Maruyama with adaptive step bounded by
 
 $$
 \Delta t \;<\; \min\!\left(\tau_L,\; \frac{\Delta x}{|\mathbf{u}|},\; \frac{\Delta x^{2}}{\sigma^{2}}\right).
 $$
 
-Higher-order Milstein only if convergence diagnostics flag bias. $\Delta t$ is an open parameter — see [open questions](#tier2-open-questions) for the operational target.
+Higher-order Milstein only if convergence diagnostics flag bias. $\Delta t$ is an open parameter; see [open questions](#tier2-open-questions) for the operational target.
 
 ### Run modes
 
 - **Forward mode:** release $N$ particles from the source, track concentration by binning particle density on the analysis grid.
-- **Backward mode (footprint):** release receptors backward in time → **source–receptor sensitivity matrix** $\mathbf{F}$. The FLEXPART/STILT paradigm and the workhorse of regional-scale inversions ([stohl2005flexpart]).
+- **Backward mode (footprint):** release receptors backward in time to get the source-receptor sensitivity matrix $\mathbf{F}$, which is the FLEXPART/STILT paradigm and the workhorse of regional-scale inversions ([stohl2005flexpart]).
 
 (tier2-footprint)=
 ### Footprint definition (formal)
@@ -60,7 +58,7 @@ $$
 F(r, s) \;=\; \int_{t_\text{obs} - T}^{t_\text{obs}} \frac{1}{V_s\, \rho_\text{air}(s,t)} \;\mathbb{1}\!\left[\, z_\text{part}(t) < f_\text{PBL}\, L(s, t)\, \right]\, \mathrm{d}t
 $$
 
-— integrated over particle residence time below a fraction $f_\text{PBL} \approx 0.5$ of the local PBL height $L(s,t)$. Units: $\text{s} \cdot \text{m}^{2} \cdot \text{kg}^{-1}$ (mixing-ratio per kg/m²/s of surface flux). The footprint is a **probability density** over candidate source cells, not an indicator: properly normalised by particle volume and air density. Numerical scaling matters because the values are tiny — work in log-space when storing.
+It is integrated over particle residence time below a fraction $f_\text{PBL} \approx 0.5$ of the local PBL height $L(s,t)$. Units: $\text{s} \cdot \text{m}^{2} \cdot \text{kg}^{-1}$ (mixing-ratio per kg/m²/s of surface flux). The footprint is a probability density over candidate source cells, properly normalised by particle volume and air density, and so is not an indicator. Numerical scaling matters because the values are tiny, so we work in log-space when storing.
 
 For an overpass with $n_\text{obs}$ columns and $n_\text{grid}$ candidate source cells, $\mathbf{F}$ is shape $(n_\text{obs}, n_\text{grid})$ and typically 90%+ sparse.
 
@@ -71,7 +69,7 @@ For an overpass with $n_\text{obs}$ columns and $n_\text{grid}$ candidate source
 
 ### Forward model with observation operator
 
-The full forward used by inference is **not** $\mathbf{y} = \mathbf{F}\mathbf{q} + \boldsymbol{\varepsilon}$. It's:
+The full forward used by inference is not $\mathbf{y} = \mathbf{F}\mathbf{q} + \boldsymbol{\varepsilon}$. It's:
 
 $$
 \mathbf{y} \;=\; \mathbf{A}\, \mathrm{col}_z(\mathbf{F}\mathbf{q}) \;+\; \mathbf{c}_\text{bg} \;+\; \boldsymbol{\varepsilon}
@@ -80,7 +78,7 @@ $$
 - $\mathbf{F}\mathbf{q}$ gives a 3D concentration field from the source vector.
 - $\mathrm{col}_z$ collapses to an XCH₄ column.
 - $\mathbf{A}$ applies the satellite [averaging kernel](#prereqs-ak-operator); see (eq-ak-operator).
-- $\mathbf{c}_\text{bg}$ is the regional background — mandatory, not optional. Same critique as Tier I: predicted enhancement vs. absolute-column observation must be reconciled day-1.
+- $\mathbf{c}_\text{bg}$ is the regional background, and it is mandatory. As in Tier I, the predicted enhancement and the absolute-column observation must be reconciled on day 1.
 
 The column and averaging kernel are the Tier I [`ColumnObservation`](xref:api#plumax.gauss_plume.observation.ColumnObservation), applied to the forward concentration on its `(z, y, x)` grid. With `c` in kg m⁻³ and `h_k = Δz` it returns the column-mass enhancement in kg m⁻², the unit `plumax.obs` converts L2 products to:
 
@@ -90,14 +88,32 @@ import jax.numpy as jnp
 from plumax.gauss_plume import ColumnObservation
 from plumax.lagrangian import simulate_lagrangian
 
-ds = simulate_lagrangian(...)  # concentration on (x, y, z) [kg m⁻³]
-concentration = jnp.asarray(ds["concentration"].transpose("z", "y", "x").values)
-dz = float(ds["z"][1] - ds["z"][0])
+# Shapes: N_x, N_y analysis-grid cells; N_z levels; N_Ωy = 2 receptors
+
+# today* (plumax)
+# c(x, y, z) [kg m⁻³]
+dataset = simulate_lagrangian(...)  # → Dataset (N_x, N_y, N_z)
+
+# reorder to the (z, y, x) grid of the column operator
+field = dataset["concentration"].transpose("z", "y", "x")  # → (N_z, N_y, N_x)
+concentration = jnp.asarray(field.values)  # (N_z, N_y, N_x)
+
+# Δz = z₁ − z₀ [m]
+layer_thickness = float(dataset["z"][1] - dataset["z"][0])  # → ()
+# h_k = Δz on every level
+layer_weights = jnp.full(dataset.sizes["z"], layer_thickness)  # → (N_z,)
+# receptors at the (iy, ix) cells
+receptor_index = jnp.array([[4, 2], [4, 6]])  # → (N_Ωy, 2)
+
+# today (plumax)
 observation = ColumnObservation(
-    layer_weights=jnp.full(ds.sizes["z"], dz),
-    receptor_index=jnp.array([[4, 2], [4, 6]]),  # (iy, ix) receptor cells
+    layer_weights=layer_weights,
+    receptor_index=receptor_index,
 )
-column = observation.from_field(concentration)  # ΔΩ per receptor [kg m⁻²]
+
+# today (plumax)
+# ΔΩ_i = ∑_k h_k c_{k,i} [kg m⁻²]
+column = observation.from_field(concentration)  # (N_z, N_y, N_x) → (N_Ωy,)
 ```
 
 (tier2-likelihood)=
@@ -107,12 +123,12 @@ $$
 \boldsymbol{\varepsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{R}), \qquad \mathbf{R} \;=\; \mathbf{R}_\text{retr} + \mathbf{R}_\text{repr}
 $$
 
-- $\mathbf{R}_\text{retr}$ — heteroscedastic per-pixel from the L2 retrieval-error map.
-- $\mathbf{R}_\text{repr}$ — **representation error**: model-vs-observation footprint mismatch. Typically 1–5 ppb diagonal addition; rises with terrain complexity and at coarse-instrument boundaries. Don't omit — naive $\mathbf{R} = \mathbf{R}_\text{retr}$ overweights observations and produces overconfident posteriors.
+- $\mathbf{R}_\text{retr}$: heteroscedastic per-pixel from the L2 retrieval-error map.
+- $\mathbf{R}_\text{repr}$: representation error (model-vs-observation footprint mismatch). Typically a 1-5 ppb diagonal addition, rising with terrain complexity and at coarse-instrument boundaries. Don't omit it, as the naive $\mathbf{R} = \mathbf{R}_\text{retr}$ overweights observations and produces overconfident posteriors.
 - Block-diagonal across overpasses; cross-overpass correlation only if observation times are within met decorrelation scale (~hours).
 
 (tier2-prior)=
-### Prior on $\mathbf{q}$ — spatially correlated, sign-constrained
+### Prior on $\mathbf{q}$: spatially correlated, sign-constrained
 
 The prior is the regularizer; it's *the* methodological choice in regional inversions.
 
@@ -132,7 +148,7 @@ Diagonal $\mathbf{B}$ produces wildly noisy spatial posteriors. Always carry spa
 :::
 
 (tier2-gaussian-closed-form)=
-### Gaussian–Gaussian closed form (linear-in-log)
+### Gaussian-Gaussian closed form (linear-in-log)
 
 When the lognormal is linearised around $\log \mathbf{q}_a$ (fine for moderate enhancements over the prior), the posterior is closed form:
 
@@ -160,9 +176,9 @@ with $\tilde{\mathbf{F}} = \operatorname{diag}(\mathbf{q}_a)\, \mathbf{F}$ (the 
 
 The Lagrangian model becomes expensive at large $N$ particles or when running ensembles for met-uncertainty propagation.
 
-- **Footprint emulator:** $(\text{met snapshot}, \text{receptor location}, \text{source-candidate grid}) \to \mathbf{F}(\text{receptor}, \cdot)$. Receptor location is **part of the input** (not just source location). CNN if the met grid is regular; FNO if you want to be resolution-agnostic.
+- **Footprint emulator:** $(\text{met snapshot}, \text{receptor location}, \text{source-candidate grid}) \to \mathbf{F}(\text{receptor}, \cdot)$. Receptor location is part of the input (not just source location). CNN if the met grid is regular; FNO if you want to be resolution-agnostic.
 - **Trajectory emulator:** replace the SDE integration with a neural ODE or normalising flow. Less common but potentially useful for backward integration.
-- **Training distribution.** Sample met conditions from the **actual distribution at facility locations of interest**, not a uniform climatology bin. A coarse $(\text{hour-of-day}, \text{season}, \text{stability})$ grid covers <10% of the operational regime probability mass; train on the conditional distribution $p(\text{met} \mid \text{facility}_\text{lat,lon}, t_\text{overpass})$ instead.
+- **Training distribution.** Sample met conditions from the actual distribution at facility locations of interest rather than a uniform climatology bin. A coarse $(\text{hour-of-day}, \text{season}, \text{stability})$ grid covers <10% of the operational regime probability mass; train on the conditional distribution $p(\text{met} \mid \text{facility}_\text{lat,lon}, t_\text{overpass})$ instead.
 
 ---
 
@@ -172,7 +188,7 @@ The Lagrangian model becomes expensive at large $N$ particles or when running en
 Replace $\mathbf{F}$ with the emulated footprint in the linear inversion. Enables:
 
 - Real-time source estimation during satellite overpass (no SDE integration in the loop).
-- Ensemble-based UQ at scale — sample met conditions, emulator gives footprint per sample, propagate to source posterior.
+- Ensemble-based UQ at scale: sample met conditions, let the emulator give a footprint per sample, and propagate to the source posterior.
 - **Validation:** posterior from emulator-inversion ≈ posterior from full-Lagrangian inversion on the same observations. Diverging posteriors flag emulator bias before it becomes a downstream problem.
 
 ---
@@ -186,16 +202,16 @@ $$
 
 ### Output grid commitment
 
-$\mathbf{q}(\mathbf{x})$ is on the inversion grid (~1–10 km, basin-scoped). Predictor outputs a fixed-size 2D field per basin tile. **Per-instrument predictors**, dispatched by `instrument_id`, because TROPOMI ([s5p_tropomi], ~5 km), EMIT ([emit], ~60 m), Tanager ([carbon_mapper], ~30 m) need different summary networks.
+$\mathbf{q}(\mathbf{x})$ is on the inversion grid (~1-10 km, basin-scoped). The predictor outputs a fixed-size 2D field per basin tile. We use per-instrument predictors, dispatched by `instrument_id`, because TROPOMI ([s5p_tropomi], ~5 km), EMIT ([emit], ~60 m), Tanager ([carbon_mapper], ~30 m) need different summary networks.
 
 ### Multi-instrument observations
 
-When fusing across instruments, each observation tensor carries its own AK and footprint at native resolution. The predictor consumes a list of $(\mathbf{y}, \mathbf{A}, \text{footprint}, \sigma_\text{retr}, \text{mask})$ per instrument and aggregates internally — don't pre-regrid to a common resolution (loses information).
+When fusing across instruments, each observation tensor carries its own AK and footprint at native resolution. The predictor consumes a list of $(\mathbf{y}, \mathbf{A}, \text{footprint}, \sigma_\text{retr}, \text{mask})$ per instrument and aggregates internally, so we don't pre-regrid to a common resolution (that loses information).
 
 ### Conditional flow architecture
 
-- Posterior over $\log \mathbf{q}(\mathbf{x})$ is a *spatial field* — natural fit for a conditional flow over images.
-- Context conditioning via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox) — same pattern as Tier I.
+- Posterior over $\log \mathbf{q}(\mathbf{x})$ is a *spatial field*, a natural fit for a conditional flow over images.
+- Context conditioning via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox), the same pattern as Tier I.
 
 :::{caution} `gauss_flows` is currently 1D-only
 Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall back to score-based / diffusion posterior. Score-based is the safer path for v1.
@@ -206,17 +222,17 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 (tier2-improve)=
 ## (6) Improve
 
-- **Multi-layer met fields.** Move from 2D footprints to 3D trajectories through stacked WRF layers — necessary when emissions span the inversion layer or when the source PBL is poorly mixed.
+- **Multi-layer met fields.** Move from 2D footprints to 3D trajectories through stacked WRF layers, which is necessary when emissions span the inversion layer or when the source PBL is poorly mixed.
 - **Chemical loss during transport.** $\mathrm{d}c/\mathrm{d}t = -k_\text{OH}\, c$ along trajectories. For CH₄ over <1 day, loss is negligible (~0.5%/day); for CO it's significant.
 - **Met uncertainty propagation.** Run the trajectory ensemble across $N_\text{met}$ WRF / ERA5 ensemble realisations → uncertainty in $\mathbf{F}$ propagated through to source posterior. Hooks into the `MetField.ensemble_dim` from the [prereqs schema](#prereqs-metfield-schema).
-- **Hierarchical $\mathbf{B}$ correlation length.** Promote $\ell$ in the Matérn prior to a hyperparameter with its own posterior — let the data choose the regularisation scale.
+- **Hierarchical $\mathbf{B}$ correlation length.** Promote $\ell$ in the Matérn prior to a hyperparameter with its own posterior, so the data choose the regularisation scale.
 
 ---
 
 (tier2-modules)=
 ## Module layout (proposed)
 
-*Tier II proposed module layout — step, concern, target module, status.*
+*Tier II proposed module layout: step, concern, target module, status.*
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
@@ -235,16 +251,16 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 | 5 | Field predictor (per instrument) | `plumax.lagrangian.predictor` | ☐ after [#90](https://github.com/jejjohnson/plumax/issues/90) |
 | 6 | Met-ensemble runner | `plumax.lagrangian.met_ensemble` (v1: mean footprint + linearised transport covariance; mixture posterior not yet) | ✓ [#89](https://github.com/jejjohnson/plumax/issues/89) |
 
-`plumax.lagrangian` exists (Steps 1–2 landed in #8, corrected in #63); the ☐ rows are tracked under the Tier II epic [#71](https://github.com/jejjohnson/plumax/issues/71).
+`plumax.lagrangian` exists (Steps 1-2 landed in #8, corrected in #63); the ☐ rows are tracked under the Tier II epic [#71](https://github.com/jejjohnson/plumax/issues/71).
 
 ---
 
 (tier2-validation)=
 ## Validation strategy
 
-- **Particle integration — zero-turbulence limit.** With $\mathbf{b} \to \mathbf{0}$, trajectories must follow streamlines exactly. Compare to streamline integration of the same wind field.
+- **Particle integration, zero-turbulence limit.** With $\mathbf{b} \to \mathbf{0}$, trajectories must follow streamlines exactly. Compare to streamline integration of the same wind field.
 - **Mass conservation.** In the no-deposition, closed-domain limit, total particle-seconds in the domain must be conserved to floating-point precision over the integration window. Standard LPDM regression test.
-- **Adjoint–finite-difference.** Verify backward ≡ adjoint of forward: perturb $q_i$ in the forward, measure $\Delta c_j$, compare to $F[j, i]$ from the backward run. Should agree within Monte Carlo error. Cheap test, catches indexing / sign / time-direction bugs that are otherwise nightmare to track down.
+- **Adjoint-finite-difference.** Verify backward ≡ adjoint of forward: perturb $q_i$ in the forward, measure $\Delta c_j$, compare to $F[j, i]$ from the backward run. Should agree within Monte Carlo error. Cheap test, catches indexing / sign / time-direction bugs that are otherwise a nightmare to track down.
 - **Particle-count convergence.** $N \to 2N$ should give converging posterior moments; unconverged means $N$ is too low. Sets the operational floor and replaces the open-question guess (10⁵ forward / 10³ backward) with measurement.
 - **Footprint vs. forward agreement.** For a single-source $\mathbf{q} = \mathbf{e}_i$, the column $\mathbf{F}\mathbf{e}_i$ (forward) and the receptor row $\mathbf{F}[i, :]$ (backward) should agree. Catches indexing/orientation bugs distinct from the adjoint test.
 - **Linear inversion against Tier I.** In the limit of a single source, near-stationary winds, and known turbulence, the Lagrangian inversion should recover Tier I's MAP estimate within posterior $\sigma$.
@@ -268,7 +284,7 @@ Lognormal prior on $\mathbf{q}$ (smooth, conjugate when linearised) vs. NNLS on 
 $\mathbf{R}_\text{repr}$ diagonal: 1 ppb (well-resolved) to 5 ppb (coarse satellite over rough terrain). Open: hierarchical fit to data, or pre-tabulated by (instrument, terrain class)?
 :::
 
-:::{attention} Number of particles — measured, not guessed
+:::{attention} Number of particles: measured, not guessed
 Replace the $N=10^5$ / $N=10^3$ guess with the convergence test above. Operational target: posterior moments stable within 5% as $N \to 2N$.
 :::
 
@@ -277,15 +293,15 @@ Treat the forward as a noisy oracle (averaged over seeds) or fix one seed and tr
 :::
 
 :::{attention} Footprint storage / compression
-Sparse CSR storage handles the 90%+ zeros, but cross-receptor footprints share spatial structure — low-rank factorisation ($\mathbf{F} \approx \mathbf{U} \mathbf{V}^{\top}$ with $r \ll n_\text{obs}$) might compress further. Open: empirical rank vs. accuracy trade-off on real data.
+Sparse CSR storage handles the 90%+ zeros, but cross-receptor footprints share spatial structure, so low-rank factorisation ($\mathbf{F} \approx \mathbf{U} \mathbf{V}^{\top}$ with $r \ll n_\text{obs}$) might compress further. Open: empirical rank vs. accuracy trade-off on real data.
 :::
 
-:::{attention} Backward vs. forward — refined
+:::{attention} Backward vs. forward: refined
 Two distinct reasons backward dominates inversion: (a) $n_\text{source}$ is unknown a priori (the original "you're inferring it"), and (b) backward gives a sparse $\mathbf{F}^{\top}$ *per receptor* that's trivially parallelisable and storage-friendly. The cost ratio $O(n_\text{obs} N)$ vs. $O(n_\text{source} N)$ is secondary.
 :::
 
 :::{attention} Coarse-instrument representation
-TROPOMI 5 km vs inversion grid 1 km — observation operator must include footprint-weighted spatial averaging. Open: handle as a deterministic averaging operator on $\mathrm{col}_z(\mathbf{F}\mathbf{q})$, or as a stochastic representation kernel inside $\mathbf{R}_\text{repr}$?
+TROPOMI 5 km vs inversion grid 1 km; the observation operator must include footprint-weighted spatial averaging. Open: handle as a deterministic averaging operator on $\mathrm{col}_z(\mathbf{F}\mathbf{q})$, or as a stochastic representation kernel inside $\mathbf{R}_\text{repr}$?
 :::
 
 :::{attention} Spatial correlation length $\ell$ in $\mathbf{B}$

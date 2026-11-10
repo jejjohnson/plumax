@@ -28,12 +28,12 @@ NumPyro. Radiative transfer, the matched filter and the 3D-Var retrieval are in 
 | II | [Lagrangian](lagrangian.md) | particle dispersion |
 | II | [Gridded wind](lagrangian_wind_interp.md) | `GriddedWind`, `gridded_wind_from_met`, `gridded_wind_from_prescribed`: the C-grid wind at each particle |
 | II | [Met ensemble](lagrangian_met_ensemble.md) | `ensemble_footprints`, `ensemble_inversion`, `transport_covariance`: footprints per met member and the inversion over them |
-| III | [Eulerian FV](les_fvm.md) | advection–diffusion on a C-grid |
+| III | [Eulerian FV](les_fvm.md) | advection-diffusion on a C-grid |
 | IV | [Coupled](coupled.md) | multi-instrument source inversion |
 | V | [Population](population.md) | source populations and forecasting |
-| — | [Plume vetting](vetting.md) | `vet_candidate`, `select_seeds`, `background_pool`, `null_masks`, `null_pvalue` on radtrax's absorption-shape test |
-| — | [Plume operators (geo)](geo.md) | `PlumeMask`, `PlumeFootprint`, `IMEEstimate`, `CrossSectionalFlux`, `ColumnToMass` and five more, and `PlumeVetting`, on GeoTensors, behind `[geo]` |
-| — | [Operators](operators.md) · [Adapters](adapters.md) | `pipekit` integration |
+| - | [Plume vetting](vetting.md) | `vet_candidate`, `select_seeds`, `background_pool`, `null_masks`, `null_pvalue` on radtrax's absorption-shape test |
+| - | [Plume operators (geo)](geo.md) | `PlumeMask`, `PlumeFootprint`, `IMEEstimate`, `CrossSectionalFlux`, `ColumnToMass` and five more, and `PlumeVetting`, on GeoTensors, behind `[geo]` |
+| - | [Operators](operators.md) · [Adapters](adapters.md) | `pipekit` integration |
 
 ## Package overview
 

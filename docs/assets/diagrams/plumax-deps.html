@@ -58,7 +58,7 @@
 <body>
 <div id="diagram">
   <div class="title">plumax and what it stands on</div>
-  <div class="subtitle">Declared dependencies of plumax 0.1.2, laid out by GeoStack layer · arrows point from user to dependency, labelled with the plumax subpackage that imports it</div>
+  <div class="subtitle">Declared dependencies of plumax 0.2.4, laid out by GeoStack layer · arrows point from user to dependency, labelled with the plumax subpackage that imports it</div>
 
   <div class="layers">
     <div class="frame">
@@ -72,9 +72,9 @@
             <div class="use">gauss_plume · gauss_puff · population</div>
           </div>
           <div class="node extra" id="vardax">
-            <div class="name"><code>vardax</code><span class="pin">[assim]</span></div>
-            <div class="desc">today · OptimalInterpolation, ThreeDVar, Laplace posterior</div>
-            <div class="use">optimal interpolation for lagrangian · whitened 3D-Var for les_fvm; plumax keeps the source–receptor maps</div>
+            <div class="name"><code>vardax</code> · <code>argminax</code><span class="pin">[assim]</span></div>
+            <div class="desc">today · OptimalInterpolation, ThreeDVar · argminax Laplace posterior</div>
+            <div class="use">optimal interpolation for lagrangian · whitened 3D-Var for les_fvm; plumax keeps the source-receptor maps</div>
           </div>
           <div class="node extra" id="filterax">
             <div class="name"><code>filterax</code><span class="pin">planned</span></div>
@@ -102,7 +102,7 @@
           </div>
         </div>
         <div class="node" id="radtrax" style="grid-column: 10 / 13">
-          <div class="name"><code>radtrax</code><span class="pin">git rev</span></div>
+          <div class="name"><code>radtrax</code><span class="pin">v0.1.0</span></div>
           <div class="desc">differentiable radiative transfer</div>
           <div class="use">slab forwards · ForwardModel · SpectralResponseFunction</div>
           <div class="rule">✕ never imports plumax</div>
@@ -144,9 +144,9 @@
             <div class="use">ForwardModel · ObservationOperator</div>
           </div>
 <div class="node extra" id="geotoolz">
-            <div class="name"><code>geotoolz</code><span class="pin">[geo]</span></div>
-            <div class="desc">planned, geotoolz #482</div>
-            <div class="use">plume masks · IME · flux move in</div>
+            <div class="name"><code>geotoolz-ops</code> · <code>georeader</code><span class="pin">[geo]</span></div>
+            <div class="desc">today · GeoTensor carriers and helpers, plumax #134</div>
+            <div class="use">plume masks · IME · flux in plumax.geo</div>
           </div>
         </div>
       </div>
@@ -154,8 +154,8 @@
         <div class="layer-head"><span class="verb">GeoML</span><span class="what">learned · statistical</span></div>
         <div class="col1">
 <div class="node extra" id="xtremax">
-          <div class="name"><code>xtremax</code><span class="pin">planned</span></div>
-          <div class="desc">point processes, plumax #106</div>
+          <div class="name"><code>xtremax</code><span class="pin">[population]</span></div>
+          <div class="desc">today · point processes, plumax #106</div>
           <div class="use">ThinningProcess for POD thinning</div>
         </div>
 <div class="node trans" id="geonnax">

@@ -6,7 +6,7 @@ Plume post-processing on GeoTensors, behind the `[geo]` extra (`pip install 'plu
     options:
       members: false
 
-## `plume` — the operators
+## `plume`: the operators
 
 ::: plumax.geo.plume
     options:
@@ -24,7 +24,7 @@ Plume post-processing on GeoTensors, behind the `[geo]` extra (`pip install 'plu
         - CrossSectionalFlux
         - ColumnToMass
 
-## `vetting` — plume vetting on carriers
+## `vetting`: plume vetting on carriers
 
 `PlumeVetting` runs [plume vetting](vetting.md) (`vet_candidate` and the scene null) on every candidate of a scene and returns the scores as one `xarray.Dataset`; the decision rule is left to the caller.
 
@@ -35,7 +35,7 @@ Plume post-processing on GeoTensors, behind the `[geo]` extra (`pip install 'plu
       members:
         - PlumeVetting
 
-## `plume_array` — the array functions
+## `plume_array`: the array functions
 
 ::: plumax.geo.plume_array
     options:

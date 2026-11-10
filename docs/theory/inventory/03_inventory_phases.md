@@ -1,9 +1,9 @@
-# Part III — Mapping the objects onto the three phases
+# Part III: Mapping the objects onto the three phases
 
 Each phase gets the same four headings: **what is random**, the **object** from [Part II](02_inventory_objects.md) that describes it, the **data** it consumes, and what falls out.
 
 (iii-1)=
-## III.1 Phase A — Discovery
+## III.1 Phase A: Discovery
 
 **What is random**
 :   Locations of sources not in the database
@@ -26,7 +26,7 @@ $$
 This needs a finite-mean $\rho$, such as the tempered GGP ($\tau > 0$).
 :::
 
-Discovery counts **sources**, so it needs a finite number of them. Keep $\lambda$ as the CRM base measure of [§II.4](#ii-4) (the same one [§III.3](#iii-3) integrates against), and give each source two marks: its **on-state** rate $s_0 u$, with Lévy measure $\rho(\mathrm{d}u)$, and its persistence $\pi$, with conditional distribution $G(\mathrm{d}\pi \mid u)$. Count only sources above a size floor $u_{\mathrm{floor}}$ (well below $s_{\min}/s_0$). Their count intensity and normalised rate distribution are
+Discovery counts sources, so it needs a finite number of them. Keep $\lambda$ as the CRM base measure of [§II.4](#ii-4) (the same one [§III.3](#iii-3) integrates against), and give each source two marks: its on-state rate $s_0 u$, with Lévy measure $\rho(\mathrm{d}u)$, and its persistence $\pi$, with conditional distribution $G(\mathrm{d}\pi \mid u)$. Count only sources above a size floor $u_{\mathrm{floor}}$ (well below $s_{\min}/s_0$). Their count intensity and normalised rate distribution are
 
 $$
 \lambda_{\ge}(\mathrm{d}x) = R\,\lambda(\mathrm{d}x),
@@ -50,7 +50,7 @@ where $Z_i \in \{0,1\}$ is the source's on/off state at scene $i$ (with $\mathbb
 Using the independent formula for a strongly correlated source overstates discovery and understates the missed-emission correction. Its mark average is $\bar p(x) = \iint p_{\mathrm{camp}}(x,u,\pi)\,G(\mathrm{d}\pi \mid u)\,f(\mathrm{d}u)$.
 
 :::{important} The central identity
-By the (marked) thinning theorem, on a searched cell $A$, **conditional on the intensity** $\lambda$:
+By the (marked) thinning theorem, on a searched cell $A$, conditional on the intensity $\lambda$:
 
 $$
 \begin{aligned}
@@ -62,10 +62,10 @@ $$
 
 $\Lambda_{\mathrm{fp}}(A)$ is the expected number of false positives in $A$: the clutter process of [§II.9.3](#ii-9-3), superposed on the real detections. Omitting it lets false plumes inflate the inferred source density and the undiscovered population. When individual detections matter, carry latent real/clutter labels instead.
 
-Under the LGCP, $\lambda$ is random, and marginally the two counts are **dependent** through it. That dependence is exactly what lets detections (and empty searched cells) inform the posterior over $\lambda$, and hence the expected number missed. Write the likelihood conditionally on $\lambda$ and integrate over $\lambda$; never factor the marginal.
+Under the LGCP, $\lambda$ is random, and marginally the two counts are dependent through it. That dependence is exactly what lets detections (and empty searched cells) inform the posterior over $\lambda$, and hence the expected number missed. Write the likelihood conditionally on $\lambda$ and integrate over $\lambda$; never factor the marginal.
 :::
 
-So the posterior over $\lambda$ updates from **both** detections **and** searched-but-empty cells, and the expected number still undiscovered (above the floor) is
+So the posterior over $\lambda$ updates from both detections and searched-but-empty cells, and the expected number still undiscovered (above the floor) is
 
 $$
 \int_A \bigl(1 - \bar p(x)\bigr)\,\lambda_{\ge}(\mathrm{d}x)
@@ -74,10 +74,10 @@ $$
 computable, not guessed.
 
 :::{warning} Why the floor
-With the infinite-activity priors of [§II.4](#ii-4), $R \to \infty$ as $u_{\mathrm{floor}} \to 0$: the missed source **count** is infinite, even though the missed **mass** is finite. Counting questions (Phase A) therefore need the floor. Mass questions (the search objective below, and Phase C in [§III.3](#iii-3)) integrate against $\lambda\,\rho$ directly, with no floor and no factor $R$.
+With the infinite-activity priors of [§II.4](#ii-4), $R \to \infty$ as $u_{\mathrm{floor}} \to 0$: the missed source count is infinite, even though the missed mass is finite. Counting questions (Phase A) therefore need the floor. Mass questions (the search objective below, and Phase C in [§III.3](#iii-3)) integrate against $\lambda\,\rho$ directly, with no floor and no factor $R$.
 :::
 
-**Search strategy falls out.** The next cell to image is the one maximising the posterior expected *inventory* emission that is still undiscovered **and** that the next image would detect,
+**Search strategy falls out.** The next cell to image is the one maximising the posterior expected *inventory* emission that is still undiscovered and that the next image would detect,
 
 $$
 s_0\,\mathbb{E}\!\left[\int_A \int_0^\infty\!\!\int_0^1 \pi u\,\bigl(1 - p_{\mathrm{camp}}(x,u,\pi)\bigr)\,\pi\,p_{\mathrm{next}}(x,u)\;G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)\right]
@@ -99,13 +99,13 @@ Choose the floor so that $\lambda_{\ge}(A_1) \approx 15$, the count of [§II.3](
 :::
 
 (iii-2)=
-## III.2 Phase B — Monitoring
+## III.2 Phase B: Monitoring
 
 **What is random**
 :   The on/off state and timing of *known* sources
 
 **Object**
-:   Per-site Beta–Bernoulli persistence ([§II.4.4](#ii-4-4)), a temporal point process of initiations ([§II.10.2](#ii-10-2)), or an on/off switching process ([§II.10.4](#ii-10-4)), observed through the thinned clock ([§II.9.3](#ii-9-3), [§II.10.6](#ii-10-6))
+:   Per-site Beta-Bernoulli persistence ([§II.4.4](#ii-4-4)), a temporal point process of initiations ([§II.10.2](#ii-10-2)), or an on/off switching process ([§II.10.4](#ii-10-4)), observed through the thinned clock ([§II.9.3](#ii-9-3), [§II.10.6](#ii-10-6))
 
 **Data**
 :   The sequence of (overpass, cloud, detected, rate) for each known site
@@ -117,7 +117,7 @@ Choose the floor so that $\lambda_{\ge}(A_1) \approx 15$, the count of [§II.3](
 | scheduled venting | renewal | $h$ peaked at 7 d |
 | leak until repair | two-state (semi-)Markov switching ([§II.10.4](#ii-10-4)) | on-state duration = repair time |
 | clustered distinct initiations (upsets, cascades) | Hawkes | $\varphi$ decaying over days |
-| random operations | Beta–Bernoulli | $\pi_k$ |
+| random operations | Beta-Bernoulli | $\pi_k$ |
 
 :::{danger} The identifiability warning
 With $n$ overpasses, $n_{\mathrm{clear}}$ clear, $n_{\mathrm{det}}$ detections at site $k$:
@@ -130,7 +130,7 @@ $$
 Use the controlled-release detection curve to divide out $p$; otherwise report the product and say so. When the POD varies by scene, do not divide by one curve: fit each clear scene's detection $y_i$ as $\mathrm{Bernoulli}\bigl(\pi_k\,p_i(x_k, s_k)\bigr)$, or, under independent states, use the moment estimate $\hat\pi_k = \sum_i y_i / \sum_i p_i$.
 :::
 
-:::{hint} Running example — source 3
+:::{hint} Running example: source 3
 :class: dropdown
 :open:
 10 overpasses, 8 clear, 3 detections at $\approx 400\ \mathrm{kg\,h^{-1}}$. The detection curve gives $p_i(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$ in every clear scene, so the moment estimate is
@@ -143,7 +143,7 @@ against a truth of 0.3. The discrepancy is sampling noise on 8 scenes, and a $\m
 :::
 
 (iii-3)=
-## III.3 Phase C — Estimation of rates and total
+## III.3 Phase C: Estimation of rates and total
 
 **What is random**
 :   The on-state rates $s_k$, the diffuse density $e(x)$, and their sums
@@ -161,7 +161,7 @@ $$
 + \underbrace{\int_S e(x)\,\mathrm{d}x}_{\text{(iii) diffuse}}
 $$
 
-This is an identity between **random** quantities: all three terms are uncertain, and the object to report is the posterior of the whole sum.
+This is an identity between random quantities: all three terms are uncertain, and the object to report is the posterior of the whole sum.
 :::
 
 Term (ii) is a sum over sources nobody has seen, with the marks $(u, \pi)$ and campaign detection probability $p_{\mathrm{camp}}$ of [§III.1](#iii-1). By marked thinning, given $\lambda$ the undetected sources form a Poisson process with intensity $\bigl(1 - p_{\mathrm{camp}}\bigr)\,G(\mathrm{d}\pi \mid u)\,\rho(\mathrm{d}u)\,\lambda(\mathrm{d}x)$, independent of the detected ones. Campbell's theorem then gives its first two moments:
@@ -184,7 +184,7 @@ Each term has its own uncertainty:
 Per-plume rate noise $\eta_k$ (log-normal, tens of percent) $\times$ persistence uncertainty from [§III.2](#iii-2).
 :::
 :::{tab-item} (ii) Undiscovered points
-Spans **all** rates, each weighted by $1 - p_{\mathrm{camp}}$. In well-covered cells it is dominated by the tail of $\rho$ below $s_{\min}$. This is where the choice of Gamma versus generalised Gamma changes the answer by a large factor, and the only handle on it is bottom-up knowledge of small-source rates.
+Spans all rates, each weighted by $1 - p_{\mathrm{camp}}$. In well-covered cells it is dominated by the tail of $\rho$ below $s_{\min}$. This is where the choice of Gamma versus generalised Gamma changes the answer by a large factor, and the only handle on it is bottom-up knowledge of small-source rates.
 
 Above the threshold, $1 - p_{\mathrm{camp}}$ stays positive wherever coverage is thin or persistence is low: an intermittent super-emitter in a rarely imaged cell can be missed and dominate the missing mass. Never truncate (ii) at $s_{\min}$.
 :::
@@ -214,10 +214,10 @@ pie showData title Where the true 726 kg/h comes from
 ```
 :::
 
-**Attribution.** When two fine-imager plumes are near each other, DP/Pitman–Yor ([§II.5](#ii-5)) decides "one source or two", with assignment weights built from each candidate's observation rate $\pi_k\,p(x_k, s_k)$, not its emission fraction (see the warning in [§II.5](#ii-5)). Pitman–Yor is the safer choice given the heavy tail.
+**Attribution.** When two fine-imager plumes are near each other, DP/Pitman-Yor ([§II.5](#ii-5)) decides "one source or two", with assignment weights built from each candidate's observation rate $\pi_k\,p(x_k, s_k)$, not its emission fraction (see the warning in [§II.5](#ii-5)). Pitman-Yor is the safer choice given the heavy tail.
 
 :::{tip} In `plumax`
-The population-level machinery for this phase (TMTPP, POD-corrected totals, the missing-mass paradox) is laid out in [Tier V.D — Total emission estimation](../../design/06_tier5d_total_emission.md).
+The population-level machinery for this phase (TMTPP, POD-corrected totals, the missing-mass paradox) is laid out in [Tier V.D: Total emission estimation](../../design/06_tier5d_total_emission.md).
 :::
 
 (iii-4)=
@@ -227,7 +227,7 @@ The population-level machinery for this phase (TMTPP, POD-corrected totals, the 
 |---|---|---|
 | **object** | $\mu_{\mathrm{pt}} = \sum_k s_k\delta_{x_k}$ | $\mu_{\mathrm{df}} = \int e\,\mathrm{d}x$ |
 | **rate prior** | CRM (Gamma / GGP) | log-GP on $e$ |
-| **persistence prior** | persistence marks $\pi_k$ (Beta–Bernoulli / Beta process) | — (persistent) |
+| **persistence prior** | persistence marks $\pi_k$ (Beta-Bernoulli / Beta process) | n/a (persistent) |
 | **seen by** | fine imager, 1 scene | coarse mapper, stack |
 | **detection** | threshold on peak | averaging, $1/\sqrt{n}$ |
 | **time** | sampled: $\pi_k s_k$ | averaged: persistent |
@@ -245,5 +245,5 @@ The population-level machinery for this phase (TMTPP, POD-corrected totals, the 
 | 4 | *Overpasses are a fair sample of source state* ([§II.8.3](#ii-8-3)) | operations correlate with local overpass time | no fix from data alone |
 
 :::{important} The identifiability warning that runs through all three phases
-The data see only products ($p\lambda$, $\pi_k p$, $\int u\,p(u)\,\rho(\mathrm{d}u)$), and **everything below the detection limit rests on calibration done outside the model.**
+The data see only products ($p\lambda$, $\pi_k p$, $\int u\,p(u)\,\rho(\mathrm{d}u)$), and everything below the detection limit rests on calibration done outside the model.
 :::

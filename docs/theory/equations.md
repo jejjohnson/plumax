@@ -7,12 +7,12 @@ title: Equation index
 An index of the key equations across the [design roadmap](../design/roadmap.md) pages, grouped by page, with a link to the section where each one lives. It exists so that authors can plan cross-references and audit coverage without reading every page.
 
 :::{note} Labels are reserved, not yet defined
-The `Label` column records the equation labels used when the roadmap was a standalone set of notes (convention `eq-<page>-<short-name>`, where `<page>` is the file basename or sub-page tag: `tier1`, `tier2`, …, `va`–`vd`, `rtm`, `prereqs`). The design pages do not currently attach these labels to their `$$` blocks, so link to the **section** anchors in the last column. When you do label an equation, reuse the name listed here — MyST labels are project-global, so this table doubles as a uniqueness check.
+The `Label` column records the equation labels used when the roadmap was a standalone set of notes (convention `eq-<page>-<short-name>`, where `<page>` is the file basename or sub-page tag: `tier1`, `tier2`, …, `va` to `vd`, `rtm`, `prereqs`). The design pages do not currently attach these labels to their `$$` blocks, so we link to the section anchors in the last column. When you do label an equation, reuse the name listed here. MyST labels are project-global, so this table doubles as a uniqueness check.
 :::
 
 ---
 
-## 00 — Prerequisites — [`design/00_prerequisites.md`](../design/00_prerequisites.md)
+## 00: Prerequisites ([`design/00_prerequisites.md`](../design/00_prerequisites.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -20,39 +20,39 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## I — Tier I (Gaussian family) — [`design/01_tier1_gaussian.md`](../design/01_tier1_gaussian.md)
+## I: Tier I (Gaussian family) ([`design/01_tier1_gaussian.md`](../design/01_tier1_gaussian.md))
 
 | Label | Form | Section |
 |-------|------|---------|
 | `eq-tier1-gaussian-plume` | Steady-state Gaussian plume with PBL image-source sum | [Gaussian plume](../design/01_tier1_gaussian.md#tier1-gaussian-plume) |
 | `eq-tier1-gaussian-puff` | Sum of 3D Gaussian puffs advected by the wind | [Gaussian puff](../design/01_tier1_gaussian.md#tier1-gaussian-puff) |
-| `eq-tier1-column-ak` | `y_model = A (∫c dz + c_bg)` — column + AK forward | [Column + AK](../design/01_tier1_gaussian.md#tier1-column-ak) |
+| `eq-tier1-column-ak` | `y_model = A (∫c dz + c_bg)`, column + AK forward | [Column + AK](../design/01_tier1_gaussian.md#tier1-column-ak) |
 | `eq-tier1-likelihood` | Heteroscedastic Gaussian observation likelihood | [Likelihood](../design/01_tier1_gaussian.md#tier1-likelihood) |
 | `eq-tier1-amortized` | NPE / amortized predictor signature | [Amortized inference](../design/01_tier1_gaussian.md#tier1-amortized) |
-| `eq-tier1-pbl-wellmixed` | Vertically well-mixed limit `c → Q / (ū L √(2π) σ_y) exp(−y²/2σ_y²)` | [Validation — PBL capping](../design/01_tier1_gaussian.md#tier1-validation) |
+| `eq-tier1-pbl-wellmixed` | Vertically well-mixed limit `c → Q / (ū L √(2π) σ_y) exp(−y²/2σ_y²)` | [Validation, PBL capping](../design/01_tier1_gaussian.md#tier1-validation) |
 
 ---
 
-## II — Tier II (Lagrangian particle) — [`design/02_tier2_lagrangian.md`](../design/02_tier2_lagrangian.md)
+## II: Tier II (Lagrangian particle) ([`design/02_tier2_lagrangian.md`](../design/02_tier2_lagrangian.md))
 
 | Label | Form | Section |
 |-------|------|---------|
 | `eq-tier2-langevin` | Markov-1 Langevin SDE on particle velocity + position | [Langevin dynamics](../design/02_tier2_lagrangian.md#tier2-langevin) |
 | `eq-tier2-dt-bound` | Adaptive timestep bound from $\tau_L$, CFL, diffusion | [Time-stepping](../design/02_tier2_lagrangian.md#tier2-langevin) |
-| `eq-tier2-footprint` | Backward-mode source–receptor footprint integral | [Footprint definition](../design/02_tier2_lagrangian.md#tier2-footprint) |
+| `eq-tier2-footprint` | Backward-mode source-receptor footprint integral | [Footprint definition](../design/02_tier2_lagrangian.md#tier2-footprint) |
 | `eq-tier2-forward` | `y = A col_z(F q) + c_bg + ε` | [Forward observation operator](../design/02_tier2_lagrangian.md#tier2-inference) |
 | `eq-tier2-likelihood` | `ε ~ N(0, R_retr + R_repr)` | [Likelihood](../design/02_tier2_lagrangian.md#tier2-likelihood) |
-| `eq-tier2-posterior-mean` | Lognormal posterior mean — Gaussian–Gaussian linearised | [Closed form](../design/02_tier2_lagrangian.md#tier2-gaussian-closed-form) |
+| `eq-tier2-posterior-mean` | Lognormal posterior mean, Gaussian-Gaussian linearised | [Closed form](../design/02_tier2_lagrangian.md#tier2-gaussian-closed-form) |
 | `eq-tier2-posterior-cov` | Lognormal posterior covariance | same |
 | `eq-tier2-amortized` | Predictor signature `(y, met) → p(log q(x))` | [Amortized inference](../design/02_tier2_lagrangian.md#tier2-amortized) |
 
 ---
 
-## III — Tier III (Eulerian FV) — [`design/03_tier3_eulerian.md`](../design/03_tier3_eulerian.md)
+## III: Tier III (Eulerian FV) ([`design/03_tier3_eulerian.md`](../design/03_tier3_eulerian.md))
 
 | Label | Form | Section |
 |-------|------|---------|
-| `eq-tier3-conservation` | $\rho$-weighted advection–diffusion–source–sink | [Conservation eq.](../design/03_tier3_eulerian.md#tier3-conservation) |
+| `eq-tier3-conservation` | $\rho$-weighted advection-diffusion-source-sink | [Conservation eq.](../design/03_tier3_eulerian.md#tier3-conservation) |
 | `eq-tier3-forward` | `y_t = A_t col_z(c(S, c₀, t)) + c_bg + ε_t` | [Forward operator](../design/03_tier3_eulerian.md#tier3-inference) |
 | `eq-tier3-4dvar-cost` | 3-term 4D-Var cost (source + IC + obs sum) | [4D-Var cost](../design/03_tier3_eulerian.md#tier3-cost) |
 | `eq-tier3-likelihood` | Per-time heteroscedastic Gaussian | [Likelihood](../design/03_tier3_eulerian.md#tier3-likelihood) |
@@ -63,16 +63,16 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## RTM — RTM stack — [`design/04_rtm_stack.md`](../design/04_rtm_stack.md)
+## RTM: RTM stack ([`design/04_rtm_stack.md`](../design/04_rtm_stack.md))
 
 | Label | Form | Section |
 |-------|------|---------|
-| `eq-rtm-radiance` | SWIR Beer–Lambert radiance | [Beer–Lambert](../design/04_rtm_stack.md#rtm-beer-lambert) |
+| `eq-rtm-radiance` | SWIR Beer-Lambert radiance | [Beer-Lambert](../design/04_rtm_stack.md#rtm-beer-lambert) |
 | `eq-rtm-tau-total` | Two-way airmass-factor optical depth | same |
 | `eq-rtm-tau` | Layer-integrated $\tau$ from HAPI cross-section | same |
 | `eq-rtm-thermal-ir` | TIR variant (emission + path radiance) | [Thermal-IR addendum](../design/04_rtm_stack.md#rtm-thermal-ir) |
 | `eq-rtm-state-vector` | Joint retrieval state vector | [Joint state](../design/04_rtm_stack.md#rtm-state-vector) |
-| `eq-rtm-gauss-newton` | Iterative Gauss–Newton update | [Gauss–Newton](../design/04_rtm_stack.md#rtm-gauss-newton) |
+| `eq-rtm-gauss-newton` | Iterative Gauss-Newton update | [Gauss-Newton](../design/04_rtm_stack.md#rtm-gauss-newton) |
 | `eq-rtm-gain` | Gain matrix $\mathbf{G}_k$ + Jacobian definition | same |
 | `eq-rtm-convergence` | Rodgers (2000) §5.7 convergence criterion | same |
 | `eq-rtm-posterior-cov` | $\mathbf{S}^*$ posterior covariance | [Info content](../design/04_rtm_stack.md#rtm-info-content) |
@@ -84,7 +84,7 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## IV — Tier IV (Coupled E2E) — [`design/05_tier4_coupled.md`](../design/05_tier4_coupled.md)
+## IV: Tier IV (Coupled E2E) ([`design/05_tier4_coupled.md`](../design/05_tier4_coupled.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -100,7 +100,7 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## V — Tier V index — [`design/06_tier5_population.md`](../design/06_tier5_population.md)
+## V: Tier V index ([`design/06_tier5_population.md`](../design/06_tier5_population.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -110,7 +110,7 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## V.A — Instantaneous emission — [`design/06_tier5a_instantaneous.md`](../design/06_tier5a_instantaneous.md)
+## V.A: Instantaneous emission ([`design/06_tier5a_instantaneous.md`](../design/06_tier5a_instantaneous.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -123,7 +123,7 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## V.B — TMTPP — [`design/06_tier5b_point_process.md`](../design/06_tier5b_point_process.md)
+## V.B: TMTPP ([`design/06_tier5b_point_process.md`](../design/06_tier5b_point_process.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -135,13 +135,13 @@ The `Label` column records the equation labels used when the roadmap was a stand
 | `eq-vb-lambda-lgcp` | Log-Gaussian Cox process | same |
 | `eq-vb-pod-hill` | Hill function $P_d(Q) = 1/(1 + (Q_{50}/Q)^k)$ | [POD](../design/06_tier5b_point_process.md#vb-pod) |
 | `eq-vb-pod-hier-prior` | Hierarchical prior on $(Q_{50}, k)$ | [POD calibration](../design/06_tier5b_point_process.md#vb-pod-calibration) |
-| `eq-vb-loglik` | Canonical TMTPP log-likelihood | [Likelihood — canonical](../design/06_tier5b_point_process.md#vb-likelihood) |
+| `eq-vb-loglik` | Canonical TMTPP log-likelihood | [Likelihood, canonical](../design/06_tier5b_point_process.md#vb-likelihood) |
 | `eq-vb-mark-iw` | Importance-weighted MC for the mark integral | [Practical evaluation](../design/06_tier5b_point_process.md#vb-practical-eval) |
 | `eq-vb-loglik-point` | Point-regime simplification | [Point regime](../design/06_tier5b_point_process.md#vb-point-regime) |
 
 ---
 
-## V.C — Persistency — [`design/06_tier5c_persistency.md`](../design/06_tier5c_persistency.md)
+## V.C: Persistency ([`design/06_tier5c_persistency.md`](../design/06_tier5c_persistency.md))
 
 | Label | Form | Section |
 |-------|------|---------|
@@ -154,7 +154,7 @@ The `Label` column records the equation labels used when the roadmap was a stand
 
 ---
 
-## V.D — Total emission — [`design/06_tier5d_total_emission.md`](../design/06_tier5d_total_emission.md)
+## V.D: Total emission ([`design/06_tier5d_total_emission.md`](../design/06_tier5d_total_emission.md))
 
 | Label | Form | Section |
 |-------|------|---------|

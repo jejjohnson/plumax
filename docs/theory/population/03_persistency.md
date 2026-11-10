@@ -1,22 +1,22 @@
 ---
-title: "Persistency — from inverted posteriors to operational forecasts"
+title: "Persistency: from inverted posteriors to operational forecasts"
 ---
 
 # Persistency
 
-We have reached the operational crux of the paradox: **Persistency**.
+We have reached the operational crux of the paradox, persistency.
 
-Once you have successfully mathematically inverted your thinned, biased MARS dataset to uncover the latent physical variables—the true timeline rate `λ_true` and the true mark distribution `f_true(Q)`—you possess a statistical crystal ball. You are no longer reacting to stale satellite images; you are forecasting physical reality.
+Once you have inverted your thinned, biased MARS dataset to recover the latent physical variables (the true timeline rate `λ_true` and the true mark distribution `f_true(Q)`), you can forecast physical reality instead of reacting to stale satellite images.
 
-Let us cross the bridge from stochastic geometry into operational engineering and business intelligence. To do this with maximum rigor, we will define every metric twice: first establishing the baseline **Homogeneous** assumption (where the leak rate is a flat, memoryless constant), and then elevating it to the **Inhomogeneous** (Non-Stationary) physical reality, where industrial sources violently fluctuate with diurnal cycles, pressures, and human operations.
+Let us cross from stochastic geometry into operational engineering and business intelligence. We define every metric twice: first under the baseline Homogeneous assumption (where the leak rate is a flat, memoryless constant), and then under the Inhomogeneous (Non-Stationary) physical reality, where industrial sources fluctuate strongly with diurnal cycles, pressures, and human operations.
 
-Here is the pedantic, step-by-step translation of the Predictive Arsenal.
+Below is the step-by-step translation of the Predictive Arsenal.
 
 ---
 
 ## 1. Temporal Predictions (The "When")
 
-This suite of metrics translates the abstract true intensity into actionable dispatch logic for Leak Detection and Repair (LDAR) crews.
+This suite of metrics translates the abstract true intensity into dispatch logic for Leak Detection and Repair (LDAR) crews.
 
 ### A. Expected Wait Time (Mean Time Between Plumes)
 
@@ -26,7 +26,7 @@ This suite of metrics translates the abstract true intensity into actionable dis
 **The Translation:** If a technician drives to this facility, how long will they physically stand there before the infrastructure vents?
 
 * **Homogeneous:** If it's a continuously stressed, cracked pipe, the wait time is constant. `E[Δt] = 1 / λ_true`. If `E[Δt]` is 1.5 hours, you dispatch a crew immediately.
-* **Inhomogeneous:** If it is a solar-heated storage tank, the rate changes over time. The expected wait time depends entirely on *when* you start the clock (`t₀`). We must integrate the survival function over the future timeline.
+* **Inhomogeneous:** If it is a solar-heated storage tank, the rate changes over time. The expected wait time depends on *when* you start the clock (`t₀`). We must integrate the survival function over the future timeline.
 * **The Equation:** $\mathbb{E}[\Delta t \mid t_0] = \int_{t_0}^\infty \exp\!\left(-\int_{t_0}^{t} \lambda_\text{true}(u)\,\mathrm{d}u\right) \mathrm{d}t$
 
 ```text
@@ -78,7 +78,7 @@ This suite of metrics translates the abstract true intensity into actionable dis
    +--|------|--------------|------|---------------------> Time of Day
       t₁     t₂             t₃     t₄
    (Morning Shift)      (Night Shift)
-      
+
    * Integrating from t₁ to t₂ captures the curve. HIGH Probability.
    * Integrating from t₃ to t₄ captures flatlines. ZERO Probability.
 =============================================================================
@@ -89,7 +89,7 @@ This suite of metrics translates the abstract true intensity into actionable dis
 
 ## 2. Survival Analysis (The "How Long")
 
-Survival analysis is the mathematical heartbeat of **Persistency**. Instead of asking "how many leaks will happen?", MARS asks "what is the mathematical probability that this infrastructure will *survive* (remain perfectly sealed) past time `t`?"
+Survival analysis is the heartbeat of persistency. Instead of asking "how many leaks will happen?", MARS asks "what is the probability that this infrastructure will *survive* (remain perfectly sealed) past time `t`?"
 
 ### A. The Survival Function
 
@@ -99,7 +99,7 @@ Survival analysis is the mathematical heartbeat of **Persistency**. Instead of a
 **The Translation:** If a satellite photographed a massive plume on Monday (`t₀`), `S(t | t₀)` dictates the decaying probability that the source has remained perfectly quiet since that exact moment.
 
 * **Homogeneous:** $S(t) = e^{-\lambda_\text{true} t}$
-* **Inhomogeneous:** The probability of surviving from a known quiet state `t₀` up to a future time `t`. As time advances, or as the integral passes through a diurnal peak, the survival probability violently collapses toward zero.
+* **Inhomogeneous:** The probability of surviving from a known quiet state `t₀` up to a future time `t`. As time advances, or as the integral passes through a diurnal peak, the survival probability collapses toward zero.
 * **The Equation:** $S(t \mid t_0) = \exp\!\left(-\int_{t_0}^{t} \lambda_\text{true}(u)\,\mathrm{d}u\right)$
 
 ### B. The Hazard Function (The Instantaneous Risk)
@@ -110,7 +110,7 @@ Survival analysis is the mathematical heartbeat of **Persistency**. Instead of a
 **The Translation:** The hazard function isolates the instantaneous, immediate risk of a leak occurring *right now*, given that it hasn't happened yet.
 
 * **Homogeneous (Broken Flange):** `h(t) = λ_true`. The risk is a flat constant. The probability of it leaking right now is exactly the same as tomorrow.
-* **Inhomogeneous (Valve Recharge):** If the source is a pressure valve that needs to physically "recharge," the timeline has memory. `h(t)` starts at exactly zero right after a leak, and aggressively climbs upward over time as the physical pressure builds back up inside the pipe.
+* **Inhomogeneous (Valve Recharge):** If the source is a pressure valve that needs to physically "recharge," the timeline has memory. `h(t)` starts at exactly zero right after a leak, and climbs steadily as the physical pressure builds back up inside the pipe.
 * **The Equation (With Memory):** $h(t) = f_\text{time}(t) / S(t)$ *(where `f_time(t)` is the PDF of the wait times).*
 
 ```text
@@ -120,12 +120,12 @@ Survival analysis is the mathematical heartbeat of **Persistency**. Instead of a
   Hazard Rate h(t) [events/hr]
    ^
    |                           /   (Weibull: Valve Recharge)
-   |                          /    Risk violently increases as 
+   |                          /    Risk violently increases as
    |                         /     pipe pressure builds.
    |------------------------/--------- (Poisson: Broken Flange)
    |                       /           Risk is a flat constant.
-   |                      / 
-   |                     /  
+   |                      /
+   |                     /
    +--------------------+-------------------> Time (t) since last leak
    0
 =============================================================================
@@ -193,11 +193,11 @@ These metrics translate the true, un-thinned mark distribution `f_true(Q)` into 
 
 ---
 
-This is where the stochastic geometry becomes a living, breathing compliance engine. A site manager does not care about the integral of a heavy-tailed Lognormal distribution; they care if they are going to be fined by a regulator tomorrow. We must translate our latent variables—the thinned marks, the fluctuating timeline, and the atmospheric filter—into an automated, mathematically bulletproof UI.
+This is where the stochastic geometry has to turn into a compliance engine. A site manager does not care about the integral of a heavy-tailed Lognormal distribution; they care whether they will be fined by a regulator tomorrow. So we translate our latent variables (the thinned marks, the fluctuating timeline, and the atmospheric filter) into an automated UI logic tree.
 
-Before we finalize the MARS logic tree, we must address the most common and dangerous pitfall that software engineers make when building these dashboards: confusing a discrete Binomial probability with a continuous Point Process intensity.
+Before we finalize the MARS logic tree, we address the most common pitfall software engineers hit when building these dashboards, which is confusing a discrete Binomial probability with a continuous Point Process intensity.
 
-Let’s lock in the rigorous physical units, perform the continuous limit proof, and then map out the final UI logic tree.
+Let’s lock in the physical units, go through the continuous limit proof, and then map out the final UI logic tree.
 
 ---
 
@@ -205,7 +205,7 @@ Let’s lock in the rigorous physical units, perform the continuous limit proof,
 
 When engineers first attempt to build a persistency dashboard, they almost always default to a discrete Binomial model (e.g., "The satellite passed over 10 times, and we saw a leak 3 times. The probability of a leak is 30%").
 
-This is structurally incorrect for physical pipeline infrastructure, and it will destroy the accuracy of your MARS predictions. We must strictly define the difference between a unitless probability (`p`) and a continuous intensity (`λ`).
+This is structurally incorrect for physical pipeline infrastructure, and it degrades the accuracy of your MARS predictions. So we define the difference between a unitless probability (`p`) and a continuous intensity (`λ`).
 
 ### The Ontology and Units
 
@@ -213,7 +213,7 @@ This is structurally incorrect for physical pipeline infrastructure, and it will
 
 * **The Definition:** The chance of a "Success" in a single, discrete trial (e.g., a coin flip).
 * **Units:** `[Unitless fraction, strictly between 0.0 and 1.0]`
-* **The Flaw:** Time does not exist here. A pipeline does not "flip a coin" once a day. It is under continuous, relentless physical pressure every single second.
+* **The Flaw:** Time does not exist here. A pipeline does not "flip a coin" once a day. It is under continuous physical pressure every second.
 
 **2. The Point Process Intensity (λ)**
 
@@ -223,9 +223,9 @@ This is structurally incorrect for physical pipeline infrastructure, and it will
 
 ### The Mathematical Proof: Collapsing the Binomial into the Poisson
 
-How do we prove that a continuous Point Process is just the ultimate, infinite evolution of the discrete Binomial model? We take the mathematical limit.
+How do we show that a continuous Point Process is the limit of the discrete Binomial model? We take the limit.
 
-**The Translation:** Imagine an observation window `T`. We slice `T` into `n` tiny, discrete intervals of length `Δt`. The probability `p` of a leak occurring in one tiny slice is the continuous rate `λ` multiplied by the length of the slice `(T / n)`. As we slice time infinitely thin (as `n` approaches infinity), the discrete Binomial equation flawlessly collapses into the continuous Poisson equation.
+**The Translation:** Imagine an observation window `T`. We slice `T` into `n` tiny, discrete intervals of length `Δt`. The probability `p` of a leak occurring in one tiny slice is the continuous rate `λ` multiplied by the length of the slice `(T / n)`. As we slice time infinitely thin (as `n` approaches infinity), the discrete Binomial equation collapses into the continuous Poisson equation.
 
 **The Setup:**
 
@@ -253,7 +253,7 @@ Now, we take the limit as `n → ∞`. We can break this into three interacting 
 2. The continuous compound interest rule: `(1 - λT / n)^n` approaches `e^(-λT)`.
 3. The remainder: `(1 - λT / n)^(-k)` approaches `1` because `λT/n` goes to zero.
 
-**The Result:** When we multiply the surviving pieces together, the discrete Binomial formula perfectly transforms into the continuous Poisson Probability Mass Function:
+**The Result:** When we multiply the surviving pieces together, the discrete Binomial formula becomes the continuous Poisson Probability Mass Function:
 
 $$
 P(X = k) = \frac{(\lambda T)^k e^{-\lambda T}}{k!}
@@ -287,9 +287,9 @@ $$
 
 ## 5. The MARS Business Translation Engine (The UI Logic)
 
-Now that we are strictly operating in continuous, un-thinned point process space, we can map our business logic.
+Now that we are working in continuous, un-thinned point process space, we can map our business logic.
 
-A government regulator does not want to integrate an inhomogeneous hazard function manually. They want a dashboard with color-coded labels that command specific mitigations. We must translate our core variables—`λ_obs` (the thinned detections), `λ_true(t)` (the un-thinned, fluctuating physical rate), and `E[P_d]` (our atmospheric confidence scalar)—into an automated logic tree.
+A government regulator does not want to integrate an inhomogeneous hazard function by hand. They want a dashboard with color-coded labels that command specific mitigations. So we translate our core variables, `λ_obs` (the thinned detections), `λ_true(t)` (the un-thinned, fluctuating physical rate), and `E[P_d]` (our atmospheric confidence scalar), into an automated logic tree.
 
 **The Ontology of MARS Business Labels:**
 
@@ -298,7 +298,7 @@ A government regulator does not want to integrate an inhomogeneous hazard functi
 3. **[ 🟢 MITIGATED ]**: We have mathematical proof that the source is physically quiet.
 4. **[ ⚪ UNKNOWN ]**: We see nothing, but only because we are mathematically blind. The ticket remains open.
 
-Here is the pedantic, inhomogeneous logic tree that powers the UI.
+Here is the inhomogeneous logic tree that powers the UI.
 
 ```text
 =============================================================================
@@ -316,20 +316,20 @@ INPUTS FOR REVIEW PERIOD 'T':
    |     |
    |     +-- [ YES ] ---> Evaluate Inhomogeneous Persistency
    |     |                  |
-   |     |                  | Calculate expected un-thinned events 
-   |     |                  | over the next 48-hour operational window: 
+   |     |                  | Calculate expected un-thinned events
+   |     |                  | over the next 48-hour operational window:
    |     |                  | Λ_future = ∫_{now}^{now+48} λ_true(t) dt
    |     |                  |
    |     |                  +-- Is Λ_future ≥ 2.0 events? (High frequency)
    |     |                  |     |
    |     |                  |     +-->> LABEL: [ 🔴 PERSISTENT ]
-   |     |                  |           UI Hook: Display Expected Total Mass 
+   |     |                  |           UI Hook: Display Expected Total Mass
    |     |                  |           (E[M_total]) and trigger emergency alert.
    |     |                  |
    |     |                  +-- Is Λ_future < 2.0 events? (Low frequency)
    |     |                        |
    |     |                        +-->> LABEL: [ 🟡 INTERMITTENT ]
-   |     |                              UI Hook: Display optimal dispatch time 
+   |     |                              UI Hook: Display optimal dispatch time
    |     |                              by targeting the peak of λ_true(t).
    |     |
    |     +-- [ NO ]  ---> Evaluate Atmospheric Confidence (The Filter)
@@ -339,15 +339,15 @@ INPUTS FOR REVIEW PERIOD 'T':
    |                        +-- Is E[P_d] > 0.85? (High confidence, clear skies)
    |                        |     |
    |                        |     +-->> LABEL: [ 🟢 MITIGATED ]
-   |                        |           Logic: If it was physically leaking, 
+   |                        |           Logic: If it was physically leaking,
    |                        |           we absolutely would have seen it.
    |                        |
    |                        +-- Is E[P_d] < 0.15? (Low confidence, cloudy)
    |                              |
    |                              +-->> LABEL: [ ⚪ UNKNOWN / BLIND SPOT ]
-   |                                    Logic: Silence means nothing here. 
+   |                                    Logic: Silence means nothing here.
    |                                    The sensor is blinded by the atmosphere.
-   |                                    UI Hook: Lock the "Close Ticket" button 
+   |                                    UI Hook: Lock the "Close Ticket" button
    |                                    to prevent false compliance logging.
 =============================================================================
 
@@ -357,9 +357,9 @@ INPUTS FOR REVIEW PERIOD 'T':
 
 ## 6. The Power of the "Unknown" State (The Blind Spot)
 
-We must heavily emphasize the pedagogical and regulatory importance of the **[ ⚪ UNKNOWN ]** state in business applications. It is the ultimate safeguard against greenwashing.
+We want to stress the pedagogical and regulatory importance of the [ ⚪ UNKNOWN ] state in business applications. It is the main safeguard against greenwashing.
 
-In naive systems, operators rely on binary logic: *If I see a leak, it is broken. If I do not see a leak, it is fixed.* By explicitly calculating the Expected Probability of Detection ($\mathbb{E}[P_d] = \int_0^\infty P_d(Q)\, f_\text{true}(Q)\,\mathrm{d}Q$), you mathematically quantify your blindness. If `E[P_d]` collapses to 5% because the region has high wind shear, dense cloud cover, or a low-albedo background (like dark water or snow), your software actively forbids the stakeholder from labeling the site as "Mitigated."
+In naive systems, operators rely on binary logic: *If I see a leak, it is broken. If I do not see a leak, it is fixed.* By explicitly calculating the Expected Probability of Detection ($\mathbb{E}[P_d] = \int_0^\infty P_d(Q)\, f_\text{true}(Q)\,\mathrm{d}Q$), you quantify your blindness. If `E[P_d]` collapses to 5% because the region has high wind shear, dense cloud cover, or a low-albedo background (like dark water or snow), your software forbids the stakeholder from labeling the site as "Mitigated."
 
 ```text
 +---------------------------------------------------------------+
@@ -383,7 +383,7 @@ In naive systems, operators rely on binary logic: *If I see a leak, it is broken
 
 ```
 
-By wrapping Survival Analysis, Expected Mass derivations, and Inhomogeneous Calculus strictly into this automated, unit-perfect logic tree, you transform a stochastic paradox into a bulletproof global compliance engine.
+By wrapping Survival Analysis, Expected Mass derivations, and Inhomogeneous Calculus into this automated, unit-perfect logic tree, you turn a stochastic paradox into a global compliance engine.
 
 ---
 
@@ -407,7 +407,7 @@ Treating the emissions as a Temporal Point Process shifts the perspective from y
 =============================================================================
   You only evaluate the universe at the exact moment the satellite is overhead.
   The spaces between the brackets mathematically do not exist.
-  
+
   Overpass 1    Overpass 2    Overpass 3    Overpass 4    Overpass 5
   [ PLUME ]     [  CLEAR ]    [ PLUME ]     [ PLUME ]     [  CLEAR ]
       1             0             1             1             0
@@ -415,9 +415,9 @@ Treating the emissions as a Temporal Point Process shifts the perspective from y
 =============================================================================
   PARADIGM 2: TEMPORAL POINT PROCESS (Continuous Physical Reality)
 =============================================================================
-  You evaluate the continuous timeline. The source operates strictly 
+  You evaluate the continuous timeline. The source operates strictly
   independent of the satellite's schedule.
-  
+
   Time ----->
   |-------*----*-----------------*---------*-------*-------|
           |    |                 |         |       |
@@ -436,13 +436,13 @@ The confusion between these two models almost always stems from a failure to tra
 
 * **The Definition:** The chance of a "Success" on a single, discrete trial.
 * **Units:** `[Detections / Overpass]` or `[Dimensionless Fraction, 0.0 to 1.0]`.
-* **The Flaw:** It is a ratio of counts to *opportunities*. If you say a leak has a persistency of `p = 0.20`, that number contains absolutely zero physics. It only means that for every 100 times your specific satellite flies over, it happens to catch the plume 20 times.
+* **The Flaw:** It is a ratio of counts to *opportunities*. If you say a leak has a persistency of `p = 0.20`, that number contains no physics. It only means that for every 100 times your specific satellite flies over, it happens to catch the plume 20 times.
 
 **The Point Process Parameter: λ (Lambda)**
 
 * **The Definition:** The expected arrival rate of events over a continuous physical timeline.
 * **Units:** `[Events / Day]` or `[Plumes / Hour]`.
-* **The Power:** It is a ratio of counts to *continuous time*. If you say a leak has an intensity of `λ = 1.5 plumes/day`, you have defined the physical, thermodynamic reality of the infrastructure, completely independent of who is looking at it or when. Furthermore, unlike a probability, an intensity can vastly exceed 1.0 (e.g., `λ = 50 events/day` is perfectly valid).
+* **The Power:** It is a ratio of counts to *continuous time*. If you say a leak has an intensity of `λ = 1.5 plumes/day`, you have defined the physical, thermodynamic reality of the infrastructure, completely independent of who is looking at it or when. Furthermore, unlike a probability, an intensity can exceed 1.0 (e.g., `λ = 50 events/day` is perfectly valid).
 
 ---
 
@@ -450,7 +450,7 @@ The confusion between these two models almost always stems from a failure to tra
 
 If these two paradigms measure different things, how are they related?
 
-The profound truth of stochastic geometry is that the Poisson Point Process is simply the Binomial distribution taken to its absolute, infinite limit. We can mathematically prove that if you make your satellite overpasses infinitely fast, the discrete empirical ratio flawlessly collapses into the continuous intensity parameter.
+The Poisson Point Process is the Binomial distribution taken to its infinite limit. We can prove that if you make your satellite overpasses infinitely frequent, the discrete empirical ratio collapses into the continuous intensity parameter.
 
 **The Setup:**
 Imagine your satellite observes a site for 1 whole day. It currently takes `n` discrete pictures per day.
@@ -478,10 +478,10 @@ To see the mathematical collapse, we group the interacting terms and evaluate th
 1. **The Constant Term:** `(λ^k / k!)` contains no `n`, so it remains perfectly unaffected.
 2. **The Fraction Term:** We pair the `n` terms from the combinatorial expansion with the `n^k` in the denominator: `(n/n) · ((n-1)/n) · ((n-2)/n) ...` As `n` goes to infinity, subtracting a tiny number like 1 or 2 from infinity is meaningless. Every single one of these fractions evaluates to exactly `1`.
 3. **The Negative Exponent Term:** `(1 - λ/n)^(-k)`. Because `λ` divided by infinity is `0`, this becomes `(1 - 0)^(-k)`, which is just `1`.
-4. **The Euler Term:** By the fundamental limit definition of Euler's number (`e`), the term `(1 - λ/n)^n` mathematically converges perfectly to `e^(-λ)`.
+4. **The Euler Term:** By the fundamental limit definition of Euler's number (`e`), the term `(1 - λ/n)^n` converges to `e^(-λ)`.
 
 **The Result:**
-When the dust settles and all the `1`s multiply out, the discrete, clunky Binomial formula has collapsed into the exact Probability Mass Function for a continuous Poisson Point Process:
+Once all the `1`s multiply out, the discrete Binomial formula has collapsed into the Probability Mass Function of a continuous Poisson Point Process:
 
 $$
 P(X = k) = \frac{\lambda^k e^{-\lambda}}{k!}
@@ -508,19 +508,17 @@ $$
 
 ## 4. Why the Point Process is Operationally Superior
 
-Relying on a simple Binomial average (`p`) is highly dangerous for global environmental alerting systems like MARS. Here is exactly why the Thinned Point Process is strictly superior for methane monitoring:
+Relying on a simple Binomial average (`p`) is risky for global environmental alerting systems like MARS. We prefer the Thinned Point Process for methane monitoring for four reasons:
 
-* **Independence from Sensor Revisit Rates:** The simple average heavily depends on your satellite's specific orbit. If Sentinel-2 passes over every 5 days, your "60% persistency" is entirely coupled to that arbitrary 5-day cadence. Switch to a daily satellite, and your empirical ratio will wildly skew. A point process rate (`λ`) models the physical pipe, completely independent of the sensor's polling rate.
-* **Handling Asynchronous and Multi-Sensor Data:** If you monitor a site using Sentinel-2 (every 5 days), Landsat (every 8 days), and a continuous ground sensor, averaging "detections per observation" across different instruments creates a mathematically incoherent mess. A Point Process gracefully merges asynchronous data. Every sensor simply applies its own specific atmospheric thinning filter (`E[P_d]`) to update the single, universal ground-truth rate (`λ`).
+* **Independence from Sensor Revisit Rates:** The simple average heavily depends on your satellite's specific orbit. If Sentinel-2 passes over every 5 days, your "60% persistency" is entirely coupled to that arbitrary 5-day cadence. Switch to a daily satellite, and your empirical ratio will skew a lot. A point process rate (`λ`) models the physical pipe, completely independent of the sensor's polling rate.
+* **Handling Asynchronous and Multi-Sensor Data:** If you monitor a site using Sentinel-2 (every 5 days), Landsat (every 8 days), and a continuous ground sensor, averaging "detections per observation" across different instruments mixes quantities that do not compare. A Point Process merges asynchronous data. Every sensor simply applies its own specific atmospheric thinning filter (`E[P_d]`) to update the single, universal ground-truth rate (`λ`).
 * **Predictive Power for Wait Times:** A Binomial average looks backward; it only tells you what happened. A Point Process looks forward. Because the time between continuous events follows a probability distribution, once you invert your data to establish `λ`, you can calculate the exact expected wait time (`E[Δt] = 1 / λ`) to optimize when to dispatch your LDAR repair crews.
-* **Isolating the Environment from the Asset:** A simple Binomial average mathematically penalizes a site for being cloudy. The Thinned Point Process strictly isolates the environmental filter from the source's physical intensity, allowing the UI dashboard to accurately label a site as `[ ⚪ UNKNOWN / BLIND SPOT ]` rather than falsely granting it a `[ 🟢 MITIGATED ]` compliance status.
+* **Isolating the Environment from the Asset:** A simple Binomial average penalizes a site for being cloudy. The Thinned Point Process isolates the environmental filter from the source's physical intensity, allowing the UI dashboard to accurately label a site as `[ ⚪ UNKNOWN / BLIND SPOT ]` rather than falsely granting it a `[ 🟢 MITIGATED ]` compliance status.
 
 ## 5. Cross-Domain Equivalencies
 
-This stochastic leap is not a novel academic exercise; it is the gold standard for dynamic systems. If stakeholders are skeptical of abandoning simple ratios, point them to how other rigorous engineering disciplines handle persistency:
+This approach is the gold standard for dynamic systems elsewhere. If stakeholders are skeptical of giving up simple ratios, point them to how other engineering disciplines handle persistency:
 
 * **Radar and Sonar Tracking (FISST):** In Finite Set Statistics, targets entering a sensor's field of view (and the false alarms generated by background clutter) are never modeled as simple ratios. They are modeled as Spatial Poisson Point Processes using Probability Hypothesis Density (PHD) filters.
-* **Network Queueing Theory:** Network routers and server farms never use "average hits per observation window" to manage bandwidth. They model persistent request sources using Poisson or Markov-modulated point processes to gracefully handle asynchronous traffic spikes.
-* **Geospatial Intelligence (GEOINT):** Persistent activity hotspots (like maritime loitering, illegal fishing, or illicit transshipments) are strictly modeled as spatial-temporal point processes to generate predictive risk heatmaps that account for satellite revisit blind spots.
-
-
+* **Network Queueing Theory:** Network routers and server farms never use "average hits per observation window" to manage bandwidth. They model persistent request sources using Poisson or Markov-modulated point processes to handle asynchronous traffic spikes.
+* **Geospatial Intelligence (GEOINT):** Persistent activity hotspots (like maritime loitering, illegal fishing, or illicit transshipments) are modeled as spatial-temporal point processes to generate predictive risk heatmaps that account for satellite revisit blind spots.
