@@ -6,7 +6,7 @@ Both score detection i by the importance-corrected mark term of
     mᵢ(θ) = log Σₛ exp(ℓᵢₛ + log P_d(qᵢₛ) + log f(qᵢₛ | θ)),
 
 with the thinned rate p̄(θ) = ∫ P_d(q) f(q | θ) dq in log space
-(:func:`~plumax.population.integrate.log_simpson`; p̄ = 1 without a POD).
+(``integrix.expect.log_simpson``; p̄ = 1 without a POD).
 
 * :func:`mark_iw_model`: the marks given the detections,
   Σᵢ mᵢ(θ) − N log p̄(θ), the λ-free part of the likelihood.
@@ -41,10 +41,8 @@ from plumax.population._src.importance import (
     Measure,
     Regime,
     catalog_evidence,
-    effective_sample_size,
     warn_on_collapse,
 )
-from plumax.population._src.integrate import log_simpson, pareto_smoothed_log_weights
 from plumax.population._src.marks import MARKS, Mark
 from plumax.population._src.pod_union import (
     TOD_BINS,
@@ -106,7 +104,7 @@ def log_thinned_rate(
         # a normalised f integrates to one
         return jnp.zeros(())
     integrand = _log_integrand(mark, theta, log_pod)
-    inside = log_simpson(integrand, support[0], support[1], n=n_nodes)
+    inside = integrix_expect.log_simpson(integrand, support[0], support[1], n=n_nodes)
     # P_d(q_hi) P(Q > q_hi), the tail beyond the last node
     upper = jnp.asarray(support[1], dtype=float)
     beyond = log_pod(upper) + mark.log_survival(upper, **theta)
@@ -590,12 +588,12 @@ def fit_size_distribution_iw(
         name: jnp.asarray(np.mean(value, axis=0)) for name, value in samples.items()
     }
     log_weights = np.asarray(evidence.log_terms(_log_integrand(family, theta, log_pod)))
-    ess = np.asarray(effective_sample_size(jnp.asarray(log_weights)))
+    ess = np.asarray(integrix_expect.effective_sample_size(jnp.asarray(log_weights)))
     pareto_k = np.full(ess.shape, math.nan)
     if regime is Regime.FULL:
-        pareto_k = np.array(
-            [pareto_smoothed_log_weights(row)[1] for row in log_weights]
-        )
+        # one k̂ per event, batched over the events
+        _, k_hat = integrix_expect.pareto_smoothed_log_weights(jnp.asarray(log_weights))
+        pareto_k = np.asarray(k_hat)
     warn_on_collapse(ess, log_weights.shape[-1], pareto_k)
     return MarkPosterior(
         mark=mark, regime=regime, samples=samples, ess=ess, pareto_k=pareto_k

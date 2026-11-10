@@ -24,7 +24,7 @@ Design validation checklist (06a / 06b), each a test in
 * regime consistency: POINT, GAUSSIAN and FULL agree on tight posteriors;
 * reduction: with π_i = f(· | θ₀) the corrected term at θ₀ is the plain
   posterior average of P_d;
-* log-space integration: :func:`~plumax.population.integrate.log_simpson`
+* log-space integration: ``integrix.expect.log_simpson``
   matches Pareto importance sampling for a Hill POD against a lognormal-Pareto
   mark where linear quadrature does not;
 * ESS: S for equal weights, near 1 when one weight dominates, and a warning
@@ -42,12 +42,12 @@ from typing import TYPE_CHECKING, Literal
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
+from integrix import expect as integrix_expect
 from jax.scipy.special import logsumexp
 from jaxtyping import Array, Float
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
-from plumax.population._src.integrate import pareto_smoothed_log_weights
 
 
 if TYPE_CHECKING:
@@ -116,23 +116,27 @@ class EventEvidence(eqx.Module):
         Without ``log_integrand`` the weights are the prior correction alone.
         """
         if log_integrand is None:
-            return effective_sample_size(self.log_weights)
-        return effective_sample_size(self.log_terms(log_integrand))
+            return integrix_expect.effective_sample_size(self.log_weights)
+        return integrix_expect.effective_sample_size(self.log_terms(log_integrand))
 
 
 def effective_sample_size(log_weights: Float[Array, "*event member"]) -> Array:
-    """ESS = (Σₛ wₛ)² / Σₛ wₛ² from log-weights, along the last axis.
+    """Deprecated alias of `integrix.expect.effective_sample_size` (plumax#253).
+
+    ESS = (Σₛ wₛ)² / Σₛ wₛ² from log-weights, along the last axis.
 
     Examples:
         >>> import jax.numpy as jnp
         >>> bool(jnp.allclose(effective_sample_size(jnp.zeros(8)), 8.0))
         True
     """
-    # 2 log Σ w − log Σ w²
-    log_ess = 2.0 * logsumexp(log_weights, axis=-1) - logsumexp(
-        2.0 * log_weights, axis=-1
+    warnings.warn(
+        "plumax.population.importance.effective_sample_size is deprecated; use "
+        "integrix.expect.effective_sample_size (plumax#253).",
+        DeprecationWarning,
+        stacklevel=2,
     )
-    return jnp.exp(log_ess)
+    return integrix_expect.effective_sample_size(log_weights)
 
 
 def _prior_logpdf(event: EmissionEvent) -> Callable[[Array], Array]:
@@ -296,11 +300,13 @@ def ess_report(
     """
     evidence = catalog_evidence(catalog, regime=regime, measure=measure)
     log_w = np.asarray(evidence.log_terms(log_integrand))
-    ess = np.asarray(effective_sample_size(jnp.asarray(log_w)))
+    ess = np.asarray(integrix_expect.effective_sample_size(jnp.asarray(log_w)))
     if warn:
         pareto_k = None
         if Regime(regime) is Regime.FULL:
-            pareto_k = np.array([pareto_smoothed_log_weights(row)[1] for row in log_w])
+            # one k̂ per event, batched over the events
+            _, k_hat = integrix_expect.pareto_smoothed_log_weights(jnp.asarray(log_w))
+            pareto_k = np.asarray(k_hat)
         warn_on_collapse(ess, log_w.shape[-1], pareto_k)
     return ess
 

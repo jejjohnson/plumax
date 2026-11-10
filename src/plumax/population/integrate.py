@@ -1,4 +1,4 @@
-"""Log-space integration for the Tier V mark likelihood (implementation in ``plumax.population._src.integrate``)."""
+"""Deprecated aliases of integrix's log-space rules (``integrix.expect``, plumax#253); they go after one release."""
 
 from __future__ import annotations
 

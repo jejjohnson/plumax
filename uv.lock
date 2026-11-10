@@ -1710,8 +1710,8 @@ wheels = [
 
 [[package]]
 name = "integrix"
-version = "0.0.4"
-source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.4#aca5c1f457632845e5415159adf0d4cccb296c3c" }
+version = "0.0.5"
+source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.5#74375bf86fb361aad712e728c929b2754fb7fb3f" }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
@@ -3457,7 +3457,7 @@ requires-dist = [
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
-    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.4" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
