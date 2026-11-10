@@ -69,7 +69,7 @@ $$
 p(\text{detected}_i \mid f, \lambda, P_d) \;\approx\; \frac{1}{S}\, \sum_{s=1}^{S}\, P_d(Q_i^{(s)})\, \frac{f(Q_i^{(s)})}{\pi_\text{per-event}(Q_i^{(s)})}
 $$
 
-The ratio $f / \pi_\text{per-event}$ is the importance weight that re-points the per-event posterior at the population mark distribution.
+The ratio $f / \pi_\text{per-event}$ is the importance weight that re-points the per-event posterior at the population mark distribution. When those weights are heavy-tailed the estimate cannot be trusted, and the effective sample size and Pareto $\hat{k}$ checks that plumax runs per event (`ess_report`, with both diagnostics from `integrix.expect`) are explained in integrix's [When importance weights lie](https://jejjohnson.github.io/integrix/expectations/#when-importance-weights-lie).
 
 :::{important} Without re-weighting, the population fit double-counts the prior
 Posterior on $f$ becomes biased; downstream total-mass estimates inherit the bias.
@@ -83,7 +83,7 @@ Posterior on $f$ becomes biased; downstream total-mass estimates inherit the bia
 | Regime | Per-event input | Mark integration |
 | --- | --- | --- |
 | **Point** | $\hat{Q}_i$ (MAP / median) | $P_d(\hat{Q}_i) \cdot f(\hat{Q}_i) / \pi_\text{per-event}(\hat{Q}_i)$; ignores per-event uncertainty |
-| **Gaussian summary** | $(\mu_{\log Q}, \sigma^{2}_{\log Q})$ (lognormal) | Closed form when $f$ is a power-law: $\int Q^{-\alpha}\, \operatorname{LogNormal}(Q \mid \mu, \sigma^{2})\, \mathrm{d}Q = \exp(-\alpha\mu + \tfrac{1}{2}\alpha^{2}\sigma^{2})$. The full integrand requires a $P_d$ model; for sigmoidal POD with logistic form, the integral is tractable via Gauss-Hermite quadrature (≤ 10 nodes for 4-decimal accuracy) |
+| **Gaussian summary** | $(\mu_{\log Q}, \sigma^{2}_{\log Q})$ (lognormal) | Closed form when $f$ is a power-law: $\int Q^{-\alpha}\, \operatorname{LogNormal}(Q \mid \mu, \sigma^{2})\, \mathrm{d}Q = \exp(-\alpha\mu + \tfrac{1}{2}\alpha^{2}\sigma^{2})$. The full integrand requires a $P_d$ model; with a sigmoidal POD it is a Gauss-Hermite rule in $\log Q$ (integrix's [Gaussian expectations with a closed rule](https://jejjohnson.github.io/integrix/expectations/#gaussian-expectations-with-a-closed-rule)), which plumax evaluates with 32 nodes |
 | **Full posterior** | sample set $\{Q_i^{(s)}\}$ from Tier I-IV MCMC | $(1/S)\, \sum_s P_d(Q_i^{(s)}) \cdot f(Q_i^{(s)}) / \pi_\text{per-event}(Q_i^{(s)})$, the importance-weighted MC estimator |
 
 Each row evaluates the same $P_d \cdot f / \pi$ integrand; the only difference is the per-event posterior representation.

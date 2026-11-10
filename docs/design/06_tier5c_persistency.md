@@ -129,7 +129,7 @@ Each metric takes an intensity (a registry name or any of the 13 `equinox` kerne
 | Posterior-aware metric wrappers | same module (`posterior_metric`) | ✓ [#112](https://github.com/jejjohnson/plumax/issues/112) |
 | Operational dashboard / report templates | out of scope for `plumax`; lives in `plumax-deploy` (future) | - |
 
-The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few intensity choices (constant, exponential decay) and otherwise needs `jax.scipy.integrate` or a fixed quadrature. We should wrap it once and reuse it across metrics.
+The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few intensity choices (constant, exponential decay). Otherwise it is an integral to infinity, which integrix's [An integral to infinity](https://jejjohnson.github.io/integrix/expectations/#an-integral-to-infinity) treats with tanh-sinh quadrature and checks against $1/\lambda_0$; plumax's `expected_wait_time` uses its own log-spaced survival grid today.
 
 ---
 
