@@ -58,7 +58,6 @@ Each object in Part II is tagged with the phase(s) it serves. If you care about 
 Notation and units are fixed once, in [§I.6](#i-6 "Notation and units"), and used unchanged on every page. Running-example boxes look like this:
 
 :::{hint} Running example
-:class: dropdown
 The same $40 \times 40\ \mathrm{km}$ Permian region, four point sources and one diffuse field, from [§I.5](#i-5) to the basin total in [§III.3](#iii-3).
 :::
 

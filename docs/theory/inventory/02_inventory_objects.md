@@ -69,8 +69,6 @@ Once $\mu_{\mathrm{sc}}$ has been folded in, this split is an approximation we c
 :::
 
 :::{hint} Running example
-:class: dropdown
-:open:
 $$
 \begin{aligned}
 \mu_{\mathrm{pt}}(A_1) &= 120 & \mu_{\mathrm{df}}(A_1) &= 0\\
@@ -108,8 +106,6 @@ Ignore rates. $N(A)$ is a *Poisson process with intensity measure $\lambda$* if
 With density: $\lambda(A) = \int_A \lambda(x)\,\mathrm{d}x$, $\lambda(x)$ in $\mathrm{km^{-2}}$. **Homogeneous:** $\lambda$ constant. **Inhomogeneous:** high over active fields, $\approx 0$ over rangeland.
 
 :::{hint} Running example
-:class: dropdown
-:open:
 Suppose $\lambda(x) = 0.05\ \mathrm{km^{-2}}$ over active acreage, $0.002\ \mathrm{km^{-2}}$ elsewhere. $A_1$ ($400\ \mathrm{km^2}$, mostly active) has $\lambda(A_1) \approx 15$: we expect about 15 point sources there, standard deviation $\approx 4$.
 
 Our four "true" sources are the ones large enough to matter; the Poisson prior also expects many tiny ones (see [§II.4](#ii-4)).
@@ -171,8 +167,6 @@ $$
 $$
 
 :::{hint} Running example
-:class: dropdown
-:open:
 $H(A_3) = 500\ \mathrm{kg\,h^{-1}}$ gives $\mu_{\mathrm{pt}}(A_3)/s_0 \sim \mathrm{Gamma}(500, 1)$: mean 500, standard deviation $\approx 22\ \mathrm{kg\,h^{-1}}$. The true 410 sits $(500 - 410)/22 \approx 4$ standard deviations below the mean: this prior all but rules the truth out.
 :::
 
@@ -198,8 +192,6 @@ Power-law body, exponential cut-off at scale $1/\tau$.
 | $\sigma \in (0,1),\ \tau > 0$ | tempered stable: heavy body, finite mean. Use this. |
 
 :::{hint} Running example
-:class: dropdown
-:open:
 Source 3 is 66 % of $\mu_{\mathrm{pt}}(S)$. A Gamma prior calls that an outlier; a tempered-stable prior with $\sigma \approx 0.5$ expects exactly this shape.
 :::
 
@@ -257,8 +249,6 @@ $$
 This is the Dirichlet process $\mathrm{DP}(H/s_0)$: its base measure is the dimensionless $H/s_0$, whose total mass $H(S)/s_0$ is the concentration.
 
 :::{hint} Running example
-:class: dropdown
-:open:
 $H = (500, 150, 500, 200)\ \mathrm{kg\,h^{-1}}$ gives fractions centred on $(0.37, 0.11, 0.37, 0.15)$.
 :::
 
@@ -364,8 +354,6 @@ $$
 positive wherever $k_g > 0$, as it is everywhere for the usual exponential, Matérn, and squared-exponential kernels, and negative where a kernel with negative lobes has $k_g < 0$. This is the LGCP, and it is the natural *discovery* prior: more detections in $A_1$ than its search effort predicts raise the posterior source density in adjacent $A_3$ before $A_3$ has been searched, and fewer lower it. The update depends on the count relative to its expectation, because the Poisson likelihood pairs the observed points with the integrated-intensity penalty $-\int p\,\lambda$.
 
 :::{hint} Running example
-:class: dropdown
-:open:
 With $k_g$'s correlation length 20 km, a search of $A_1$ moves $\mathbb{E}[N(A_3) \mid \text{data}]$ by a fraction set by $k_g(x_1, A_3)$. Because this exponential kernel is positive, $A_3$ moves in the direction of the surprise. Five detections against 4.5 expected would raise it; the single detection of [§III.1](#iii-1) against 4.5 expected lowers both $A_1$ and $A_3$. Under plain Poisson, $A_3$ would not move either way.
 :::
 
@@ -413,8 +401,6 @@ $C_\Delta$ maps a measure to a vector of pixel totals in $\mathrm{kg\,h^{-1}}$. 
 ::::
 
 :::{hint} Running example
-:class: dropdown
-:open:
 The coarse mapper's 7 km pixel over the north-east of $A_2$ contains source 2 ($35\ \mathrm{kg\,h^{-1}}$) and roughly a quarter of field $D$ ($100\ \mathrm{kg\,h^{-1}}$): $C_\Delta\mu \approx 135\ \mathrm{kg\,h^{-1}}$ for that pixel, and the mapper cannot tell the two apart. The fine imager *resolves* source 2 geometrically (its footprint would be a compact plume), but at $35\ \mathrm{kg\,h^{-1}}$ it is below the $\approx 100\ \mathrm{kg\,h^{-1}}$ detection limit, so it goes undetected ([§II.9.2](#ii-9-2)); field $D$ produces no plume at all. Resolution and detection are different properties.
 :::
 
@@ -478,8 +464,6 @@ If they are not (overpass at 10:30 local, blowdowns scheduled mornings) the esti
 :::::
 
 :::{hint} Running example: source 3
-:class: dropdown
-:open:
 $s_3 = 410$, $\pi_3 = 0.3$, $\bar{s}_3 = 123\ \mathrm{kg\,h^{-1}}$. Ten fine-imager overpasses, eight clear, three showing a plume, each estimating $\approx 400 \pm 120\ \mathrm{kg\,h^{-1}}$ (the same sequence as [§III.2](#iii-2)). The raw fraction $3/8$ estimates $\pi_3\,p(x_3, s_3)$, not $\pi_3$ ([§II.9.3](#ii-9-3)). Dividing by the POD, $p(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$, gives $\hat\pi_3 \approx 0.42$, $\hat{s}_3 \approx 400$, and $\hat{\bar{s}}_3 \approx 167\ \mathrm{kg\,h^{-1}}$ against a truth of 123. The gap is sampling noise on eight scenes ([§III.2](#iii-2) gives the interval), and the estimate is unbiased only *if* the overpasses are a fair sample of the source's schedule.
 :::
 
@@ -496,8 +480,6 @@ If $N$ is Poisson with intensity $\lambda$, then $N_{\mathrm{obs}}$ is Poisson w
 :::
 
 :::{hint} Running example
-:class: dropdown
-:open:
 $\lambda(A_1) \approx 15$, $p \approx 0.3$ over $A_1$ on a given day, so $N_{\mathrm{obs}}(A_1) \sim \mathrm{Poisson}(4.5)$ and the undetected $\sim \mathrm{Poisson}(10.5)$, independent.
 :::
 
@@ -532,8 +514,6 @@ Under that condition:
     This is the below-detection-limit gap, in one line.
 
 :::{hint} Running example
-:class: dropdown
-:open:
 Fine imager, $s_{\min} \approx 100\ \mathrm{kg\,h^{-1}}$: sources 2 and 4 (35, 60) are essentially invisible; sources 1 and 3 are visible when on. Observable point total $\approx 530$ of $625\ \mathrm{kg\,h^{-1}}$ instantaneous, and a *further* factor of $\pi_k$ once averaged.
 :::
 

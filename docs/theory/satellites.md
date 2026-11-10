@@ -18,7 +18,6 @@ numbering:
 The Methane Alert and Response System (MARS) combines data from over 35 satellites, which fall into two functional categories.
 
 :::{note} Detection categories
-:class: dropdown
 
 - **Point Source Imagers (PSI):** high spatial resolution (20-60 m), tasked or systematic imaging, sensitivity to individual facility plumes (~100-1{,}000 kg/h detection floor).
 - **Area Flux Mappers (AFM):** wide-swath column retrievals of XCH₄ (in ppb), which allow regional and national budget attribution.
