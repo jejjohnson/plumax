@@ -551,7 +551,7 @@ def _pick_solver(name: SolverName):
     if name == "dopri5":
         return diffrax.Dopri5(), True
     if name == "ssprk3":
-        from finitevolx import RK3SSP
+        from integrix.march import RK3SSP
 
         return RK3SSP(), False
     if name == "heun":

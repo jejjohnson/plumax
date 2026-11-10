@@ -33,6 +33,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+from integrix import expect as integrix_expect
 from jaxtyping import Array, Bool, Float
 
 from plumax.population._src.importance import (
@@ -434,7 +435,26 @@ class MarkPosterior:
 
     def posterior_mean(self) -> dict[str, np.floating | np.ndarray]:
         """θ̄, the posterior mean of every parameter."""
-        return {name: np.mean(draws, axis=0) for name, draws in self.samples.items()}
+        moments = self._posterior_moments()
+        return {name: mean[()] for name, (mean, _) in moments.items()}
+
+    def posterior_standard_error(self) -> dict[str, np.floating | np.ndarray]:
+        """σ̂/√S, the Monte Carlo standard error of each posterior mean."""
+        moments = self._posterior_moments()
+        return {name: error[()] for name, (_, error) in moments.items()}
+
+    def _posterior_moments(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        """θ̄ and its standard error per parameter, over the draws NumPyro made."""
+        moments = {}
+        for name, draws in self.samples.items():
+            # θ̄ = (1/S) ∑ₛ θ⁽ˢ⁾, σ̂/√S
+            estimate = integrix_expect.monte_carlo(
+                lambda draw: draw, jnp.asarray(draws)
+            )
+            mean = np.asarray(estimate.value)
+            error = np.asarray(estimate.standard_error)
+            moments[name] = (mean, error)
+        return moments
 
 
 @dataclass(frozen=True)

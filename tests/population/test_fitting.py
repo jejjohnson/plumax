@@ -140,3 +140,28 @@ def test_pod_powerlaw_gradient_matches_finite_differences():
     step = 1e-5
     central = (log_likelihood(2.0 + step) - log_likelihood(2.0 - step)) / (2 * step)
     np.testing.assert_allclose(jax.grad(log_likelihood)(2.0), central, rtol=1e-5)
+
+
+def test_posterior_mean_and_standard_error_come_from_integrix() -> None:
+    """plumax#247: the posterior mean is integrix's Monte Carlo average of the
+    draws NumPyro made, equal to ``np.mean`` to 1e-12, with its standard error
+    σ̂/√S beside it."""
+    from plumax.population.fitting import MarkPosterior
+    from plumax.population.importance import Regime
+
+    rng = np.random.default_rng(0)
+    samples = {"mu": rng.normal(2.0, 0.3, 400), "sigma": rng.gamma(4.0, 0.1, 400)}
+    posterior = MarkPosterior(
+        mark="lognormal",
+        regime=Regime.FULL,
+        samples=samples,
+        ess=np.ones(3),
+        pareto_k=np.zeros(3),
+    )
+    means = posterior.posterior_mean()
+    errors = posterior.posterior_standard_error()
+    for name, draws in samples.items():
+        np.testing.assert_allclose(means[name], np.mean(draws), rtol=1e-12)
+        expected_error = np.std(draws, ddof=1) / np.sqrt(draws.size)
+        np.testing.assert_allclose(errors[name], expected_error, rtol=1e-12)
+        assert np.ndim(means[name]) == 0
