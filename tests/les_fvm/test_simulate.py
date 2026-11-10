@@ -521,3 +521,27 @@ def test_simulate_with_time_varying_wind_schedule():
         dt0=0.5,
     )
     assert float(ds["concentration"].max()) > 0.0
+
+
+@pytest.mark.slow
+def test_ssprk3_from_integrix_matches_finitevolx(monkeypatch):
+    """plumax#247: ``solver="ssprk3"`` now takes ``RK3SSP`` from integrix, which
+    moved it from finitevolX with the same tableau; the run equals finitevolX's
+    to 1e-12 in float64."""
+    from finitevolx import RK3SSP as FinitevolxRK3SSP
+
+    from plumax.les_fvm import simulate as simulate_module
+
+    kwargs = _common_kwargs(solver="ssprk3")
+    integrix_run = simulate_eulerian_dispersion(**kwargs)
+    monkeypatch.setattr(
+        simulate_module, "_pick_solver", lambda name: (FinitevolxRK3SSP(), False)
+    )
+    finitevolx_run = simulate_eulerian_dispersion(**kwargs)
+    assert float(integrix_run["concentration"].max()) > 0.0
+    np.testing.assert_allclose(
+        integrix_run["concentration"].values,
+        finitevolx_run["concentration"].values,
+        rtol=1e-12,
+        atol=1e-15,
+    )
