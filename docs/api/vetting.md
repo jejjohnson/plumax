@@ -8,7 +8,7 @@ Errors are radtrax's public exception classes (`ParameterError`, `DegenerateInpu
     options:
       members: false
 
-## `vet` — one candidate
+## `vet`: one candidate
 
 ::: plumax.vetting
     options:
@@ -18,7 +18,7 @@ Errors are radtrax's public exception classes (`ParameterError`, `DegenerateInpu
         - vet_candidate
         - VettingResult
 
-## `seeds` — the seeds and the background pool
+## `seeds`: the seeds and the background pool
 
 ::: plumax.vetting
     options:
@@ -28,7 +28,7 @@ Errors are radtrax's public exception classes (`ParameterError`, `DegenerateInpu
         - select_seeds
         - background_pool
 
-## `null` — a null from the same scene
+## `null`: a null from the same scene
 
 ::: plumax.vetting
     options:

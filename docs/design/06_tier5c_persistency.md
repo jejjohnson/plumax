@@ -1,8 +1,8 @@
-# Tier V.C — Persistency
+# Tier V.C: Persistency
 
 **Question:** Given the inverted intensity $\lambda(t)$ from Tier V.B, when will the next emission event happen, and what's the probability of an event during a specified window?
 
-This is the **operational layer** — what an LDAR (Leak Detection and Repair) crew or a satellite-tasking dispatcher actually consumes. The full derivations of each metric live in the [persistency theory page](../theory/population/03_persistency.md); this page summarises the metrics and how they slot into the `plumax` API.
+This is the operational layer, which is what an LDAR (Leak Detection and Repair) crew or a satellite-tasking dispatcher actually consumes. The full derivations of each metric live in the [persistency theory page](../theory/population/03_persistency.md); this page summarises the metrics and how they slot into the `plumax` API.
 
 ---
 
@@ -39,20 +39,20 @@ $$
 \mathbb{P}\!\bigl(N(t_1, t_2) \geq 1\bigr) \;=\; 1 - \exp\!\left(-\int_{t_1}^{t_2} \lambda(t)\, \mathrm{d}t\right) \qquad \text{(inhomogeneous)}
 $$
 
-**Operational use.** "Wrench-turning" probability. If a maintenance window is 4 hours, what's the chance the leak shows itself during that window? Drives whether to schedule the visit.
+**Operational use.** This is the "wrench-turning" probability: if a maintenance window is 4 hours, what's the chance the leak shows itself during that window? It drives whether to schedule the visit.
 
 (vc-conditional-intensity)=
 ### 3. Conditional intensity given prior detection $\lambda(t \mid t_\text{prev})$
 
 For a source with a known recent detection at $t_\text{prev}$, what's the posterior intensity going forward?
 
-For Poisson processes (no memory): unchanged. For Hawkes / self-exciting processes: bumped —
+For Poisson processes (no memory) the intensity is unchanged. For Hawkes / self-exciting processes it is bumped:
 
 $$
 \lambda(t \mid t_\text{prev}) \;=\; \mu + \alpha\, \exp\!\bigl(-\beta(t - t_\text{prev})\bigr)
 $$
 
-— captures the empirical observation that super-emitters "cluster".
+This captures the empirical observation that super-emitters "cluster".
 
 **Operational use.** Prioritisation: a source with a recent detection is *more* likely to repeat-emit in the next 24 h. Re-task a high-resolution satellite (GHGSat [ghgsat], Carbon Mapper [carbon_mapper]) on top of a TROPOMI alert [s5p_tropomi].
 
@@ -77,41 +77,59 @@ $$
 A thin wrapper around `plumax.population.intensity`:
 
 ```python
+import jax
 from plumax.population.persistency import (
+    expected_count,
     expected_wait_time,
     occurrence_probability,
-    cumulative_count,
-    next_event_quantile,
+    posterior_metric,
+)
+from plumax.population.point_process import PoissonRatePosterior
+
+# Shapes: N_E = 1,000 posterior draws of the event rate λ
+
+# today (plumax)
+# λ | n ~ Gamma(α₀ + n, β₀ + A T), with 200 events over 100 days
+posterior = PoissonRatePosterior(alpha=201.0, beta=100.0, n_events=200, exposure=100.0)
+key = jax.random.key(0)
+key_wait, key_occurrence, key_count = jax.random.split(key, 3)
+
+# today (plumax)
+# 𝔼[Δt | t₀] = ∫₀^∞ exp(−Λ(t₀, t₀ + s)) ds, from t₀ = 18:00 [days]
+wait = posterior_metric(  # samples (N_E,)
+    expected_wait_time, posterior, 0.75, key=key_wait
 )
 
-# Inputs: posterior samples of intensity parameters (from Tier V.B fit)
-# Outputs: posterior samples of the operational metric
+# today (plumax)
+# P(N(t, t + h) ≥ 1) = 1 − exp(−Λ(t, t + h)), from 08:00 for h = 4 hours
+occurrence = posterior_metric(  # samples (N_E,)
+    occurrence_probability, posterior, 8 / 24, 4 / 24, key=key_occurrence
+)
 
-E_wait = expected_wait_time(intensity, t0=18.0, posterior_samples=mcmc.get_samples())
-# → array of shape (n_samples,) in [hours]
-
-P_occur = occurrence_probability(intensity, t1=8.0, t2=12.0,
-                                 posterior_samples=mcmc.get_samples())
-# → array of shape (n_samples,) in [0, 1]
+# today (plumax)
+# 𝔼[N(t, t + h)] = Λ(t, t + h), over a year
+count = posterior_metric(  # samples (N_E,)
+    expected_count, posterior, 0.0, 365.0, key=key_count
+)
 ```
 
-The metric functions take an intensity callable (any of the 13 `equinox` modules from `plumax.population.intensity`), a query window, and a posterior sample of the intensity's parameters. They return posterior samples of the metric — full UQ propagation, no point estimates.
+Each metric takes an intensity (a registry name or any of the 13 `equinox` kernels from `plumax.population.intensity`), a start time and, for a window, a horizon, all in days. `posterior_metric` then maps a metric over the draws of a fitted posterior (Gamma-Poisson, log-linear or the full TMTPP) and returns the samples with their quantiles, so the UQ propagates in full and there are no point estimates. The conditional intensity of section 3 needs a Hawkes kernel, which is still open ([#115](https://github.com/jejjohnson/plumax/issues/115)).
 
 ---
 
 (vc-modules)=
 ## Module layout
 
-*Tier V.C module layout — concern, target module, status.*
+*Tier V.C module layout: concern, target module and status.*
 
 | Concern | Module | Status |
 | --- | --- | --- |
 | Intensity functions | `plumax.population.intensity` | ✓ in tree |
 | Wait-time / occurrence / cumulative metrics | `plumax.population.persistency` | ✓ [#112](https://github.com/jejjohnson/plumax/issues/112) |
 | Posterior-aware metric wrappers | same module (`posterior_metric`) | ✓ [#112](https://github.com/jejjohnson/plumax/issues/112) |
-| Operational dashboard / report templates | out of scope for `plumax`; lives in `plumax-deploy` (future) | — |
+| Operational dashboard / report templates | out of scope for `plumax`; lives in `plumax-deploy` (future) | - |
 
-The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few intensity choices (constant, exponential decay) and otherwise needs `jax.scipy.integrate` or a fixed quadrature. Worth wrapping once and reusing across metrics.
+The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few intensity choices (constant, exponential decay) and otherwise needs `jax.scipy.integrate` or a fixed quadrature. We should wrap it once and reuse it across metrics.
 
 ---
 
@@ -121,7 +139,7 @@ The integral over $\lambda(t)$ in the wait-time formula is closed-form for a few
 - **Homogeneous limit.** For constant $\lambda$, all four metrics have closed-form formulas; the implementation should match to machine precision.
 - **MC self-consistency.** Sample $n$ event times from a known $\lambda(t)$ via thinning, compute the empirical wait time / occurrence frequency, compare to the closed-form metric. Tests both the metric implementation and the simulator.
 - **Posterior coverage.** For a synthetic source with known $\lambda_\text{true}(t)$, the 95% credible interval on $\mathbb{E}[\Delta t]$ should contain the truth ~95% of the time across replicates.
-- **Diurnal sanity.** A solar-heated tank with peak $\lambda$ at 14:00 should have $\mathbb{E}[\Delta t \mid 14{:}00] \ll \mathbb{E}[\Delta t \mid 02{:}00]$. Numerical sanity check, not a formal test, but catches sign errors.
+- **Diurnal sanity.** A solar-heated tank with peak $\lambda$ at 14:00 should have $\mathbb{E}[\Delta t \mid 14{:}00] \ll \mathbb{E}[\Delta t \mid 02{:}00]$. This is a numerical sanity check rather than a formal test, but it catches sign errors.
 
 ---
 

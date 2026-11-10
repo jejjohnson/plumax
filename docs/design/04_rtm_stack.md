@@ -1,18 +1,18 @@
-# Radiative transfer (RTM) stack — parallel track
+# Radiative transfer (RTM) stack: parallel track
 
-The RTM is the **observation operator** $\mathbf{H}_\text{obs} : c(\mathbf{x},t) \to \mathbf{y}_\text{radiance}$. It connects Tiers II–IV to actual satellite measurements. Independent of transport tier — can be developed in parallel by a different person without coordination.
+The RTM is the observation operator $\mathbf{H}_\text{obs} : c(\mathbf{x},t) \to \mathbf{y}_\text{radiance}$. It connects Tiers II-IV to actual satellite measurements. It is independent of the transport tier, so it can be developed in parallel by a different person without coordination.
 
-If you're working with **Level-2 XCH₄ products** (e.g. TROPOMI official retrieval; [s5p_tropomi]), the entire RTM stack collapses to just the [averaging-kernel operator](#prereqs-ak-operator); this whole page becomes "use the published L2." This page assumes Level-1 (radiance) work, where you build the retrieval yourself.
+If you're working with Level-2 XCH₄ products (e.g. TROPOMI official retrieval; [s5p_tropomi]), the entire RTM stack collapses to just the [averaging-kernel operator](#prereqs-ak-operator), and this whole page becomes "use the published L2." This page assumes Level-1 (radiance) work, where you build the retrieval yourself.
 
 ---
 
 (rtm-simple-model)=
-## (1) Simple model — line-by-line via HAPI
+## (1) Simple model: line-by-line via HAPI
 
-[HAPI (HITRAN Application Programming Interface)](https://hitran.org/hapi/) ([gordon2022hitran,kochanov2016hapi]) provides absorption cross-sections $\sigma(\nu, T, p)$ from the HITRAN database. **All operational satellites for methane retrieval are SWIR** — solar reflection, not thermal emission. The two-way path matters and so does scattering; a pure clear-sky Beer–Lambert model is biased by 10–30% on aerosol-loaded scenes.
+[HAPI (HITRAN Application Programming Interface)](https://hitran.org/hapi/) ([gordon2022hitran,kochanov2016hapi]) provides absorption cross-sections $\sigma(\nu, T, p)$ from the HITRAN database. All operational satellites for methane retrieval work in the SWIR, which means solar reflection, not thermal emission. The two-way path matters, and so does scattering, so a pure clear-sky Beer-Lambert model is biased by 10-30% on aerosol-loaded scenes.
 
 (rtm-beer-lambert)=
-### Clear-sky two-way Beer–Lambert (SWIR scope)
+### Clear-sky two-way Beer-Lambert (SWIR scope)
 
 $$
 L(\nu) \;=\; \frac{F_\text{solar}(\nu)}{\pi}\, A_\text{surf}(\nu)\, \cos(\text{SZA})\, \exp\!\bigl(-\tau_\text{total}(\nu)\bigr)
@@ -26,10 +26,10 @@ $$
 \tau(\nu) \;=\; \int \sigma\!\bigl(\nu, T(z), p(z)\bigr)\, \rho_{\text{CH}_4}(z)\, \mathrm{d}z
 $$
 
-- $F_\text{solar}(\nu)$ — top-of-atmosphere solar irradiance.
-- $A_\text{surf}(\nu)$ — surface albedo (Lambertian for v1, BRDF for v2).
-- $(\text{SZA}, \text{VZA}, \text{RAA})$ — solar zenith, viewing zenith, relative azimuth from L1 metadata.
-- $\tau_\text{total}$ — **two-way** optical depth: light goes down through the atmosphere, reflects, comes back up. The earlier $\exp(-\tau)$ form was one-way and silently biased at oblique geometries.
+- $F_\text{solar}(\nu)$: top-of-atmosphere solar irradiance.
+- $A_\text{surf}(\nu)$: surface albedo (Lambertian for v1, BRDF for v2).
+- $(\text{SZA}, \text{VZA}, \text{RAA})$: solar zenith, viewing zenith, relative azimuth from L1 metadata.
+- $\tau_\text{total}$: the two-way optical depth, as light goes down through the atmosphere, reflects and comes back up. The earlier $\exp(-\tau)$ form was one-way and silently biased at oblique geometries.
 
 (rtm-thermal-ir)=
 ### Thermal-IR addendum
@@ -40,26 +40,26 @@ $$
 L_\text{TIR}(\nu) \;=\; \varepsilon_\text{surf}(\nu)\, B(T_\text{surf}, \nu)\, \exp\!\bigl(-\tau(\nu)\bigr) \;+\; \int B(\nu, T(z))\, \mathrm{d}\!\exp\!\bigl(-\tau(\nu, z)\bigr)
 $$
 
-Different physics, different priors ($\varepsilon_\text{surf}$ instead of $A_\text{surf}$, $T_\text{surf}$ instead of $F_\text{solar}$). Don't conflate the two surface models in code — split per spectral regime.
+Different physics, different priors ($\varepsilon_\text{surf}$ instead of $A_\text{surf}$, $T_\text{surf}$ instead of $F_\text{solar}$). We should not conflate the two surface models in code, so we split them per spectral regime.
 
-### Scattering — out-of-scope for v1, planned for v2
+### Scattering: out-of-scope for v1, planned for v2
 
-SWIR aerosol scattering is the leading systematic for methane retrievals over bright/aerosol-loaded scenes. v1 commits to **clear-sky direct-beam** with explicit AOD-based screening (reject pixels with $\text{AOD} > 0.2$); v2 couples to **LIDORT / DISORT / 6S** for multiple-scattering Jacobians. Validation against operational L2 in Step 4 must stratify by AOD to expose the v1 limit.
+SWIR aerosol scattering is the leading systematic for methane retrievals over bright/aerosol-loaded scenes. v1 commits to clear-sky direct-beam with explicit AOD-based screening (reject pixels with $\text{AOD} > 0.2$); v2 couples to LIDORT / DISORT / 6S for multiple-scattering Jacobians. Validation against operational L2 in Step 4 must stratify by AOD to expose the v1 limit.
 
 ### Line shape and continuum
 
-- **Voigt profile** with explicit wing cutoffs (default: 25 cm⁻¹). HAPI is the source of truth; expose the cutoff as a config knob — too tight underestimates absorption in the wings, too wide adds noise.
-- **CO₂-specific line mixing** in the methane window. Required because CO₂ overlaps the 1.65 μm CH₄ band; ignoring line mixing biases retrievals by ~5 ppb.
+- Voigt profile with explicit wing cutoffs (default: 25 cm⁻¹). HAPI is the source of truth, so we expose the cutoff as a config knob; too tight a cutoff underestimates absorption in the wings and too wide a cutoff adds noise.
+- CO₂-specific line mixing in the methane window. Required because CO₂ overlaps the 1.65 μm CH₄ band; ignoring line mixing biases retrievals by ~5 ppb.
 - **MT_CKD H₂O continuum.** Non-trivial in the methane band; load alongside HAPI cross-sections.
 
 (rtm-hapi-trace)=
 ### HAPI traceability
 
 :::{important} HAPI is not JAX-traceable
-The architectural choice is explicit: pre-tabulate, then trace.
+The architectural choice is explicit, so we pre-tabulate and then trace.
 
-- **Path A — pre-tabulate, JAX-trace.** HAPI generates $\sigma(\nu, T, p)$ lookup tables offline; runtime `forward.py` interpolates inside `jax.jit`. This is what [`hapi_lut/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/) already implements. Default for v1.
-- **Path B — `jax.pure_callback` with custom VJP.** Wrap HAPI calls in a callback when needed inside differentiable code. Use only for cross-section sensitivities not pre-tabulated.
+- **Path A: pre-tabulate, JAX-trace.** HAPI generates $\sigma(\nu, T, p)$ lookup tables offline; runtime `forward.py` interpolates inside `jax.jit`. This is what [`hapi_lut/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/) already implements. It is the default for v1.
+- **Path B: `jax.pure_callback` with custom VJP.** Wrap HAPI calls in a callback when needed inside differentiable code. We use it only for cross-section sensitivities not pre-tabulated.
 
 **Why:** `jax.jacobian` "exactly" works only on Path A; on Path B, the VJP is whatever you wrote. Document the chosen path on every forward-RT helper.
 :::
@@ -72,20 +72,20 @@ The architectural choice is explicit: pre-tabulate, then trace.
 (rtm-state-vector)=
 ### Joint state vector
 
-Operational SWIR retrievals do **not** retrieve XCH₄ alone. The state vector is jointly:
+Operational SWIR retrievals do not retrieve XCH₄ alone, so the state vector is joint:
 
 $$
 \mathbf{x} \;=\; (\text{profile}_{\text{CH}_4},\; \text{profile}_{\text{H}_2\text{O}},\; A_\text{surf},\; \text{AOD},\; p_\text{surf,offset})
 $$
 
-- $\text{profile}_{\text{CH}_4}$ — CH₄ vertical profile (typically 12–30 layers).
-- $\text{profile}_{\text{H}_2\text{O}}$ — H₂O profile is coupled (overlapping bands, continuum).
-- $A_\text{surf}$ — spectrally-resolved albedo.
-- $\text{AOD}$ — aerosol optical depth (coarse-mode and fine-mode separately for high-fidelity work).
-- $p_\text{surf,offset}$ — DEM error proxy; small but matters for column accounting.
+- $\text{profile}_{\text{CH}_4}$: CH₄ vertical profile (typically 12-30 layers).
+- $\text{profile}_{\text{H}_2\text{O}}$: H₂O profile is coupled (overlapping bands, continuum).
+- $A_\text{surf}$: spectrally-resolved albedo.
+- $\text{AOD}$: aerosol optical depth (coarse-mode and fine-mode separately for high-fidelity work).
+- $p_\text{surf,offset}$: DEM error proxy; small but matters for column accounting.
 
 :::{caution} Don't retrieve XCH₄ alone
-Single-parameter retrievals (XCH₄ only) are biased — the coupling is real and load-bearing.
+Single-parameter retrievals (XCH₄ only) are biased, as the coupling is real and matters.
 :::
 
 (rtm-prior)=
@@ -102,11 +102,11 @@ Single-parameter retrievals (XCH₄ only) are biased — the coupling is real an
 | $p_\text{surf,offset}$ | tight Gaussian around DEM | sub-pixel terrain uncertainty |
 
 :::{important} Diagonal $\mathbf{S}_a$ is wrong
-Always carry vertical correlation in the gas profiles — diagonal $\mathbf{S}_a$ produces wildly noisy retrieved profiles.
+Always carry vertical correlation in the gas profiles, as a diagonal $\mathbf{S}_a$ produces wildly noisy retrieved profiles.
 :::
 
 (rtm-gauss-newton)=
-### Iterative Gauss–Newton
+### Iterative Gauss-Newton
 
 The closed-form formula in the prior version is the *first* update. The converged retrieval iterates ([rodgers2000]):
 
@@ -124,12 +124,12 @@ $$
 \delta \chi^{2}_{k} \;=\; (\mathbf{x}^{k+1} - \mathbf{x}^{k})^{\top}\, (\mathbf{S}^{*})^{-1}\, (\mathbf{x}^{k+1} - \mathbf{x}^{k}) \;<\; 0.5 \cdot \text{DOFs}
 $$
 
-Cap at $k_\text{max} = 10$. Pixels that fail to converge get a quality flag.
+We cap at $k_\text{max} = 10$, and pixels that fail to converge get a quality flag.
 
 (rtm-info-content)=
 ### Posterior covariance and information content
 
-Standard outputs of optimal estimation — should appear on every retrieved pixel:
+These are standard outputs of optimal estimation and they should appear on every retrieved pixel:
 
 $$
 \mathbf{S}^{*} \;=\; (\mathbf{K}^{\top}\, \mathbf{S}_\varepsilon^{-1}\, \mathbf{K} + \mathbf{S}_a^{-1})^{-1}
@@ -143,7 +143,7 @@ $$
 H \;=\; \tfrac{1}{2} \log \det(\mathbf{S}_a) - \tfrac{1}{2} \log \det(\mathbf{S}^{*}), \qquad \Delta \mathbf{S} \;=\; \operatorname{tr}(\mathbf{S}_a) - \operatorname{tr}(\mathbf{S}^{*})
 $$
 
-These are load-bearing for instrument-design questions (EMIT vs Tanager vs TROPOMI comparisons) and for the cross-tier UQ pipeline that Tier IV assembles. Currently absent from the doc — must appear in the retrieved-product schema.
+These matter for instrument-design questions (EMIT vs Tanager vs TROPOMI comparisons) and for the cross-tier UQ pipeline that Tier IV assembles. They are currently absent from the doc, and they must appear in the retrieved-product schema.
 
 (rtm-quality-flags)=
 ### Quality flags
@@ -159,20 +159,20 @@ Each retrieval emits a flag bitmask:
 - DEM error excessive
 
 :::{caution} Quality flags are mandatory upstream
-Without these flags, downstream Tiers II–IV silently consume bad retrievals → corrupted source posteriors.
+Without these flags, downstream Tiers II-IV silently consume bad retrievals, which corrupts the source posteriors.
 :::
 
 ---
 
 (rtm-emulator)=
-## (3) Model emulator — two levels
+## (3) Model emulator: two levels
 
 (rtm-emu-lut)=
-### Level A — factorised LUT RTM
+### Level A: factorised LUT RTM
 
-A dense LUT over $(T, p, q_{\text{CH}_4}, A_\text{surf}, \text{SZA}, \text{VZA}, \text{RAA}, \text{AOD})$ has $\sim 4 \times 10^{13}$ cells — untrainable. **Operational practice: factorise.**
+A dense LUT over $(T, p, q_{\text{CH}_4}, A_\text{surf}, \text{SZA}, \text{VZA}, \text{RAA}, \text{AOD})$ has $\sim 4 \times 10^{13}$ cells, which is untrainable. In operational practice we factorise.
 
-Decompose the radiance into multiplicative / additive components on lower-dimensional sub-LUTs:
+We decompose the radiance into multiplicative / additive components on lower-dimensional sub-LUTs:
 
 $$
 L(\nu) \;=\; \underbrace{T_\text{gas}\!\bigl(\nu \,\big|\, T(z), p(z), q_{\text{CH}_4}(z)\bigr)}_{\text{sub-LUT 1: gas transmittance}}
@@ -180,18 +180,18 @@ L(\nu) \;=\; \underbrace{T_\text{gas}\!\bigl(\nu \,\big|\, T(z), p(z), q_{\text{
 \;+\; \underbrace{S_\text{scatt}\!\bigl(\nu \,\big|\, \text{AOD}, \text{SZA}, \text{VZA}, \text{RAA}\bigr)}_{\text{sub-LUT 3 (v2): scattering source term}}
 $$
 
-Sub-LUT sizes are tractable (~$10^{6}$ cells each). Combine analytically at runtime. **This is the only viable path for high-dimensional SWIR retrieval** — without factorisation, LUTs don't fit.
+Sub-LUT sizes are tractable (~$10^{6}$ cells each), and we combine them analytically at runtime. This is the only viable path for high-dimensional SWIR retrieval, as LUTs don't fit without factorisation.
 
 - Pros: bit-exact reproducibility, conservative.
 - Cons: factorisation introduces approximation error at sub-LUT interaction boundaries; needs Step-4-style validation.
 
 (rtm-emu-neural)=
-### Level B — Neural RTM
+### Level B: Neural RTM
 
 MLP / Fourier-feature network mapping $(\text{profile}, \text{geometry}, A_\text{surf}, \text{AOD}) \to L(\nu)$. Train on factorised LUT or directly on HAPI outputs.
 
-- **Architecture choice.** SIREN is mentioned in earlier drafts but is justified for *spatial* signals; spectra are smooth in $\nu$ with sharp absorption features, which favours **Fourier-feature MLP** or **per-band wavelet basis**. SIREN works but isn't the obvious pick — benchmark before committing.
-- **Per-scene-class heads.** Land vs. water vs. sun-glint vs. ice have different spectral signatures and different aerosol regimes. Either one network per scene class (dispatched by L1 scene flag) or scene class as a categorical input — *don't* train a single net across all scenes.
+- **Architecture choice.** SIREN is mentioned in earlier drafts but is justified for *spatial* signals; spectra are smooth in $\nu$ with sharp absorption features, which favours a Fourier-feature MLP or a per-band wavelet basis. SIREN works but isn't the obvious pick, so we should benchmark before committing.
+- **Per-scene-class heads.** Land vs. water vs. sun-glint vs. ice have different spectral signatures and different aerosol regimes. Either one network per scene class (dispatched by L1 scene flag) or scene class as a categorical input; we should not train a single net across all scenes.
 - **Spectral resolution.** TROPOMI ~1000 channels in the methane window; EMIT ~285. Per-instrument heads at native resolution; don't pre-convolve to a common grid.
 - Pros: smooth, differentiable everywhere, compact (~MB vs ~GB for an LUT).
 - Cons: training is non-trivial, needs validation against HAPI on out-of-distribution states.
@@ -200,7 +200,7 @@ MLP / Fourier-feature network mapping $(\text{profile}, \text{geometry}, A_\text
 (rtm-neural-jacobian)=
 ### Neural-Jacobian calibration is mandatory
 
-Backprop through a trained neural RTM gives *some* gradient — whether it matches HAPI's $\mathbf{K}$ is an empirical question, and the entire Step-4 retrieval depends on it.
+Backprop through a trained neural RTM gives some gradient, and whether it matches HAPI's $\mathbf{K}$ is an empirical question on which the entire Step-4 retrieval depends.
 
 :::{important} Hard validation test
 Neural-RTM Jacobian vs. HAPI Jacobian on a held-out state set, $<5\%$ relative error in operator norm. If the neural RTM has accurate forward predictions but a biased Jacobian, the retrieval converges to the wrong state.
@@ -217,7 +217,7 @@ $$
 \nabla_{\mathbf{x}} J \;=\; \texttt{jax.grad}\!\Bigl(\bigl\lVert \texttt{NeuralRTM}(\mathbf{x}) - \mathbf{y}\bigr\rVert^{2}\Bigr)
 $$
 
-Same Gauss–Newton iteration, ~1000× faster per step, gradients trivially available.
+The Gauss-Newton iteration stays the same, but it runs ~1000× faster per step and the gradients are trivially available.
 
 - **Forward validation:** posterior from neural-RTM retrieval ≈ posterior from HAPI retrieval on the same observations.
 - **Adjoint validation:** neural-RTM Jacobian ≈ HAPI Jacobian (Step-3 calibration test). If this fails, the inversion is biased even when forward predictions look fine.
@@ -233,23 +233,23 @@ $$
 
 ### Output the joint posterior
 
-Collapsing to $p(\text{XCH}_4 \mid \mathbf{y})$ throws away information Tier IV wants — the joint $(\text{profile}, \text{albedo}, \text{AOD})$ is the right output. Collapse to XCH₄ at the consumer side, not in the predictor.
+Collapsing to $p(\text{XCH}_4 \mid \mathbf{y})$ throws away information Tier IV wants, and the joint $(\text{profile}, \text{albedo}, \text{AOD})$ is the right output. We collapse to XCH₄ on the consumer side, not in the predictor.
 
 ### Per-instrument heads
 
-Different spectral resolutions (TROPOMI ~1000 ch [s5p_tropomi], EMIT ~285 ch [emit], GHGSat hyperspectral [ghgsat], Tanager hyperspectral [carbon_mapper]) → per-instrument predictor heads dispatched by `instrument_id`. Same pattern as Tiers II/III.
+Different spectral resolutions (TROPOMI ~1000 ch [s5p_tropomi], EMIT ~285 ch [emit], GHGSat hyperspectral [ghgsat], Tanager hyperspectral [carbon_mapper]) call for per-instrument predictor heads dispatched by `instrument_id`, the same pattern as Tiers II/III.
 
 ### Context conditioning
 
-$\text{prior}_\text{atm} = (T(z), p(z), q_{\text{H}_2\text{O}}(z))$ from the [met field](#prereqs-metfield-schema) and $\text{geometry} = (\text{SZA}, \text{VZA}, \text{RAA})$ from L1 metadata. Wire in via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox) — same pattern as Tiers I/II/III.
+$\text{prior}_\text{atm} = (T(z), p(z), q_{\text{H}_2\text{O}}(z))$ from the [met field](#prereqs-metfield-schema) and $\text{geometry} = (\text{SZA}, \text{VZA}, \text{RAA})$ from L1 metadata. We wire these in via FiLM / hypernet primitives in [`pyrox.nn`](https://github.com/jejjohnson/pyrox), the same pattern as Tiers I/II/III.
 
 ### Posterior over the spatial profile
 
-Conditional flow over the vertical profile (1D — `gauss_flows` handles this natively, no 2D extension needed) for $\text{profile}_{\text{CH}_4}$ and joint Gaussian for $(A_\text{surf}, \text{AOD})$ is the simplest split. Validate via SBC against HAPI-based optimal-estimation posteriors on synthetic data, **stratified by SNR / SZA / AOD**.
+Conditional flow over the vertical profile (1D, so `gauss_flows` handles this natively with no 2D extension needed) for $\text{profile}_{\text{CH}_4}$ and joint Gaussian for $(A_\text{surf}, \text{AOD})$ is the simplest split. Validate via SBC against HAPI-based optimal-estimation posteriors on synthetic data, stratified by SNR / SZA / AOD.
 
 ### Uncertainty calibration
 
-SBC is necessary but not sufficient — the *specific* requirement is that the predictor's standard deviation matches the empirical RMSE on a held-out set, stratified by SNR / SZA / AOD. Without stratification, calibration on the easy regime hides miscalibration on the hard regime.
+SBC is necessary but not sufficient, as the specific requirement is that the predictor's standard deviation matches the empirical RMSE on a held-out set, stratified by SNR / SZA / AOD. Without stratification, calibration on the easy regime hides miscalibration on the hard regime.
 
 ---
 
@@ -258,23 +258,23 @@ SBC is necessary but not sufficient — the *specific* requirement is that the p
 
 - **Multi-window retrieval.** Joint CH₄ + CO + H₂O across multiple SWIR bands tightens the posterior and resolves degeneracies.
 - **Multiple scattering.** Couple to LIDORT / DISORT / 6S for $\text{AOD} > 0.2$ scenes (the v1 screening threshold).
-- **Surface BRDF.** Cox–Munk for sun-glint over water; RPV / Ross–Li for vegetated surfaces; per-band Lambertian for snow. Replace the single-Lambertian assumption with a BRDF registry.
+- **Surface BRDF.** Cox-Munk for sun-glint over water; RPV / Ross-Li for vegetated surfaces; per-band Lambertian for snow. Replace the single-Lambertian assumption with a BRDF registry.
 - **Heteroscedastic retrieval uncertainty.** Output retrieval-error covariance per observation, not a fixed $\mathbf{S}_\varepsilon$.
-- **Polarisation.** For polarisation-capable instruments (Sentinel-3 SLSTR [sentinel3], future missions), add Stokes-vector RTM. Out of scope for `plumax` v1, deferred-decision note.
-- **Hierarchical Matérn length-scale on profile prior.** Promote the AR(1) decorrelation length to a hyperparameter — same pattern as Tiers II/III.
+- **Polarisation.** For polarisation-capable instruments (Sentinel-3 SLSTR [sentinel3], future missions), add Stokes-vector RTM. It is out of scope for `plumax` v1 (a deferred-decision note).
+- **Hierarchical Matérn length-scale on profile prior.** Promote the AR(1) decorrelation length to a hyperparameter, the same pattern as Tiers II/III.
 
 ---
 
 (rtm-modules)=
 ## Module layout
 
-*RTM stack module layout — step, concern, target module, status.*
+*RTM stack module layout: step, concern, target module, status.*
 
 The RTM stack moved to [radtrax](https://github.com/jejjohnson/radtrax) in plumax#133. The links below point at radtrax, and the planned `plumax.radtran.*` modules are radtrax's to build.
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/tables.py) | ✓ — two-way path consistency test tracked in [#99](https://github.com/jejjohnson/plumax/issues/99) |
+| 1 | HAPI Beer-Lambert (clear-sky, two-way) | [`hapi_lut/beers.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/tables.py) | ✓, two-way path consistency test tracked in [#99](https://github.com/jejjohnson/plumax/issues/99) |
 | 1 | LUT generator | [`hapi_lut/generator.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/generator.py) | ✓ |
 | 1 | LUT config | [`hapi_lut/config.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/config.py) | ✓ |
 | 1 | Multi-gas LUT | [`hapi_lut/multi.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/spectroscopy/hitran/multi.py) | ✓ |
@@ -284,11 +284,11 @@ The RTM stack moved to [radtrax](https://github.com/jejjohnson/radtrax) in pluma
 | 1 | Instrument model | [`radtran/instrument.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/instrument/psf.py) | ✓ |
 | 1 | Background atmosphere | [`matched_filter/background.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/background.py) | ✓ |
 | 1 | Target gas spec | [`matched_filter/target.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/target.py) | ✓ |
-| 1 | Surface model — SWIR (albedo / BRDF) | `plumax.radtran.surface_swir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
-| 1 | Surface model — TIR (emissivity) | `plumax.radtran.surface_tir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
+| 1 | Surface model: SWIR (albedo / BRDF) | `plumax.radtran.surface_swir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
+| 1 | Surface model: TIR (emissivity) | `plumax.radtran.surface_tir` | ☐ [#98](https://github.com/jejjohnson/plumax/issues/98) |
 | 1 | Aerosol / scattering coupling (v2) | `plumax.radtran.scattering` | ☐ |
-| — | Matched filter (detection) | [`matched_filter/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/) | ✓ |
-| — | gaussx-based linear solve | [`matched_filter/core.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/core.py) | ✓ |
+| - | Matched filter (detection) | [`matched_filter/`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/) | ✓ |
+| - | gaussx-based linear solve | [`matched_filter/core.py`](https://github.com/jejjohnson/radtrax/tree/main/src/radtrax/retrieval/matched_filter/core.py) | ✓ |
 | 2 | Optimal-estimation iterative loop | `plumax.radtran.retrieval` (`matched_filter/core.py` stays the one-shot linear matched-filter path) | ☐ [#96](https://github.com/jejjohnson/plumax/issues/96) |
 | 2 | Quality flags + screening | `plumax.radtran.quality` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
 | 2 | Information-content diagnostics | `plumax.radtran.diagnostics` | ☐ [#97](https://github.com/jejjohnson/plumax/issues/97) |
@@ -302,15 +302,15 @@ The RTM stack moved to [radtrax](https://github.com/jejjohnson/radtrax) in pluma
 (rtm-validation)=
 ## Validation strategy
 
-- **HAPI Beer–Lambert — unit optical depth.** For a known column and a known cross-section, $\tau$ must match the analytical product $\sigma \times \text{column}$.
-- **Two-way path consistency.** At nadir ($\text{SZA} = \text{VZA} = 0$), $\tau_\text{total} = 2\tau$; at oblique geometries, the airmass factor must match $1/\cos(\text{SZA}) + 1/\cos(\text{VZA})$. Catches one-way / two-way bugs.
-- **LUT vs. HAPI — in-distribution.** Interpolation error $<1\%$ on the radiance for any state inside the LUT bounding box.
-- **LUT vs. HAPI — OOD.** Random states *outside* the box should fail loudly via boundary checks — not silently extrapolate.
+- **HAPI Beer-Lambert: unit optical depth.** For a known column and a known cross-section, $\tau$ must match the analytical product $\sigma \times \text{column}$.
+- **Two-way path consistency.** At nadir ($\text{SZA} = \text{VZA} = 0$), $\tau_\text{total} = 2\tau$; at oblique geometries, the airmass factor must match $1/\cos(\text{SZA}) + 1/\cos(\text{VZA})$. This catches one-way / two-way bugs.
+- **LUT vs. HAPI, in-distribution.** Interpolation error $<1\%$ on the radiance for any state inside the LUT bounding box.
+- **LUT vs. HAPI, OOD.** Random states *outside* the box should fail loudly via boundary checks, not silently extrapolate.
 - **Neural RTM forward.** Held-out set spans all training-distribution corners; report worst-case relative error per channel, stratified by scene class.
-- **Neural-RTM Jacobian.** Calibration vs. HAPI Jacobian, $<5\%$ operator-norm error. **Hard test** — failure means Step 4 retrieval is biased.
+- **Neural-RTM Jacobian.** Calibration vs. HAPI Jacobian, $<5\%$ operator-norm error. This is a hard test, and failure means the Step 4 retrieval is biased.
 - **Optimal estimation against synthetic truth.** Generate radiances for a known profile via HAPI, retrieve, compare retrieved profile to truth. Should sit inside the reported posterior covariance with ~68% frequency over many trials.
-- **Information-content recovery.** Generate synthetic radiances at varying SNR / SZA, report retrieved DOFs vs. theoretical maximum from instrument SRF. Catches retrieval-side regressions invisible to mean-error tests.
-- **Real-data benchmark.** Compare HAPI-based retrieval to TROPOMI / EMIT / GHGSat *official* L2 product on overlap pixels ([s5p_tropomi,emit,ghgsat]). Median bias < 5 ppb, RMSE within instrument noise floor. Stratify by AOD to expose the v1 clear-sky-only limit. **Without this the retrieval is a synthetic exercise.**
+- **Information-content recovery.** Generate synthetic radiances at varying SNR / SZA, report retrieved DOFs vs. theoretical maximum from instrument SRF. This catches retrieval-side regressions invisible to mean-error tests.
+- **Real-data benchmark.** Compare HAPI-based retrieval to TROPOMI / EMIT / GHGSat *official* L2 product on overlap pixels ([s5p_tropomi,emit,ghgsat]). Median bias < 5 ppb, RMSE within instrument noise floor. Stratify by AOD to expose the v1 clear-sky-only limit. Without this the retrieval is a synthetic exercise.
 - **Predictor calibration.** SBC stratified by SNR / SZA / AOD; standard-deviation calibration vs. empirical RMSE on held-out set.
 
 ---
@@ -319,7 +319,7 @@ The RTM stack moved to [radtrax](https://github.com/jejjohnson/radtrax) in pluma
 ## Open questions
 
 :::{attention} Spectral resolution storage
-Native HAPI is sub-cm⁻¹. Operational instruments are ~0.1 nm. Store at native HAPI then convolve with SRF at runtime (storage-efficient but slow), or pre-convolve per instrument (fast but bloats storage)? Probably runtime convolution with a sparse SRF representation — open: pick the SRF sparsity scheme.
+Native HAPI is sub-cm⁻¹. Operational instruments are ~0.1 nm. Store at native HAPI then convolve with SRF at runtime (storage-efficient but slow), or pre-convolve per instrument (fast but bloats storage)? Probably runtime convolution with a sparse SRF representation; open: pick the SRF sparsity scheme.
 :::
 
 :::{attention} Vertical profile representation
@@ -327,19 +327,19 @@ Layer-mean concentrations vs. discretised continuous profiles. Affects how the A
 :::
 
 :::{attention} Surface BRDF beyond Lambertian
-Cox–Munk for water sun-glint, RPV / Ross–Li for vegetation, per-band Lambertian for snow. Build a BRDF registry keyed on land-use class? In scope for v1.5 / v2.
+Cox-Munk for water sun-glint, RPV / Ross-Li for vegetation, per-band Lambertian for snow. Build a BRDF registry keyed on land-use class? In scope for v1.5 / v2.
 :::
 
 :::{attention} Cloud / cirrus screening
-Internal detection step or rely on L1 cloud mask? Likely the latter for v1, but document the trust assumption — TROPOMI cloud mask is conservative, EMIT lacks one, Tanager cloud handling is in flux.
+Internal detection step or rely on L1 cloud mask? Likely the latter for v1, but document the trust assumption (TROPOMI cloud mask is conservative, EMIT lacks one, Tanager cloud handling is in flux).
 :::
 
 :::{attention} Scattering scope
-Strict clear-sky ($\text{AOD} < 0.2$) for v1 vs. multiple-scattering hybrid for v2 — when do we promote? Probably driven by Tier-IV bias diagnostics.
+Strict clear-sky ($\text{AOD} < 0.2$) for v1 vs. multiple-scattering hybrid for v2: when do we promote? Probably driven by Tier-IV bias diagnostics.
 :::
 
 :::{attention} HAPI traceability
-Path A (pre-tabulate) vs. Path B (`pure_callback`). v1 default is A. When does B become necessary — when retrieving cross-section sensitivities not pre-computed?
+Path A (pre-tabulate) vs. Path B (`pure_callback`). v1 default is A. When does B become necessary, for instance when retrieving cross-section sensitivities not pre-computed?
 :::
 
 :::{attention} Polarisation deferred-decision

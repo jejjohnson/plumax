@@ -1,18 +1,18 @@
 ---
-title: "TMTPP — thinned marked temporal point processes"
+title: "TMTPP: thinned marked temporal point processes"
 ---
 
 # Thinned Marked Temporal Point Processes
 
-Let's build this mathematical architecture from the bedrock up. To truly understand a "Thinned Marked Temporal Point Process" in the context of global methane infrastructure, we must assemble it piece by piece. We will define the physical reality, assign the strict mathematical variables, and visualize how each atmospheric layer violently transforms the one below it.
+Let's build this model from the ground up. To understand a "Thinned Marked Temporal Point Process" in the context of global methane infrastructure, we assemble it piece by piece. We define the physical reality, assign the mathematical variables, and show how each atmospheric layer transforms the one below it.
 
-Here is the pedantic, step-by-step construction of the model, expanded to reveal the rigorous mechanics operating beneath the surface of the MARS platform.
+Below is the step-by-step construction of the model, with the mechanics behind the MARS platform spelled out.
 
 ---
 
 ## Step 1: The Temporal Point Process (The "When")
 
-Before we care about how big a leak is, or if a satellite can see it, we must first mathematically model the sheer existence of events in time.
+Before we care about how big a leak is, or whether a satellite can see it, we first model the existence of events in time.
 
 Physically, imagine a pressure-relief valve on a liquid natural gas storage tank. As pressure builds and drops, the valve periodically "burps" methane into the atmosphere. Each burp is a discrete, instantaneous event occurring at a specific moment.
 
@@ -34,9 +34,9 @@ $$
 =============================================================================
   STEP 1: THE TEMPORAL POINT PROCESS (The Pure Chronology)
 =============================================================================
-  The pure chronology of the methane valve venting. 
+  The pure chronology of the methane valve venting.
   Every "x" is an event occurring at a specific time t_i.
-  
+
   Timeline:
   --x-------x-----------x----x--x----------x-----------------x------x---> t [hours]
     t₁      t₂          t₃   t₄ t₅         t₆                t⇇     t₈
@@ -51,14 +51,14 @@ $$
 
 ## Step 2: Adding the "Marks" (The "What")
 
-A timestamp alone is physically meaningless for a greenhouse gas inventory. To model reality, every temporal event must carry a physical payload. In stochastic geometry, this payload is called a "Mark."
+A timestamp alone says nothing useful for a greenhouse gas inventory. To model reality, every temporal event has to carry a physical payload, which in stochastic geometry is called a "Mark."
 
-Physically, the mark is the severity of the valve's burp—the exact mass flux or emission rate of the methane plume.
+Physically, the mark is the severity of the valve's burp (the mass flux or emission rate of the methane plume).
 
 **The Ontology (The Physical Truth):**
 
 * **Q_i:** The True Mark `[kg/hr]`. The specific, actual emission rate associated with the event at time `t_i`. It exists in the Mark Space (a set of all possible emission rates, typically all real numbers > 0).
-* **f_true(Q):** The True Mark Distribution (PDF) `[unitless]`. The underlying probability distribution that dictates the physical size of these burps. For methane, this is famously a heavy-tailed Lognormal distribution—most burps are tiny, a few are massive blowouts.
+* **f_true(Q):** The True Mark Distribution (PDF) `[unitless]`. The underlying probability distribution that dictates the physical size of these burps. For methane this is a heavy-tailed Lognormal distribution (most burps are tiny, a few are massive blowouts).
 * *Constraint:* The total area under the curve must equal exactly 1.0 ($\int_0^\infty f_\text{true}(Q)\,\mathrm{d}Q = 1$).
 
 
@@ -78,7 +78,7 @@ $$
 =============================================================================
   Every event t_i now carries a true physical weight Q_i.
   Our 1D timeline gains a Y-axis. Every event becomes a vertical stem.
-  
+
   Q [kg/hr]
    ^
    |        [Q₂]                                             [Q₇]
@@ -97,11 +97,11 @@ $$
 
 ## Step 3: Independent Thinning (The "Filter")
 
-Now we introduce the observer (e.g., the MARS satellite network). The observer is imperfect. It cannot see every plume. The physical reality must pass through an observational filter.
+Now we introduce the observer (e.g., the MARS satellite network). The observer is imperfect and cannot see every plume, so the physical reality has to pass through an observational filter.
 
-Physically, a tiny puff of methane (a small mark) will be immediately dispersed by wind shear and fall below the satellite's pixel resolution. A massive blowout (a large mark) will almost certainly trigger an anomaly.
+Physically, a tiny puff of methane (a small mark) is dispersed by wind shear and falls below the satellite's pixel resolution. A massive blowout (a large mark) will almost certainly trigger an anomaly.
 
-This process of selective deletion is called **Thinning**. Mathematically, it invokes a beautiful theorem: Independent Thinning splits the original point process into two entirely separate, independent point processes—the "Observed" process and the "Hidden" process.
+This selective deletion is called thinning. By the thinning theorem, independent thinning splits the original point process into two separate, independent point processes, the "Observed" process and the "Hidden" process.
 
 **The Ontology (The Sensor Limit):**
 
@@ -113,9 +113,9 @@ This process of selective deletion is called **Thinning**. Mathematically, it in
 =============================================================================
   STEP 3: THE THINNING PROCESS (The Observational Sieve)
 =============================================================================
-  The sensor applies the P_d(Q) filter. 
+  The sensor applies the P_d(Q) filter.
   Small leaks have a near-zero chance of survival.
-  
+
   Q [kg/hr]
    ^
    |        [Q₂] <---- (Massive leak. P_d = 0.99. SURVIVES)  [Q₇] <-(SURVIVES)
@@ -136,7 +136,7 @@ This process of selective deletion is called **Thinning**. Mathematically, it in
 
 We have arrived at the final dataset sitting on the MARS servers.
 
-The physical process has been temporally sparsified (events appear to occur much less frequently) and its marks have been violently biased (only the large burps remain). To calculate exactly how the data is warped, we must integrate out the dependencies and compare them to the True ontology defined in Steps 1 and 2.
+The physical process has been temporally sparsified (events appear to occur much less often) and its marks are biased (only the large burps remain). To see exactly how the data is warped, we integrate out the dependencies and compare the result with the True ontology of Steps 1 and 2.
 
 **The Ontology (The Observed Reality):**
 
@@ -147,16 +147,16 @@ $$
 \mathbb{E}[P_d] = \int_0^\infty P_d(Q)\, f_\text{true}(Q)\,\mathrm{d}Q
 $$
 
-* **λ_obs(t):** The Observed Intensity `[events / hour]`. The rate at which MARS actually records detections. It is the true intensity severely crippled by the overall expectation of detection: $\lambda_\text{obs}(t) = \lambda_\text{true}(t)\,\mathbb{E}[P_d]$.
+* **λ_obs(t):** The Observed Intensity `[events / hour]`. The rate at which MARS actually records detections. It is the true intensity reduced by the overall expectation of detection: $\lambda_\text{obs}(t) = \lambda_\text{true}(t)\,\mathbb{E}[P_d]$.
 
-**The Translation:** The Observed Mark Distribution `[unitless]` is the skewed distribution of the plumes MARS caught. We multiply the physical truth by the hardware filter, and divide by the expectation scalar to force the area under the new curve to remain 1.0.
+**The Translation:** The Observed Mark Distribution `[unitless]` is the skewed distribution of the plumes MARS caught. We multiply the physical truth by the hardware filter, and divide by the expectation scalar so that the area under the new curve stays at 1.0.
 **The Equation:**
 
 $$
 f_\text{obs}(Q) = \frac{P_d(Q)\, f_\text{true}(Q)}{\mathbb{E}[P_d]}
 $$
 
-**The Translation:** The Observed Expected Mark `[kg/hr]` is the center of mass of the leaks the satellite *actually saw*. Because the small leaks were deleted by the Bernoulli trial, this is mathematically forced to be drastically larger than `E[Q_true]`.
+**The Translation:** The Observed Expected Mark `[kg/hr]` is the center of mass of the leaks the satellite *actually saw*. Because the small leaks were deleted by the Bernoulli trial, this is necessarily much larger than `E[Q_true]`.
 **The Equation:**
 
 $$
@@ -167,10 +167,10 @@ $$
 =============================================================================
   STEP 4: THE THINNED MARKED TEMPORAL POINT PROCESS (The MARS Data)
 =============================================================================
-  This is the final mathematical object you are forced to work with. 
-  The source appears to burp rarely, but when it does, the burps 
-  appear massive. 
-  
+  This is the final mathematical object you are forced to work with.
+  The source appears to burp rarely, but when it does, the burps
+  appear massive.
+
   Q_obs [kg/hr]
    ^
    |        [Q₂]                                             [Q₇]
@@ -178,9 +178,9 @@ $$
    |         |                                                |
    |         |                                                |
    |         |                             [Q₆]               |
-   |         |                              |                 |     
+   |         |                              |                 |
  --+---------x------------------------------x-----------------x----------> t [hours]
-             t₂                             t₆                t⇇     
+             t₂                             t₆                t⇇
 =============================================================================
 
 ```
@@ -191,7 +191,7 @@ $$
 * **Marked:** Physics dictates that every event must carry a true, physical emission mass (`Q`).
 * **Thinned:** The atmosphere and the satellite sensor act as a probabilistic sieve, discarding events based on their mass (`P_d`), leaving MARS with a mathematically warped Observed timeline and heavily biased Mark distribution.
 
-To successfully mitigate a methane facility, you cannot trust Step 4. You must take the biased, sparse data from Step 4 and use stochastic inversion to mathematically reverse-engineer it all the way back to the physical reality of Step 2.
+To mitigate a methane facility, you cannot trust Step 4. You have to take the biased, sparse data from Step 4 and use stochastic inversion to work back to the physical reality of Step 2.
 
 ---
 

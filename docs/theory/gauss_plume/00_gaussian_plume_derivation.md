@@ -1,10 +1,10 @@
 ---
-title: "Gaussian plume — derivation from the advection-diffusion equation"
+title: "Gaussian plume: derivation from the advection-diffusion equation"
 ---
 
 # Derivation of the Gaussian plume solution
 
-This note derives the steady-state Gaussian plume solution used by the forward model in `plumax.gauss_plume.plume.plume_concentration`. The derivation follows Stockie [^stockie2011] closely; Stockie's paper is an excellent pedagogical reference that starts from the full advection-diffusion PDE, states the simplifying assumptions explicitly, and walks through the Laplace-transform and Green's-function solutions in detail. The structure, equation numbering, and notation of this note mirror Stockie §§2-3; any reader who wants more depth — in particular the proofs behind the equivalence theorem (2.4) ≡ (2.5), the Green's-function route, or the discussion of the eddy-diffusivity / σ-parameterisation inconsistency — should consult the paper itself.
+This note derives the steady-state Gaussian plume solution used by the forward model in `plumax.gauss_plume.plume.plume_concentration`. The derivation follows Stockie [^stockie2011] closely. His paper is a very good teaching reference, as it starts from the full advection-diffusion PDE, states the simplifying assumptions explicitly, and walks through the Laplace-transform and Green's-function solutions in detail. The structure, equation numbering and notation of this note mirror Stockie §§2-3, so a reader who wants more depth (in particular the proofs behind the equivalence theorem (2.4) ≡ (2.5), the Green's-function route, or the discussion of the eddy-diffusivity / σ-parameterisation inconsistency) should consult the paper itself.
 
 [^stockie2011]: Stockie, J. M. (2011). *The Mathematics of Atmospheric Dispersion Modelling*. SIAM Review, **53**(2), 349-372. Preprint: https://www.sfu.ca/~jstockie/atmos/paper.pdf. Referenced here as "Stockie (2011)". All equation numbers cited with the form "(2.1)" refer to that paper; equation numbers without a Stockie prefix are introduced in this note.
 
@@ -16,25 +16,25 @@ $$
 \frac{\partial C}{\partial t} + \nabla \cdot \vec{J} \;=\; S,
 $$
 
-where $S(\vec{x}, t)$ [kg/m³·s] is a volumetric source term and $\vec{J}$ [kg/m²·s] is the total contaminant mass flux. Two physical mechanisms contribute to $\vec{J}$. **Advection** by the wind field $\vec{u}$ [m/s] contributes $\vec{J}_A = C \vec{u}$. **Turbulent diffusion** contributes a Fickian flux $\vec{J}_D = -\mathbf{K}\, \nabla C$, where $\mathbf{K}(\vec{x}) = \operatorname{diag}(K_x, K_y, K_z)$ [m²/s] is the eddy diffusivity — an effective, position-dependent diffusion tensor that parameterises turbulent mixing at scales well below the resolution of interest. Summing the two contributions and substituting into the conservation law yields the **three-dimensional advection-diffusion equation** (Stockie eq. 2.2):
+where $S(\vec{x}, t)$ [kg/m³·s] is a volumetric source term and $\vec{J}$ [kg/m²·s] is the total contaminant mass flux. Two physical mechanisms contribute to $\vec{J}$. Advection by the wind field $\vec{u}$ [m/s] contributes $\vec{J}_A = C \vec{u}$. Turbulent diffusion contributes a Fickian flux $\vec{J}_D = -\mathbf{K}\, \nabla C$, where $\mathbf{K}(\vec{x}) = \operatorname{diag}(K_x, K_y, K_z)$ [m²/s] is the eddy diffusivity, an effective, position-dependent diffusion tensor that parameterises turbulent mixing at scales well below the resolution of interest. Summing the two contributions and substituting into the conservation law gives the three-dimensional advection-diffusion equation (Stockie eq. 2.2):
 
 $$
 \frac{\partial C}{\partial t} + \nabla \cdot (C \vec{u}) \;=\; \nabla \cdot (\mathbf{K}\, \nabla C) + S.
 $$ (eq-plume-ad)
 
-This PDE is the starting point. It is exact under the Fickian-closure hypothesis for the turbulent flux; everything that follows is a chain of simplifications to reduce it to a form with a closed-form solution.
+This PDE is the starting point, and it is exact under the Fickian-closure hypothesis for the turbulent flux. Everything that follows is a chain of simplifications that reduces it to a form with a closed-form solution.
 
 ## 2. The seven classical assumptions (Stockie §2)
 
-To recover the Gaussian plume, Stockie makes seven assumptions (A1-A7). Each is a physically-motivated simplification; together they replace the full PDE by a linear, constant-coefficient problem that admits a closed-form solution.
+To recover the Gaussian plume, Stockie makes seven assumptions (A1-A7). Each is a physically motivated simplification, and together they replace the full PDE by a linear, constant-coefficient problem that admits a closed-form solution.
 
-- **(A1)** The source is a **continuous point source** at height $H$ above the ground, releasing at constant rate $Q$ [kg/s]: $S(\vec{x}) = Q\, \delta(x) \delta(y) \delta(z - H)$. $H$ is the *effective* stack height $h + \delta h$, the sum of the physical stack height and the plume rise $\delta h$ due to buoyancy.
-- **(A2)** The **wind is constant and aligned with $+x$**: $\vec{u} = (u, 0, 0)$ with $u \geq 0$. This is both a physical assumption ("no crosswind, no vertical mean motion") and a coordinate choice — in practice we solve the PDE in a wind-aligned frame and rotate back.
-- **(A3)** The solution is **steady state**: $\partial C / \partial t = 0$. Valid when $u$ and $\mathbf{K}$ are time-independent on the timescale of interest (a single satellite overpass, say).
-- **(A4)** The eddy diffusivities depend only on downwind distance: $K_x(x) = K_y(x) = K_z(x) =: K(x)$. Diffusion is assumed *isotropic* — a strong simplification that we will revisit when introducing the Briggs σ-parameterisation below.
+- **(A1)** The source is a continuous point source at height $H$ above the ground, releasing at constant rate $Q$ [kg/s]: $S(\vec{x}) = Q\, \delta(x) \delta(y) \delta(z - H)$. $H$ is the *effective* stack height $h + \delta h$, the sum of the physical stack height and the plume rise $\delta h$ due to buoyancy.
+- **(A2)** The wind is constant and aligned with $+x$: $\vec{u} = (u, 0, 0)$ with $u \geq 0$. This is both a physical assumption ("no crosswind, no vertical mean motion") and a coordinate choice, as in practice we solve the PDE in a wind-aligned frame and rotate back.
+- **(A3)** The solution is steady state: $\partial C / \partial t = 0$. Valid when $u$ and $\mathbf{K}$ are time-independent on the timescale of interest (a single satellite overpass, say).
+- **(A4)** The eddy diffusivities depend only on downwind distance: $K_x(x) = K_y(x) = K_z(x) =: K(x)$. Diffusion is assumed *isotropic*, which is a strong simplification that we will revisit when introducing the Briggs σ-parameterisation below.
 - **(A5)** Along-wind diffusion is small compared with advection, so $K_x\, \partial_x^2 C$ is dropped. Stockie's Exercise 2 non-dimensionalises the full PDE to justify this: the Péclet number $u H / K$ is large for realistic $u \sim 1\text{-}10$ m/s, $H \sim 10^1\text{-}10^2$ m, $K \sim 1\text{-}10$ m²/s.
 - **(A6)** The ground surface is flat: $z = 0$, no topography.
-- **(A7)** The contaminant **does not penetrate the ground**. This closes the problem with a zero-flux Neumann BC at $z = 0$.
+- **(A7)** The contaminant does not penetrate the ground. This closes the problem with a zero-flux Neumann BC at $z = 0$.
 
 Applying (A1)-(A6) to [equation](#eq-plume-ad) gives the scalar, elliptic boundary-value problem (Stockie 2.4a-c):
 
@@ -46,7 +46,7 @@ on the half-space $x \geq 0$, $z \geq 0$, $y \in (-\infty, \infty)$, with bounda
 
 ## 3. Boundary-source equivalence (Stockie §2, eqs. 2.5)
 
-Stockie notes that the source term can be absorbed into the boundary condition at $x = 0$: the volumetric source $Q\, \delta(x)\, \delta(y)\, \delta(z - H)$ is equivalent to a surface source $C(0, y, z) = (Q/u)\, \delta(y)\, \delta(z - H)$ on the inflow plane, with no interior source. This is a standard result (Stakgold's theorem; Stockie's Exercise 1 asks the reader to prove it by integrating the PDE over $x \in [-d, d]$ and taking $d \to 0^+$). We will use the boundary-source form — it simplifies the Laplace-transform manipulation.
+Stockie notes that the source term can be absorbed into the boundary condition at $x = 0$: the volumetric source $Q\, \delta(x)\, \delta(y)\, \delta(z - H)$ is equivalent to a surface source $C(0, y, z) = (Q/u)\, \delta(y)\, \delta(z - H)$ on the inflow plane, with no interior source. This is a standard result (Stakgold's theorem; Stockie's Exercise 1 asks the reader to prove it by integrating the PDE over $x \in [-d, d]$ and taking $d \to 0^+$). We will use the boundary-source form, as it simplifies the Laplace-transform manipulation.
 
 ## 4. Change of variable: the r-coordinate (Stockie §3, eq. 3.1)
 
@@ -86,11 +86,11 @@ $$
 \frac{\partial b}{\partial r} = \frac{\partial^2 b}{\partial z^2}, \qquad b(0, z) = \delta(z - H), \qquad b(r, \infty) = 0, \qquad \frac{\partial b}{\partial z}(r, 0) = 0.
 $$
 
-Each is a 1-D heat equation with a delta initial condition — the first on $\mathbb{R}$, the second on the half-line $[0, \infty)$ with a zero-flux BC at the origin.
+Each is a 1-D heat equation with a delta initial condition, the first on $\mathbb{R}$ and the second on the half-line $[0, \infty)$ with a zero-flux BC at the origin.
 
 ## 6. Solving the two subproblems (Stockie §3.1)
 
-Stockie solves both subproblems by Laplace transforms in $r$ and (for the crosswind problem) also in $y$; §3.2 gives an equivalent Green's-function derivation. Since we only need the final solutions, I'll quote them directly and flag the physical content.
+Stockie solves both subproblems by Laplace transforms in $r$ and (for the crosswind problem) also in $y$; §3.2 gives an equivalent Green's-function derivation. Since we only need the final solutions, we quote them directly and flag the physical content.
 
 ### 6.1 Crosswind Gaussian
 
@@ -102,23 +102,23 @@ $$
 
 ### 6.2 Vertical Gaussian with ground reflection
 
-The $z$-problem lives on $[0, \infty)$ with a zero-flux boundary at $z = 0$. The **method of images** handles this cleanly: reflect the source at height $H$ to an image source at $-H$ and solve on all of $\mathbb{R}$. The superposition of the two fundamental solutions automatically satisfies $\partial b / \partial z \big|_{z=0} = 0$ because the reflected contribution exactly cancels the vertical derivative of the direct contribution at the ground. The result is (Stockie eq. 3.7):
+The $z$-problem lives on $[0, \infty)$ with a zero-flux boundary at $z = 0$. The method of images handles this cleanly: reflect the source at height $H$ to an image source at $-H$ and solve on all of $\mathbb{R}$. The superposition of the two fundamental solutions automatically satisfies $\partial b / \partial z \big|_{z=0} = 0$ because the reflected contribution exactly cancels the vertical derivative of the direct contribution at the ground. The result is (Stockie eq. 3.7):
 
 $$
 b(r, z) \;=\; \frac{1}{\sqrt{4 \pi r}}\, \left[\, \exp\!\left( -\frac{(z - H)^2}{4 r} \right) + \exp\!\left( -\frac{(z + H)^2}{4 r} \right) \,\right].
 $$
 
-The two exponentials correspond to the **direct** plume path from the physical source at $(0, 0, H)$ and the **reflected** path from the image source at $(0, 0, -H)$ respectively.
+The two exponentials correspond to the direct plume path from the physical source at $(0, 0, H)$ and the reflected path from the image source at $(0, 0, -H)$ respectively.
 
 ## 7. Assembly and σ-rewrite (Stockie §3, eqs. 3.8, 3.9)
 
-Substituting $a$ and $b$ into the separable ansatz gives the **Gaussian plume solution in r-coordinates** (Stockie eq. 3.8):
+Substituting $a$ and $b$ into the separable ansatz gives the Gaussian plume solution in r-coordinates (Stockie eq. 3.8):
 
 $$
 C(x, y, z) \;=\; \frac{Q}{4 \pi u\, r}\, \exp\!\left( -\frac{y^2}{4 r} \right) \left[\, \exp\!\left( -\frac{(z - H)^2}{4 r} \right) + \exp\!\left( -\frac{(z + H)^2}{4 r} \right) \,\right].
 $$
 
-It is standard in the atmospheric-science literature to replace $r$ with the **standard deviations of the Gaussian plume**:
+It is standard in the atmospheric-science literature to replace $r$ with the standard deviations of the Gaussian plume:
 
 $$
 \sigma^2(x) \;=\; \frac{2}{u} \int_0^x K(\xi)\, \mathrm{d}\xi \;=\; 2 r.
@@ -134,7 +134,7 @@ This is exactly the expression evaluated in [plume.py](https://github.com/jejjoh
 
 ### A subtlety: distinct σ_y and σ_z
 
-Stockie derives the solution under assumption (A4) that $K_x = K_y = K_z = K$ — the eddy diffusivity is isotropic. Under that assumption $\sigma_y = \sigma_z$ follows identically. In practice, atmospheric turbulence is **anisotropic**: vertical mixing is suppressed relative to horizontal mixing by density stratification, and the empirical dispersion parameterisations (Pasquill-Gifford, Briggs-McElroy-Pooler) give different $\sigma_y(x)$ and $\sigma_z(x)$ in every stability regime. The standard practice — which we follow — is to carry [equation](#eq-plume) over verbatim and separately parameterise $\sigma_y$ and $\sigma_z$ from empirical data. This is *technically* an inconsistency with the isotropic-$K$ starting point; Stockie §3.3 discusses it candidly, citing Llewellyn's critique. The error turns out to be small in the regime where the Gaussian plume is used operationally.
+Stockie derives the solution under assumption (A4) that $K_x = K_y = K_z = K$ (the eddy diffusivity is isotropic). Under that assumption $\sigma_y = \sigma_z$ follows identically. In practice, atmospheric turbulence is anisotropic: vertical mixing is suppressed relative to horizontal mixing by density stratification, and the empirical dispersion parameterisations (Pasquill-Gifford, Briggs-McElroy-Pooler) give different $\sigma_y(x)$ and $\sigma_z(x)$ in every stability regime. The standard practice, which we follow, is to carry [equation](#eq-plume) over verbatim and separately parameterise $\sigma_y$ and $\sigma_z$ from empirical data. This is technically an inconsistency with the isotropic-$K$ starting point, which Stockie §3.3 discusses candidly, citing Llewellyn's critique. The error turns out to be small in the regime where the Gaussian plume is used operationally.
 
 ## 8. Dispersion-coefficient parameterisations (Stockie §3.3)
 
@@ -144,15 +144,15 @@ $$
 \sigma^2(x) \;=\; a x^b,
 $$ (eq-sigma-power)
 
-and notes that experimentally $b > 0.70$ in most conditions — larger than the $b = 1/2$ predicted by constant $K$, reflecting the fact that real-atmosphere diffusivities grow with downwind distance.
+and notes that experimentally $b > 0.70$ in most conditions, which is larger than the $b = 1/2$ predicted by constant $K$ and reflects the fact that real-atmosphere diffusivities grow with downwind distance.
 
-Our library uses the slightly richer **Briggs-McElroy-Pooler** parameterisation:
+Our library uses the slightly richer Briggs-McElroy-Pooler parameterisation:
 
 $$
 \sigma_i(x) \;=\; a_i\, x \, (1 + b_i\, x)^{c_i}, \qquad i \in \{y, z\},
 $$ (eq-briggs)
 
-with one coefficient triple $(a_i, b_i, c_i)$ per Pasquill-Gifford stability class A-F. For $b_i = 0$ this reduces to Stockie's form [equation](#eq-sigma-power) with $a = a_i^2$ and $b = 2$; for $b_i > 0$ and $c_i < 0$ the extra factor produces a gentle rollover at large $x$ that matches measurements better than the pure power law. The six stability classes — from A (strongly unstable, sunny convective day) through D (neutral) to F (strongly stable, clear calm night) — give six different $(\sigma_y, \sigma_z)$ curves. Class A produces the largest $\sigma$'s and hence the most diluted plume; class F produces long, thin plumes with high peak concentration near the centerline. [dispersion.py](https://github.com/jejjohnson/plumax/blob/main/src/plumax/gauss_plume/dispersion.py) stores the six parameter triples in `BRIGGS_DISPERSION_PARAMS` and evaluates [equation](#eq-briggs) in `calculate_briggs_dispersion`.
+with one coefficient triple $(a_i, b_i, c_i)$ per Pasquill-Gifford stability class A-F. For $b_i = 0$ this reduces to Stockie's form [equation](#eq-sigma-power) with $a = a_i^2$ and $b = 2$; for $b_i > 0$ and $c_i < 0$ the extra factor produces a gentle rollover at large $x$ that matches measurements better than the pure power law. The six stability classes, from A (strongly unstable, sunny convective day) through D (neutral) to F (strongly stable, clear calm night), give six different $(\sigma_y, \sigma_z)$ curves. Class A produces the largest $\sigma$'s and hence the most diluted plume; class F produces long, thin plumes with high peak concentration near the centerline. [dispersion.py](https://github.com/jejjohnson/plumax/blob/main/src/plumax/gauss_plume/dispersion.py) stores the six parameter triples in `BRIGGS_DISPERSION_PARAMS` and evaluates [equation](#eq-briggs) in `calculate_briggs_dispersion`.
 
 ## 9. Mass conservation
 
@@ -162,20 +162,20 @@ $$
 \int_0^{\infty} \int_{-\infty}^{\infty} C(x, y, z) \, u \, \mathrm{d}y \, \mathrm{d}z \;=\; Q,
 $$
 
-which is mass-flux conservation: the downwind flux of contaminant mass through any cross-section equals the source rate. The factor of 2 in the denominator of [equation](#eq-plume) (i.e. $2 \pi u\, \sigma_y\, \sigma_z$ rather than $4 \pi u\, \sigma_y\, \sigma_z$) is exactly what's needed for this — the ground reflection puts the full vertical Gaussian on the physical half-space $z \geq 0$, and the $y$-Gaussian is symmetric around zero.
+which is mass-flux conservation: the downwind flux of contaminant mass through any cross-section equals the source rate. The factor of 2 in the denominator of [equation](#eq-plume) (i.e. $2 \pi u\, \sigma_y\, \sigma_z$ rather than $4 \pi u\, \sigma_y\, \sigma_z$) is exactly what is needed for this, since the ground reflection puts the full vertical Gaussian on the physical half-space $z \geq 0$, and the $y$-Gaussian is symmetric around zero.
 
 ## 10. Operational conventions and pitfalls
 
 Three small items that are easy to trip over:
 
 - **Wind-direction convention**. In meteorology `wind_direction` is the direction the wind is *from*: `wind_direction = 270°` means a westerly wind (blowing *from* the west, flowing *toward* the east). Our `simulate_plume` adopts this convention; the conversion to Cartesian velocity components is $u = -U \sin(\theta)$, $v = -U \cos(\theta)$ with $\theta$ in radians.
-- **Upwind masking**. [equation](#eq-plume) is only valid for $x' > 0$ in the wind-aligned frame. Numerically evaluating the formula at $x' \leq 0$ gives a nonsensical (and very negative) exponent inside $\sigma^2 \propto x'^{1+}$ and we mask those points to zero. `plume_concentration` uses `jnp.where(x_downwind > 0.0, concentration, 0.0)` for this.
-- **Calm-wind limit**. [equation](#eq-plume) has a $1/u$ prefactor that diverges as $u \to 0$, but this divergence is spurious — Stockie eq. 3.11 shows that if one carries $r$ rather than $u\sigma^2$, the true $u \to 0$ limit is finite. Our implementation clamps $u$ below a floor `MIN_WIND_SPEED = 0.5 m/s` rather than handling the calm regime rigorously; the rigorous fix is to switch to a Gaussian-puff model (Stockie §3.5.6) when wind is very low, which is on the future-work list for this sub-project.
+- **Upwind masking**. [equation](#eq-plume) is only valid for $x' > 0$ in the wind-aligned frame. Numerically evaluating the formula at $x' \leq 0$ gives a nonsensical (and very negative) exponent inside $\sigma^2 \propto x'^{1+}$, so we mask those points to zero. `plume_concentration` uses `jnp.where(x_downwind > 0.0, concentration, 0.0)` for this.
+- **Calm-wind limit**. [equation](#eq-plume) has a $1/u$ prefactor that diverges as $u \to 0$, but this divergence is spurious, as Stockie eq. 3.11 shows that if one carries $r$ rather than $u\sigma^2$, the true $u \to 0$ limit is finite. Our implementation clamps $u$ below a floor `MIN_WIND_SPEED = 0.5 m/s` rather than handling the calm regime rigorously; the rigorous fix is to switch to a Gaussian-puff model (Stockie §3.5.6) when wind is very low, which is on the future-work list for this sub-project.
 
 ## What to read next
 
-- **Notebook [01_gaussian_plume_forward](../../notebooks/gauss_plume/01_gaussian_plume_forward.ipynb)** — numerical evaluation of [equation](#eq-plume) on a 3-D grid, visual checks of the Gaussian cross-sections, and a stability-class sweep illustrating how σ_y, σ_z scale with class.
-- **Notebook [02_emission_rate_parameter_estimation](../../notebooks/gauss_plume/02_plume_emission_rate_estimation.ipynb)** — Bayesian inversion for $Q$ given a downwind transect, using NumPyro NUTS against [equation](#eq-plume) as the forward operator.
-- **Notebook [03_plume_state_estimation](../../notebooks/gauss_plume/03_plume_state_estimation.ipynb)** — a state-space extension where $Q_t$ evolves as a random walk; the forward model at each $t$ is still [equation](#eq-plume).
-- **Stockie §§3.4-3.6** — multi-source superposition (linear in $Q$), the "menagerie" of Gaussian-plume variants (cross-wind-integrated, settling, deposition), and the Gaussian-puff solution for transient / low-wind cases.
-- **Stockie §§4-6** — the *inverse* source-identification problem via constrained linear least squares and its application to the Inco Superstack dataset. The Bayesian view in our notebooks is a probabilistic cousin of Stockie's least-squares treatment.
+- **Notebook [01_gaussian_plume_forward](../../notebooks/gauss_plume/01_gaussian_plume_forward.ipynb)**: numerical evaluation of [equation](#eq-plume) on a 3-D grid, visual checks of the Gaussian cross-sections, and a stability-class sweep illustrating how σ_y, σ_z scale with class.
+- **Notebook [02_emission_rate_parameter_estimation](../../notebooks/gauss_plume/02_plume_emission_rate_estimation.ipynb)**: Bayesian inversion for $Q$ given a downwind transect, using NumPyro NUTS against [equation](#eq-plume) as the forward operator.
+- **Notebook [03_plume_state_estimation](../../notebooks/gauss_plume/03_plume_state_estimation.ipynb)**: a state-space extension where $Q_t$ evolves as a random walk; the forward model at each $t$ is still [equation](#eq-plume).
+- **Stockie §§3.4-3.6**: multi-source superposition (linear in $Q$), the "menagerie" of Gaussian-plume variants (cross-wind-integrated, settling, deposition), and the Gaussian-puff solution for transient / low-wind cases.
+- **Stockie §§4-6**: the *inverse* source-identification problem via constrained linear least squares and its application to the Inco Superstack dataset. The Bayesian view in our notebooks is a probabilistic cousin of Stockie's least-squares treatment.

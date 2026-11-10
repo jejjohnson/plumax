@@ -1,7 +1,7 @@
 ---
-title: "MARS Satellite Constellation — Technical Characteristics"
+title: "MARS Satellite Constellation: Technical Characteristics"
 short_title: Satellite catalog
-subject: plumax — observation side
+subject: plumax: observation side
 authors:
   - name: J. Emmanuel Johnson
     affiliations: [UNEP, IMEO, MARS]
@@ -13,24 +13,24 @@ numbering:
   enumerator: "S%s"
 ---
 
-# MARS Satellite Constellation — Technical Characteristics
+# MARS Satellite Constellation: Technical Characteristics
 
-The **Methane Alert and Response System (MARS)** integrates data from over 35 satellites, split into two functional categories.
+The Methane Alert and Response System (MARS) combines data from over 35 satellites, which fall into two functional categories.
 
 :::{note} Detection categories
 :class: dropdown
 
-- **Point Source Imagers (PSI)** — high spatial resolution (20–60 m), tasked or systematic imaging, sensitivity to individual facility plumes (~100–1{,}000 kg/h detection floor).
-- **Area Flux Mappers (AFM)** — wide-swath column retrievals of XCH₄ (in ppb), enabling regional and national budget attribution.
+- **Point Source Imagers (PSI):** high spatial resolution (20-60 m), tasked or systematic imaging, sensitivity to individual facility plumes (~100-1{,}000 kg/h detection floor).
+- **Area Flux Mappers (AFM):** wide-swath column retrievals of XCH₄ (in ppb), which allow regional and national budget attribution.
 :::
 
 The full 27-row catalog is loaded from a sibling file ([`satellites_table.html`](satellites_table.html)) per the mystmd guide on [including tables from file](https://mystmd.org/guide/tables#include-tables-from-file).
 
 :::{caution} Static-only rendering under mystmd `{include}`
-mystmd's HTML sanitization strips `<script>` tags from included content, so the filter buttons (Past / Present / Future, PSI / AFM) and the search input render as inert controls — all 27 rows are always visible. The legacy notebook cell rendered the same HTML inside a sandboxed iframe where the JS *did* run; restoring that interactive UX would require either embedding via `srcdoc=` or keeping a one-cell `.ipynb` companion. Treat this as a static catalog for now.
+mystmd's HTML sanitization strips `<script>` tags from included content, so the filter buttons (Past / Present / Future, PSI / AFM) and the search input render as inert controls, so all 27 rows are always visible. The legacy notebook cell rendered the same HTML inside a sandboxed iframe where the JS *did* run. Restoring that interactive view would need either embedding via `srcdoc=` or keeping a one-cell `.ipynb` companion, so for now we treat this as a static catalog.
 :::
 
-*MARS satellite constellation — past, present, and future missions tasked for methane retrieval, with spatial / spectral / SNR characteristics and per-row references into `references.bib`.*
+*MARS satellite constellation: past, present, and future missions tasked for methane retrieval, with spatial / spectral / SNR characteristics and per-row references into `references.bib`.*
 
 :::{include} satellites_table.html
 :::
@@ -38,22 +38,22 @@ mystmd's HTML sanitization strips `<script>` tags from included content, so the 
 ## Notes
 
 :::{important} Detection philosophy
-The two categories reflect fundamentally different retrieval strategies:
+The two categories reflect different retrieval strategies.
 
 - PSI instruments use high spatial resolution to spatially resolve individual facility plumes, with SNR and spectral resolution tuned to the 1.65 µm SWIR absorption feature.
 - AFM instruments retrieve column-averaged dry-air mole fractions (XCH₄ in ppb) across wide swaths, enabling regional budget inversion.
 :::
 
 :::{note} Spectral windows
-Nearly all instruments use either the **1.60–1.68 µm** window (lower absorption depth, cleaner for point-source retrieval) or the **2.3 µm** band (deeper absorption, preferred for regional XCH₄ columns, used by TROPOMI/Sentinel-5; see {cite:p}`s5p_tropomi`). MERLIN ({cite:p}`merlin`) is unique in using an IPDA lidar with matched on/off wavelengths at 1645 nm rather than passive solar backscatter.
+Nearly all instruments use either the 1.60-1.68 µm window (lower absorption depth, cleaner for point-source retrieval) or the 2.3 µm band (deeper absorption, preferred for regional XCH₄ columns, used by TROPOMI/Sentinel-5; see {cite:p}`s5p_tropomi`). MERLIN ({cite:p}`merlin`) is the only one that uses an IPDA lidar with matched on/off wavelengths at 1645 nm instead of passive solar backscatter.
 :::
 
 :::{caution} Caveats
 - SNR figures are scene- and band-dependent; many instruments publish full spectrally-resolved SNR curves.
-- Revisit times for tasked instruments (GHGSat {cite:p}`ghgsat`, PRISMA {cite:p}`prisma`, Carbon Mapper {cite:p}`carbon_mapper`) depend entirely on operator scheduling.
+- Revisit times for tasked instruments (GHGSat {cite:p}`ghgsat`, PRISMA {cite:p}`prisma`, Carbon Mapper {cite:p}`carbon_mapper`) depend on operator scheduling.
 - Future-mission specs (SBG {cite:p}`sbg`, CHIME {cite:p}`chime`, CO2M {cite:p}`co2m`, MERLIN {cite:p}`merlin`, TANGO {cite:p}`tango`) are from pre-launch design documents and subject to revision.
 - GOSAT-GW ({cite:p}`gosat_gw`) launched December 2023 but was still in commissioning as of early 2024; some specs are pre-launch.
-- EMIT ({cite:p}`emit`) revisit is irregular due to ISS precession drift — coverage varies from 1–4 passes/month depending on latitude.
+- EMIT ({cite:p}`emit`) revisit is irregular because of ISS precession drift, and coverage varies from 1-4 passes/month depending on latitude.
 :::
 
 ## References

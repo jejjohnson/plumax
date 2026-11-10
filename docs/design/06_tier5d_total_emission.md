@@ -1,8 +1,8 @@
-# Tier V.D — Total emission estimation
+# Tier V.D: Total emission estimation
 
 **Question:** Given a population of detected plumes (and the ones we missed), what is the true total emitted mass over a region and time window?
 
-This is the **inventory-grade output** of `plumax` — the number that gets reported into national greenhouse-gas inventories, climate models, and policy dashboards. It also requires the most care, because the satellite catalog you start from is **systematically biased**: detection thinning means the very things you can't see (small, frequent leaks) are exactly the things that matter for total mass.
+This is the inventory-grade output of `plumax`, the number that gets reported into national greenhouse-gas inventories, climate models and policy dashboards. It also needs the most care, because the satellite catalog you start from is systematically biased. Detection thinning means the very things you can't see (small, frequent leaks) are exactly the things that matter for total mass.
 
 ---
 
@@ -12,10 +12,10 @@ This is the **inventory-grade output** of `plumax` — the number that gets repo
 The full Monte Carlo proof is in the [missing-mass paradox notebook](../notebooks/population/01_missing_mass_paradox.ipynb). The result, in one sentence:
 
 :::{important} The paradox
-A POD-thinned plume catalog simultaneously **overestimates the average emission rate** (because it oversamples big leaks) and **underestimates the total emitted mass** (because it misses many small leaks).
+A POD-thinned plume catalog simultaneously overestimates the average emission rate (because it oversamples big leaks) and underestimates the total emitted mass (because it misses many small leaks).
 :::
 
-These two biases pull in opposite directions, but they don't cancel — averaging the wrong thing over the wrong sample size gives you the wrong total. The corrected estimator has to model the thinning explicitly.
+These two biases pull in opposite directions, but they don't cancel, since averaging the wrong thing over the wrong sample size gives the wrong total. The corrected estimator has to model the thinning explicitly.
 
 ---
 
@@ -29,7 +29,7 @@ M_\text{total}(T) \;=\; \mathbb{E}[N_\text{true}(T)] \cdot \mathbb{E}[Q]
 \;=\; \left(\int_{0}^{T} \lambda(t)\, \mathrm{d}t\right) \cdot \left(\int Q\, f(Q)\, \mathrm{d}Q\right)
 $$
 
-This is the **un-thinned** total — what would be emitted regardless of detection. Compare to the naive estimator:
+This is the un-thinned total, which is what would be emitted regardless of detection. Compare to the naive estimator:
 
 $$
 M_\text{naive}(T) \;=\; \sum_{i \in \mathcal{D}} Q_i \;\approx\; \mathbb{E}[N_\text{detected}(T)] \cdot \mathbb{E}[Q \mid \text{detected}]
@@ -44,9 +44,9 @@ $$
 $M_\text{naive}$ is biased low because:
 
 - $\mathbb{E}[N_\text{detected}] < \mathbb{E}[N_\text{true}]$ (some events missed).
-- $\mathbb{E}[Q \mid \text{detected}] > \mathbb{E}[Q]$ (detected events are systematically bigger — heavy tail of $f$).
+- $\mathbb{E}[Q \mid \text{detected}] > \mathbb{E}[Q]$ (detected events are systematically bigger, heavy tail of $f$).
 
-The two errors *compound* rather than cancel: the regional total is undercounted, and the per-event mean is inflated. Inverting the POD model is the **only** way to recover an unbiased total.
+The two errors *compound* rather than cancel, as the regional total is undercounted and the per-event mean is inflated. Inverting the POD model is the only way to recover an unbiased total.
 
 ---
 
@@ -80,7 +80,7 @@ Without these, the estimator is just a number.
 (vd-modules)=
 ## Module layout
 
-*Tier V.D module layout — concern, target module, status.*
+*Tier V.D module layout, concern, target module, status.*
 
 | Concern | Module | Status |
 | --- | --- | --- |
@@ -101,10 +101,10 @@ $$
 P_d^{\cup}(Q) \;=\; 1 - \prod_{k=1}^{K} \bigl(1 - P_d^{k}(Q)\bigr)
 $$
 
-This is the "any satellite saw it" probability. Folds into the TMTPP likelihood as a single replacement of $P_d$ with $P_d^{\cup}$. Adds one strong assumption: detections by different satellites are conditionally independent given the leak size — defensible at the population level, possibly violated for clustered super-emitters.
+This is the "any satellite saw it" probability, and it folds into the TMTPP likelihood as a single replacement of $P_d$ with $P_d^{\cup}$. It adds one strong assumption, that detections by different satellites are conditionally independent given the leak size, which is defensible at the population level but possibly violated for clustered super-emitters.
 
 :::{attention} Open: union vs. categorical mark
-Whether to model **which** satellite detected each event (categorical mark) or just the union. The first gives more information per event but doubles the number of POD parameters.
+We still need to decide whether to model which satellite detected each event (categorical mark) or just the union. The first gives more information per event but doubles the number of POD parameters.
 :::
 
 ---
@@ -113,7 +113,7 @@ Whether to model **which** satellite detected each event (categorical mark) or j
 ## Open questions
 
 :::{attention} Mass vs. mass-rate
-$M_\text{total}(T)$ is mass. Most published inventories report mass-rate (Tg / yr). The conversion is $M_\text{total} / T$, but $T$ for a satellite catalog is fuzzy — what's the effective observing time when satellites overpass intermittently? Document the convention.
+$M_\text{total}(T)$ is mass. Most published inventories report mass-rate (Tg / yr). The conversion is $M_\text{total} / T$, but $T$ for a satellite catalog is fuzzy, what's the effective observing time when satellites overpass intermittently? Document the convention.
 :::
 
 :::{attention} Spatial aggregation
