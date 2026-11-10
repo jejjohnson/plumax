@@ -22,10 +22,10 @@ from dataclasses import dataclass
 
 import jax
 import jax.numpy as jnp
+from integrix import expect as integrix_expect
 from jaxtyping import Array, Float
 
 from plumax.population._src.fitting_iw import TMTPPPosterior
-from plumax.population._src.integrate import log_simpson
 from plumax.population._src.pod_union import (
     TOD_BINS,
     InstrumentPOD,
@@ -134,7 +134,9 @@ def _stratum_emission(
                 return jnp.log(q) + posterior.mark.log_prob(q, **theta) + log_miss
 
             # E_f[Q (1 − P_d(Q))], in log space: a heavy tail underflows in linear Q
-            return jnp.exp(log_simpson(log_integrand, q_min, q_max, n=n_nodes))
+            return jnp.exp(
+                integrix_expect.log_simpson(log_integrand, q_min, q_max, n=n_nodes)
+            )
 
         # M_total = Λ E_f[Q] D
         total = expected_events * mean_rate * event_duration
