@@ -46,7 +46,8 @@ $$ (eq-vet-pool)
 
 with $\tau_{\text{bg}}$ the window's `mf_background_mol_m2` (30 ppm·m for EMIT's CH₄ window) and $b = 200$. So $I \subseteq M$, $O \cap I = \emptyset$ and $O \cap M_c = \emptyset$ for every candidate. These are the reference package's settings [^pv], `pv/config/config.yaml`; the two sets then go to radtrax's pairing as flat pixel indices.
 
-:::{dropdown} Why each setting
+### Why each setting
+
 **Seeds come from the matched filter.** The depth of methane's absorption in $R$ grows with $\Delta X$, so the strongest pixels give the deepest and best-resolved transmittance.
 
 **The seeds' noise is not innocent.** Choosing the $k$ largest scores selects pixels whose noise happens to point along methane's target, so the seeds' spectra are biased toward methane's shape by the selection itself. This is one reason vetting is not independent of the matched filter. Growing the seeds by one pixel adds neighbours that were not chosen for their own noise, and it keeps the in-set a connected region rather than a scatter of isolated pixels.
@@ -56,8 +57,6 @@ with $\tau_{\text{bg}}$ the window's `mf_background_mol_m2` (30 ppm·m for EMIT'
 **Growth is one dilation.** The reference code grows the seeds with a Gaussian filter of σ = 1 and keeps pixels above 0.05. On a binary mask that is exactly one 3 × 3 dilation, which plumax computes as a max-pool in JAX.
 
 **The background pool.** A small matched-filter score keeps plume pixels out of $L_{\text{out}}$, where they would cancel the signal being tested. The box keeps the pool near the seeds, so that each pair shares its sun, elevation and water vapour, which is what lets them cancel in the ratio. Every candidate of the scene is kept out, not only this one, so a second plume or confounder never serves as background.
-:::
-
 ## 3. A null from the same scene
 
 The honest null is this scene's clutter with no plume. Vet $S$ copies $M_s$ of the mask, each rotated and translated to where there is no candidate ([`null_masks`](xref:api#plumax.vetting.null_masks)), exactly as the candidate was vetted, and report ([`null_pvalue`](xref:api#plumax.vetting.null_pvalue))
@@ -76,7 +75,8 @@ $$ (eq-vet-free)
 
 found exactly as the zeros of the correlation of the candidates with $M_\theta$'s bounding box; one free shift is drawn uniformly. Randomness comes only from the caller's `jax.random` key, so the same key gives the same copies.
 
-:::{dropdown} Reading $\hat p$
+### Reading $\hat p$
+
 **What it estimates.** $\hat p$ is the fraction of null copies that score at least as well as the candidate. A small $\hat p$ says that a plume-free mask of the candidate's shape, placed elsewhere in this scene, rarely fits methane this well.
 
 **Its resolution.** With $S$ copies, $\hat p$ moves in steps of $1/S$. $\hat p = 0$ says only that no copy did as well, not that the probability is zero. The usual Monte Carlo form, $(1 + S'\hat p) / (1 + S')$, is never zero and is a valid p-value when the candidate and the copies are exchangeable under the null [^phipson2010]. With $S = 100$, candidate A's $\hat p = 0.00$ is $1/101 \approx 0.01$ in that form. For a score where higher is better, such as a likelihood ratio, pass both scores negated.
@@ -84,8 +84,6 @@ found exactly as the zeros of the correlation of the candidates with $M_\theta$'
 **What the null samples.** Each copy runs the whole chain, seeds to $D_{\text{norm}}$, so the selection of seeds by the matched filter happens inside the null too. The selection of the mask itself does not. Copies sit wherever there is no candidate, so they sample this scene's background in the mask's shape, not background that the matched filter flagged. A confounder is unusual background by construction, which is why the null calibrates the score but cannot replace the fit's test of shape.
 
 **The copies are not independent.** They overlap one another and draw on the same background pool, so the tail of the null is estimated less precisely than $S$ independent draws would estimate it.
-:::
-
 ## 4. One candidate
 
 [`vet_candidate`](xref:api#plumax.vetting.vet_candidate) runs the steps in their fixed order with the window's band selection: the seeds {eq}`eq-vet-seeds` and the pool {eq}`eq-vet-pool`, radtrax's pairing on the window's pairing bands, the ratio on its fitting bands, the fit and $D_{\text{norm}}$. Its [`VettingResult`](xref:api#plumax.vetting.VettingResult) carries $\widehat{\Delta X}$ in mol/m², $D_{\text{norm}}$, the number of pairs, the ratio and the fit (continuum $P$ and transmittance $E$, the spectra an analyst plots as $R/P$ against $E$), and the continuum-only residual at $\Delta X = 0$ beside the fit's residual at $\widehat{\Delta X}$.

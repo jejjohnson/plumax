@@ -43,15 +43,13 @@ simulated plume to radiance through it); radtrax never imports plumax.
 
 ## What it stands on
 
-plumax sits in GeoStack's GeoModels layer beside radtrax. It reaches down to
-finitevolX for the Eulerian grid, to gaussx for every posterior covariance, and to pipekit for the `Operator` interface. Inference sits to one side. Every tier exposes the same `forward(params, met) → observations`, so we write the samplers and assimilation schemes once against it: NumPyro does the sampling, vardax (variational, the `assim` extra) runs the Tier II optimal interpolation and the Tier III 3D-Var, and filterax (ensemble Kalman) is planned.
+plumax sits in GeoStack's GeoModels layer beside radtrax, and nothing below imports it back. It reaches down to finitevolX in GeoNumerics for the Eulerian grid, and to Core for the rest: gaussx for every posterior covariance, pipekit for the `Operator` interface and, behind extras, vardax and argminax for the source inversions and xtremax for the point processes. Every tier exposes the same `forward(params, met) → observations`, so we write the samplers and assimilation schemes once against it. NumPyro does the sampling, vardax (the `assim` extra) runs the Tier II optimal interpolation and the Tier III 3D-Var over plumax's source-receptor maps, and filterax (ensemble Kalman methods) is the planned home for EKI. The [stack layer map](https://github.com/jejjohnson/geostack/blob/main/docs/design/stack_layer_map.md) also plans to move some of plumax out, as the particle machinery goes to tracerax, the per-pixel geometry to radiomax and the physical constants to geophysix.
 
 :::{figure} assets/diagrams/plumax-deps.png
 :label: fig-plumax-deps
-:alt: plumax and its dependencies by GeoStack layer: an Inference column with numpyro (today, behind the inference extra), vardax and argminax (today, behind the assim extra) and filterax (planned); in GeoModels, plumax depends on radtrax through coupled and adapters, and radtrax never imports plumax; in GeoNumerics, les_fvm uses finitevolX (with spectraldiffx underneath) and lagrangian and les_fvm use gaussx; in GeoStack, operators use pipekit, adapters satisfy pipekit-cycle in tests only, and geotoolz-ops and georeader back the geo extra; in GeoML, xtremax backs the population extra and geonnax arrives through radtrax; jax, equinox, diffrax, optimistix, lineax, xarray, netcdf4 and scipy are the third-party foundations.
+:alt: plumax and its dependencies in the layers of the geostack stack layer map: in GeoModels, plumax imports radtrax and radtrax never imports plumax; in Core, pipekit and gaussx are base dependencies, vardax and argminax come with the assim extra, xtremax with the population extra and pipekit-train with the emulate extra, pipekit-cycle is used in tests only, geonnax arrives through radtrax, and integrix (sums, stepping and log-space quadrature), functax and filterax are planned; in GeoNumerics, finitevolX is a base dependency with spectraldiffx underneath, and tracerax, radiomax and geophysix are planned homes for code that moves out of plumax; in GeoStack, geotoolz-ops comes with the geo extra and xrtoolz with the io extra; jax, equinox, einx, diffrax, optimistix, lineax, numpyro, xarray, netcdf4, scipy, georeader and scikit-learn are the third-party foundations.
 
-plumax's declared dependencies by GeoStack layer. Each arrow is labelled with
-the plumax subpackage that imports the dependency.
+plumax's declared dependencies in the layers of the geostack stack layer map. Each card names the plumax subpackages that import it, and planned moves are dashed.
 :::
 
 ## The modeling cycle
@@ -175,6 +173,7 @@ maths is sector-agnostic.
 ## Links
 
 - [Roadmap & Architecture](design/roadmap.md)
+- [Notation](theory/notation.md)
 - [API Reference](xref:api#plumax)
 - [Changelog](changelog.md)
 - [GitHub](https://github.com/jejjohnson/plumax)

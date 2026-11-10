@@ -149,49 +149,7 @@ $$
 (i-6)=
 ## I.6 Notation and units
 
-Fixed for the whole section.
-
-:::{important} Full symbol table (click to expand)
-:class: dropdown
-| Symbol | Meaning | Units |
-|---|---|---|
-| $S$ | spatial domain | - |
-| $x \in S$ | location (easting, northing) | km, km |
-| $T = [0, T_{\mathrm{end}}]$ | time window | d |
-| $t \in T$ | a time | d |
-| $X$ | generic index set: $S$, $T$, or $S \times T$ | - |
-| $A \subset X$ | a region or interval | - |
-| $\lvert A \rvert$ | area (or length) of $A$ | $\mathrm{km^2}$ (d) |
-| $\delta_x$ | point mass at $x$ | - |
-| $N(A)$ | number of point sources in $A$ | - |
-| $\lambda(A)$, $\lambda(x)$ | expected count in $A$; source density | -, $\mathrm{km^{-2}}$ |
-| $\lambda(t)$ | event rate | $\mathrm{d^{-1}}$ |
-| $s_k$ | on-state rate of point source $k$ | $\mathrm{kg\,h^{-1}}$ |
-| $s_0$ | reference rate, $1\ \mathrm{kg\,h^{-1}}$ | $\mathrm{kg\,h^{-1}}$ |
-| $\pi_k$ | persistence (fraction of time on) of source $k$ | - |
-| $G(\mathrm{d}\pi \mid u)$ | distribution of persistence given on-state rate | - |
-| $p_{\mathrm{camp}}$ | probability a source is detected at least once over a campaign | - |
-| $\lambda_{\ge}$, $R$ | count intensity of sources above the floor $u_{\mathrm{floor}}$; $R = \rho([u_{\mathrm{floor}},\infty))$ | $\mathrm{km^{-2}}$, - |
-| $e(x)$ | diffuse flux density | $\mathrm{kg\,h^{-1}\,km^{-2}}$ |
-| $\mu(A)$ | total emission rate from $A$ (point + diffuse) | $\mathrm{kg\,h^{-1}}$ |
-| $\mu_{\mathrm{pt}}$, $\mu_{\mathrm{df}}$ | atomic and diffuse parts of $\mu$ | $\mathrm{kg\,h^{-1}}$ |
-| $H(A)$ | prior expected emission from $A$ | $\mathrm{kg\,h^{-1}}$ |
-| $u_k$ | dimensionless rate $s_k/s_0$ | - |
-| $\rho(\mathrm{d}u)$ | Lévy measure over dimensionless rates $u$ | - |
-| $G(A)$ | fraction of basin total from $A$ | - |
-| $f(x)$ | $\mathrm{XCH_4}$ enhancement | ppb |
-| $m(x)$, $k(x,x')$ | mean, covariance kernel of a field | ppb, $\mathrm{ppb^2}$ |
-| $g(x)$ | log source density, $\log\lambda(x)$ | - |
-| $\Delta x$, $\Delta t$ | pixel size, revisit interval | km, d |
-| $C_\Delta$ | coarsening operator: $\mu \mapsto$ pixel totals | - |
-| $\mathcal{T}$ | atmospheric transport operator: $\mu \mapsto f$ | ppb per $\mathrm{kg\,h^{-1}}$ |
-| $\mathbf{U}$, $U$ | 10 m wind vector (east, north); its speed $U = \lVert\mathbf{U}\rVert$ | $\mathrm{m\,s^{-1}}$ |
-| $p(x,s)$ | detection probability | - |
-| $s_{\min}$ | detection limit | $\mathrm{kg\,h^{-1}}$ |
-| $c_j$, $Z_j$ | candidate site $j$; its emitting indicator | km km, - |
-| $m_k$, $M(t)$ | event mass; cumulative mass by $t$ | kg |
-| $\lambda^*(t)$, $\mathcal{H}_t$ | conditional intensity; history before $t$ | $\mathrm{d^{-1}}$, - |
-:::
+These are fixed for the whole section, and the symbols are listed in the [emission inventory table](#tbl-notation-inventory) of the notation page.
 
 :::{note} Two conventions
 - Inside $\rho(\mathrm{d}u)$ and Gamma shape parameters, rates are **dimensionless**: $u = s/s_0$, and physical totals carry the factor $s_0$ back.

@@ -4,7 +4,7 @@ title: Equation index
 
 # Design-roadmap equation index
 
-An index of the key equations across the [design roadmap](../design/roadmap.md) pages, grouped by page, with a link to the section where each one lives. It exists so that authors can plan cross-references and audit coverage without reading every page.
+An index of the key equations across the [design roadmap](../design/roadmap.md) pages, grouped by page, with a link to the section where each one lives. It exists so that authors can plan cross-references and audit coverage without reading every page. The symbols themselves are on the [notation](notation.md) page.
 
 :::{note} Labels are reserved, not yet defined
 The `Label` column records the equation labels used when the roadmap was a standalone set of notes (convention `eq-<page>-<short-name>`, where `<page>` is the file basename or sub-page tag: `tier1`, `tier2`, …, `va` to `vd`, `rtm`, `prereqs`). The design pages do not currently attach these labels to their `$$` blocks, so we link to the section anchors in the last column. When you do label an equation, reuse the name listed here. MyST labels are project-global, so this table doubles as a uniqueness check.

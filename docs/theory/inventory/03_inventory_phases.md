@@ -93,8 +93,6 @@ flowchart LR
 ```
 
 :::{hint} Running example
-:class: dropdown
-:open:
 Choose the floor so that $\lambda_{\ge}(A_1) \approx 15$, the count of [§II.3](#ii-3). With $\bar p \approx 0.3$, the prior mean of detections is $0.3 \times 15 = 4.5$. After one clear fine-imager scene over $A_1$ detecting source 1: $N_{\mathrm{obs}}(A_1) = 1$ against that prior mean of 4.5 detectable, so the posterior $\lambda(A_1)$ drops; the Cox prior propagates milder drops to every cell correlated with $A_1$. $A_2$ and $A_4$ get no direct likelihood term because they are unsearched, but they still move through the kernel: $A_2$ and $A_3$, both adjacent to $A_1$, by similar amounts, and the diagonal $A_4$ by less. Expected undiscovered in $A_1 \approx (1 - \bar p)\,\hat\lambda_{\ge}(A_1)$ with mark-averaged $\bar p \approx 0.3$.
 :::
 
@@ -131,8 +129,6 @@ Use the controlled-release detection curve to divide out $p$; otherwise report t
 :::
 
 :::{hint} Running example: source 3
-:class: dropdown
-:open:
 10 overpasses, 8 clear, 3 detections at $\approx 400\ \mathrm{kg\,h^{-1}}$. The detection curve gives $p_i(400\ \mathrm{kg\,h^{-1}}) \approx 0.9$ in every clear scene, so the moment estimate is
 
 $$
@@ -194,8 +190,6 @@ From the coarse-mapper stack; scales at best as $\sigma_r/\sqrt{n_{\mathrm{clear
 ::::
 
 :::{hint} Running example
-:class: dropdown
-:open:
 The toy basin contains only the four listed sources, so its true (ii) is exactly sources 2 and 4. A real basin also has a tail of smaller sources, and the estimate of (ii) always includes one.
 
 | Term | Truth ($\mathrm{kg\,h^{-1}}$) | Estimate ($\mathrm{kg\,h^{-1}}$) | Note |
