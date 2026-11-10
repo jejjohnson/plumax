@@ -41,7 +41,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
+import jax.numpy as jnp
 import numpy as np
+from integrix import rule as integrix_rule
 
 from plumax.errors import MissingExtraError
 from plumax.geo.plume_array import (
@@ -110,6 +112,22 @@ __all__ = [
 def _single_band_nan(x: GeoTensor | np.ndarray) -> np.ndarray:
     """Single-band ``(H, W)`` float map of ``x`` with nodata pixels set to NaN."""
     return squeeze_single_band(mask_invalid_to_nan(x))
+
+
+def _masked_mass(enhancement: np.ndarray, mask: np.ndarray, area: float) -> float:
+    """∑ᵢ mᵢ Ωᵢ ΔA over an ``(H, W)`` map, with NaN pixels left out.
+
+    The mass of the column enhancement Ω (kg m⁻²) over the pixels where
+    ``mask`` holds, each of area ΔA (m²): ``np.nansum(Ω[mask] * ΔA)``, as one
+    traceable integrix sum (plumax#250).
+    """
+    # ΔA per pixel, in the image's shape
+    pixel_areas = jnp.full(enhancement.shape, area)
+    # ∑ᵢ mᵢ Ωᵢ ΔA, NaN pixels omitted
+    total = integrix_rule.integrate(
+        pixel_areas, enhancement, axis=(0, 1), where=mask, nan_policy="omit"
+    )
+    return float(total.value)
 
 
 def _instance_labels(x: GeoTensor | np.ndarray) -> np.ndarray:
@@ -629,7 +647,7 @@ class IMEEstimate(Operator):
             if self.pixel_area_m2 is not None
             else pixel_area(gt.transform)
         )
-        ime_kg = float(np.nansum(enhancement[mask] * area))
+        ime_kg = _masked_mass(enhancement, mask, area)
         length_m = plume_length(mask, gt.transform, method=self.length_method)
         rate = 0.0 if length_m == 0.0 else ime_kg * self.wind_speed / length_m
         out = {
@@ -749,7 +767,8 @@ class CrossSectionalFlux(Operator):
             offset = along - distance
             in_strip = (offset >= -width / 2.0) & (offset < width / 2.0)
             on_transect = mask & in_strip
-            flux = float(np.nansum(enhancement[on_transect] * wind_norm * width))
+            # Q_k = (U / w) ∑ over the strip of Ωᵢ ΔA, which is U ∑ Ωᵢ w
+            flux = _masked_mass(enhancement, on_transect, area) * wind_norm / width
             half_len = max(
                 float(np.max(np.abs(across[mask]))) if mask.any() else width,
                 width,

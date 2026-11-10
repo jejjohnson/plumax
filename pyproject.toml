@@ -75,6 +75,9 @@ dependencies = [
     # einx writes reductions, gathers and rearranges with named axes (the
     # house style's replacement for axis= / reshape / indexing tricks).
     "einx>=0.4",
+    # integrix sums the IME and the cross-sectional flux (plumax#250). 0.0.4 is
+    # the first release with where= and nan_policy= on integrix.rule.integrate.
+    "integrix>=0.0.4",
 ]
 
 [project.optional-dependencies]
@@ -159,6 +162,7 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "7c446f141c23164918e2e8b708428b860206120c" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
+integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.4" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 # vardax v0.2.1: the first release with both MinimiseResult.converged

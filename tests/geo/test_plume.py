@@ -1158,3 +1158,49 @@ def test_shape_filter_ignores_a_positive_label_fill() -> None:
     )
     assert set(np.unique(np.asarray(out))) <= {0, 1, 2}
     assert not np.asarray(out)[10:].any()
+
+
+def _cloudy_plume(seed: int) -> tuple[np.ndarray, np.ndarray]:
+    """A random kg/m² enhancement with NaN (cloudy) pixels, and a plume mask."""
+    rng = np.random.default_rng(seed)
+    enhancement = rng.uniform(0.0, 2e-3, (11, 21))
+    enhancement[rng.uniform(size=(11, 21)) < 0.15] = np.nan
+    mask_arr = rng.uniform(size=(11, 21)) < 0.6
+    return enhancement, mask_arr
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_ime_on_integrix_matches_the_numpy_sum(seed: int) -> None:
+    """Gate G6-port (plumax#250): the integrix sum equals plumax's old
+    ``np.nansum(enhancement[mask] * area)`` to 1e-12, clouds and all."""
+    enhancement, mask_arr = _cloudy_plume(seed)
+    result = geo.IMEEstimate(wind_speed=2.0, return_uncertainty=False)(
+        _gt(enhancement), _gt(mask_arr)
+    )
+    area = 10.0 * 10.0
+    expected = float(np.nansum(enhancement[mask_arr] * area))
+    assert result["ime_kg"] == pytest.approx(expected, rel=1e-12, abs=0.0)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_cross_sectional_flux_on_integrix_matches_the_numpy_sum(seed: int) -> None:
+    """Gate G6-port (plumax#250): each transect's flux equals plumax's old
+    ``np.nansum(enhancement[on_transect] * |U| * width)`` to 1e-12."""
+    enhancement, mask_arr = _cloudy_plume(seed)
+    source_y = 100.0 - 5.5 * 10.0  # row 5 centre
+    gdf = geo.CrossSectionalFlux(
+        source=(0.0, source_y),
+        wind_u=3.0,
+        wind_v=0.0,
+        n_transects=4,
+        transect_spacing_m=40.0,
+    )(_gt(enhancement), _gt(mask_arr))
+    width = 10.0
+    # pixel centres along the wind, x = 5, 15, …; the strip [d − w/2, d + w/2)
+    along = 5.0 + width * np.arange(21)
+    for row, distance in zip(gdf.itertuples(), (40.0, 80.0, 120.0, 160.0), strict=True):
+        offset = along - distance
+        in_strip = (offset >= -width / 2.0) & (offset < width / 2.0)
+        on_transect = mask_arr & in_strip
+        expected = float(np.nansum(enhancement[on_transect] * 3.0 * width))
+        assert row.flux_kg_s == pytest.approx(expected, rel=1e-12, abs=1e-18)

@@ -1169,6 +1169,23 @@ wheels = [
 ]
 
 [[package]]
+name = "functax"
+version = "0.0.1"
+source = { git = "https://github.com/jejjohnson/functax?rev=e7eb8f9423666a0f32fcda1aa5ac88611d823fcc#e7eb8f9423666a0f32fcda1aa5ac88611d823fcc" }
+dependencies = [
+    { name = "numpy" },
+]
+
+[package.optional-dependencies]
+jax = [
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "jax" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+]
+
+[[package]]
 name = "gaussx"
 version = "0.6.12"
 source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12#1adbf077f6fdf8b19a3f8484c9dc8781b515ee1d" }
@@ -1689,6 +1706,23 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
+]
+
+[[package]]
+name = "integrix"
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.4#aca5c1f457632845e5415159adf0d4cccb296c3c" }
+dependencies = [
+    { name = "diffrax" },
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "functax", extra = ["jax"] },
+    { name = "gaussx" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+    { name = "optimistix" },
 ]
 
 [[package]]
@@ -3329,6 +3363,7 @@ dependencies = [
     { name = "equinox" },
     { name = "finitevolx" },
     { name = "gaussx" },
+    { name = "integrix" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "netcdf4" },
@@ -3422,6 +3457,7 @@ requires-dist = [
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.4" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
