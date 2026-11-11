@@ -232,7 +232,7 @@ docs = [
     "mkdocs-material>=9.7.6",
     # pygments 2.20.0 + pymdownx crash on code fences containing blank lines
     # inside docstrings (html.escape on a None filename); 2.19.x is fine.
-    "pygments<2.20",
+    "pygments<2.22",
     "mkdocstrings[python]>=1.0.4",
     "jupytext>=1.16",
     "ipykernel>=7.2.0",
