@@ -175,7 +175,7 @@ radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.5" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# vardax v0.3.5: the first release on pipekit-ops, which keeps
+# vardax v0.3.5 (on pipekit-ops since v0.3.4), which keeps
 # MinimiseResult.converged (FourDVarResult.converged reports it) and the
 # state-space form of OptimalInterpolation (coupled.fuse_observations solves
 # with it).
