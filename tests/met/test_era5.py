@@ -23,7 +23,7 @@ from plumax.met import LocalFrame, load_era5
 from plumax.met.era5 import GRAVITY, R_DRY
 
 
-pytest.importorskip("xrtoolz")
+pytest.importorskip("xrops")
 Geod = pytest.importorskip("pyproj").Geod
 
 SITE = (31.95, -102.15)  # Permian Basin

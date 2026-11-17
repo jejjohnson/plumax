@@ -1,6 +1,6 @@
 """Boundary-layer diagnostics on a ``MetField``, and the Hanna turbulence factory.
 
-The bulk-Richardson PBL height runs through xrtoolz at load time (NumPy, the
+The bulk-Richardson PBL height runs through xrops at load time (NumPy, the
 ``io`` extra); the Hanna factory turns a :class:`SurfaceLayer` into Tier II's
 turbulence model at one column.
 """
@@ -30,7 +30,7 @@ def pbl_height_bulk_richardson(
 
     Algorithm:
         1. Build θ, the T-point wind and the heights above the grid's surface.
-        2. Hand them to :func:`xrtoolz.atm.pbl_height_bulk_richardson`, which
+        2. Hand them to :func:`xrops.atm.pbl_height_bulk_richardson`, which
            finds the first crossing and interpolates between levels.
 
     Args:
@@ -41,7 +41,7 @@ def pbl_height_bulk_richardson(
         h [m]; NaN where no level reaches Ri_c inside the grid.
 
     Raises:
-        MissingExtraError: If the ``io`` extra (xrtoolz) is not installed.
+        MissingExtraError: If the ``io`` extra (xrops) is not installed.
 
     Examples:
         A neutral layer under an inversion at 400 m, with shear:
@@ -68,10 +68,10 @@ def pbl_height_bulk_richardson(
         True
     """
     try:
-        import xrtoolz.atm
+        import xrops.atm
     except ImportError as err:
         raise MissingExtraError(
-            "pbl_height_bulk_richardson runs through xrtoolz; install it with "
+            "pbl_height_bulk_richardson runs through xrops; install it with "
             "`pip install 'plumax[io]'`"
         ) from err
     grid = field.plume_grid
@@ -105,7 +105,7 @@ def pbl_height_bulk_richardson(
         {"theta_v": (dims, theta), "u": (dims, u_centre), "v": (dims, v_centre)},
         coords={"z_agl": ("level", heights)},
     )
-    result = xrtoolz.atm.pbl_height_bulk_richardson(
+    result = xrops.atm.pbl_height_bulk_richardson(
         profiles, theta_v="theta_v", ri_crit=ri_crit, height="z_agl"
     )
     return result["pbl_height"].transpose("time", "y", "x").values

@@ -18,7 +18,7 @@ from plumax.met import LocalFrame
 from plumax.priors import load_inventory, per_tile_background
 
 
-pytest.importorskip("xrreader")
+pytest.importorskip("xrproducts")
 Geod = pytest.importorskip("pyproj").Geod
 
 SITE = (31.95, -102.15)  # Permian Basin

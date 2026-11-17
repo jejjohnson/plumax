@@ -8,7 +8,7 @@ source.
 Inputs
 ------
 Two NetCDF files as the Climate Data Store returns them (download them with
-xrreader's ``reanalysis-era5-pressure-levels`` and
+xrproducts's ``reanalysis-era5-pressure-levels`` and
 ``reanalysis-era5-single-levels`` presets):
 
 - pressure levels: ``u``, ``v`` [m s⁻¹], ``w`` (ω) [Pa s⁻¹], ``t`` [K] and,
@@ -23,7 +23,7 @@ Vertical
 --------
 Height above ground of each pressure level comes from the hypsometric
 equation integrated up from the surface pressure
-(:func:`xrtoolz.atm.hypsometric_height`, with ``q`` when present). ERA5
+(:func:`xrops.atm.hypsometric_height`, with ``q`` when present). ERA5
 extrapolates fields below ground, so levels with ``p > p_s`` get negative
 heights; they stay in the column and only the analysis heights (all above
 ground) are sampled. Vertical velocity is converted from ω with the
@@ -65,7 +65,7 @@ from plumax.met.field import MetField
 from plumax.met.wrf import _interpolate_vertical
 
 
-#: Standard gravity g [m s⁻²], as xrtoolz's hypsometric integration uses.
+#: Standard gravity g [m s⁻²], as xrops's hypsometric integration uses.
 GRAVITY = 9.80665
 #: Dry-air gas constant R_d [J kg⁻¹ K⁻¹].
 R_DRY = 287.04
@@ -114,7 +114,7 @@ def load_era5(
         A :class:`MetField` on ``plume_grid``.
 
     Raises:
-        MissingExtraError: If the ``io`` extra (xrtoolz) is not installed.
+        MissingExtraError: If the ``io`` extra (xrops) is not installed.
         MissingVariableError: If a required variable is missing.
         GridMismatchError: If the two files' times or lat/lon grids differ,
             or the longitudes are unevenly spaced.
@@ -231,13 +231,13 @@ def load_era5(
 
 def _require_hypsometric_height():
     try:
-        import xrtoolz.atm
+        import xrops.atm
     except ImportError as err:
         raise MissingExtraError(
-            "load_era5 integrates heights through xrtoolz; install it with "
+            "load_era5 integrates heights through xrops; install it with "
             "`pip install 'plumax[io]'`"
         ) from err
-    return xrtoolz.atm.hypsometric_height
+    return xrops.atm.hypsometric_height
 
 
 def _normalise(ds: xr.Dataset) -> xr.Dataset:

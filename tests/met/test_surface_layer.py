@@ -152,7 +152,7 @@ def test_hanna_factory_regimes():
 
 
 def test_bulk_richardson_matches_direct_profile():
-    pytest.importorskip("xrtoolz")
+    pytest.importorskip("xrops")
     inversion = 400.0
 
     def theta(z):

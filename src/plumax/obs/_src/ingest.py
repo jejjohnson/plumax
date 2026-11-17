@@ -6,7 +6,7 @@ takes those instruments with an observed column-mass enhancement each
 [kg m⁻²], the unit ``coupled.column_response`` integrates the plume to.
 These loaders build both from a product file:
 
-1. read the file with xrreader's opener (QA screening included),
+1. read the file with xrproducts's opener (QA screening included),
 2. place pixel centres in the analysis frame with ``LocalFrame.to_xy``,
 3. convert the product's quantity to a column-mass enhancement ``ΔΩ``,
 4. reduce the averaging kernel to the scalar the plume sees.
@@ -15,7 +15,7 @@ Unit conversions (``M`` the CH₄ molar mass, ``N_A`` Avogadro's number):
 
 - XCH₄ (TROPOMI, GHGSat) in ppb above a background ``b``:
   ``ΔΩ = (XCH₄ − b) · 10⁻⁹ · N_dry · M / N_A``, with ``N_dry`` the dry-air
-  column [molecules m⁻²] from :func:`xrtoolz.atm.gas.ch4.dry_air_column`
+  column [molecules m⁻²] from :func:`xrops.atm.gas.ch4.dry_air_column`
   (TROPOMI's surface pressure; a standard 101 325 Pa column for GHGSat).
 - Enhancement in ppm·m (EMIT): ``ΔΩ = E · 10⁻⁶ · (p / (k_B T)) · M / N_A``,
   the ideal-gas number density of a near-surface layer at ``(p, T)``.
@@ -86,14 +86,14 @@ class ColumnObservation(eqx.Module):
 
 def _readers():
     try:
-        import xrreader
-        import xrtoolz.atm.gas.ch4
+        import xrops.atm.gas.ch4
+        import xrproducts
     except ImportError as err:
         raise MissingExtraError(
-            "the L2 loaders read through xrreader / xrtoolz; install them with "
+            "the L2 loaders read through xrproducts / xrops; install them with "
             "`pip install 'plumax[io]'`"
         ) from err
-    return xrreader, xrtoolz.atm.gas.ch4.dry_air_column
+    return xrproducts, xrops.atm.gas.ch4.dry_air_column
 
 
 def ppb_to_column_mass(
@@ -189,7 +189,7 @@ def load_tropomi_l2(
     A = A_{surface layer}.
 
     Algorithm:
-        1. Open the granule with xrreader (QA screening at ``qa_min``) and add
+        1. Open the granule with xrproducts (QA screening at ``qa_min``) and add
            the dry-air column from the surface pressure.
         2. Flatten the swath to pixels; drop NaNs and pixels outside ``bbox``.
         3. Take the background (default: median of the kept XCH₄), convert
@@ -217,10 +217,10 @@ def load_tropomi_l2(
         MissingExtraError: If the ``io`` extra is not installed.
         ScreeningError: If no pixel survives the screening.
     """
-    xrreader, dry_air_column = _readers()
+    xrproducts, dry_air_column = _readers()
 
     # --- read ---
-    ds = xrreader.open_tropomi_ch4_l2(path, qa_min=qa_min)
+    ds = xrproducts.open_tropomi_ch4_l2(path, qa_min=qa_min)
     ds = dry_air_column(ds, surface_pressure="sp")
     xch4 = ds["xch4_bias_corrected"]
     pixel_dims = list(xch4.dims)
@@ -275,7 +275,7 @@ def load_emit_l2b(
     ``retrieval_sigma_ppm_m``.
 
     Args:
-        path: NetCDF raster (see :func:`xrreader.open_emit_ch4_l2b`).
+        path: NetCDF raster (see :func:`xrproducts.open_emit_ch4_l2b`).
         frame: Analysis frame.
         bbox: Optional ``(lon_min, lat_min, lon_max, lat_max)`` crop.
         glt_path: Optional geometric lookup table for orthorectification.
@@ -295,8 +295,8 @@ def load_emit_l2b(
             ``retrieval_sigma_ppm_m`` is available.
         ScreeningError: If no pixel survives the screening.
     """
-    xrreader, _ = _readers()
-    ds = xrreader.open_emit_ch4_l2b(path, glt_path=glt_path)
+    xrproducts, _ = _readers()
+    ds = xrproducts.open_emit_ch4_l2b(path, glt_path=glt_path)
     if "ch4_uncertainty" in ds:
         sigma_field = ds["ch4_uncertainty"]
     elif retrieval_sigma_ppm_m is not None:
@@ -344,7 +344,7 @@ def load_ghgsat_l2(
     precision, so the precision is an argument.
 
     Args:
-        path: Per-plume NetCDF (see :func:`xrreader.open_ghgsat_ch4_l2`).
+        path: Per-plume NetCDF (see :func:`xrproducts.open_ghgsat_ch4_l2`).
         frame: Analysis frame.
         retrieval_sigma_ppb: Per-pixel 1-σ [ppb].
         bbox: Optional ``(lon_min, lat_min, lon_max, lat_max)`` crop.
@@ -362,8 +362,8 @@ def load_ghgsat_l2(
         MissingVariableError: If the file has no ``xch4``.
         ScreeningError: If no pixel survives the screening.
     """
-    xrreader, dry_air_column = _readers()
-    ds = xrreader.open_ghgsat_ch4_l2(path)
+    xrproducts, dry_air_column = _readers()
+    ds = xrproducts.open_ghgsat_ch4_l2(path)
     if "xch4" not in ds:
         raise MissingVariableError(f"load_ghgsat_l2: {path!s} has no `xch4`")
     surface = xr.Dataset({"sp": surface_pressure_pa})

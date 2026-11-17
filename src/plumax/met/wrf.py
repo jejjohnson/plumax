@@ -37,7 +37,7 @@ held (constant extrapolation).
 
 Reading
 -------
-The file is read through :func:`xrtoolz.atm.open_wrfout`, which destaggers
+The file is read through :func:`xrops.atm.open_wrfout`, which destaggers
 to mass points, rebuilds height above ground from the geopotential and the
 terrain, converts WRF's perturbation fields and decodes the time axis. It
 needs the ``io`` extra (``pip install 'plumax[io]'``). This module owns
@@ -101,7 +101,7 @@ def load_wrf(
         A :class:`MetField` on ``plume_grid``.
 
     Raises:
-        MissingExtraError: If the ``io`` extra (xrtoolz) is not installed.
+        MissingExtraError: If the ``io`` extra (xrops) is not installed.
         TimeAxisError: If ``times`` selects nothing.
         MissingVariableError: With a ``LocalFrame``, if the file lacks
             ``XLAT`` / ``XLONG`` or the ``COSALPHA`` / ``SINALPHA`` its
@@ -123,7 +123,7 @@ def load_wrf(
         selected_steps = range(raw.sizes["Time"])[times or slice(None)]
     if len(selected_steps) == 0:
         raise TimeAxisError("load_wrf: `times` selects no time steps")
-    # xrtoolz destaggers to mass points, rebuilds height above ground and
+    # xrops destaggers to mass points, rebuilds height above ground and
     # temperature, and decodes the time axis.
     with open_wrfout(
         path, times=times, variables=rotation if has_rotation else None
@@ -203,14 +203,14 @@ def load_wrf(
 
 
 def _require_open_wrfout():
-    """``xrtoolz.atm.open_wrfout``, or an error naming the ``io`` extra."""
+    """``xrops.atm.open_wrfout``, or an error naming the ``io`` extra."""
     try:
-        import xrtoolz.atm
+        import xrops.atm
     except ImportError as err:
         raise MissingExtraError(
-            "load_wrf reads through xrtoolz; install it with `pip install 'plumax[io]'`"
+            "load_wrf reads through xrops; install it with `pip install 'plumax[io]'`"
         ) from err
-    return xrtoolz.atm.open_wrfout
+    return xrops.atm.open_wrfout
 
 
 def _earth_relative_wind(

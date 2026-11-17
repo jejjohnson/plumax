@@ -186,7 +186,7 @@ def test_rotated_file_keeps_grid_relative_wind(tmp_path, loaded):
 def test_missing_io_extra_names_it(synthetic_wrf, monkeypatch):
     import sys
 
-    monkeypatch.setitem(sys.modules, "xrtoolz.atm", None)
+    monkeypatch.setitem(sys.modules, "xrops.atm", None)
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     with pytest.raises(ImportError, match=r"plumax\[io\]"):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=ORIGIN)
