@@ -131,6 +131,8 @@ $$
 
 $\mathbf{B}$ carries the structured priors from §1 (lognormal $Q$, met-tight $\bar{u}$, $\theta_\text{wind}$, GP/OU on $Q(t)$, etc.); $\mathbf{K}_Q$ is the OU/GP kernel. $\mathbf{R}_\text{inst}$ includes representation, retrieval, and temporal-alignment terms.
 
+The transport backend says which blocks of $\mathbf{x}$ the inversion can fit. A backend that subclasses `AbstractControlledSource` declares its own blocks and its emission blocks, and evaluates its response at any value of them; `CoupledProblem` checks the prior against those declarations and raises `ControlBlockError` on a name or shape the backend does not declare. The Tier I `PlumeSource` declares `location` and `wind`, scaled by `emission_rate` or `log_emission_rate`. The column plume `ColumnPlumeSource` declares `location`, `direction`, `log_reference_width` and `width_exponent`, scaled by the line density $q = Q / U$ (`line_density` or `log_line_density`). $Q$ and $U$ enter a column only through $q$, so the column plume has no wind block: `CoupledResult.with_wind` turns $q$ into $Q$ after the solve, with a lognormal wind independent of the fit ([why the wind is not a control](#image-fit-wind)).
+
 ### Quality-flag handling
 
 Per-instrument quality flags from the RTM stack flow into the coupled forward. **Default policy:** flagged pixels contribute zero log-likelihood (mask multiplier in $\mathbf{R}^{-1}$).
@@ -287,6 +289,7 @@ Simulate millions of $(\text{source config}, \text{multi-instrument overpass})$ 
 | 1 | Trans-dimensional source-count handling | `plumax.coupled.k_sources` | ✓ [#104](https://github.com/jejjohnson/plumax/issues/104) |
 | 2 | End-to-end inversion | [`coupled/inversion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/inversion.py) (`solve_coupled`): vardax `ThreeDVar` over the composed forward, L-BFGS; the Gauss-Newton minimiser waits on [vardax#72](https://github.com/jejjohnson/vardax/issues/72) | 🚧 [#102](https://github.com/jejjohnson/plumax/issues/102) |
 | 2 | Posterior covariance (Laplace / Hessian / EnKF) | Laplace via vardax `LaplaceCovariance` in `solve_coupled`, dense or diagonal covariances; block-structured ones wait on [vardax#141](https://github.com/jejjohnson/vardax/issues/141) | 🚧 [#102](https://github.com/jejjohnson/plumax/issues/102) |
+| 2 | Control blocks declared by the backend; the line density $q = Q / U$ and `with_wind` | `AbstractControlledSource` in [`coupled/backends.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/backends.py), `CoupledResult.with_wind` in [`coupled/inversion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/coupled/inversion.py) | ✓ [#268](https://github.com/jejjohnson/plumax/issues/268) |
 | 2 | Posterior export → Tier V | `samples` / `prior_logpdf` on `FusionPosterior` and `CoupledResult` (scalar Q) | ✓ [#107](https://github.com/jejjohnson/plumax/issues/107) |
 | 3 | Stacked emulator runtime | `plumax.coupled.stacked_emulator` | ☐ |
 | 3 | Coupled emulator (end-to-end) | `plumax.coupled.emulator` | ☐ |

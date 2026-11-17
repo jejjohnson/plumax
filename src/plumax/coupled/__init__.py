@@ -31,7 +31,9 @@ rate, with the per-instrument bias as a first-class state element:
 
 - ``backends`` — the Tier II and Tier III transports behind the same forward
   (:class:`TransportBackend`, :class:`LagrangianSource`,
-  :class:`EulerianSource`), through the shared column observation.
+  :class:`EulerianSource`), through the shared column observation, and
+  :class:`AbstractControlledSource`, the base of a backend that declares the
+  control blocks the inversion fits.
 
 - ``quality`` — the per-instrument quality-flag aggregator
   (:class:`QualityPolicy`, :func:`apply_quality`, :func:`contribution_report`):
@@ -67,7 +69,12 @@ from plumax.coupled import (
     quality,
     rtm,
 )
-from plumax.coupled.backends import EulerianSource, LagrangianSource, TransportBackend
+from plumax.coupled.backends import (
+    AbstractControlledSource,
+    EulerianSource,
+    LagrangianSource,
+    TransportBackend,
+)
 from plumax.coupled.forward import (
     CoupledForward,
     PlumeSource,
@@ -112,6 +119,7 @@ from plumax.coupled.rtm import (
 
 
 __all__ = [
+    "AbstractControlledSource",
     "CoupledForward",
     "CoupledPrior",
     "CoupledProblem",

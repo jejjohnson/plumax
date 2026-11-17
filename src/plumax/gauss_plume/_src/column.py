@@ -21,6 +21,7 @@ the docs (``design/01_tier1_image_fit.md``).
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import einx
@@ -29,6 +30,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
+from plumax._src.controlled import AbstractControlledSource
 from plumax._src.errors import ParameterError
 
 
@@ -403,12 +405,19 @@ class ColumnPlume(eqx.Module):
         return cls(**config)
 
 
-class ColumnPlumeSource(eqx.Module):
-    """A column plume as a ``coupled.TransportBackend``.
+class ColumnPlumeSource(AbstractControlledSource):
+    """A column plume as a controlled ``coupled`` transport backend.
 
     r_inst = A_inst ⊙ r(s_inst; θ), the column per unit line density at an
     instrument's receptors, through its averaging kernel. The coupled forward
     then predicts y = q r_inst + Ω_bg + bias.
+
+    It declares the geometry as control blocks: ``location`` ``(2,)``,
+    ``direction`` ``()``, ``log_reference_width`` ``()`` and
+    ``width_exponent`` ``()``, scaled by ``line_density`` or
+    ``log_line_density``. Q and U enter the column only as q = Q / U, so
+    there is no ``wind`` block and no ``emission_rate``; the wind is applied
+    after the fit (``CoupledResult.with_wind``).
 
     Attributes:
         plume: The column model and its fixed choices.
@@ -432,11 +441,37 @@ class ColumnPlumeSource(eqx.Module):
         >>> response = source.column_response(instrument)
         >>> bool(jnp.allclose(response, ColumnPlume()(receptors, geometry)))
         True
+
+        A control swaps in the blocks it holds and keeps the others:
+
+        >>> turned = source.response_at(instrument, {"direction": jnp.pi / 2})
+        >>> float(turned[0])
+        0.0
+        >>> bool(jnp.allclose(source.response_at(instrument, {}), response))
+        True
     """
 
     plume: ColumnPlume
     geometry: PlumeGeometry
     background: float = 0.0
+
+    @property
+    def control_blocks(self) -> Mapping[str, tuple[int, ...]]:
+        """The geometry: ``location`` ``(2,)`` and three scalars.
+
+        ``direction``, ``log_reference_width`` and ``width_exponent``.
+        """
+        return {
+            "location": (2,),
+            "direction": (),
+            "log_reference_width": (),
+            "width_exponent": (),
+        }
+
+    @property
+    def emission_blocks(self) -> tuple[str, ...]:
+        """``line_density`` and ``log_line_density``."""
+        return ("line_density", "log_line_density")
 
     def column_response(self, instrument: Instrument) -> Float[Array, " obs"]:
         """Column per unit line density at the instrument's receptors [m⁻¹].
@@ -449,12 +484,59 @@ class ColumnPlumeSource(eqx.Module):
         Returns:
             The unit response r_inst.
         """
+        return self.response_at(instrument, {})
+
+    def response_at(
+        self,
+        instrument: Instrument,
+        control: Mapping[str, Float[ArrayLike, "*shape"]],
+    ) -> Float[Array, " obs"]:
+        """Column per unit line density with the control's geometry [m⁻¹].
+
+        r_inst(θ) = A_inst ⊙ r(s_inst; θ).
+
+        Args:
+            instrument: The observing instrument (receptors and kernel).
+            control: The control, by block; blocks missing from it keep this
+                source's values, and other names are ignored.
+
+        Returns:
+            The unit response r_inst(θ).
+        """
+        # θ → geometry
+        geometry = self.geometry_at(control)
         receptors = jnp.asarray(instrument.receptors)
         # r = exp(−c² / 2w²) / (√(2π) w)
-        response = self.plume(receptors, self.geometry)
+        response = self.plume(receptors, geometry)
+        averaging_kernel = jnp.asarray(instrument.ak, dtype=response.dtype)
         # r_inst = A ⊙ r
-        observed = instrument.ak * response
+        observed = averaging_kernel * response
         return observed
+
+    def geometry_at(
+        self, control: Mapping[str, Float[ArrayLike, "*shape"]]
+    ) -> PlumeGeometry:
+        """This source's geometry with the control's blocks swapped in.
+
+        w_ref = exp(log w_ref); the other blocks are taken as they are.
+
+        Args:
+            control: The control, by block.
+
+        Returns:
+            The geometry at the control.
+        """
+        reference_width = self.geometry.reference_width
+        if "log_reference_width" in control:
+            # w_ref = exp(log w_ref)
+            reference_width = jnp.exp(control["log_reference_width"])
+        geometry = PlumeGeometry(
+            location=control.get("location", self.geometry.location),
+            direction=control.get("direction", self.geometry.direction),
+            reference_width=reference_width,
+            width_exponent=control.get("width_exponent", self.geometry.width_exponent),
+        )
+        return geometry
 
 
 __all__ = [
