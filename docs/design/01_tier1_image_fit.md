@@ -87,7 +87,7 @@ $$
 w(d)^2 = w_0^2 + w_\text{ref}^2 \left(\frac{d}{d_\text{ref}}\right)^{2b}
 $$ (eq-image-fit-width)
 
-With $w_0 = 0$ this is SPIIRE's $\sigma_y = a (d / 1000)^b$ with $a = w_\text{ref}$. The initial width removes the singularity at the source, and $w_0 = g / \sqrt{12}$ stands in for the average over a pixel of side $g$, whose variance is $g^2 / 12$.
+With $w_0 = 0$ this is SPIIRE's $\sigma_y = a (d / 1000)^b$ with $a = w_\text{ref}$. The initial width removes the singularity at the source, and $w_0 = g / \sqrt{12}$ stands in for the average over a pixel of side $g$, whose variance is $g^2 / 12$. Point evaluation is still a sample, not an average: a Gaussian of width $w$ sampled every $g$ sums to $1 / g$ only up to an aliasing error of about $2 \exp(-2\pi^2 w^2 / g^2)$, which is 0.4 at $w = g / \sqrt{12}$ and below $10^{-8}$ once $w \ge g$. Near the source, where the plume is narrower than a pixel, the exact crosswind pixel average is the option to use.
 
 (image-fit-centreline)=
 ### Centreline
@@ -362,7 +362,7 @@ rate = result.with_wind(speed=3.5, speed_std=1.0)
 | Gate | Passes when | Issue |
 | --- | --- | --- |
 | G1 column identity | the closed form, with the Briggs crosswind width, no meander and a hard cut, equals the trapezoid column of `plume_concentration` on 2,000 levels from 0 to 5 km to 1e-4 relative | [#267](https://github.com/jejjohnson/plumax/issues/267) |
-| G2 mass flux | the crosswind sum of $\Delta\Omega$ times the pixel side equals $q$ to 1e-3 relative beyond $3 w_0$, with and without meander | [#267](https://github.com/jejjohnson/plumax/issues/267), [#270](https://github.com/jejjohnson/plumax/issues/270) |
+| G2 mass flux | the crosswind sum of $\Delta\Omega$ times the pixel side equals $q$, with and without meander: to 1e-10 relative at every distance with the pixel average, and to 1e-3 relative with point evaluation wherever the width is at least one pixel | [#267](https://github.com/jejjohnson/plumax/issues/267), [#270](https://github.com/jejjohnson/plumax/issues/270) |
 | G3 recovery | on 200 synthetic scenes, the truth of $\log q$ lies inside the 1σ Laplace interval in a fraction consistent with 68.3 % at 3 binomial standard errors | [#268](https://github.com/jejjohnson/plumax/issues/268) |
 | G4 wind degeneracy | the Fisher matrix of $(\log Q, \log U)$ has a second singular value below 1e-10 of the first | [#268](https://github.com/jejjohnson/plumax/issues/268) |
 | G5 linear limit | with only a linear `line_density` block and one bias free, the solve equals `fuse_observations` to 1e-8 | [#268](https://github.com/jejjohnson/plumax/issues/268) |
