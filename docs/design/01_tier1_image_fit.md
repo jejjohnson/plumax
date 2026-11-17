@@ -222,7 +222,7 @@ and $\vect{m} \sim \mathcal{N}(\vect{0}, \mat{K}_{DD})$ with $[\mat{K}_{DD}]_{jk
 (image-fit-numerics)=
 ## Numerics
 
-- The upwind cut at $d_n = 0$ makes the cost discontinuous in $\vect{s}_0$ and $\varphi$. The default replaces it by a logistic ramp $1 / (1 + \exp(-d_n / \ell_u))$ with $\ell_u = w_0$; the hard cut stays for the oracle tests.
+- The upwind cut at $d_n = 0$ makes the cost discontinuous in $\vect{s}_0$ and $\varphi$. The default replaces it by a logistic ramp $1 / (1 + \exp(-d_n / \ell_u))$ with $\ell_u = w_0$; the hard cut stays for the oracle tests. The ramp removes mass near the source: the crosswind integral is $q / (1 + \exp(-d / \ell_u))$, so the mass-flux invariant holds to 1e-3 only beyond about $6.9 \ell_u$, 120 m for EMIT.
 - $q$ and $w_\text{ref}$ are fitted in logs; $b$ is fitted directly, with its prior keeping it near the observed range of 0.5 to 1.
 - $d_\text{ref}$ is set to half the plume length, which decorrelates $\log w_\text{ref}$ from $b$; 1000 m is the default until a plume length is known.
 - The exponent is evaluated as $-\frac{1}{2} ((c - m) / w)^2$, never with a separate $w^2$ in the denominator; both it and the amplitude are safe in float32 once $w \ge w_0$.
@@ -362,7 +362,7 @@ rate = result.with_wind(speed=3.5, speed_std=1.0)
 | Gate | Passes when | Issue |
 | --- | --- | --- |
 | G1 column identity | the closed form, with the Briggs crosswind width, no meander and a hard cut, equals the trapezoid column of `plume_concentration` on 2,000 levels from 0 to 5 km to 1e-4 relative | [#267](https://github.com/jejjohnson/plumax/issues/267) |
-| G2 mass flux | the crosswind sum of $\Delta\Omega$ times the pixel side equals $q$, with and without meander: to 1e-10 relative at every distance with the pixel average, and to 1e-3 relative with point evaluation wherever the width is at least one pixel | [#267](https://github.com/jejjohnson/plumax/issues/267), [#270](https://github.com/jejjohnson/plumax/issues/270) |
+| G2 mass flux | with the hard upwind cut, the crosswind sum of $\Delta\Omega$ times the pixel side equals $q$, with and without meander: to 1e-10 relative at every distance with the pixel average, and to 1e-3 relative with point evaluation wherever the width is at least one pixel. The logistic ramp scales the sum by $1 / (1 + e^{-d / \ell_u})$, which is within 1e-3 of 1 only beyond $\ell_u \log 999 \approx 6.9 \ell_u$ | [#267](https://github.com/jejjohnson/plumax/issues/267), [#270](https://github.com/jejjohnson/plumax/issues/270) |
 | G3 recovery | on 200 synthetic scenes, the truth of $\log q$ lies inside the 1σ Laplace interval in a fraction consistent with 68.3 % at 3 binomial standard errors | [#268](https://github.com/jejjohnson/plumax/issues/268) |
 | G4 wind degeneracy | the Fisher matrix of $(\log Q, \log U)$ has a second singular value below 1e-10 of the first | [#268](https://github.com/jejjohnson/plumax/issues/268) |
 | G5 linear limit | with only a linear `line_density` block and one bias free, the solve equals `fuse_observations` to 1e-8 | [#268](https://github.com/jejjohnson/plumax/issues/268) |
