@@ -69,6 +69,8 @@ project:
         - file: design/roadmap.md
         - file: design/00_prerequisites.md
         - file: design/01_tier1_gaussian.md
+          children:
+            - file: design/01_tier1_image_fit.md
         - file: design/02_tier2_lagrangian.md
         - file: design/03_tier3_eulerian.md
         - file: design/04_rtm_stack.md
