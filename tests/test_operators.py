@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import xarray as xr
-from pipekit import Lambda, Operator, Sequential
+from pipekit_ops import Lambda, Operator, Sequential
 
 from plumax.operators import EulerianDispersion, GaussianPlume, GaussianPuff
 

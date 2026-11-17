@@ -62,10 +62,10 @@ dependencies = [
     # optimistix powers the variational retrieval module (assimilation):
     # LBFGS / GaussNewton / LevenbergMarquardt + implicit-adjoint gradients.
     "optimistix>=0.0.10",
-    # pipekit supplies the carrier-agnostic Operator primitives and the
-    # pipekit_cycle ForwardModel / ObservationOperator protocols that the
-    # plumax operator + adapter layer plug into.
-    "pipekit",
+    # pipekit-ops (import pipekit_ops) supplies the carrier-agnostic Operator
+    # primitives, and pipekit_cycle the ForwardModel / ObservationOperator
+    # protocols that the plumax operator + adapter layer plug into.
+    "pipekit-ops>=0.2.1",
     # radtrax owns the radiative transfer (the single-slab forward model, the
     # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
     # and the radiance adapter compose with the plume models (package
@@ -105,15 +105,16 @@ emulate = ["pipekit-train[equinox,cache]"]
 # likelihood machinery on xtremax.point_processes (Poisson, marked and thinned
 # processes), imported lazily so `import plumax.population` stays light.
 population = ["numpyro>=0.21", "pyyaml>=6", "xtremax>=0.0.4"]
-# Plume post-processing on GeoTensors (plumax.geo): the ten plume operators
+# Plume post-processing on GeoArrays (plumax.geo): the ten plume operators
 # ported from geotoolz's `plume` (#134) and the vetting operator (#157), as
-# pipekit Operators built with geoops's public carrier helpers, as radtrax's
-# [geo] does. georeader 2.4.1 imports typing_extensions and tqdm without
+# pipekit Operators built with geoops's public carrier helpers; geoops's
+# [morph] extra (scikit-image) measures skeleton lengths. georeader draws the
+# contour polygons, and 2.4.1 imports typing_extensions and tqdm without
 # declaring them; scikit-learn's DBSCAN counts clumps in PlumeQNDFeatures.
 # Imported lazily, so the base install stays carrier-free (gate P5).
 geo = [
     "georeader-spaceml>=2.4.1",
-    "geotoolz-ops>=0.10.3",
+    "geotoolz-ops[morph]>=0.18.1",
     "scikit-learn>=1.4",
     "tqdm>=4",
     "typing-extensions>=4",
@@ -130,15 +131,22 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # every symbol those two packages import still exists at this rev.
 override-dependencies = [
     "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.12",
-    # xrtoolz (the `io` extra) sources pipekit from its unpinned main; hold the
-    # graph on plumax's pin, the same commit xrtoolz's own lock resolves to.
+    # The `io` extra's xrtoolz still imports the pre-0.2.0 pipekit core (as
+    # `pipekit`, beside pipekit_ops) and sources it from pipekit's unpinned
+    # main; hold it on the commit xrtoolz's own lock resolves to.
     "pipekit @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit",
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
-    # vardax sources pipekit-cycle from pipekit's unpinned main; same rev as
-    # pipekit above.
-    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit-cycle",
+    # vardax sources pipekit-cycle at its own tag; hold it on plumax's
+    # pipekit tag.
+    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@pipekit-ops-v0.2.1#subdirectory=packages/pipekit-cycle",
+    # vardax v0.3.5 sources integrix v0.0.3; hold the graph on plumax's v0.0.5.
+    "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.5",
+    # integrix v0.0.5 names functax at a pre-0.0.6 commit but never imports
+    # it (it reads a rule's nodes and weights structurally); geoarray needs
+    # functax 0.0.6.
+    "functax @ git+https://github.com/jejjohnson/functax@v0.0.6",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
@@ -157,29 +165,39 @@ override-dependencies = [
 # xtremax (the `population` extra) is not on PyPI; it is pinned to the v0.0.4
 # release commit (its `__version__` string is not reliable, so pin by rev).
 [tool.uv.sources]
+# Every pipekit package is pinned to the one tag pipekit-ops-v0.2.1 (8e357a1),
+# which carries each package's current release; per-package tags make uv
+# report conflicting URLs for pipekit-ops, which they all reference.
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
+pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-ops-v0.2.1" }
+# The pre-0.2.0 core, for the `io` extra's xrtoolz only (see the override).
 pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
-# pipekit-train (the `emulate` extra) is not on PyPI; pinned ahead of pipekit and
-# pipekit-cycle above, at the merge of pipekit#142 (CachedDataset in_memory).
-pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", rev = "7c446f141c23164918e2e8b708428b860206120c" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
+# pipekit-train (the `emulate` extra) is not on PyPI.
+pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-ops-v0.2.1" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.5" }
 xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# vardax v0.2.1: the first release with both MinimiseResult.converged
-# (jejjohnson/vardax#128, which FourDVarResult.converged reports) and the
-# state-space form of OptimalInterpolation (jejjohnson/vardax#163, which
-# coupled.fuse_observations solves with).
-vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.2.1" }
+# vardax v0.3.5: the first release on pipekit-ops, which keeps
+# MinimiseResult.converged (FourDVarResult.converged reports it) and the
+# state-space form of OptimalInterpolation (coupled.fuse_observations solves
+# with it).
+vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.5" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
-# geotoolz-ops (the `geo` extra) is pinned to the rev radtrax's [geo] uses: the
-# rename commit (geotoolz#489), the last GeoTensor-carrier release line with the
-# public `geoops.carrier` helpers (geotoolz#480) and pipekit 0.0.2.
-geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "278b8afbc675b9e082ac75488200a4729da38097" }
+# The geotoolz packages (the `geo` extra) are pinned to one geotoolz commit,
+# df8c228 on main: geoops 0.18.1 on pipekit-ops and the GeoArray carrier, with
+# geoarray beside it. functax is geoarray's own git dependency, at the tag
+# geotoolz pins.
+geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
+geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
+functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.6" }
 xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
@@ -213,7 +231,7 @@ dev = [
     "xtremax",
     # The `geo` extra, so the plumax.geo tests run in CI.
     "georeader-spaceml>=2.4.1",
-    "geotoolz-ops",
+    "geotoolz-ops[morph]",
     "scikit-learn>=1.4",
     "tqdm>=4",
 ]

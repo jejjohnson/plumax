@@ -1,4 +1,4 @@
-"""Plume operators on GeoTensors, behind the ``[geo]`` extra.
+"""Plume operators on GeoArrays, behind the ``[geo]`` extra.
 
 - :mod:`plumax.geo.plume`: the ten plume operators ported from geotoolz's
   ``plume`` module (#134): masks, contours, footprints, shape filters,
@@ -7,7 +7,7 @@
 - :mod:`plumax.geo.plume_array`: the array functions under them
   (`plume_mask`, `wind_advection_cone`, `convert_column_units`, ...).
 - :mod:`plumax.geo.vetting`: `PlumeVetting`, :mod:`plumax.vetting`'s
-  candidate vetting and scene null on GeoTensors, as one Dataset (#157).
+  candidate vetting and scene null on GeoArrays, as one Dataset (#157).
 
 Importing this subpackage does not need the extra; the operators load on
 first use, and a missing extra raises an ``ImportError`` naming it.

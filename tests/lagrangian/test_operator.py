@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 import xarray as xr
-from pipekit import Operator
+from pipekit_ops import Operator
 
 from plumax.lagrangian import HomogeneousTurbulence
 from plumax.operators import LagrangianDispersion

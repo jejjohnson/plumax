@@ -7,7 +7,7 @@ Sub-packages
 - ``gauss_plume``  : steady-state Gaussian plume (JAX + NumPyro).
 - ``gauss_puff``   : time-resolved Gaussian puff (JAX + diffrax + NumPyro),
                      with optional Ornstein-Uhlenbeck sub-grid turbulence.
-- ``geo``          : plume operators on GeoTensors ported from geotoolz
+- ``geo``          : plume operators on GeoArrays ported from geotoolz
                      (masks, footprints, IME, cross-sectional flux), behind
                      the ``[geo]`` extra; loaded on first use.
 - ``les_fvm``      : Eulerian 3-D advection-diffusion on an Arakawa C-grid

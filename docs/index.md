@@ -71,7 +71,7 @@ The [Roadmap & Architecture](design/roadmap.md) page has the tier breakdown, goi
 uv add plumax
 ```
 
-finitevolX, `gaussx`, `pipekit` and `radtrax` are not yet on PyPI; from a checkout they resolve from git via `[tool.uv.sources]`. NumPyro (Bayesian inference), vardax and argminax (the source inversions), xtremax (populations), the plume operators on GeoTensors and the notebook dependencies are optional extras:
+finitevolX, `gaussx`, `pipekit-ops` and `radtrax` are not yet on PyPI; from a checkout they resolve from git via `[tool.uv.sources]`. NumPyro (Bayesian inference), vardax and argminax (the source inversions), xtremax (populations), the plume operators on GeoTensors and the notebook dependencies are optional extras:
 
 ```bash
 uv add "plumax[inference,assim]"

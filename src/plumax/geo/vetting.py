@@ -1,8 +1,8 @@
-"""Plume vetting on GeoTensors (behind the ``[geo]`` extra): one Dataset per scene.
+"""Plume vetting on GeoArrays (behind the ``[geo]`` extra): one Dataset per scene.
 
 `PlumeVetting` is the L2 operator over the array-level vetting in
-:mod:`plumax.vetting` (#157): it reads a radiance GeoTensor, its
-matched-filter GeoTensor and a stack of candidate masks, runs
+:mod:`plumax.vetting` (#157): it reads a radiance GeoArray, its
+matched-filter GeoArray and a stack of candidate masks, runs
 `vet_candidate` on each candidate and the scene null (`null_masks`,
 `null_pvalue`) beside it, and returns the scores as one ``xarray.Dataset``.
 It returns scores, not a verdict: the decision rule is #158's.
@@ -30,11 +30,11 @@ from plumax.vetting import VettingResult, null_masks, null_pvalue, vet_candidate
 try:
     from geoops.carrier import (
         invalid_values,
-        require_geotensor,
+        require_geoarray,
         require_grid_match,
         single_band,
     )
-    from pipekit import Operator
+    from pipekit_ops import Operator
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.vetting needs the [geo] extra: pip install 'plumax[geo]'"
@@ -42,7 +42,7 @@ except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
 
 
 if TYPE_CHECKING:
-    from georeader.geotensor import GeoTensor
+    from geoarray import GeoArray
 
 
 __all__ = ["PlumeVetting"]
@@ -66,7 +66,7 @@ class PlumeVetting(Operator):
     ``attrs["wavelengths"]``; ``mf`` is ``(H, W)`` or ``(1, H, W)`` on the
     cube's pixel grid, in mol/m² (the units of
     ``window.mf_background_mol_m2``). Nodata pixels of either carrier
-    (non-finite, or equal to its ``fill_value_default``) are dropped from
+    (non-finite, or equal to its ``fill_value``) are dropped from
     every candidate and kept out of the pool and the null copies. The
     candidates' random draws split ``key`` in candidate order, so the same
     key gives the same ``p_null``.
@@ -143,11 +143,11 @@ class PlumeVetting(Operator):
 
     def _apply(
         self,
-        cube: GeoTensor,
-        mf: GeoTensor,
+        cube: GeoArray,
+        mf: GeoArray,
         masks: Bool[np.ndarray, "C H W"],
     ) -> xr.Dataset:
-        require_geotensor(cube, "PlumeVetting")
+        require_geoarray(cube, "PlumeVetting")
         require_grid_match(cube, mf, "PlumeVetting", names=("cube", "mf"))
         radiance = np.asarray(cube)
         if radiance.ndim != 3:
@@ -215,7 +215,7 @@ class PlumeVetting(Operator):
         return self._dataset(rows, p_null, wavelength_nm[fit_bands])
 
     @staticmethod
-    def _wavelengths(cube: GeoTensor, n_bands: int) -> np.ndarray:
+    def _wavelengths(cube: GeoArray, n_bands: int) -> np.ndarray:
         wavelengths = (getattr(cube, "attrs", None) or {}).get("wavelengths")
         if wavelengths is None:
             raise ShapeError(
@@ -293,11 +293,21 @@ class PlumeVetting(Operator):
         cls,
         config: dict[str, Any],
         *,
-        table: Float[ArrayLike, "D Bf"],
-        delta_grid: Float[ArrayLike, " D"],
+        table: Float[ArrayLike, "D Bf"] | None = None,
+        delta_grid: Float[ArrayLike, " D"] | None = None,
         key: Array | None = None,
     ) -> PlumeVetting:
-        """Rebuild from `get_config`'s output and the arrays it leaves out."""
+        """Rebuild from `get_config`'s output and the arrays it leaves out.
+
+        Raises:
+            TypeError: If ``table`` or ``delta_grid`` is not given; the
+                config holds neither.
+        """
+        if table is None or delta_grid is None:
+            raise TypeError(
+                "PlumeVetting.from_config needs the table= and delta_grid= "
+                "arrays, which get_config leaves out"
+            )
         config = dict(config)
         window = dict(config.pop("window"))
         for name in ("fit_nm", "absorbing_nm"):

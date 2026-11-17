@@ -18,10 +18,12 @@ resolution-markers = [
 
 [manifest]
 overrides = [
+    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.6" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
     { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
-    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
+    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
 ]
 
 [[package]]
@@ -1170,19 +1172,10 @@ wheels = [
 
 [[package]]
 name = "functax"
-version = "0.0.1"
-source = { git = "https://github.com/jejjohnson/functax?rev=e7eb8f9423666a0f32fcda1aa5ac88611d823fcc#e7eb8f9423666a0f32fcda1aa5ac88611d823fcc" }
+version = "0.0.6"
+source = { git = "https://github.com/jejjohnson/functax?tag=v0.0.6#7fdcd2729fe8d6a62de0ab2330ae6ae2da133ea2" }
 dependencies = [
     { name = "numpy" },
-]
-
-[package.optional-dependencies]
-jax = [
-    { name = "einx" },
-    { name = "equinox" },
-    { name = "jax" },
-    { name = "jaxtyping" },
-    { name = "lineax" },
 ]
 
 [[package]]
@@ -1265,24 +1258,38 @@ wheels = [
 ]
 
 [[package]]
+name = "geotoolz-array"
+version = "0.4.1"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-array&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
+dependencies = [
+    { name = "affine" },
+    { name = "functax" },
+    { name = "numpy" },
+    { name = "pipekit-array" },
+    { name = "pipekit-ops" },
+    { name = "pyproj" },
+]
+
+[[package]]
 name = "geotoolz-ops"
-version = "0.10.3"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097#278b8afbc675b9e082ac75488200a4729da38097" }
+version = "0.18.1"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
 dependencies = [
     { name = "affine" },
     { name = "einx" },
-    { name = "geopandas" },
-    { name = "georeader-spaceml" },
+    { name = "geotoolz-array" },
     { name = "jaxtyping" },
     { name = "numpy" },
     { name = "pandas" },
-    { name = "pipekit" },
+    { name = "pipekit-array" },
+    { name = "pipekit-ops" },
     { name = "pyproj" },
-    { name = "rasterio" },
-    { name = "scikit-image" },
     { name = "scipy" },
-    { name = "shapely" },
-    { name = "typing-extensions" },
+]
+
+[package.optional-dependencies]
+morph = [
+    { name = "scikit-image" },
 ]
 
 [[package]]
@@ -1676,15 +1683,15 @@ wheels = [
 
 [[package]]
 name = "imageio"
-version = "2.38.1"
+version = "2.38.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
     { name = "pillow" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f3/cd/69e4ac55b6dafdd2b5f32075236841a3945dea7323d0232d80f28c37cea8/imageio-2.38.1.tar.gz", hash = "sha256:6769f1f01c4dd46448307863a787c9a22fa4dbe11c0c88f525c6e410fdfd7983", size = 403667, upload-time = "2026-10-08T14:35:32.961Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f1/be/027f866037034c8ccc1791a3df6d630d2e454233f7ba09fbff76ce5aed81/imageio-2.38.2.tar.gz", hash = "sha256:62e338ea5c19a5547521b3b590a8a9ed1177e5d6c3fd1df076029053eacc73ca", size = 404125, upload-time = "2026-11-16T08:43:45.488Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/7d/8a/3b7f62b9df56460959f1b9bef094248d2a4d7f393c5b0d2da8efcdf0e40e/imageio-2.38.1-py3-none-any.whl", hash = "sha256:36d23eb7423d2fb63f637098758edb3d2df3687f7125e0a5ce8596572022dcf9", size = 328389, upload-time = "2026-10-08T14:35:31.075Z" },
+    { url = "https://files.pythonhosted.org/packages/30/34/7fb055831d4dd5aa9994cc296b61e341f4cd5221c8119b15b0617c721c61/imageio-2.38.2-py3-none-any.whl", hash = "sha256:d71174e7af8369a4f73525c5b1c0d2621eb2827ed3cfd7327560be02ac1b4084", size = 328689, upload-time = "2026-11-16T08:43:43.569Z" },
 ]
 
 [[package]]
@@ -1716,7 +1723,7 @@ dependencies = [
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
-    { name = "functax", extra = ["jax"] },
+    { name = "functax" },
     { name = "gaussx" },
     { name = "jax" },
     { name = "jaxlib" },
@@ -3307,19 +3314,32 @@ version = "0.0.2"
 source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 
 [[package]]
-name = "pipekit-cycle"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
+name = "pipekit-array"
+version = "0.1.1"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-ops-v0.2.1#8e357a1f3eb82b15e15bf18be4de04d4d9535855" }
 dependencies = [
-    { name = "pipekit" },
+    { name = "pipekit-ops" },
 ]
 
 [[package]]
-name = "pipekit-train"
-version = "0.1.3"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c#7c446f141c23164918e2e8b708428b860206120c" }
+name = "pipekit-cycle"
+version = "0.1.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1#8e357a1f3eb82b15e15bf18be4de04d4d9535855" }
 dependencies = [
-    { name = "pipekit" },
+    { name = "pipekit-ops" },
+]
+
+[[package]]
+name = "pipekit-ops"
+version = "0.2.1"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-ops-v0.2.1#8e357a1f3eb82b15e15bf18be4de04d4d9535855" }
+
+[[package]]
+name = "pipekit-train"
+version = "0.2.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-ops-v0.2.1#8e357a1f3eb82b15e15bf18be4de04d4d9535855" }
+dependencies = [
+    { name = "pipekit-ops" },
 ]
 
 [package.optional-dependencies]
@@ -3355,7 +3375,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -3369,7 +3389,7 @@ dependencies = [
     { name = "netcdf4" },
     { name = "numpy" },
     { name = "optimistix" },
-    { name = "pipekit" },
+    { name = "pipekit-ops" },
     { name = "radtrax" },
     { name = "scipy" },
     { name = "xarray" },
@@ -3385,7 +3405,7 @@ emulate = [
 ]
 geo = [
     { name = "georeader-spaceml" },
-    { name = "geotoolz-ops" },
+    { name = "geotoolz-ops", extra = ["morph"] },
     { name = "scikit-learn" },
     { name = "tqdm" },
     { name = "typing-extensions" },
@@ -3413,7 +3433,7 @@ dev = [
     { name = "argminax" },
     { name = "beartype" },
     { name = "georeader-spaceml" },
-    { name = "geotoolz-ops" },
+    { name = "geotoolz-ops", extra = ["morph"] },
     { name = "hypothesis" },
     { name = "numpyro" },
     { name = "pipekit-cycle" },
@@ -3456,7 +3476,7 @@ requires-dist = [
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
+    { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
@@ -3467,8 +3487,8 @@ requires-dist = [
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
     { name = "numpyro", marker = "extra == 'population'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
-    { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c" },
+    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-ops-v0.2.1" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-ops-v0.2.1" },
     { name = "pyproj", marker = "extra == 'io'" },
     { name = "pyyaml", marker = "extra == 'population'", specifier = ">=6" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
@@ -3476,7 +3496,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.2.1" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
     { name = "xarray" },
     { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
@@ -3489,18 +3509,18 @@ dev = [
     { name = "argminax", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
     { name = "beartype", specifier = ">=0.22" },
     { name = "georeader-spaceml", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=278b8afbc675b9e082ac75488200a4729da38097" },
+    { name = "geotoolz-ops", extras = ["morph"], git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "numpyro", specifier = ">=0.21" },
-    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&rev=7c446f141c23164918e2e8b708428b860206120c" },
+    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-ops-v0.2.1" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.2.1" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
     { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
     { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
@@ -3513,7 +3533,7 @@ docs = [
     { name = "mkdocs-material", specifier = ">=9.7.6" },
     { name = "mkdocstrings", extras = ["python"], specifier = ">=1.0.4" },
     { name = "nbconvert", specifier = ">=7.16.6" },
-    { name = "pygments", specifier = "<2.20" },
+    { name = "pygments", specifier = "<2.22" },
     { name = "watermark", specifier = ">=2.6.0" },
 ]
 lint = [{ name = "ruff", specifier = ">=0.15.10" }]
@@ -4848,14 +4868,14 @@ wheels = [
 
 [[package]]
 name = "tifffile"
-version = "2026.10.15"
+version = "2026.11.16"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "numpy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fd/87/a982ca5b892579397c2b155275cc0119b51feb1701eaefa18acb0245f0a4/tifffile-2026.10.15.tar.gz", hash = "sha256:a5ee666dbd6d62e059830a3450825a2521a981b3f45c07a80ab009484aef56f0", size = 454150, upload-time = "2026-10-16T00:32:10.511Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d6/e1/f09384869bcf78bae3a794a86d8a90753fb2a6f4646c07ec941ff629cd33/tifffile-2026.11.16.tar.gz", hash = "sha256:d9c246d464f1c3ca9ab62c5225b3ff45578f33629029dbbd9f62f4e901702726", size = 462802, upload-time = "2026-11-17T03:35:19.648Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5b/bc/9e7664e2d30d4e82ada1b29dbb249d2dcac1ed1114cbbf11764f670d8be7/tifffile-2026.10.15-py3-none-any.whl", hash = "sha256:3dcf6c56731a45c1f85c81e90dad922b0a380a2d639e77f71207e010f8ef0f7b", size = 276988, upload-time = "2026-10-16T00:32:09.158Z" },
+    { url = "https://files.pythonhosted.org/packages/cf/3a/483491be6f7eb070d1c22b1182bbbc0243e85bf5903fafe3f80b6aeb3dba/tifffile-2026.11.16-py3-none-any.whl", hash = "sha256:d2103c2537f185868f0a880eceba590b316aa1981bd76d91028e5f2eb0e1a6e6", size = 279737, upload-time = "2026-11-17T03:35:18.375Z" },
 ]
 
 [[package]]
@@ -5048,22 +5068,24 @@ wheels = [
 
 [[package]]
 name = "vardax"
-version = "0.2.1"
-source = { git = "https://github.com/jejjohnson/vardax?tag=v0.2.1#e31a804ef5780866e7c605c2d16a84b05dd3b4f5" }
+version = "0.3.5"
+source = { git = "https://github.com/jejjohnson/vardax?tag=v0.3.5#d87878b593cd6f86ee065cdb40cf9a3fc8279dd9" }
 dependencies = [
+    { name = "argminax" },
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
     { name = "gaussx" },
     { name = "geonnax" },
+    { name = "integrix" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "jaxtyping" },
     { name = "lineax" },
     { name = "optax" },
     { name = "optimistix" },
-    { name = "pipekit" },
     { name = "pipekit-cycle" },
+    { name = "pipekit-ops" },
 ]
 
 [[package]]

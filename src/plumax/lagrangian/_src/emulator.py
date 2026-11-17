@@ -39,7 +39,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pipekit
+import pipekit_ops
 from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 
 from plumax._src.errors import ParameterError
@@ -219,7 +219,7 @@ class FootprintSimulator:
         return einx.rearrange("obs x y -> obs (x y)", jnp.asarray(footprint))
 
 
-class MetContextPrior(pipekit.Operator):
+class MetContextPrior(pipekit_ops.Operator):
     """The operational met distribution p(u) as pipekit-train's prior operator.
 
     u ~ p(u | site, overpass time), one draw per integer seed. Draw u from the

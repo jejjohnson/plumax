@@ -1,4 +1,4 @@
-"""Toy GeoTensor carriers for the plumax.geo tests, from geotoolz's test helpers."""
+"""Toy GeoArray carriers for the plumax.geo tests, from geotoolz's test helpers."""
 
 from __future__ import annotations
 
@@ -9,7 +9,11 @@ import pytest
 
 
 rasterio = pytest.importorskip("rasterio")
-GeoTensor = pytest.importorskip("georeader.geotensor").GeoTensor
+GeoArray = pytest.importorskip("geoarray").GeoArray
+SpectralAxis = pytest.importorskip("geoarray.coords").SpectralAxis
+
+#: dims of a carrier by its rank
+DIMS = {2: ("y", "x"), 3: ("band", "y", "x"), 4: ("time", "band", "y", "x")}
 
 
 #: 10 m UTM grid anchored in zone 29N, arbitrary but stable.
@@ -45,32 +49,35 @@ def fill_pixel_mask(shape: tuple[int, ...]) -> np.ndarray:
     return mask
 
 
-def toy_geotensor(
+def toy_geoarray(
     values: np.ndarray,
     *,
-    fill_value_default: Any = -9999,
+    fill_value: Any = -9999,
     attrs: dict[str, Any] | None = None,
+    band_names: tuple[str, ...] | None = None,
     with_fill_pixels: bool = False,
     grid: str = "utm",
 ) -> Any:
-    """A GeoTensor on a :data:`TOY_GRIDS` grid; optionally the corners filled."""
+    """A GeoArray on a :data:`TOY_GRIDS` grid; optionally the corners filled."""
     transform, crs = TOY_GRIDS[grid]
     if with_fill_pixels:
         values = np.array(values, copy=True)
-        values[..., fill_pixel_mask(values.shape)] = fill_value_default
-    return GeoTensor(
+        values[..., fill_pixel_mask(values.shape)] = fill_value
+    return GeoArray(
         values,
         transform=transform,
         crs=crs,
-        fill_value_default=fill_value_default,
-        attrs=attrs,
+        fill_value=fill_value,
+        attrs=attrs or {},
+        dims=DIMS[np.ndim(values)],
+        coords=() if band_names is None else (SpectralAxis(band_names),),
     )
 
 
 def time_stack(
     shape: tuple[int, int, int, int] = (2, 3, 4, 4), *, seed: int = 0
 ) -> Any:
-    """A ``(T, C, H, W)`` GeoTensor time stack with values in ``[0.01, 1)``."""
-    attrs = {"band_names": [f"b{i}" for i in range(shape[1])]}
+    """A ``(T, C, H, W)`` GeoArray time stack with values in ``[0.01, 1)``."""
+    band_names = tuple(f"b{i}" for i in range(shape[1]))
     values = np.random.default_rng(seed).uniform(0.01, 1.0, shape)
-    return toy_geotensor(values, attrs=attrs)
+    return toy_geoarray(values, band_names=band_names)
