@@ -221,6 +221,7 @@ The training dataset is free: we simulate millions of plume configurations in se
 | 1 | Plume forward | [`gauss_plume/plume.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/plume.py) | ✓ |
 | 1 | Puff forward | [`gauss_puff/puff.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/puff.py) | ✓ |
 | 1 | Plume rise (Briggs) | [`gauss_plume/plume_rise.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/plume_rise.py) (`BriggsPlumeRise`, opt-in `plume_rise=` on the plume forward) | ✓ [#82](https://github.com/jejjohnson/plumax/issues/82) |
+| 1 | Column plume (closed form, fitted power-law width) | [`gauss_plume/column.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/column.py) (`ColumnPlume`, `PlumeGeometry`, and `ColumnPlumeSource` as a coupled backend; see the [image-fitted plume](01_tier1_image_fit.md)) | ✓ [#267](https://github.com/jejjohnson/plumax/issues/267) |
 | 1 | Stability + dispersion | [`gauss_plume/dispersion.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_plume/dispersion.py) | 🚧 partial |
 | 1 | Puff turbulence | [`gauss_puff/turbulence.py`](https://github.com/jejjohnson/plumax/tree/main/src/plumax/gauss_puff/turbulence.py) | ✓ |
 | 1 | Column + AK pipeline | `gauss_plume.observation` (`ColumnObservation`, shared by Tiers II-III; `coupled.column_response` and `les_fvm.ColumnObservationOperator` call it) | ✓ [#83](https://github.com/jejjohnson/plumax/issues/83) |

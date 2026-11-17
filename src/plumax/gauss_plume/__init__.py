@@ -4,6 +4,7 @@ Submodules:
   - dispersion    — Briggs σ_y(x), σ_z(x) coefficients (A-F stability classes)
   - plume         — coordinate rotation + JIT forward model + xarray wrapper
   - plume_rise    — Briggs plume rise Δh(x) and the effective release height
+  - column        — closed-form column plume with a power-law width, and its backend
   - inference     — NumPyro Bayesian inference for Q (and optional stability)
   - observation   — column + averaging-kernel observation shared by every tier
   - likelihoods   — Gaussian, Student-t and heteroscedastic observation noise
@@ -20,6 +21,7 @@ import importlib
 from typing import TYPE_CHECKING
 
 from plumax.gauss_plume import (
+    column,
     dispersion,
     likelihoods,
     mo_dispersion,
@@ -27,6 +29,14 @@ from plumax.gauss_plume import (
     observation,
     plume,
     plume_rise,
+)
+from plumax.gauss_plume.column import (
+    ColumnPlume,
+    ColumnPlumeSource,
+    PlumeGeometry,
+    plume_frame,
+    power_law_width,
+    unit_column,
 )
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
@@ -101,6 +111,8 @@ __all__ = [
     "STABILITY_CLASSES",
     "BriggsPlumeRise",
     "ColumnObservation",
+    "ColumnPlume",
+    "ColumnPlumeSource",
     "EmissionRateSamples",
     "GaussianNoise",
     "GolderDispersion",
@@ -108,10 +120,12 @@ __all__ = [
     "MaskedSources",
     "MultiSourcePosterior",
     "Noise",
+    "PlumeGeometry",
     "SourceSummary",
     "StudentTNoise",
     "briggs_plume_rise",
     "calculate_briggs_dispersion",
+    "column",
     "dispersion",
     "effective_height",
     "gaussian_plume_model",
@@ -130,7 +144,10 @@ __all__ = [
     "plume",
     "plume_concentration",
     "plume_concentration_vmap",
+    "plume_frame",
     "plume_rise",
+    "power_law_width",
     "rotate_to_wind_frame",
     "simulate_plume",
+    "unit_column",
 ]
