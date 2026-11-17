@@ -286,7 +286,7 @@ class ColumnPlume(eqx.Module):
         3. Evaluate the Gaussian ridge, or its average across a pixel.
         4. Apply the upwind cut, hard or as a logistic ramp.
 
-    Args:
+    Attributes:
         reference_distance: Distance d_ref [m] at which the width is w_ref.
         initial_width: Width w₀ [m] at the source; g / √12 stands in for a
             pixel of side g.
