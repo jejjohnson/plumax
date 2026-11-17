@@ -70,8 +70,8 @@ public API is re-exported through `src/plumax/__init__.py`.
 | `gauss_puff`       | Time-resolved Gaussian puff (Pasquill–Gifford), diffrax wind integration, OU sub-grid turbulence. **Tier I.** |
 | `les_fvm`          | Eulerian 3-D advection–diffusion on an Arakawa C-grid via `finitevolX`. **Tier III.** |
 | `met`              | `MetField` gridded meteorology on the `les_fvm` analysis grid + `wrfout` / ERA5 loaders (`load_wrf`, `load_era5`), `LocalFrame` / `TimeAxis` + `to_prescribed_wind` adapter. **Tier 0.** |
-| `obs`              | L2 methane products (TROPOMI, EMIT, GHGSat) → `coupled.Instrument` + observed column-mass enhancement, via xrreader. **Tier 0.** |
-| `priors`           | Inventory prior mean (area-mean flux on the analysis T-cells, via xrreader) and the per-tile observation background. **Tier 0.** |
+| `obs`              | L2 methane products (TROPOMI, EMIT, GHGSat) → `coupled.Instrument` + observed column-mass enhancement, via xrproducts. **Tier 0.** |
+| `priors`           | Inventory prior mean (area-mean flux on the analysis T-cells, via xrproducts) and the per-tile observation background. **Tier 0.** |
 | `operators`        | `pipekit_ops.Operator` wrappers over the forward models. |
 | `adapters`         | `pipekit_cycle` `ForwardModel` / `ObservationOperator` adapters. |
 
@@ -93,7 +93,7 @@ public API is re-exported through `src/plumax/__init__.py`.
   when they run, so `import plumax` never needs it.
 - Radiative transfer, the matched filter and the 3D-Var retrieval are in `radtrax` (a base dependency); `plumax.radtran`, `plumax.hapi_lut`, `plumax.matched_filter` and `plumax.assimilation` raise `ImportError` naming their new home.
 - Readers (`met.load_wrf`, and the Tier 0 loaders as they land) go through
-  `xrtoolz` / `xrreader` behind the `io` extra (`pip install 'plumax[io]'`)
+  `xrops` / `xrproducts` behind the `io` extra (`pip install 'plumax[io]'`)
   and import it lazily, so `import plumax` never needs it.
 - `gaussx` and `pipekit` resolve from git (`[tool.uv.sources]`); they are
   not yet on PyPI.

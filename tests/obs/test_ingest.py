@@ -35,7 +35,7 @@ from plumax.obs import (
 )
 
 
-pytest.importorskip("xrreader")
+pytest.importorskip("xrproducts")
 pytest.importorskip("pyproj")
 
 SITE = (31.95, -102.15)  # Permian Basin

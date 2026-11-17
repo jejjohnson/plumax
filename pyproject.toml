@@ -86,9 +86,11 @@ dependencies = [
 [project.optional-dependencies]
 # The `inference` submodules are the only consumers of numpyro.
 inference = ["numpyro>=0.21"]
-# Readers: WRF (and, as Tier 0 grows, ERA5, L2 products and inventories)
-# through xrtoolz / xrreader, so the base install stays free of I/O stacks.
-io = ["xrtoolz", "xrtoolz-reader", "pyproj"]
+# Readers: WRF, ERA5, L2 products and inventories through xrops (xrtoolz-ops:
+# the atmospheric column and height functions, the wrfout reader) and
+# xrproducts (xrtoolz-products: the L2 and inventory openers), so the base
+# install stays free of I/O stacks.
+io = ["xrtoolz-ops", "xrtoolz-products", "pyproj"]
 # Pulled in by the example notebooks (plots).
 notebooks = ["matplotlib", "ipython"]
 # Variational source inversion (Tier II OI, Tier III 3D-Var with a Laplace
@@ -131,10 +133,6 @@ Documentation = "https://jejjohnson.github.io/plumax"
 # every symbol those two packages import still exists at this rev.
 override-dependencies = [
     "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.12",
-    # The `io` extra's xrtoolz still imports the pre-0.2.0 pipekit core (as
-    # `pipekit`, beside pipekit_ops) and sources it from pipekit's unpinned
-    # main; hold it on the commit xrtoolz's own lock resolves to.
-    "pipekit @ git+https://github.com/jejjohnson/pipekit@ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#subdirectory=packages/pipekit",
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
@@ -158,10 +156,6 @@ override-dependencies = [
 # `plumax.vetting` needs; radtrax is not on PyPI).
 # geonnax is radtrax's own git dependency, which uv does not read from
 # radtrax's sources.
-# xrtoolz (the `io` extra) is a workspace of six packages, none on PyPI; all
-# six are pinned to one rev: the release commit of xrtoolz-v0.0.6 /
-# xrtoolz-reader-v0.0.5, the first with xrreader.open_ch4_inventory (used by
-# plumax.priors).
 # xtremax (the `population` extra) is not on PyPI; it is pinned to the v0.0.4
 # release commit (its `__version__` string is not reliable, so pin by rev).
 [tool.uv.sources]
@@ -172,8 +166,6 @@ pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "p
 pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
 pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
 pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-ops-v0.2.1" }
-# The pre-0.2.0 core, for the `io` extra's xrtoolz only (see the override).
-pipekit = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit", rev = "ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
 # pipekit-train (the `emulate` extra) is not on PyPI.
@@ -191,19 +183,16 @@ vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.5" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
-# The geotoolz packages (the `geo` extra) are pinned to one geotoolz commit,
-# df8c228 on main: geoops 0.18.1 on pipekit-ops and the GeoArray carrier, with
-# geoarray beside it. functax is geoarray's own git dependency, at the tag
+# The geotoolz packages (the `geo` and `io` extras) are pinned to one geotoolz
+# commit, df8c228 on main: geoops 0.18.1 on pipekit-ops and the GeoArray
+# carrier, geoarray beside it, and the xarray lane moved in from xrtoolz
+# (xrops 0.5.1, xrproducts 0.5.0), which has no release from geotoolz yet. functax is geoarray's own git dependency, at the tag
 # geotoolz pins.
 geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
 geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
+xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
+xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
 functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.6" }
-xrtoolz = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
-xrtoolz-core = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-core", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
-xrtoolz-grad = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-grad", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
-xrtoolz-einx = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-einx", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
-xrtoolz-sklearn = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-sklearn", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
-xrtoolz-reader = { git = "https://github.com/jejjohnson/xrtoolz", subdirectory = "packages/xrtoolz-reader", rev = "a94d9a15729979ffff030b9149da11ba1cf248b8" }
 
 [dependency-groups]
 dev = [
@@ -220,8 +209,8 @@ dev = [
     "hypothesis>=6.100",
     # The `io` extra's readers, so the loader tests run in CI (which syncs
     # only this group).
-    "xrtoolz",
-    "xrtoolz-reader",
+    "xrtoolz-ops",
+    "xrtoolz-products",
     # The `assim` extra, so the vardax inversion tests run in CI.
     "argminax",
     "vardax",

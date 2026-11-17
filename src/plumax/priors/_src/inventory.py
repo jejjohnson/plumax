@@ -43,7 +43,7 @@ def load_inventory(
     are equal ground areas.
 
     Algorithm:
-        1. Read the inventory with :func:`xrreader.open_ch4_inventory`, which
+        1. Read the inventory with :func:`xrproducts.open_ch4_inventory`, which
            converts to kg m⁻² s⁻¹ with ascending lat and lon in [-180, 180).
         2. Lay an ``s × s`` lattice over every analysis cell and map it to
            lat/lon.
@@ -65,20 +65,20 @@ def load_inventory(
         F̄ [kg m⁻² s⁻¹] on the horizontal T-cells, in the grid's dtype.
 
     Raises:
-        MissingExtraError: If the ``io`` extra (xrreader) is not installed.
+        MissingExtraError: If the ``io`` extra (xrproducts) is not installed.
         DomainError: If a lattice point falls outside the inventory raster,
             or the raster's longitudes are unevenly spaced.
     """
     try:
-        import xrreader
+        import xrproducts
     except ImportError as err:
         raise MissingExtraError(
-            "load_inventory reads through xrreader; install it with "
+            "load_inventory reads through xrproducts; install it with "
             "`pip install 'plumax[io]'`"
         ) from err
 
     # --- read ---
-    dataset = xrreader.open_ch4_inventory(path, variable=variable, units=units)
+    dataset = xrproducts.open_ch4_inventory(path, variable=variable, units=units)
     flux = dataset["ch4_emission_flux"]
     if "time" in flux.dims:
         flux = flux.isel(time=time_index)

@@ -22,7 +22,6 @@ overrides = [
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
-    { name = "pipekit", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" },
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
 ]
 
@@ -3309,16 +3308,16 @@ wheels = [
 ]
 
 [[package]]
-name = "pipekit"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit&rev=ef3c17f85678dbcdd739f27ef75a0eaab6d5163f#ef3c17f85678dbcdd739f27ef75a0eaab6d5163f" }
-
-[[package]]
 name = "pipekit-array"
 version = "0.1.1"
 source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-ops-v0.2.1#8e357a1f3eb82b15e15bf18be4de04d4d9535855" }
 dependencies = [
     { name = "pipekit-ops" },
+]
+
+[package.optional-dependencies]
+xarray = [
+    { name = "xarray" },
 ]
 
 [[package]]
@@ -3415,8 +3414,8 @@ inference = [
 ]
 io = [
     { name = "pyproj" },
-    { name = "xrtoolz" },
-    { name = "xrtoolz-reader" },
+    { name = "xrtoolz-ops" },
+    { name = "xrtoolz-products" },
 ]
 notebooks = [
     { name = "ipython" },
@@ -3445,8 +3444,8 @@ dev = [
     { name = "scikit-learn" },
     { name = "tqdm" },
     { name = "vardax" },
-    { name = "xrtoolz" },
-    { name = "xrtoolz-reader" },
+    { name = "xrtoolz-ops" },
+    { name = "xrtoolz-products" },
     { name = "xtremax" },
 ]
 docs = [
@@ -3498,8 +3497,8 @@ requires-dist = [
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
     { name = "xarray" },
-    { name = "xrtoolz", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
-    { name = "xrtoolz-reader", marker = "extra == 'io'", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
+    { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6" },
     { name = "xtremax", marker = "extra == 'population'", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 provides-extras = ["inference", "io", "notebooks", "assim", "emulate", "population", "geo"]
@@ -3521,8 +3520,8 @@ dev = [
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
     { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
-    { name = "xrtoolz", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
-    { name = "xrtoolz-reader", git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8" },
+    { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6" },
     { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 docs = [
@@ -5288,86 +5287,39 @@ wheels = [
 ]
 
 [[package]]
-name = "xrtoolz"
-version = "0.0.6"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
+name = "xrtoolz-ops"
+version = "0.5.1"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
 dependencies = [
     { name = "dask", extra = ["array"] },
-    { name = "einx" },
+    { name = "geotoolz-array" },
+    { name = "geotoolz-ops" },
     { name = "jaxtyping" },
     { name = "matplotlib" },
     { name = "netcdf4" },
     { name = "numpy" },
     { name = "numpy-groupies" },
     { name = "pandas" },
-    { name = "pipekit" },
+    { name = "pipekit-array", extra = ["xarray"] },
+    { name = "pipekit-ops" },
     { name = "pyproj" },
     { name = "regionmask" },
     { name = "rioxarray" },
-    { name = "scikit-learn" },
     { name = "scipy" },
     { name = "xarray" },
     { name = "xrft" },
-    { name = "xrtoolz-core" },
-    { name = "xrtoolz-einx" },
-    { name = "xrtoolz-grad" },
-    { name = "xrtoolz-reader" },
-    { name = "xrtoolz-sklearn" },
+    { name = "xrtoolz-products" },
     { name = "xskillscore" },
 ]
 
 [[package]]
-name = "xrtoolz-core"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-core&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pipekit" },
-    { name = "xarray" },
-]
-
-[[package]]
-name = "xrtoolz-einx"
-version = "0.0.1"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-einx&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
-dependencies = [
-    { name = "einx" },
-    { name = "numpy" },
-    { name = "xarray" },
-    { name = "xrtoolz-core" },
-]
-
-[[package]]
-name = "xrtoolz-grad"
-version = "0.0.3"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-grad&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
-dependencies = [
-    { name = "finitediffx" },
-    { name = "jaxtyping" },
-    { name = "numpy" },
-    { name = "xarray" },
-]
-
-[[package]]
-name = "xrtoolz-reader"
-version = "0.0.5"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-reader&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
+name = "xrtoolz-products"
+version = "0.5.0"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "xarray" },
-]
-
-[[package]]
-name = "xrtoolz-sklearn"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/xrtoolz?subdirectory=packages%2Fxrtoolz-sklearn&rev=a94d9a15729979ffff030b9149da11ba1cf248b8#a94d9a15729979ffff030b9149da11ba1cf248b8" }
-dependencies = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "scikit-learn" },
-    { name = "xarray" },
-    { name = "xrtoolz-core" },
 ]
 
 [[package]]

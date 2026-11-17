@@ -11,7 +11,7 @@ variance) plus the observed column-mass enhancement
 - :func:`load_emit_l2b` — EMIT L2B CH₄ enhancement (ppm·m).
 - :func:`load_ghgsat_l2` — GHGSat per-plume XCH₄.
 
-The files are read with xrreader's openers; needs the ``io`` extra.
+The files are read with xrproducts's openers; needs the ``io`` extra.
 """
 
 from __future__ import annotations
