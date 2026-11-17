@@ -1,4 +1,4 @@
-"""PlumeVetting, plumax.vetting on GeoTensors as one Dataset (#157).
+"""PlumeVetting, plumax.vetting on GeoArrays as one Dataset (#157).
 
 Gate VT7: on the plume-vetting notebook's scene wrapped as carriers, the
 operator's scores equal `vet_candidate`'s bit for bit, and ``p_null`` equals
@@ -21,7 +21,7 @@ from radtrax import ParameterError, ShapeError
 
 from plumax.geo import PlumeVetting
 from plumax.vetting import null_masks, null_pvalue, vet_candidate
-from tests.geo._carriers import DEFAULT_CRS, DEFAULT_TRANSFORM, GeoTensor
+from tests.geo._carriers import DEFAULT_CRS, DEFAULT_TRANSFORM, GeoArray
 from tests.vetting._vetting_scene import notebook_scene, vet_scene
 
 
@@ -29,19 +29,21 @@ BOX = 16  # the notebook's pool margin
 
 
 def _carriers(scene, *, mf: np.ndarray | None = None) -> tuple:
-    """The scene's radiance as a (B, H, W) GeoTensor and its MF as (H, W)."""
-    cube = GeoTensor(
+    """The scene's radiance as a (B, H, W) GeoArray and its MF as (H, W)."""
+    cube = GeoArray(
         np.moveaxis(scene.radiance, -1, 0),
         transform=DEFAULT_TRANSFORM,
         crs=DEFAULT_CRS,
-        fill_value_default=None,
+        fill_value=None,
         attrs={"wavelengths": scene.wavelength_nm.tolist()},
+        dims=("band", "y", "x"),
     )
-    score = GeoTensor(
+    score = GeoArray(
         scene.mf if mf is None else mf,
         transform=DEFAULT_TRANSFORM,
         crs=DEFAULT_CRS,
-        fill_value_default=None,
+        fill_value=None,
+        dims=("y", "x"),
     )
     return cube, score
 
@@ -152,16 +154,22 @@ def test_get_config_round_trips(scene) -> None:
     assert rebuilt.get_config() == config
 
 
+def test_from_config_without_the_arrays_raises(scene) -> None:
+    config = _operator(scene).get_config()
+    with pytest.raises(TypeError, match="table= and delta_grid="):
+        PlumeVetting.from_config(config)
+
+
 def test_a_cube_without_wavelengths_raises(scene) -> None:
     cube, mf = _carriers(scene)
-    cube.attrs = {}
+    cube = cube.replace(attrs={})
     with pytest.raises(ShapeError, match="wavelengths"):
         _operator(scene, n_null=0)(cube, mf, scene.masks)
 
 
 def test_wavelengths_that_do_not_match_the_bands_raise(scene) -> None:
     cube, mf = _carriers(scene)
-    cube.attrs = {"wavelengths": scene.wavelength_nm[:-1].tolist()}
+    cube = cube.replace(attrs={"wavelengths": scene.wavelength_nm[:-1].tolist()})
     with pytest.raises(ShapeError, match="wavelengths"):
         _operator(scene, n_null=0)(cube, mf, scene.masks)
 

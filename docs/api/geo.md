@@ -1,6 +1,6 @@
 # Plume operators (geo)
 
-Plume post-processing on GeoTensors, behind the `[geo]` extra (`pip install 'plumax[geo]'`): the ten operators ported from geotoolz's `plume` module, as `pipekit.Operator`s built with geoops's public carrier helpers (the pattern of radtrax's `[geo]` operators). Importing `plumax.geo` does not need the extra; the operators load on first use, and a missing extra raises an `ImportError` naming it.
+Plume post-processing on GeoArrays, behind the `[geo]` extra (`pip install 'plumax[geo]'`): the ten operators ported from geotoolz's `plume` module, as `pipekit_ops.Operator`s built with geoops's public carrier helpers (the pattern of radtrax's `[geo]` operators). Importing `plumax.geo` does not need the extra; the operators load on first use, and a missing extra raises an `ImportError` naming it.
 
 ::: plumax.geo
     options:

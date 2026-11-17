@@ -1,4 +1,4 @@
-"""The plume operators on GeoTensors (behind the ``[geo]`` extra).
+"""The plume operators on GeoArrays (behind the ``[geo]`` extra).
 
 Ten operators ported from geotoolz's ``plume`` module (#134) with their
 behaviour unchanged; its eleventh, ``SBMP``, moved to radtrax as
@@ -6,10 +6,10 @@ behaviour unchanged; its eleventh, ``SBMP``, moved to radtrax as
 :mod:`plumax.geo.plume_array` and are pipekit Operators built with geoops's
 public carrier helpers, as radtrax's ``[geo]`` operators are.
 
-Per-pixel operators accept a ``georeader.GeoTensor`` or a plain
+Per-pixel operators accept a ``geoarray.GeoArray`` or a plain
 ``np.ndarray`` and return the same carrier kind; geo-dependent operators
 (advection geometry, pixel-area maths, footprints) require a georeferenced
-``GeoTensor`` and raise ``TypeError`` otherwise. The area and distance
+``GeoArray`` and raise ``TypeError`` otherwise. The area and distance
 operators (``PlumeFootprint``, ``WindAdvectionCone``, ``IMEEstimate``,
 ``CrossSectionalFlux``) work in metres and raise ``ValueError`` on a
 geographic CRS (see :func:`geoops.carrier.require_projected_crs`). Vector
@@ -27,12 +27,12 @@ The IME and cross-section operators expect the enhancement carrier to be
 in kg/m^2. Use :class:`ColumnToMass` to convert from ppm m or mol/m^2.
 
 Nodata: pixels that are non-finite or equal the carrier's
-``fill_value_default`` (see :func:`geoops.carrier.valid_pixels`) never
+``fill_value`` (see :func:`geoops.carrier.valid_pixels`) never
 enter a threshold, statistic or sum, and are never part of a plume mask or
 contour. Output fill values follow the output's meaning, not the
-input's: boolean masks declare ``fill_value_default=False``, float
+input's: boolean masks declare ``fill_value=False``, float
 products (scores, converted columns) hold ``NaN`` at nodata pixels and
-declare ``fill_value_default=NaN``, and label images use ``0`` (see
+declare ``fill_value=NaN``, and label images use ``0`` (see
 :class:`PlumeContours` for its one documented exception).
 """
 
@@ -65,13 +65,14 @@ try:
     import geopandas as gpd
     import pandas as pd
     from geoops.carrier import (
+        affine_of,
         as_tuple,
         callable_name,
         carried_fill,
         mask_invalid_to_nan,
         over_frames,
         reject_config_summary,
-        require_geotensor,
+        require_geoarray,
         require_grid_match,
         require_ndim,
         require_projected_crs,
@@ -81,7 +82,7 @@ try:
     )
     from geoops.measure import DEFAULT_REGIONPROPS, regionprops_frame, skeleton_length
     from georeader import vectorize
-    from pipekit import Operator
+    from pipekit_ops import Operator
     from pyproj import CRS, Transformer
     from shapely.geometry import LineString
     from shapely.ops import unary_union
@@ -92,7 +93,7 @@ except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
 
 
 if TYPE_CHECKING:
-    from georeader.geotensor import GeoTensor
+    from geoarray import GeoArray
 
 
 __all__ = [
@@ -109,7 +110,7 @@ __all__ = [
 ]
 
 
-def _single_band_nan(x: GeoTensor | np.ndarray) -> np.ndarray:
+def _single_band_nan(x: GeoArray | np.ndarray) -> np.ndarray:
     """Single-band ``(H, W)`` float map of ``x`` with nodata pixels set to NaN."""
     return squeeze_single_band(mask_invalid_to_nan(x))
 
@@ -130,7 +131,7 @@ def _masked_mass(enhancement: np.ndarray, mask: np.ndarray, area: float) -> floa
     return float(total.value)
 
 
-def _instance_labels(x: GeoTensor | np.ndarray) -> np.ndarray:
+def _instance_labels(x: GeoArray | np.ndarray) -> np.ndarray:
     """``(H, W)`` int64 label image of ``x`` with nodata pixels as background.
 
     A positive fill (a uint8 raster's ``255``) would otherwise read as one
@@ -160,7 +161,7 @@ class PlumeMask(Operator):
 
     Nodata pixels (non-finite or equal to the input's fill value) are
     excluded from the Otsu / percentile threshold and are always
-    ``False`` in the mask, which declares ``fill_value_default=False``.
+    ``False`` in the mask, which declares ``fill_value=False``.
 
     Examples:
         >>> mask = PlumeMask(
@@ -182,7 +183,7 @@ class PlumeMask(Operator):
         self.nbins = nbins
 
     @over_frames
-    def _apply(self, gt: GeoTensor | np.ndarray) -> GeoTensor | np.ndarray:
+    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         mask = plume_mask(
             _single_band_nan(gt),
             threshold=self.threshold,
@@ -190,7 +191,7 @@ class PlumeMask(Operator):
             connectivity=self.connectivity,
             nbins=self.nbins,
         )
-        return wrap_like(gt, mask, fill_value_default=False)
+        return wrap_like(gt, mask, fill_value=False)
 
 
 class PlumeContours(Operator):
@@ -202,12 +203,12 @@ class PlumeContours(Operator):
 
     Nodata pixels (non-finite -- e.g. a ``NaN`` score -- or equal to the
     input's fill value) are never part of a contour. In the boolean
-    output they are ``False`` (``fill_value_default=False``). In the
+    output they are ``False`` (``fill_value=False``). In the
     label image they hold the input's fill value when it is a
     non-positive int32 value (e.g. ``-9999``, so it cannot collide with
     a label); otherwise (``NaN``, no fill, or a
-    positive fill) they are ``0`` (background), and a GeoTensor output
-    then carries ``fill_value_default=0``.
+    positive fill) they are ``0`` (background), and a GeoArray output
+    then carries ``fill_value=0``.
 
     Examples:
         >>> labels = PlumeContours(min_area_px=50)(mask)
@@ -225,7 +226,7 @@ class PlumeContours(Operator):
         self.connectivity = connectivity
 
     @over_frames
-    def _apply(self, gt: GeoTensor | np.ndarray) -> GeoTensor | np.ndarray:
+    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         valid = valid_pixels(gt)
         labels = label_components(
             squeeze_single_band(np.asarray(gt)).astype(bool) & valid,
@@ -233,13 +234,13 @@ class PlumeContours(Operator):
             connectivity=self.connectivity,
         )
         if not self.return_labels:
-            return wrap_like(gt, labels > 0, fill_value_default=False)
+            return wrap_like(gt, labels > 0, fill_value=False)
         # ``carried_fill`` is None unless the fill is an int32 value; a
         # positive fill would collide with a component label.
         fill = carried_fill(gt, labels.dtype)
         if fill is None or isinstance(fill, bool | np.bool_) or fill > 0:
             fill = 0
-        return wrap_filled(gt, labels, fill_value_default=fill, valid=valid)
+        return wrap_filled(gt, labels, fill_value=fill, valid=valid)
 
 
 class PlumeFootprint(Operator):
@@ -262,7 +263,7 @@ class PlumeFootprint(Operator):
     by the per-polygon statistics.
 
     Geo-dependent: polygonisation needs the carrier's transform and CRS,
-    so the input must be a georeferenced ``GeoTensor`` (plain arrays
+    so the input must be a georeferenced ``GeoArray`` (plain arrays
     raise ``TypeError``). Areas are in m^2 and the simplify tolerance in
     m, so the CRS must be projected with metre units; a geographic CRS
     raises ``ValueError`` (reproject with :class:`geoops.geom.Reproject`
@@ -308,10 +309,10 @@ class PlumeFootprint(Operator):
         )
 
     def _apply(
-        self, gt: GeoTensor, enhancement: GeoTensor | np.ndarray | None = None
+        self, gt: GeoArray, enhancement: GeoArray | np.ndarray | None = None
     ) -> gpd.GeoDataFrame:
         require_ndim(gt, (2, 3), "PlumeFootprint")
-        require_geotensor(gt, "PlumeFootprint")
+        require_geoarray(gt, "PlumeFootprint")
         require_projected_crs(gt, "PlumeFootprint")
         if enhancement is not None:
             require_grid_match(
@@ -371,7 +372,7 @@ class PlumeFootprint(Operator):
             # One component can still vectorise to several 4-connected
             # polygons (diagonal-only contacts); union them.
             geometries = vectorize.get_polygons(
-                component, min_area=0.0, tolerance=0.0, transform=gt.transform
+                component, min_area=0.0, tolerance=0.0, transform=affine_of(gt)
             )
             if not geometries:
                 continue
@@ -468,7 +469,7 @@ class WindAdvectionCone(Operator):
 
     Geo-dependent: the cone is rasterised in CRS coordinates via the
     carrier's transform, so the input must be a georeferenced
-    ``GeoTensor`` (plain arrays raise ``TypeError``). ``max_distance`` is
+    ``GeoArray`` (plain arrays raise ``TypeError``). ``max_distance`` is
     in metres and the cone angle is measured in the map plane, so the
     carrier CRS must be projected with metre units; a geographic CRS
     raises ``ValueError`` (reproject with :class:`geoops.geom.Reproject`
@@ -511,8 +512,8 @@ class WindAdvectionCone(Operator):
         self.crs = crs
 
     @over_frames
-    def _apply(self, gt: GeoTensor) -> GeoTensor:
-        require_geotensor(gt, "WindAdvectionCone")
+    def _apply(self, gt: GeoArray) -> GeoArray:
+        require_geoarray(gt, "WindAdvectionCone")
         require_projected_crs(gt, "WindAdvectionCone")
         arr = squeeze_single_band(np.asarray(gt))
         source = self.source
@@ -520,7 +521,7 @@ class WindAdvectionCone(Operator):
             if gt.crs is None:
                 raise ValueError(
                     "WindAdvectionCone was given source crs="
-                    f"{self.crs!r} but the input GeoTensor has no CRS, so "
+                    f"{self.crs!r} but the input GeoArray has no CRS, so "
                     "the source cannot be reprojected onto it. Set the "
                     "carrier CRS, or pass source in carrier coordinates "
                     "with crs=None."
@@ -532,14 +533,14 @@ class WindAdvectionCone(Operator):
                 source = transformer.transform(*source)
         mask = wind_advection_cone(
             arr.shape,
-            gt.transform,
+            affine_of(gt),
             source=source,
             wind_u=self.wind_u,
             wind_v=self.wind_v,
             half_angle_deg=self.half_angle_deg,
             max_distance=self.max_distance,
         )
-        return wrap_like(gt, mask, fill_value_default=False)
+        return wrap_like(gt, mask, fill_value=False)
 
 
 class IMEEstimate(Operator):
@@ -570,7 +571,7 @@ class IMEEstimate(Operator):
 
     Geo-dependent: pixel area (m^2) and plume length (m) are derived from
     the carrier's transform, so the input must be a georeferenced
-    ``GeoTensor`` (plain arrays raise ``TypeError``) in a projected CRS
+    ``GeoArray`` (plain arrays raise ``TypeError``) in a projected CRS
     with metre units; a geographic CRS raises ``ValueError`` (reproject
     with :class:`geoops.geom.Reproject` first).
 
@@ -632,10 +633,10 @@ class IMEEstimate(Operator):
         self.uncertainty_fraction = uncertainty_fraction
 
     def _apply(
-        self, gt: GeoTensor, plume_mask: GeoTensor | np.ndarray
+        self, gt: GeoArray, plume_mask: GeoArray | np.ndarray
     ) -> dict[str, float]:
         require_ndim(gt, (2, 3), "IMEEstimate")
-        require_geotensor(gt, "IMEEstimate")
+        require_geoarray(gt, "IMEEstimate")
         require_projected_crs(gt, "IMEEstimate")
         require_grid_match(
             gt, plume_mask, "IMEEstimate", names=("enhancement", "plume_mask")
@@ -645,10 +646,10 @@ class IMEEstimate(Operator):
         area = (
             self.pixel_area_m2
             if self.pixel_area_m2 is not None
-            else pixel_area(gt.transform)
+            else pixel_area(affine_of(gt))
         )
         ime_kg = _masked_mass(enhancement, mask, area)
-        length_m = plume_length(mask, gt.transform, method=self.length_method)
+        length_m = plume_length(mask, affine_of(gt), method=self.length_method)
         rate = 0.0 if length_m == 0.0 else ime_kg * self.wind_speed / length_m
         out = {
             "ime_kg": ime_kg,
@@ -692,7 +693,7 @@ class CrossSectionalFlux(Operator):
 
     Geo-dependent: transect placement and pixel size come from the
     carrier's transform and CRS, so the input must be a georeferenced
-    ``GeoTensor`` (plain arrays raise ``TypeError``) in a projected CRS
+    ``GeoArray`` (plain arrays raise ``TypeError``) in a projected CRS
     with metre units; a geographic CRS raises ``ValueError`` (reproject
     with :class:`geoops.geom.Reproject` first).
 
@@ -739,10 +740,10 @@ class CrossSectionalFlux(Operator):
         self.transect_spacing_m = transect_spacing_m
 
     def _apply(
-        self, gt: GeoTensor, plume_mask: GeoTensor | np.ndarray
+        self, gt: GeoArray, plume_mask: GeoArray | np.ndarray
     ) -> gpd.GeoDataFrame:
         require_ndim(gt, (2, 3), "CrossSectionalFlux")
-        require_geotensor(gt, "CrossSectionalFlux")
+        require_geoarray(gt, "CrossSectionalFlux")
         require_projected_crs(gt, "CrossSectionalFlux")
         require_grid_match(
             gt, plume_mask, "CrossSectionalFlux", names=("enhancement", "plume_mask")
@@ -752,9 +753,9 @@ class CrossSectionalFlux(Operator):
             raise ValueError("wind vector must be non-zero")
         mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
         enhancement = _single_band_nan(gt)
-        area = pixel_area(gt.transform)
+        area = pixel_area(affine_of(gt))
         width = float(np.sqrt(area))
-        xs, ys = pixel_centers(mask.shape, gt.transform)
+        xs, ys = pixel_centers(mask.shape, affine_of(gt))
         dx = xs - self.source[0]
         dy = ys - self.source[1]
         along = (dx * self.wind_u + dy * self.wind_v) / wind_norm
@@ -802,7 +803,7 @@ class ColumnToMass(Operator):
     assumes a standard molar volume (298.15 K, 1 atm); see that
     function's docstring for the exact relation and caveats. Nodata
     pixels (non-finite or equal to the fill value) are not converted:
-    they hold ``NaN`` and the output declares ``fill_value_default=NaN``
+    they hold ``NaN`` and the output declares ``fill_value=NaN``
     (a converted column is a new quantity, so the input's fill -- e.g.
     ``-9999`` ppm m -- is not carried over).
 
@@ -828,7 +829,7 @@ class ColumnToMass(Operator):
         self.units_in = units_in
         self.units_out = units_out
 
-    def _apply(self, gt: GeoTensor | np.ndarray) -> GeoTensor | np.ndarray:
+    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         out = convert_column_units(
             np.asarray(gt),
             gas=self.gas,
@@ -838,7 +839,7 @@ class ColumnToMass(Operator):
         if np.ndim(out) < 2:
             return wrap_like(gt, out)
         out = np.asarray(out, dtype=np.result_type(out, np.float32))
-        return wrap_filled(gt, out, fill_value_default=np.nan)
+        return wrap_filled(gt, out, fill_value=np.nan)
 
 
 def _iter_instances(
@@ -925,7 +926,7 @@ class PlumeShapeFilter(Operator):
         self.max_fiber_width = float(max_fiber_width)
 
     @over_frames
-    def _apply(self, gt: GeoTensor | np.ndarray) -> GeoTensor | np.ndarray:
+    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         labels = _instance_labels(gt)
         kept: set[int] = set()
         for lbl, compact, _bbox in _iter_instances(labels):
@@ -953,7 +954,7 @@ class PlumeShapeFilter(Operator):
         else:
             keep_mask = np.isin(labels, list(kept))
             out = np.where(keep_mask, labels, 0).astype(np.int32, copy=False)
-        return wrap_like(gt, out, fill_value_default=0)
+        return wrap_like(gt, out, fill_value=0)
 
 
 def _major_axis_length(compact_mask: np.ndarray) -> float:
@@ -1008,14 +1009,14 @@ class PlumeColumnStats(Operator):
     fill value) are left out of every statistic.
 
     Called as ``op(labels, column)``: ``column`` is the column field
-    (single-band ``GeoTensor`` or plain array) on the label map's pixel
+    (single-band ``GeoArray`` or plain array) on the label map's pixel
     grid (``ValueError`` otherwise).
     """
 
     _terminal: ClassVar[bool] = True
 
     def _apply(
-        self, gt: GeoTensor | np.ndarray, column: GeoTensor | np.ndarray
+        self, gt: GeoArray | np.ndarray, column: GeoArray | np.ndarray
     ) -> pd.DataFrame:
         require_ndim(gt, (2, 3), "PlumeColumnStats")
         require_grid_match(gt, column, "PlumeColumnStats", names=("labels", "column"))
@@ -1197,9 +1198,9 @@ class PlumeQNDFeatures(Operator):
 
     def _apply(
         self,
-        gt: GeoTensor | np.ndarray,
-        column: GeoTensor | np.ndarray,
-        albedo: GeoTensor | np.ndarray | None = None,
+        gt: GeoArray | np.ndarray,
+        column: GeoArray | np.ndarray,
+        albedo: GeoArray | np.ndarray | None = None,
     ) -> pd.DataFrame:
         require_ndim(gt, (2, 3), "PlumeQNDFeatures")
         require_grid_match(gt, column, "PlumeQNDFeatures", names=("labels", "column"))

@@ -172,7 +172,7 @@ A satellite does not see $`C`$; it sees the column enhancement
 $`\Delta\Omega(x, y)`$ [kg m⁻²] that radtrax retrieves. On an image, plumax
 segments the plume into a mask $`M`$ of pixels with area $`A_i`$, sums the
 integrated mass enhancement $`\mathrm{IME} = \sum_{i \in M} \Delta\Omega_i A_i`$,
-and divides by the residence time $`L / U_{\mathrm{eff}}`$, with plume length $`L`$ and effective wind $`U_{\mathrm{eff}}`$. The plume operators came over from geotoolz into `plumax.geo` (behind the `[geo]` extra), whereas the radtrax call is sketched (the `obs_model` that sets the target, and so the units of the column, is left out). `scene` is a radiance GeoTensor in a projected CRS and `u_eff` the effective wind $`U_{\mathrm{eff}}`$ [m s⁻¹] at the source:
+and divides by the residence time $`L / U_{\mathrm{eff}}`$, with plume length $`L`$ and effective wind $`U_{\mathrm{eff}}`$. The plume operators came over from geotoolz into `plumax.geo` (behind the `[geo]` extra), whereas the radtrax call is sketched (the `obs_model` that sets the target, and so the units of the column, is left out). `scene` is a radiance GeoArray in a projected CRS and `u_eff` the effective wind $`U_{\mathrm{eff}}`$ [m s⁻¹] at the source:
 
 ```python
 import plumax.geo as pgeo
@@ -276,7 +276,7 @@ make install      # uv sync --all-groups + pre-commit hooks
 
 - The core install pulls JAX, xarray, diffrax/Equinox, einx, finitevolX, gaussx, optimistix, pipekit and radtrax.
 - finitevolX, gaussx, pipekit and radtrax are not yet on PyPI, and neither are most packages behind the extras; from a checkout they resolve from git via `[tool.uv.sources]`.
-- Extras: `inference` (NumPyro), `assim` (vardax and argminax: the Tier II and Tier III source inversions and the Tier IV nonlinear inversion), `population` (NumPyro and xtremax), `geo` (the plume operators on GeoTensors), `emulate` (pipekit-train, for the footprint emulator), `io` (readers) and `notebooks` (matplotlib, IPython): `uv add "plumax[inference,assim]"`.
+- Extras: `inference` (NumPyro), `assim` (vardax and argminax: the Tier II and Tier III source inversions and the Tier IV nonlinear inversion), `population` (NumPyro and xtremax), `geo` (the plume operators on GeoArrays), `emulate` (pipekit-train, for the footprint emulator), `io` (readers) and `notebooks` (matplotlib, IPython): `uv add "plumax[inference,assim]"`.
 
 ## Development
 
