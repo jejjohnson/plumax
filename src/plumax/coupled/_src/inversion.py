@@ -1,16 +1,22 @@
 """Nonlinear end-to-end coupled inversion on vardax, with a Laplace posterior.
 
-The control θ stacks whichever of these blocks the prior names: the emission
-rate (``emission_rate``, or ``log_emission_rate`` for a lognormal Q), the
-source position (``location``), the mean wind (``wind``: speed and
-meteorological direction), the background column (``background``) and one bias
-per instrument (``biases``). Conditioned on everything else, the cost is
+The control θ stacks whichever blocks the prior names. The transport backend
+says which it can fit: an ``AbstractControlledSource`` declares its own
+blocks and its emission blocks (the Tier I ``PlumeSource``: ``location`` and
+``wind``, scaled by ``emission_rate`` or ``log_emission_rate``; the column
+plume: ``location``, ``direction``, ``log_reference_width`` and
+``width_exponent``, scaled by the line density ``line_density`` or
+``log_line_density``), and any other backend fits only ``emission_rate`` or
+``log_emission_rate``. Every backend also fits the background column
+(``background``) and one bias per instrument (``biases``). Conditioned on
+everything else, the cost is
 
     𝒥(θ) = ½ ‖θ − μ_θ‖²_{Σ_θ⁻¹} + ½ Σ_i ‖m_i ⊙ (y_i − h_i(θ))‖²_{Σ_ε,i⁻¹},
 
-with h_i the coupled forward of instrument i: the transport response times Q,
-plus the background and the bias, then the instrument's radiance operator when
-it observes radiance. m_i is the quality mask of ``coupled.quality``.
+with h_i the coupled forward of instrument i: the transport response times Q
+(or the line density q = Q / U for the column plume), plus the background and
+the bias, then the instrument's radiance operator when it observes radiance.
+m_i is the quality mask of ``coupled.quality``.
 
 plumax builds the forward, the prior and the masks; vardax does the rest.
 :func:`solve_coupled` hands ``vardax.ThreeDVar`` the stacked forward as a
@@ -28,7 +34,7 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Mapping
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 import einx
 import gaussx as gx
@@ -39,21 +45,27 @@ import numpy as np
 from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float
 
-from plumax._src.errors import PayloadError
+from plumax._src.controlled import AbstractControlledSource
+from plumax._src.errors import ControlBlockError, ParameterError, PayloadError
 from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
 from plumax._vardax import require_vardax
-from plumax.coupled.forward import CoupledForward, PlumeSource, _scale_response
-from plumax.coupled.instrument import Instrument
+from plumax.coupled._src.forward import (
+    CoupledForward,
+    _scale_response,
+    plume_response,
+)
 from plumax.coupled.quality import StackedObservations, contribution_report
 from plumax.coupled.rtm import RadianceObservationOperator
-from plumax.gauss_plume.dispersion import get_dispersion_params
-from plumax.gauss_plume.observation import ColumnObservation
-from plumax.gauss_plume.plume import plume_concentration_vmap
 
 
+if TYPE_CHECKING:
+    from plumax.coupled.backends import TransportBackend
+
+
+# the emission blocks of a backend that declares none of its own
 _EMISSION_BLOCKS = ("emission_rate", "log_emission_rate")
-_BLOCK_SIZES = {"location": 2, "wind": 2, "background": 0}
-_MET_BLOCKS = ("location", "wind")
+_LINE_DENSITY_BLOCKS = ("line_density", "log_line_density")
+_SHARED_BLOCKS = ("background", "biases")
 _LOG_EMISSION_CAP = 50.0
 
 
@@ -73,45 +85,27 @@ class RadianceOperator(Protocol):
 class CoupledPrior:
     """Gaussian prior N(μ_θ, Σ_θ) on the stacked control, by named block.
 
+    The prior accepts any block name; :class:`CoupledProblem` checks the names
+    and shapes against what its transport backend declares.
+
     Attributes:
-        mean: Prior mean μ_θ of each block. Exactly one of ``emission_rate``
-            and ``log_emission_rate`` (a scalar, or one value per emission
-            parameter); optionally ``location`` ``(x, y)`` [m], ``wind``
-            ``(speed [m/s], direction [deg from North])``, ``background``
-            (scalar) and ``biases`` (one per instrument).
+        mean: Prior mean μ_θ of each block. Exactly one emission block (for
+            the Tier I plume ``emission_rate`` or ``log_emission_rate``, a
+            scalar or one value per emission parameter), the backend's own
+            blocks (for the Tier I plume ``location`` ``(x, y)`` [m] and
+            ``wind`` ``(speed [m/s], direction [deg from North])``),
+            ``background`` (scalar) and ``biases`` (one per instrument).
         covariance: Σ_θ over the flattened control, in :attr:`layout` order:
             a vector of variances (diagonal) or a dense matrix.
 
     Raises:
-        ValueError: On an unknown or missing block, a mis-shaped block or a
-            covariance that does not match the control.
+        ValueError: On a covariance that does not match the control.
     """
 
     mean: Mapping[str, Float[Array, "*shape"]]
     covariance: Float[Array, " param"] | Float[Array, "param param"]
 
     def __post_init__(self) -> None:
-        known = (*_EMISSION_BLOCKS, *_BLOCK_SIZES, "biases")
-        unknown = set(self.mean) - set(known)
-        if unknown:
-            raise ValueError(
-                f"CoupledPrior: unknown blocks {sorted(unknown)}; expected some of "
-                f"{list(known)}."
-            )
-        emission = [name for name in _EMISSION_BLOCKS if name in self.mean]
-        if len(emission) != 1:
-            raise ValueError(
-                "CoupledPrior: give exactly one of `emission_rate` and "
-                f"`log_emission_rate`; got {emission}."
-            )
-        for name, size in _BLOCK_SIZES.items():
-            if name in self.mean:
-                expected = () if size == 0 else (size,)
-                if np.shape(self.mean[name]) != expected:
-                    raise ValueError(
-                        f"CoupledPrior: `{name}` must have shape {expected}; got "
-                        f"{np.shape(self.mean[name])}."
-                    )
         size = self.size
         covariance_shape = np.shape(self.covariance)
         if covariance_shape not in ((size,), (size, size)):
@@ -212,9 +206,11 @@ class CoupledProblem:
     (``coupled.quality.apply_quality``).
 
     Attributes:
-        forward: The coupled forward. ``location`` and ``wind`` blocks need
-            the Tier I ``PlumeSource``, whose response is recomputed at each
-            control; other backends keep their precomputed responses.
+        forward: The coupled forward. A backend that is an
+            ``AbstractControlledSource`` (the Tier I ``PlumeSource``, the
+            column plume) recomputes its response at each control that holds
+            one of its declared blocks; other backends keep their precomputed
+            responses.
         prior: Prior on the control.
         observations: Observations by instrument name: ``(n_obs,)`` columns,
             or ``(n_obs, n_channels)`` radiances.
@@ -223,9 +219,11 @@ class CoupledProblem:
             scalar or ``(n_obs, n_channels)``.
 
     Raises:
-        ValueError: On missing or extra observations, a met block without a
-            ``PlumeSource``, mis-shaped biases or a radiance operator without
-            a variance.
+        ControlBlockError: If the prior names a block the backend does not
+            declare, holds other than one emission block, or gives a block the
+            wrong shape.
+        ValueError: On missing or extra observations or a radiance operator
+            without a variance.
         TypeError: For a ``RadianceObservationOperator``, which runs in NumPy
             and so cannot be differentiated.
     """
@@ -266,33 +264,59 @@ class CoupledProblem:
                 raise ValueError(
                     f"CoupledProblem: no `radiance_variance` for {name!r}."
                 )
-        met = [name for name in _MET_BLOCKS if name in self.prior.mean]
-        if met and not isinstance(self.forward.source, PlumeSource):
-            raise ValueError(
-                f"CoupledProblem: the {met} blocks re-run the Tier I plume and "
-                "need a PlumeSource; other backends invert the emission, the "
-                "background and the biases."
+        self._check_blocks(n_instruments=len(names))
+
+    def _check_blocks(self, n_instruments: int) -> None:
+        """The prior's blocks against the backend's declarations."""
+        source = self.forward.source
+        declared, emission = _declarations(source)
+        allowed = (*declared, *emission, *_SHARED_BLOCKS)
+        unknown = sorted(set(self.prior.mean) - set(allowed))
+        if unknown:
+            hint = (
+                ""
+                if isinstance(source, AbstractControlledSource)
+                else " Only an AbstractControlledSource, such as PlumeSource, "
+                "fits a position or a wind."
             )
-        if "biases" in self.prior.mean:
-            expected = (len(names),)
-            if np.shape(self.prior.mean["biases"]) != expected:
-                raise ValueError(
-                    f"CoupledProblem: `biases` must have shape {expected}; got "
-                    f"{np.shape(self.prior.mean['biases'])}."
+            raise ControlBlockError(
+                f"CoupledProblem: the prior names {unknown}, which "
+                f"{type(source).__name__} does not declare. It fits "
+                f"{list(declared)}, one of {list(emission)}, and "
+                f"{list(_SHARED_BLOCKS)}.{hint}"
+            )
+        present = [name for name in emission if name in self.prior.mean]
+        if len(present) != 1:
+            raise ControlBlockError(
+                f"CoupledProblem: give exactly one of {list(emission)} for "
+                f"{type(source).__name__}; got {present}."
+            )
+        shapes = {**declared, "background": (), "biases": (n_instruments,)}
+        for name, expected in shapes.items():
+            if name not in self.prior.mean:
+                continue
+            shape = np.shape(self.prior.mean[name])
+            if shape != tuple(expected):
+                raise ControlBlockError(
+                    f"CoupledProblem: `{name}` must have shape {tuple(expected)}; "
+                    f"got {shape}."
                 )
+
+    @property
+    def emission_block(self) -> str:
+        """The emission block the prior holds, one of the backend's."""
+        _, emission = _declarations(self.forward.source)
+        return next(name for name in emission if name in self.prior.mean)
 
     def responses(self, control: Mapping[str, jax.Array]) -> list[jax.Array]:
         """Unit-emission response of each instrument at this control."""
-        if not any(name in control for name in _MET_BLOCKS):
-            return list(self.forward.responses)
         source = self.forward.source
-        assert isinstance(source, PlumeSource)
-        location = control.get("location", jnp.asarray(source.location[:2]))
-        wind = control.get(
-            "wind", jnp.asarray([source.wind_speed, source.wind_direction])
-        )
+        if not isinstance(source, AbstractControlledSource):
+            return list(self.forward.responses)
+        if not any(name in control for name in source.control_blocks):
+            return list(self.forward.responses)
         return [
-            plume_response(source, instrument, location, wind)
+            source.response_at(instrument, control)
             for instrument in self.forward.instruments
         ]
 
@@ -306,16 +330,17 @@ class CoupledProblem:
         Returns:
             Columns ``(n_obs,)``, or radiances ``(n_obs, n_channels)``.
         """
-        if "log_emission_rate" in control:
+        block = self.emission_block
+        if block.startswith("log_"):
             # A line-search trial far from the data can overflow exp, and
             # lineax raises on the non-finite residual; capping log Q at 50
             # (Q ≈ 5e21 kg/s) keeps the trial cost finite, so the search
             # backtracks instead.
-            log_emission = jnp.minimum(control["log_emission_rate"], _LOG_EMISSION_CAP)
+            log_emission = jnp.minimum(control[block], _LOG_EMISSION_CAP)
             # Q = exp(log Q)
             emission = jnp.exp(log_emission)
         else:
-            emission = control["emission_rate"]
+            emission = control[block]
         background = control.get(
             "background", jnp.asarray(self.forward.source.background, dtype=float)
         )
@@ -383,54 +408,13 @@ class CoupledProblem:
         )
 
 
-def plume_response(
-    source: PlumeSource,
-    instrument: Instrument,
-    location: Float[Array, " 2"],
-    wind: Float[Array, " 2"],
-) -> Float[Array, " obs"]:
-    """Tier I unit-emission column at a traced source position and wind.
-
-    ``coupled.column_response`` with the horizontal position and the wind
-    (speed, meteorological direction) as JAX arrays, so the coupled cost can
-    differentiate through them. The source height, stability class and levels
-    stay those of ``source``.
-
-    Args:
-        source: The Tier I source (height, stability, levels).
-        instrument: The observing instrument.
-        location: Source ``(x, y)`` [m].
-        wind: ``(speed [m/s], direction [deg from North])``.
-
-    Returns:
-        The unit-emission column through the averaging kernel.
-    """
-    levels = jnp.asarray(source.column_z, dtype=float)
-    receptors = jnp.asarray(instrument.receptors, dtype=float)
-    n_levels = levels.shape[0]
-    # every receptor at every level, level fastest
-    x = einx.rearrange("obs -> (obs level)", receptors[:, 0], level=n_levels)
-    y = einx.rearrange("obs -> (obs level)", receptors[:, 1], level=n_levels)
-    z = einx.rearrange("level -> (obs level)", levels, obs=receptors.shape[0])
-    direction = jnp.deg2rad(wind[1])
-    # (u, v) = −s (sin φ, cos φ)
-    wind_u = -wind[0] * jnp.sin(direction)
-    wind_v = -wind[0] * jnp.cos(direction)
-    concentration = plume_concentration_vmap(
-        x,
-        y,
-        z,
-        location[0],
-        location[1],
-        source.location[2],
-        wind_u,
-        wind_v,
-        1.0,
-        get_dispersion_params(source.stability_class),
-    )
-    profiles = einx.rearrange("(obs level) -> obs level", concentration, level=n_levels)
-    observation = ColumnObservation.trapezoid(levels, averaging_kernel=instrument.ak)
-    return observation.column(profiles)
+def _declarations(
+    source: TransportBackend,
+) -> tuple[Mapping[str, tuple[int, ...]], tuple[str, ...]]:
+    """A backend's own blocks and its emission blocks."""
+    if isinstance(source, AbstractControlledSource):
+        return source.control_blocks, source.emission_blocks
+    return {}, _EMISSION_BLOCKS
 
 
 @dataclasses.dataclass(frozen=True)
@@ -441,6 +425,11 @@ class CoupledResult:
     deviation of Q (``population.PerEventPosterior``): for a lognormal Q the
     lognormal moments of the Laplace marginal on log Q,
     E[Q] = exp(μ + σ²/2) and sd[Q] = E[Q] √(exp(σ²) − 1).
+
+    A column-plume solve retrieves the line density q = Q / U instead, with
+    the same moments in ``line_density`` and ``line_density_std``; its
+    ``emission_rate`` and ``emission_std`` are NaN until :meth:`with_wind`
+    supplies the wind.
 
     Attributes:
         map_estimate: MAP θ* by block (``log_emission_rate`` stays in logs).
@@ -458,12 +447,22 @@ class CoupledResult:
             masked.
         pixels_used: Pixels each instrument contributed at full weight.
         prior: The prior the solve used (``None`` when built by hand).
+        line_density: Posterior mean of q [kg m⁻¹]; ``None`` for a backend
+            that retrieves Q.
+        line_density_std: Posterior standard deviation of q (NaN without the
+            posterior).
+        wind: ``(U, s_U)`` [m s⁻¹] that :meth:`with_wind` applied, or ``None``.
+        emission_block: The emission block the solve fitted, as its backend
+            declared it; ``None`` for a result built by hand, whose block is
+            then read from the names in ``map_estimate`` and ``prior``. A
+            name that starts with ``log_`` is lognormal in the payload.
 
     For a scalar Q it also carries the Tier V per-event payload
     (``population.PerEventPosterior``): draws of Q from the Laplace marginal
     of its block, N(Q*, σ²) or log Q ~ N(log Q*, σ²) for a lognormal Q, and the
     log-density of that block's prior marginal, both exact for the Gaussian
-    laws on θ.
+    laws on θ. For a line density these need the wind: log Q ~ N(μ_q + μ_U,
+    σ_q² + σ_U²) for the lognormal wind of :meth:`with_wind`.
     """
 
     map_estimate: dict[str, jax.Array]
@@ -478,14 +477,95 @@ class CoupledResult:
     per_instrument_residuals: dict[str, jax.Array]
     pixels_used: dict[str, int]
     prior: CoupledPrior | None = None
+    line_density: jax.Array | None = None
+    line_density_std: jax.Array | None = None
+    wind: tuple[float, float] | None = None
+    emission_block: str | None = None
+
+    def with_wind(self, *, speed: float, speed_std: float) -> CoupledResult:
+        """The same result with the emission rate filled in, Q = q U.
+
+        For a lognormal wind independent of the fit, with
+        σ_U² = log(1 + s_U² / U²) and μ_U = log U − σ_U² / 2, a lognormal line
+        density gives log Q ~ N(μ_q + μ_U, σ_q² + σ_U²). The moments are those
+        of the product of independent q and U, which equal that law's:
+
+            E[Q] = E[q] U,
+            Var[Q] = sd[q]² s_U² + sd[q]² U² + E[q]² s_U².
+
+        Args:
+            speed: Mean wind speed U [m s⁻¹].
+            speed_std: Its standard deviation s_U [m s⁻¹].
+
+        Returns:
+            The result with ``emission_rate``, ``emission_std`` and ``wind``
+            set.
+
+        Raises:
+            ParameterError: If ``speed`` is not positive or ``speed_std`` is
+                negative.
+            PayloadError: If the result holds no line density.
+
+        Examples:
+            With no spread in the wind, Q is q times the speed:
+
+            >>> import jax.numpy as jnp
+            >>> result = CoupledResult(
+            ...     map_estimate={"log_line_density": jnp.log(0.1)},
+            ...     std={"log_line_density": jnp.asarray(0.15)},
+            ...     mean=jnp.log(0.1)[None],
+            ...     covariance=None,
+            ...     emission_rate=jnp.asarray(jnp.nan),
+            ...     emission_std=jnp.asarray(jnp.nan),
+            ...     converged=True,
+            ...     n_steps=1,
+            ...     cost=0.0,
+            ...     per_instrument_residuals={},
+            ...     pixels_used={},
+            ...     line_density=jnp.asarray(0.1),
+            ...     line_density_std=jnp.asarray(0.015),
+            ... )
+            >>> rate = result.with_wind(speed=3.5, speed_std=0.0)
+            >>> bool(jnp.allclose(rate.emission_rate, 0.35))
+            True
+        """
+        if speed <= 0.0:
+            raise ParameterError(f"with_wind: speed must be > 0, got {speed}")
+        if speed_std < 0.0:
+            raise ParameterError(f"with_wind: speed_std must be ≥ 0, got {speed_std}")
+        if self.line_density is None or self.line_density_std is None:
+            raise PayloadError(
+                "CoupledResult.with_wind: this result retrieved Q, not the line "
+                "density q = Q / U; only a column-plume solve needs a wind."
+            )
+        # E[Q] = E[q] U
+        mean = self.line_density * speed
+        # sd[q]² (s_U² + U²)
+        spread_of_line_density = jnp.square(self.line_density_std) * (
+            speed_std**2 + speed**2
+        )
+        # E[q]² s_U²
+        spread_of_wind = jnp.square(self.line_density) * speed_std**2
+        # sd[Q] = √(sd[q]² s_U² + sd[q]² U² + E[q]² s_U²)
+        deviation = jnp.sqrt(spread_of_line_density + spread_of_wind)
+        return dataclasses.replace(
+            self,
+            emission_rate=mean,
+            emission_std=deviation,
+            wind=(float(speed), float(speed_std)),
+        )
 
     def samples(self, key: jax.Array, n: int) -> Float[Array, " member"]:
         """n draws of Q from the Laplace marginal of its block.
 
+        For a line density, Q = q U with U from the lognormal wind of
+        :meth:`with_wind`.
+
         Raises:
-            PayloadError: Without the Laplace posterior, or for a vector Q.
+            PayloadError: Without the Laplace posterior, for a vector Q, or
+                for a line density with no wind applied.
         """
-        block = _emission_block(self.map_estimate)
+        block = self._payload_block(self.map_estimate)
         if self.std is None:
             raise PayloadError(
                 "CoupledResult.samples needs the Laplace posterior; solve with "
@@ -494,22 +574,55 @@ class CoupledResult:
         center = self.map_estimate[block]
         spread = self.std[block]
         _require_scalar(center, "samples")
-        if block == "log_emission_rate":
+        if block in _LINE_DENSITY_BLOCKS:
+            wind = self._wind_law("samples")
+            if block == "log_line_density":
+                # log Q ~ N(μ_q + μ_U, σ_q² + σ_U²)
+                law = LognormalEmission(
+                    center + wind.loc, jnp.hypot(spread, wind.scale)
+                )
+                return law.sample(key, n)
+            line_key, wind_key = jax.random.split(key)
+            # Q = q U
+            line_density = GaussianEmission(center, spread).sample(line_key, n)
+            return line_density * wind.sample(wind_key, n)
+        if block.startswith("log_"):
             return LognormalEmission(center, spread).sample(key, n)
         return GaussianEmission(center, spread).sample(key, n)
+
+    def _payload_block(self, blocks: Mapping[str, jax.Array]) -> str:
+        """The fitted emission block, or the one ``blocks`` names."""
+        if self.emission_block is not None:
+            return self.emission_block
+        return _emission_block(blocks)
+
+    def _wind_law(self, method: str) -> LognormalEmission:
+        """The lognormal wind :meth:`with_wind` applied."""
+        if self.wind is None:
+            raise PayloadError(
+                f"CoupledResult.{method}: this result carries the line density "
+                "q = Q / U; apply a wind with with_wind(speed=..., speed_std=...)."
+            )
+        speed, speed_std = self.wind
+        return LognormalEmission.from_moments(speed, speed_std)
 
     def prior_logpdf(self, q: jax.Array) -> jax.Array:
         """log π(Q) of the prior marginal of Q's block.
 
+        For a log line density the prior's (μ_q,0, σ²_q,0) take the place of
+        the posterior's: log Q ~ N(μ_q,0 + μ_U, σ²_q,0 + σ_U²).
+
         Raises:
-            PayloadError: Without the prior, or for a vector Q.
+            PayloadError: Without the prior, for a vector Q, for a line density
+                with no wind applied, or for a linear line density, whose
+                product with a lognormal wind has no closed-form density.
         """
         if self.prior is None:
             raise PayloadError(
                 "CoupledResult.prior_logpdf: this result carries no prior; build "
                 "it with solve_coupled."
             )
-        block = _emission_block(self.prior.mean)
+        block = self._payload_block(self.prior.mean)
         center = jnp.asarray(self.prior.mean[block], dtype=float)
         _require_scalar(center, "prior_logpdf")
         # Q's diagonal entry of Σ_θ, at its offset in the flattened layout
@@ -523,13 +636,30 @@ class CoupledResult:
             variance = covariance[offset]
         else:
             variance = covariance[offset, offset]
-        if block == "log_emission_rate":
+        if block == "line_density":
+            raise PayloadError(
+                "CoupledResult.prior_logpdf: a Gaussian line density times a "
+                "lognormal wind has no closed-form density; fit "
+                "log_line_density instead."
+            )
+        if block == "log_line_density":
+            wind = self._wind_law("prior_logpdf")
+            # log Q ~ N(μ_q,0 + μ_U, σ²_q,0 + σ_U²)
+            law = LognormalEmission(
+                center + wind.loc, jnp.hypot(jnp.sqrt(variance), wind.scale)
+            )
+            return law.log_prob(q)
+        if block.startswith("log_"):
             return LognormalEmission(center, jnp.sqrt(variance)).log_prob(q)
         return GaussianEmission(center, jnp.sqrt(variance)).log_prob(q)
 
 
 def _emission_block(blocks: Mapping[str, jax.Array]) -> str:
-    return "log_emission_rate" if "log_emission_rate" in blocks else "emission_rate"
+    """The emission block a hand-built result's control or prior holds."""
+    for name in ("log_emission_rate", "log_line_density", "line_density"):
+        if name in blocks:
+            return name
+    return "emission_rate"
 
 
 def _require_scalar(value: jax.Array, method: str) -> None:
@@ -640,7 +770,17 @@ def solve_coupled(
         marginal_std = jnp.sqrt(jnp.clip(jnp.diagonal(covariance), 0.0, None))
         std = unflatten(marginal_std)
 
-    emission_rate, emission_std = _emission_moments(prior, map_estimate, std)
+    block = problem.emission_block
+    moments = _emission_moments(block, map_estimate, std)
+    line_density = None
+    line_density_std = None
+    if block in _LINE_DENSITY_BLOCKS:
+        # Q and U enter only as q = Q / U: Q waits on the wind (with_wind)
+        line_density, line_density_std = moments
+        emission_rate = jnp.full_like(line_density, jnp.nan)
+        emission_std = jnp.full_like(line_density, jnp.nan)
+    else:
+        emission_rate, emission_std = moments
 
     # --- diagnostics ---
     predictions = problem.predict(map_estimate)
@@ -665,25 +805,28 @@ def solve_coupled(
         per_instrument_residuals=residuals,
         pixels_used=contribution_report(problem.forward.instruments),
         prior=prior,
+        line_density=line_density,
+        line_density_std=line_density_std,
+        emission_block=block,
     )
 
 
 def _emission_moments(
-    prior: CoupledPrior,
+    block: str,
     map_estimate: Mapping[str, jax.Array],
     std: Mapping[str, jax.Array] | None,
 ) -> tuple[jax.Array, jax.Array]:
-    """Posterior mean and standard deviation of Q from the Laplace marginal."""
-    if not prior.log_emission:
-        emission = map_estimate["emission_rate"]
+    """Posterior mean and standard deviation of the scale from its Laplace marginal."""
+    if not block.startswith("log_"):
+        emission = map_estimate[block]
         if std is None:
             return emission, jnp.full_like(emission, jnp.nan)
-        return emission, std["emission_rate"]
-    log_mean = map_estimate["log_emission_rate"]
+        return emission, std[block]
+    log_mean = map_estimate[block]
     if std is None:
         # no posterior: report the MAP, Q* = exp(log Q*)
         return jnp.exp(log_mean), jnp.full_like(log_mean, jnp.nan)
-    log_variance = std["log_emission_rate"] ** 2
+    log_variance = std[block] ** 2
     # E[Q] = exp(μ + σ²/2)
     mean = jnp.exp(log_mean + 0.5 * log_variance)
     # sd[Q] = E[Q] √(exp(σ²) − 1)

@@ -6,8 +6,12 @@ instrument's averaging kernel,
 
     y_inst = Q · r_inst + c_bg + bias_inst,    r_inst = A_inst col_z(c(·; Q = 1)).
 
-:class:`TransportBackend` names that contract. The Tier I ``PlumeSource``
-meets it, and this module adds the other two tiers:
+:class:`TransportBackend` names that contract. A backend whose response also
+depends on parameters the inversion fits is an
+:class:`AbstractControlledSource`: it declares those parameters as named
+control blocks and evaluates its response at any value of them. The Tier I
+``PlumeSource`` and the column plume ``gauss_plume.ColumnPlumeSource`` are
+controlled sources, and this module adds the other two tiers:
 
 - :class:`LagrangianSource` (Tier II) runs backward footprints from every
   receptor level (``lagrangian.ensemble_footprints``, one per met member),
@@ -37,6 +41,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
+from plumax._src.controlled import AbstractControlledSource
 from plumax._src.errors import DomainError, GridMismatchError
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.met_ensemble import ensemble_footprints
@@ -339,4 +344,9 @@ class EulerianSource:
         return observation.from_field(self.unit_history[index])
 
 
-__all__ = ["EulerianSource", "LagrangianSource", "TransportBackend"]
+__all__ = [
+    "AbstractControlledSource",
+    "EulerianSource",
+    "LagrangianSource",
+    "TransportBackend",
+]

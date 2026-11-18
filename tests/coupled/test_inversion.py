@@ -27,6 +27,7 @@ from plumax.coupled import (
     solve_coupled,
 )
 from plumax.coupled.inversion import plume_response
+from plumax.errors import ControlBlockError
 from plumax.population.catalog import event_from_posterior
 
 
@@ -372,8 +373,12 @@ def test_problem_validation():
         )
     with pytest.raises(ValueError, match="observations for"):
         CoupledProblem(forward=forward, prior=prior, observations={})
-    with pytest.raises(ValueError, match="exactly one"):
-        CoupledPrior.from_std({"biases": jnp.zeros(1)}, {"biases": 1.0})
+    with pytest.raises(ControlBlockError, match="exactly one"):
+        CoupledProblem(
+            forward=forward,
+            prior=CoupledPrior.from_std({"biases": jnp.zeros(1)}, {"biases": 1.0}),
+            observations=observations,
+        )
     with pytest.raises(ValueError, match="covariance"):
         CoupledPrior(mean={"emission_rate": jnp.asarray(1.0)}, covariance=jnp.ones(2))
     other = build_coupled_forward(_MatrixSource(), [_column_instrument(1.0)])

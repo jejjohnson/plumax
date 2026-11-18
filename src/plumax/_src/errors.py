@@ -45,3 +45,7 @@ class ParameterError(PlumaxError, ValueError):
 
 class PayloadError(PlumaxError, ValueError):
     """A posterior lacks what the Tier V payload needs (its prior or its covariance)."""
+
+
+class ControlBlockError(PlumaxError, ValueError):
+    """A prior names a block its backend does not declare, or one of the wrong shape."""

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from plumax._src.errors import (
+    ControlBlockError,
     DomainError,
     GridMismatchError,
     MissingExtraError,
@@ -16,6 +17,7 @@ from plumax._src.errors import (
 
 
 __all__ = [
+    "ControlBlockError",
     "DomainError",
     "GridMismatchError",
     "MissingExtraError",
