@@ -111,7 +111,13 @@ class InhomogeneousIntensityPosterior:
     @property
     def beta_mean(self) -> np.ndarray:
         """Posterior-mean coefficients ``(n_covariates,)``."""
-        return einx.mean("[draw] ...", self.beta_samples)
+        samples = np.asarray(self.beta_samples)
+        if samples.size == 0:
+            # einx rejects a zero-size axis: no covariates give no coefficients,
+            # and no draws give NaN means, as the axis mean did
+            return np.full(samples.shape[1:], np.nan)
+        # β̄ = (1/S) Σₛ β⁽ˢ⁾
+        return einx.mean("[draw] ...", samples)
 
 
 def fit_poisson_rate(

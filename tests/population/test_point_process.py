@@ -7,6 +7,7 @@ import pytest
 
 from plumax.population.catalog import EmissionCatalog, EmissionEvent
 from plumax.population.point_process import (
+    InhomogeneousIntensityPosterior,
     PoissonRatePosterior,
     fit_inhomogeneous_intensity,
     fit_poisson_rate,
@@ -149,3 +150,10 @@ def test_inhomogeneous_log_likelihood_matches_hand_formula() -> None:
         )
         actual = _inhomogeneous_log_likelihood(beta0, beta, events, quad, weights)
         np.testing.assert_allclose(float(actual), expected, rtol=1e-12)
+
+
+def test_beta_mean_of_an_intercept_only_fit_is_empty():
+    posterior = InhomogeneousIntensityPosterior(
+        beta0_samples=np.zeros(4), beta_samples=np.zeros((4, 0))
+    )
+    assert posterior.beta_mean.shape == (0,)
