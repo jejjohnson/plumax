@@ -216,7 +216,7 @@ class FootprintSimulator:
             self.pbl_fraction * self.pbl_height,
         )
         # F[i, s]: cells flattened row-major over (x, y)
-        return einx.rearrange("obs x y -> obs (x y)", jnp.asarray(footprint))
+        return einx.id("obs x y -> obs (x y)", jnp.asarray(footprint))
 
 
 class MetContextPrior(pipekit_ops.Operator):
@@ -351,9 +351,7 @@ class FootprintEmulator(eqx.Module):
         met_context: Float[Array, " feature"],
         receptor_xy: Float[Array, " 2"],
     ) -> Float[Array, " cell"]:
-        inputs = einx.rearrange(
-            "feature, xy -> (feature + xy)", met_context, receptor_xy
-        )
+        inputs = einx.id("feature, xy -> (feature + xy)", met_context, receptor_xy)
         # z = ([u, r_xy] − m) / σ
         standardised = (inputs - self.input_mean) / self.input_scale
         logits = self.network(standardised)
@@ -405,15 +403,15 @@ def _case_inputs(
 ) -> Float[Array, "case obs input"]:
     """Network inputs [u, r_xy] for every case and receptor."""
     receptor_xy = receptors[:, :2]
-    tiled_context = einx.rearrange(
+    tiled_context = einx.id(
         "case feature -> case obs feature",
         met_context,
         obs=receptor_xy.shape[0],
     )
-    tiled_receptor = einx.rearrange(
+    tiled_receptor = einx.id(
         "obs xy -> case obs xy", receptor_xy, case=met_context.shape[0]
     )
-    return einx.rearrange(
+    return einx.id(
         "case obs feature, case obs xy -> case obs (feature + xy)",
         tiled_context,
         tiled_receptor,

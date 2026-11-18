@@ -149,7 +149,7 @@ def source_offset_grid(
     offsets = step * pixel_size * np.arange(-half, half + 1, dtype=float)
     offset_x, offset_y = np.meshgrid(offsets, offsets, indexing="ij")
     # (step g i, step g j), i over x first
-    grid = einx.rearrange("x y, x y -> (x y) (1 + 1)", offset_x, offset_y)
+    grid = einx.id("x y, x y -> (x y) (1 + 1)", offset_x, offset_y)
     # s₀ + step g (i, j)
     starts = einx.add(
         "start axis, axis -> start axis", grid, np.asarray(source, dtype=float)

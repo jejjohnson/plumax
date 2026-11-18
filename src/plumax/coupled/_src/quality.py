@@ -228,8 +228,8 @@ class StackedObservations(eqx.Module):
         """
         vdx = require_vardax("StackedObservations.batch")
         return vdx.Batch1D(
-            input=einx.rearrange("obs -> 1 1 obs", self.values),
-            mask=einx.rearrange("obs -> 1 1 obs", self.mask),
+            input=einx.id("obs -> 1 1 obs", self.values),
+            mask=einx.id("obs -> 1 1 obs", self.mask),
         )
 
     def obs_cov_op(self) -> lx.DiagonalLinearOperator:
@@ -238,7 +238,7 @@ class StackedObservations(eqx.Module):
         A diagonal operator rather than a scaled identity, which vardax
         mis-solves (jejjohnson/vardax#146).
         """
-        return lx.DiagonalLinearOperator(einx.rearrange("obs -> 1 obs", self.variance))
+        return lx.DiagonalLinearOperator(einx.id("obs -> 1 obs", self.variance))
 
 
 def stack_observations(

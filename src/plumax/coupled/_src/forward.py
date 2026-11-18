@@ -196,9 +196,9 @@ def plume_response(
     receptors = jnp.asarray(instrument.receptors, dtype=float)
     n_levels = levels.shape[0]
     # every receptor at every level, level fastest
-    x = einx.rearrange("obs -> (obs level)", receptors[:, 0], level=n_levels)
-    y = einx.rearrange("obs -> (obs level)", receptors[:, 1], level=n_levels)
-    z = einx.rearrange("level -> (obs level)", levels, obs=receptors.shape[0])
+    x = einx.id("obs -> (obs level)", receptors[:, 0], level=n_levels)
+    y = einx.id("obs -> (obs level)", receptors[:, 1], level=n_levels)
+    z = einx.id("level -> (obs level)", levels, obs=receptors.shape[0])
     direction = jnp.deg2rad(wind[1])
     # (u, v) = −s (sin φ, cos φ)
     wind_u = -wind[0] * jnp.sin(direction)
@@ -215,7 +215,7 @@ def plume_response(
         1.0,
         get_dispersion_params(source.stability_class),
     )
-    profiles = einx.rearrange("(obs level) -> obs level", concentration, level=n_levels)
+    profiles = einx.id("(obs level) -> obs level", concentration, level=n_levels)
     observation = ColumnObservation.trapezoid(levels, averaging_kernel=instrument.ak)
     return observation.column(profiles)
 

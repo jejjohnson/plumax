@@ -37,7 +37,7 @@ def _receptors(length=1800.0, half_width=600.0):
     xs = jnp.arange(-2 * PIXEL, length + 1.0, PIXEL)
     ys = jnp.arange(-half_width, half_width + 1.0, PIXEL)
     gx, gy = jnp.meshgrid(xs, ys, indexing="ij")
-    return einx.rearrange("x y, x y -> (x y) (1 + 1)", gx, gy)
+    return einx.id("x y, x y -> (x y) (1 + 1)", gx, gy)
 
 
 def _geometry():
@@ -98,7 +98,7 @@ def _grid(centre, n=3):
     # s₀ + g (i, j) for i, j ∈ {−1, 0, 1}, x first
     offsets = PIXEL * jnp.arange(-(n // 2), n // 2 + 1, dtype=float)
     offset_x, offset_y = jnp.meshgrid(offsets, offsets, indexing="ij")
-    grid = einx.rearrange("x y, x y -> (x y) (1 + 1)", offset_x, offset_y)
+    grid = einx.id("x y, x y -> (x y) (1 + 1)", offset_x, offset_y)
     return einx.add("start axis, axis -> start axis", grid, jnp.asarray(centre))
 
 

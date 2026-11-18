@@ -568,7 +568,7 @@ class MixtureLognormalMark(eqx.Module):
             jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
         )
         # log LN(q; μₖ, σₖ²) for every component
-        component = _lognormal_log_prob(einx.rearrange("... -> ... 1", q), locs, scales)
+        component = _lognormal_log_prob(einx.id("... -> ... 1", q), locs, scales)
         # log Σₖ wₖ LNₖ(q)
         return einx.logsumexp("... [k]", component + jnp.log(weights))
 
@@ -605,8 +605,8 @@ class MixtureLognormalMark(eqx.Module):
         )
         # Σₖ wₖ ∫ q LNₖ(q) dq
         per_component = _lognormal_partial_mean(
-            einx.rearrange("... -> ... 1", lower),
-            einx.rearrange("... -> ... 1", upper),
+            einx.id("... -> ... 1", lower),
+            einx.id("... -> ... 1", upper),
             locs,
             scales,
         )
@@ -626,7 +626,7 @@ class MixtureLognormalMark(eqx.Module):
             jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
         )
         positive = q > 0.0
-        log_q = einx.rearrange("... -> ... 1", jnp.log(jnp.where(positive, q, 1.0)))
+        log_q = einx.id("... -> ... 1", jnp.log(jnp.where(positive, q, 1.0)))
         component = norm.logcdf(-(log_q - locs) / scales)
         mixture = einx.logsumexp("... [k]", component + jnp.log(weights))
         return jnp.where(positive, mixture, 0.0)

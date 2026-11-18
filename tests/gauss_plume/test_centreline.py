@@ -43,7 +43,7 @@ def _grid(length=1200.0, half_width=600.0):
     xs = jnp.arange(-2 * PIXEL, length + 1.0, PIXEL)
     ys = jnp.arange(-half_width, half_width + 1.0, PIXEL)
     gx, gy = jnp.meshgrid(xs, ys, indexing="ij")
-    return einx.rearrange("x y, x y -> (x y) (1 + 1)", gx, gy)
+    return einx.id("x y, x y -> (x y) (1 + 1)", gx, gy)
 
 
 # ── centreline_offset ────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ def test_bent_pixel_average_conserves_mass_at_every_distance():
     offsets = jnp.arange(-200, 201) * PIXEL
     for distance in (30.0, 100.0, 300.0, 700.0, 3000.0):
         downwind = jnp.full_like(offsets, distance)
-        receptors = einx.rearrange("obs, obs -> obs (1 + 1)", downwind, offsets)
+        receptors = einx.id("obs, obs -> obs (1 + 1)", downwind, offsets)
         mass = einx.sum("[obs]", plume(receptors, _geometry())) * PIXEL
         np.testing.assert_allclose(mass, 1.0, rtol=1e-10)
 
@@ -131,7 +131,7 @@ def test_bent_point_evaluation_conserves_mass_once_a_pixel_wide():
     assert bool(jnp.all(widths >= PIXEL))
     for distance in distances:
         downwind = jnp.full_like(offsets, distance)
-        receptors = einx.rearrange("obs, obs -> obs (1 + 1)", downwind, offsets)
+        receptors = einx.id("obs, obs -> obs (1 + 1)", downwind, offsets)
         mass = einx.sum("[obs]", plume(receptors, _geometry())) * PIXEL
         np.testing.assert_allclose(mass, 1.0, rtol=1e-3)
 
@@ -157,7 +157,7 @@ def test_knot_gradient_matches_central_differences_and_is_local():
         (response(KNOTS + step * unit) - response(KNOTS - step * unit)) / (2 * step)
         for unit in jnp.eye(KNOTS.shape[0])
     ]
-    expected = einx.rearrange("knot obs -> obs knot", jnp.stack(differences))
+    expected = einx.id("knot obs -> obs knot", jnp.stack(differences))
     scale = float(jnp.max(jnp.abs(expected)))
     np.testing.assert_allclose(jacobian, expected, rtol=1e-5, atol=1e-5 * scale)
 
@@ -290,7 +290,7 @@ def test_covariance_is_symmetric_positive_definite(
     knot_distance = jnp.cumsum(jnp.asarray(increments))
     prior = CentrelinePrior(length_scale=length_scale, amplitude=amplitude, kind=kind)
     covariance = prior(knot_distance)
-    transposed = einx.rearrange("row col -> col row", covariance)
+    transposed = einx.id("row col -> col row", covariance)
     np.testing.assert_allclose(covariance, transposed, rtol=1e-12, atol=0.0)
     eigenvalues = jnp.linalg.eigvalsh(covariance)
     assert bool(jnp.all(eigenvalues > 0.0))

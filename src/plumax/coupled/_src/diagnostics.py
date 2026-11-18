@@ -138,7 +138,7 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     )
     # F = J_hᵀ Σ_ε⁻¹ J_h
     fisher = einx.dot("obs row, obs col -> row col", obs_jacobian, weighted_jacobian)
-    transposed = einx.rearrange("row col -> col row", fisher)
+    transposed = einx.id("row col -> col row", fisher)
     fisher = 0.5 * (fisher + transposed)
 
     # --- prior-free bound ---

@@ -260,7 +260,7 @@ class LagrangianSource:
             )
             # c = ρ_air F̄ q
             concentration = self.air_density * mixing_ratio
-            profiles = einx.rearrange(
+            profiles = einx.id(
                 "(obs level) -> obs level", concentration, level=n_levels
             )
             return observation.column(profiles)
@@ -270,11 +270,11 @@ class LagrangianSource:
         )
         # c_p = ρ_air F̄ q_p
         concentration = self.air_density * mixing_ratio
-        profiles = einx.rearrange(
+        profiles = einx.id(
             "(obs level) param -> param obs level", concentration, level=n_levels
         )
         columns = jax.vmap(observation.column)(profiles)
-        return einx.rearrange("param obs -> obs param", columns)
+        return einx.id("param obs -> obs param", columns)
 
 
 @dataclasses.dataclass(frozen=True)

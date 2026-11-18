@@ -108,7 +108,7 @@ def ensemble_footprints(
                 receptor_time=receptor_time,
                 seed=seed + index,
             )
-            rows.append(einx.rearrange("x y -> (x y)", jnp.asarray(footprint)))
+            rows.append(einx.id("x y -> (x y)", jnp.asarray(footprint)))
         members.append(jnp.stack(rows))
     return jnp.stack(members)
 
