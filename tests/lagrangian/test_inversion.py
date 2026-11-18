@@ -358,3 +358,24 @@ def test_matern32_differentiable_through_length_scale():
     # trace = n·σ² is independent of ℓ, so its gradient is exactly 0 — the point
     # is that grad evaluates at all (no TracerBoolConversionError).
     assert np.isfinite(float(g))
+
+
+def test_matern32_covariance_matches_the_closed_form_and_has_finite_gradients() -> None:
+    """The kernellib-backed kernel (#350) is k(r) = σ² (1 + √3 r/ℓ) e^{−√3 r/ℓ}."""
+    import jax
+
+    from plumax.lagrangian.inversion import matern32_covariance
+
+    coords = jnp.array([[0.0, 0.0], [100.0, 0.0], [100.0, 0.0], [0.0, 250.0]])
+    covariance = matern32_covariance(coords, variance=2.0, length_scale=150.0)
+    offsets = coords[:, None, :] - coords[None, :, :]
+    scaled = jnp.sqrt(3.0) * jnp.sqrt(jnp.sum(offsets**2, axis=-1)) / 150.0
+    expected = 2.0 * (1.0 + scaled) * jnp.exp(-scaled)
+    np.testing.assert_allclose(covariance, expected, rtol=1e-6, atol=1e-12)
+    # two coincident points (r = 0) keep the gradient in ℓ finite
+    gradient = jax.grad(
+        lambda length_scale: matern32_covariance(
+            coords, variance=2.0, length_scale=length_scale
+        ).sum()
+    )(150.0)
+    assert bool(jnp.isfinite(gradient))

@@ -54,6 +54,7 @@ import jax.numpy as jnp
 import lineax as lx
 from jax.typing import ArrayLike
 from jaxtyping import Float
+from kernellib.functional import matern_kernel
 
 from plumax._src.scalar_emission import (
     GaussianEmission,
@@ -173,16 +174,10 @@ def matern32_covariance(
         return jnp.zeros((0, 0), dtype=dtype)
     if coords.ndim == 1:
         coords = einx.id("point -> point 1", coords)
-    # Δ_ij = x_i − x_j
-    diff = einx.subtract(
-        "first coord, second coord -> first second coord", coords, coords
+    # k_ij = σ² (1 + √3 r_ij / ℓ) exp(−√3 r_ij / ℓ),  r_ij = ‖x_i − x_j‖
+    return matern_kernel(
+        coords, coords, jnp.asarray(variance), jnp.asarray(length_scale), 1.5
     )
-    # r_ij = ‖x_i − x_j‖
-    distance = jnp.sqrt(einx.sum("first second [coord]", diff**2) + 1e-300)
-    # s = √3 r / ℓ
-    scaled = jnp.sqrt(3.0) * distance / length_scale
-    # k = σ² (1 + s) exp(−s)
-    return variance * (1.0 + scaled) * jnp.exp(-scaled)
 
 
 def observation_covariance(
