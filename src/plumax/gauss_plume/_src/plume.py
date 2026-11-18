@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import einx
 import jax.numpy as jnp
 import numpy as np
 from jax import jit, vmap
@@ -80,15 +81,20 @@ def rotate_to_wind_frame(
     y_wind : jnp.ndarray
         Crosswind coordinate y' [m].
     """
-    dx = x - source_x
-    dy = y - source_y
+    # Δx = x − x_s
+    spacing_x = x - source_x
+    # Δy = y − y_s
+    spacing_y = y - source_y
 
-    theta = jnp.arctan2(wind_v, wind_u)
-    cos_theta = jnp.cos(theta)
-    sin_theta = jnp.sin(theta)
+    # θ = atan2(v, u)
+    angle = jnp.arctan2(wind_v, wind_u)
+    cos_theta = jnp.cos(angle)
+    sin_theta = jnp.sin(angle)
 
-    x_wind = dx * cos_theta + dy * sin_theta
-    y_wind = -dx * sin_theta + dy * cos_theta
+    # x' = Δx cos θ + Δy sin θ
+    x_wind = spacing_x * cos_theta + spacing_y * sin_theta
+    # y' = −Δx sin θ + Δy cos θ
+    y_wind = -spacing_x * sin_theta + spacing_y * cos_theta
     return x_wind, y_wind
 
 
@@ -160,13 +166,17 @@ def plume_concentration(
 
     x_positive = jnp.maximum(x_downwind, 1.0)
     if isinstance(dispersion_params, GolderDispersion):
-        sigma_y, sigma_z = dispersion_params(x_positive)
+        crosswind_spread, vertical_spread = dispersion_params(x_positive)
     else:
-        sigma_y, sigma_z = calculate_briggs_dispersion(x_positive, dispersion_params)
+        crosswind_spread, vertical_spread = calculate_briggs_dispersion(
+            x_positive, dispersion_params
+        )
 
-    normalization = 2.0 * jnp.pi * wind_speed * sigma_y * sigma_z
+    # 2π U σ_y σ_z
+    normalization = 2.0 * jnp.pi * wind_speed * crosswind_spread * vertical_spread
 
-    exp_y = jnp.exp(-0.5 * jnp.square(y_crosswind / sigma_y))
+    # exp(−y'² / 2σ_y²)
+    exp_y = jnp.exp(-0.5 * jnp.square(y_crosswind / crosswind_spread))
 
     if plume_rise is None:
         release_height = source_z
@@ -174,10 +184,13 @@ def plume_concentration(
         # H_eff = H + Δh(x')
         release_height = source_z + plume_rise(x_positive, wind_speed=wind_speed)
 
+    # z − H_eff and z + H_eff, the direct and ground-reflected images
     z_diff = z - release_height
-    z_sum = z + release_height
-    exp_z_direct = jnp.exp(-0.5 * jnp.square(z_diff / sigma_z))
-    exp_z_reflected = jnp.exp(-0.5 * jnp.square(z_sum / sigma_z))
+    height_sum = z + release_height
+    # exp(−(z − H)² / 2σ_z²)
+    exp_z_direct = jnp.exp(-0.5 * jnp.square(z_diff / vertical_spread))
+    # exp(−(z + H)² / 2σ_z²)
+    exp_z_reflected = jnp.exp(-0.5 * jnp.square(height_sum / vertical_spread))
 
     concentration = (
         (emission_rate / normalization) * exp_y * (exp_z_direct + exp_z_reflected)
@@ -291,15 +304,15 @@ def simulate_plume(
                 f"simulate_plume: `{name}` must be (start, stop, n_points); "
                 f"got length {len(domain)}"
             )
-        start, stop, n = domain
+        start, stop, num_points = domain
         if not (start < stop):
             raise ValueError(
                 f"simulate_plume: `{name}` requires start < stop "
                 f"(got start={start!r}, stop={stop!r})"
             )
-        if int(n) < 2:
+        if int(num_points) < 2:
             raise ValueError(
-                f"simulate_plume: `{name}` requires n_points ≥ 2 (got n={n!r})"
+                f"simulate_plume: `{name}` requires n_points ≥ 2 (got n={num_points!r})"
             )
 
     if isinstance(stability_class, GolderDispersion):
@@ -309,22 +322,30 @@ def simulate_plume(
         dispersion_params = get_dispersion_params(stability_class)
         stability_attr = stability_class
 
-    x = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
-    y = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
-    z = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]))
-    n_x, n_y, n_z = len(x), len(y), len(z)
+    easting = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
+    northing = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
+    height = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]))
+    num_x, num_y = len(easting), len(northing)
 
-    theta_rad = np.deg2rad(wind_direction)
-    wind_u = -wind_speed * np.sin(theta_rad)
-    wind_v = -wind_speed * np.cos(theta_rad)
+    # θ = wind direction in radians
+    direction_rad = np.deg2rad(wind_direction)
+    # u = −U sin θ
+    wind_u = -wind_speed * np.sin(direction_rad)
+    # v = −U cos θ
+    wind_v = -wind_speed * np.cos(direction_rad)
 
     src_x, src_y, src_z = source_location
 
-    X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+    easting_grid, northing_grid, height_grid = np.meshgrid(
+        easting, northing, height, indexing="ij"
+    )
+    easting_flat = einx.id("x y z -> (x y z)", easting_grid)
+    northing_flat = einx.id("x y z -> (x y z)", northing_grid)
+    height_flat = einx.id("x y z -> (x y z)", height_grid)
     conc_flat = plume_concentration(
-        jnp.array(X.ravel()),
-        jnp.array(Y.ravel()),
-        jnp.array(Z.ravel()),
+        jnp.asarray(easting_flat),
+        jnp.asarray(northing_flat),
+        jnp.asarray(height_flat),
         src_x,
         src_y,
         src_z,
@@ -334,20 +355,22 @@ def simulate_plume(
         dispersion_params,
         plume_rise=plume_rise,
     )
-    concentration = np.asarray(conc_flat).reshape((n_x, n_y, n_z))
+    conc_flat = np.asarray(conc_flat)
+    concentration = einx.id("(x y z) -> x y z", conc_flat, x=num_x, y=num_y)
     concentration = concentration + background_conc
 
     # Trapezoidal vertical integration: the z grid from ``np.linspace`` includes
     # both endpoints, so a plain ``sum * dz`` over-counts a vertically uniform
-    # component (e.g. a background) by one grid interval (n_z / (n_z - 1)).
-    column = np.trapezoid(concentration, x=z, axis=2)
+    # component (e.g. a background) by one grid interval, a factor
+    # num_z / (num_z − 1).
+    column = np.trapezoid(concentration, x=height, axis=2)
 
-    ds = xr.Dataset(
+    dataset = xr.Dataset(
         data_vars={
             "concentration": (["x", "y", "z"], concentration),
             "column_concentration": (["x", "y"], column),
         },
-        coords={"x": x, "y": y, "z": z},
+        coords={"x": easting, "y": northing, "z": height},
         attrs={
             "title": "Steady-state Gaussian plume (JAX)",
             "emission_rate": emission_rate,
@@ -365,9 +388,12 @@ def simulate_plume(
             "background_concentration": background_conc,
         },
     )
-    ds["concentration"].attrs = {"long_name": "Mass concentration", "units": "kg/m^3"}
-    ds["column_concentration"].attrs = {
+    dataset["concentration"].attrs = {
+        "long_name": "Mass concentration",
+        "units": "kg/m^3",
+    }
+    dataset["column_concentration"].attrs = {
         "long_name": "Column-integrated concentration",
         "units": "kg/m^2",
     }
-    return ds
+    return dataset

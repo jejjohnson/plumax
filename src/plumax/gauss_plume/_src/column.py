@@ -192,9 +192,9 @@ def centreline_offset(
         True
     """
     centreline = jnp.asarray(centreline)
-    n_knots = centreline.shape[0]
+    num_knots = centreline.shape[0]
     # d_k = k Δ_d for k = 0, …, K
-    knot_index = jnp.arange(n_knots + 1, dtype=centreline.dtype)
+    knot_index = jnp.arange(num_knots + 1, dtype=centreline.dtype)
     knot_distance = knot_spacing * knot_index
     # (m₀, m₁, …, m_K) with m₀ = 0
     source_offset = jnp.zeros((1,), dtype=centreline.dtype)
