@@ -12,9 +12,10 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Float
 
+from plumax._src.constants import CP_DRY, P_REFERENCE, R_DRY
 from plumax._src.extras import require_extra
 from plumax.lagrangian.turbulence import DEFAULT_CORIOLIS_PARAMETER, HannaTurbulence
-from plumax.met._src.surface_layer import CP_DRY, P_REFERENCE, R_DRY, SurfaceLayer
+from plumax.met._src.surface_layer import SurfaceLayer
 from plumax.met.field import MetField
 
 
