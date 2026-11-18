@@ -259,7 +259,11 @@ def pod_union(
     logits = _logits(pods, rates, None, tod_bin)
     # a = Σ_k c_k log(1 + e^η_k)
     covered_terms = jnp.where(mask, jax.nn.softplus(logits), 0.0)
-    miss_scale = einx.sum("... [instrument]", covered_terms)
+    if covered_terms.size == 0:
+        # einx rejects a zero-size axis; a sum over no terms is 0
+        miss_scale = jnp.zeros(covered_terms.shape[:-1], dtype=covered_terms.dtype)
+    else:
+        miss_scale = einx.sum("... [instrument]", covered_terms)
     # P^∪ = 1 − e^{−a}
     return -jnp.expm1(-miss_scale)
 
