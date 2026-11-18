@@ -544,6 +544,11 @@ def test_line_density_interval_is_calibrated():
             float(result.map_estimate["log_line_density"]) - math.log(LINE_DENSITY)
         )
         hits += int(error < float(result.std["log_line_density"]))
+        # each solve keeps ~340 memory maps of compiled code; 200 of them pass
+        # the kernel's default limit of 65,530 and XLA aborts, while clearing
+        # after every solve recompiles everything (16 s against 2 s warm)
+        if scene % 50 == 49:
+            jax.clear_caches()
     coverage = hits / n_scenes
     # 3 binomial standard errors around 0.683
     tolerance = 3 * math.sqrt(0.683 * 0.317 / n_scenes)
