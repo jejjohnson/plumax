@@ -135,7 +135,7 @@ def test_inhomogeneous_log_likelihood_matches_hand_formula() -> None:
     pytest.importorskip("xtremax")
     import jax
 
-    from plumax.population.point_process import _inhomogeneous_log_likelihood
+    from plumax.population._src.point_process import _inhomogeneous_log_likelihood
 
     with jax.enable_x64(True):
         rng = np.random.default_rng(3)
