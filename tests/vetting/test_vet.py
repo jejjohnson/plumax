@@ -19,7 +19,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from radtrax import ShapeError
 from radtrax.retrieval.absorption import (
     AbsorptionWindow,
     d_norm,
@@ -34,6 +33,7 @@ from plumax.vetting import (
     select_seeds,
     vet_candidate,
 )
+from tests.vetting._errors import raises_shape_error
 from tests.vetting._vetting_scene import notebook_scene, vet_scene
 
 
@@ -185,17 +185,18 @@ def test_a_noise_free_column_on_a_grid_node_is_recovered() -> None:
 
 def test_a_table_off_the_windows_fit_bands_raises() -> None:
     cube, mf, mask = _scene(0.1)
-    with pytest.raises(ShapeError, match=rf"table must be \(D, {FIT.sum()}\)"):
+    with raises_shape_error(rf"table must be \(D, {FIT.sum()}\)", parameter="table"):
         vet_candidate(cube, mf, mask, EMIT_NM, TABLE[:, :-1], GRID, WINDOW)
-    with pytest.raises(ShapeError, match="table must be"):
+    with raises_shape_error("table must be", parameter="table"):
         vet_candidate(cube, mf, mask, EMIT_NM, TABLE[0], GRID, WINDOW)
 
 
 def test_wavelengths_off_the_cubes_bands_raise() -> None:
     cube, mf, mask = _scene(0.1)
-    with pytest.raises(ShapeError, match="wavelength_nm has shape"):
+    with raises_shape_error("wavelength_nm has shape", parameter="wavelength_nm"):
         vet_candidate(cube, mf, mask, EMIT_NM[:-1], TABLE, GRID, WINDOW)
-    with pytest.raises(ShapeError, match="wavelength_nm has shape"):
+    # a cube of the wrong rank fails the type-check hook on the cube itself
+    with raises_shape_error("wavelength_nm has shape", parameter="cube"):
         vet_candidate(cube[0], mf, mask, EMIT_NM, TABLE, GRID, WINDOW)
 
 
