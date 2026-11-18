@@ -8,13 +8,11 @@ import numpy as np
 import pytest
 from numpyro.infer import Predictive
 
+from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.dispersion import BRIGGS_DISPERSION_PARAMS
-from plumax.gauss_plume.inference import (
-    _lognormal_from_moments,
-    gaussian_plume_model,
-    infer_emission_rate,
-)
+from plumax.gauss_plume.inference import gaussian_plume_model, infer_emission_rate
 from plumax.gauss_plume.plume import plume_concentration
+from tests._type_check import raises_checked
 
 
 def test_model_importable():
@@ -142,7 +140,11 @@ def test_infer_emission_rate_rejects_bad_inputs():
             num_warmup=1,
             num_samples=1,
         )
-    with pytest.raises(ValueError, match=r"observation_coords.*must be \(x, y, z\)"):
+    with raises_checked(
+        ValueError,
+        r"observation_coords.*must be \(x, y, z\)",
+        parameter="observation_coords",
+    ):
         infer_emission_rate(
             obs,
             (coords[0], coords[1]),

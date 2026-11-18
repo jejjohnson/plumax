@@ -15,11 +15,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from radtrax import DegenerateInputError, ParameterError
+from radtrax import DegenerateInputError, ParameterError, ShapeError
 
 from plumax.vetting import background_pool, select_seeds
 from plumax.vetting._src.morphology import dilate
-from tests.vetting._errors import raises_shape_error
+from tests._type_check import raises_checked
 
 
 ndimage = pytest.importorskip("scipy.ndimage")
@@ -269,13 +269,13 @@ def test_background_pool_rejects_an_empty_pool_and_a_negative_box(
 
 
 def test_shapes_are_checked(mf: np.ndarray, mask: np.ndarray) -> None:
-    with raises_shape_error("mask has shape", parameter="mask"):
+    with raises_checked(ShapeError, "mask has shape", parameter="mask"):
         select_seeds(mf, mask[:-1])
-    with raises_shape_error(r"mf must be \(H, W\)", parameter="mf"):
+    with raises_checked(ShapeError, r"mf must be \(H, W\)", parameter="mf"):
         select_seeds(mf[None], mask[None])
-    with raises_shape_error("seeds has shape", parameter="seeds"):
+    with raises_checked(ShapeError, "seeds has shape", parameter="seeds"):
         background_pool(mf, mask[:, :-1], threshold=1.0)
-    with raises_shape_error("exclude must be", parameter="exclude"):
+    with raises_checked(ShapeError, "exclude must be", parameter="exclude"):
         background_pool(mf, mask, threshold=1.0, exclude=mask)
 
 

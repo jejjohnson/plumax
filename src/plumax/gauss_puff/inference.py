@@ -27,7 +27,7 @@ import numpyro.distributions as dist
 from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
-from plumax.gauss_plume.inference import _lognormal_from_moments
+from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_puff.dispersion import (
     STABILITY_CLASSES,
