@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.6](https://github.com/jejjohnson/plumax/compare/v0.2.5...v0.2.6) (2026-11-18)
+
+
+### Features
+
+* **coupled:** control blocks declared by the backend, with the line density and with_wind ([#282](https://github.com/jejjohnson/plumax/issues/282)) ([290f31f](https://github.com/jejjohnson/plumax/commit/290f31f4ebc66513b487ede0cbb2a367acb259c2))
+* **coupled:** starting values from the mask, a multistart over the source, and fit diagnostics ([#285](https://github.com/jejjohnson/plumax/issues/285)) ([67bd85e](https://github.com/jejjohnson/plumax/commit/67bd85e3b7fd51727b997da3e7574b63a98accf9)), closes [#271](https://github.com/jejjohnson/plumax/issues/271)
+* **gauss_plume:** a closed-form column plume with a fitted power-law width ([#278](https://github.com/jejjohnson/plumax/issues/278)) ([47752a2](https://github.com/jejjohnson/plumax/commit/47752a203e4aff360c727e2b4390f4b0c6a35fb8))
+* **gauss_plume:** a meandering centreline as a control block with a smoothness prior ([#284](https://github.com/jejjohnson/plumax/issues/284)) ([45e78a6](https://github.com/jejjohnson/plumax/commit/45e78a679f58d47960b05764b00f5afa7cecf3d0)), closes [#270](https://github.com/jejjohnson/plumax/issues/270)
+* **geo:** cross-plume transects with per-slice line density, centre and width ([#287](https://github.com/jejjohnson/plumax/issues/287)) ([16364d3](https://github.com/jejjohnson/plumax/commit/16364d3eebaeb2ae88fc5af21d2427bdcba2e7ec))
+
 ## [0.2.5](https://github.com/jejjohnson/plumax/compare/v0.2.4...v0.2.5) (2026-11-10)
 
 
