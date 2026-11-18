@@ -1,6 +1,6 @@
-"""Backend-declared control blocks and the column plume's line density (#268).
+"""Backend-declared control blocks, the line density (#268) and the centreline (#270).
 
-Toy scenes only: a column plume on a few hundred 60 m pixels.
+Toy scenes only: a column plume on a few hundred to a few thousand 60 m pixels.
 """
 
 from __future__ import annotations
@@ -27,7 +27,14 @@ from plumax.coupled import (
     solve_coupled,
 )
 from plumax.errors import ControlBlockError, PayloadError
-from plumax.gauss_plume import ColumnPlume, ColumnPlumeSource, PlumeGeometry
+from plumax.gauss_plume import (
+    CentrelinePrior,
+    ColumnPlume,
+    ColumnPlumeSource,
+    PlumeGeometry,
+    centreline_offset,
+    plume_frame,
+)
 
 
 PIXEL = 60.0
@@ -597,3 +604,268 @@ def test_payload_follows_the_backend_emission_block():
     np.testing.assert_allclose(
         result.prior_logpdf(jnp.asarray(2.0)), expected, rtol=1e-10
     )
+
+
+# ── the centreline block (#270) ──────────────────────────────────────────────
+
+SPACING = 180.0
+
+
+def _bent_source(n_knots=4, centreline=None, length=None):
+    plume = ColumnPlume(
+        reference_distance=900.0,
+        initial_width=INITIAL_WIDTH,
+        upwind_scale=INITIAL_WIDTH,
+        pixel_size=PIXEL,
+        knot_spacing=SPACING,
+    )
+    base = _geometry()
+    centreline = jnp.zeros(n_knots) if centreline is None else centreline
+    geometry = PlumeGeometry(
+        location=base.location,
+        direction=base.direction,
+        reference_width=base.reference_width,
+        width_exponent=base.width_exponent,
+        centreline=centreline,
+    )
+    return ColumnPlumeSource(plume=plume, geometry=geometry)
+
+
+def _knot_distance(n_knots):
+    # d_k = k Δ_d
+    return SPACING * jnp.arange(1, n_knots + 1)
+
+
+def test_centreline_block_is_declared_with_the_geometry():
+    assert "centreline" not in _source().control_blocks
+    assert _bent_source(n_knots=7).control_blocks["centreline"] == (7,)
+    instrument = _instrument(_receptors(length=600.0, half_width=300.0))
+    observation = jnp.zeros(instrument.n_obs)
+    mean = {"log_line_density": 0.0, "centreline": jnp.zeros(3)}
+    std = {"log_line_density": 1.0, "centreline": 100.0}
+    prior = CoupledPrior.from_std(mean, std)
+    with pytest.raises(ControlBlockError, match="does not declare"):
+        _problem(_source(), instrument, observation, prior)
+    with pytest.raises(ControlBlockError, match="shape"):
+        _problem(_bent_source(n_knots=4), instrument, observation, prior)
+    _problem(_bent_source(n_knots=3), instrument, observation, prior)
+
+
+@settings(max_examples=25, deadline=None)
+@given(
+    std_scalar=st.floats(1e-3, 1e3),
+    std_vector=st.lists(st.floats(1e-3, 1e3), min_size=3, max_size=3),
+)
+def test_from_blocks_with_deviations_equals_from_std(std_scalar, std_vector):
+    mean = {"background": 0.0, "location": jnp.zeros(2), "centreline": jnp.zeros(3)}
+    std = {
+        "background": std_scalar,
+        "location": std_scalar,
+        "centreline": jnp.asarray(std_vector),
+    }
+    blocks = CoupledPrior.from_blocks(mean, std)
+    diagonal = CoupledPrior.from_std(mean, std)
+    np.testing.assert_allclose(blocks.covariance, diagonal.covariance, rtol=1e-15)
+    assert blocks.layout == diagonal.layout
+
+
+def test_from_blocks_places_a_dense_block_in_layout_order():
+    knot_covariance = CentrelinePrior()(_knot_distance(3))
+    mean = {"background": 0.0, "centreline": jnp.zeros(3), "width_exponent": 0.8}
+    covariance = {
+        "background": 1e-4,
+        "centreline": knot_covariance,
+        "width_exponent": 0.5,
+    }
+    prior = CoupledPrior.from_blocks(mean, covariance)
+    # layout (background, centreline, width_exponent) = (1, 3, 1)
+    expected = jnp.zeros((5, 5))
+    expected = expected.at[0, 0].set(1e-8)
+    expected = expected.at[1:4, 1:4].set(knot_covariance)
+    expected = expected.at[4, 4].set(0.25)
+    np.testing.assert_allclose(prior.covariance, expected, rtol=1e-15)
+
+
+def test_from_blocks_validation():
+    with pytest.raises(ControlBlockError, match="keys differ"):
+        CoupledPrior.from_blocks({"background": 0.0}, {"biases": 1.0})
+    with pytest.raises(ControlBlockError, match=r"\(3, 3\) matrix"):
+        CoupledPrior.from_blocks(
+            {"centreline": jnp.zeros(3)}, {"centreline": jnp.eye(2)}
+        )
+    with pytest.raises(ControlBlockError, match="> 0"):
+        CoupledPrior.from_blocks({"background": 0.0}, {"background": 0.0})
+
+
+def _bent_prior(source, n_knots, centreline_mean=None):
+    geometry = source.geometry
+    mean = {
+        "log_line_density": jnp.log(LINE_DENSITY),
+        "log_reference_width": jnp.log(geometry.reference_width),
+        "width_exponent": geometry.width_exponent,
+        "location": geometry.location,
+        "background": 0.0,
+        "centreline": jnp.zeros(n_knots)
+        if centreline_mean is None
+        else centreline_mean,
+    }
+    covariance = {
+        "log_line_density": 2.0,
+        "log_reference_width": 1.0,
+        "width_exponent": 0.5,
+        "location": 60.0,
+        "background": 1e-4,
+        "centreline": CentrelinePrior()(_knot_distance(n_knots)),
+    }
+    return CoupledPrior.from_blocks(mean, covariance)
+
+
+@pytest.mark.slow
+def test_masked_scene_leaves_the_knots_at_their_prior():
+    n_knots = 4
+    source = _bent_source(n_knots=n_knots)
+    receptors = _receptors(length=600.0, half_width=300.0)
+    instrument = Instrument(
+        "EMIT",
+        receptors,
+        retrieval_variance=NOISE**2,
+        mask=jnp.zeros(receptors.shape[0]),
+    )
+    observation = LINE_DENSITY * source.column_response(instrument)
+    prior = _bent_prior(source, n_knots)
+    result = solve_coupled(_problem(source, instrument, observation, prior))
+    prior_std = jnp.sqrt(jnp.diagonal(CentrelinePrior()(_knot_distance(n_knots))))
+    np.testing.assert_allclose(result.std["centreline"], prior_std, rtol=1e-6)
+
+
+# a sinusoidal centreline, 200 m amplitude and 3 km wavelength, on a 3 km image
+# with knots 180 m apart that run 600 m past its end
+BENT_LENGTH = 3000.0
+BENT_KNOTS = 20
+
+
+def _bent_truth():
+    knot_distance = _knot_distance(BENT_KNOTS)
+    # m_k = 200 sin(2π d_k / 3 km)
+    return 200.0 * jnp.sin(2.0 * jnp.pi * knot_distance / 3000.0)
+
+
+def _two_stage_fit(observation, instrument):
+    """Stage 1 straight, stage 2 bent with the direction held (#266)."""
+    straight = _full_problem_for(observation, instrument)
+    first = solve_coupled(straight)
+    estimate = first.map_estimate
+    geometry = PlumeGeometry(
+        location=estimate["location"],
+        direction=estimate["direction"],
+        reference_width=jnp.exp(estimate["log_reference_width"]),
+        width_exponent=estimate["width_exponent"],
+        centreline=jnp.zeros(BENT_KNOTS),
+    )
+    source = ColumnPlumeSource(plume=_bent_source().plume, geometry=geometry)
+    mean = {name: value for name, value in estimate.items() if name != "direction"}
+    mean["centreline"] = jnp.zeros(BENT_KNOTS)
+    covariance = {
+        "log_line_density": 2.0,
+        "log_reference_width": 1.0,
+        "width_exponent": 0.5,
+        "location": 60.0,
+        "background": 1e-4,
+        "centreline": CentrelinePrior()(_knot_distance(BENT_KNOTS)),
+    }
+    prior = CoupledPrior.from_blocks(mean, covariance)
+    second = solve_coupled(
+        _problem(source, instrument, observation, prior), max_steps=1000
+    )
+    return first, second
+
+
+def _full_problem_for(observation, instrument):
+    mean, std = _prior_blocks(_geometry())
+    prior = CoupledPrior.from_std(mean, std)
+    return _problem(_source(), instrument, observation, prior)
+
+
+def _ridge_error(first, second):
+    """Crosswind error of each fitted knot in the true plume frame [m].
+
+    Stage 2 bends the ridge in the frame of the stage-1 direction, so each
+    fitted knot is placed in the plane and measured against the true ridge.
+    """
+    estimate = second.map_estimate
+    direction = first.map_estimate["direction"]
+    # e_∥, e_⊥ of the held direction
+    along = jnp.stack([jnp.cos(direction), jnp.sin(direction)])
+    across = jnp.stack([-jnp.sin(direction), jnp.cos(direction)])
+    knot_distance = _knot_distance(BENT_KNOTS)
+    # s_k = s₀ + d_k e_∥ + m_k e_⊥
+    downwind_part = einx.multiply("knot, axis -> knot axis", knot_distance, along)
+    crosswind_part = einx.multiply(
+        "knot, axis -> knot axis", estimate["centreline"], across
+    )
+    points = einx.add(
+        "axis, knot axis -> knot axis",
+        estimate["location"],
+        downwind_part + crosswind_part,
+    )
+    truth = _geometry()
+    downwind, crosswind = plume_frame(points, truth.location, truth.direction)
+    # c_k − m_true(d_k)
+    true_offset = centreline_offset(downwind, _bent_truth(), knot_spacing=SPACING)
+    return crosswind - true_offset
+
+
+@pytest.fixture(scope="module")
+def bent_scene():
+    source = _bent_source(centreline=_bent_truth())
+    receptors = _receptors(length=BENT_LENGTH, half_width=1200.0)
+    clean = LINE_DENSITY * source.column_response(_instrument(receptors))
+    # peak signal-to-noise ratio of 10
+    noise = float(jnp.max(clean)) / 10.0
+    instrument = Instrument("EMIT", receptors, retrieval_variance=noise**2)
+    observation = clean + noise * jax.random.normal(jax.random.PRNGKey(3), clean.shape)
+    return clean, observation, instrument
+
+
+@pytest.mark.slow
+def test_noise_free_bent_plume_is_recovered(bent_scene):
+    clean, _, instrument = bent_scene
+    first, second = _two_stage_fit(clean, instrument)
+    assert second.converged
+    inside = _knot_distance(BENT_KNOTS) <= BENT_LENGTH
+    error = _ridge_error(first, second)[inside]
+    rmse = float(jnp.sqrt(jnp.mean(jnp.square(error))))
+    assert rmse < PIXEL / 6, f"noise-free centreline RMSE {rmse:.1f} m"
+
+
+@pytest.mark.slow
+def test_noisy_bent_plume_is_recovered_within_its_posterior(bent_scene):
+    _, observation, instrument = bent_scene
+    first, second = _two_stage_fit(observation, instrument)
+    assert second.converged
+    knot_distance = _knot_distance(BENT_KNOTS)
+    inside = knot_distance <= BENT_LENGTH
+    std = second.std["centreline"]
+
+    # the knot errors are of the size the posterior gives them
+    error = _ridge_error(first, second)
+    standardised = error[inside] / std[inside]
+    rms_standardised = float(jnp.sqrt(jnp.mean(jnp.square(standardised))))
+    assert rms_standardised < 2.0, f"RMS knot error {rms_standardised:.2f} σ"
+
+    # log q is inside its 2σ interval
+    log_error = second.map_estimate["log_line_density"] - jnp.log(LINE_DENSITY)
+    assert bool(jnp.abs(log_error) < 2.0 * second.std["log_line_density"])
+
+    # the bent fit is closer to the truth than the straight one
+    straight_error = jnp.abs(
+        first.map_estimate["log_line_density"] - jnp.log(LINE_DENSITY)
+    )
+    assert bool(jnp.abs(log_error) < straight_error), (
+        f"q straight {float(jnp.exp(first.map_estimate['log_line_density'])):.4f}, "
+        f"bent {float(jnp.exp(second.map_estimate['log_line_density'])):.4f}, "
+        f"truth {LINE_DENSITY}"
+    )
+
+    # a knot past the image is less determined than any knot inside it
+    assert float(jnp.min(std[~inside])) > float(jnp.max(std[inside]))

@@ -14,8 +14,10 @@ follows a power law above an initial width,
 
 :class:`ColumnPlume` evaluates the column per unit line density at a set of
 receptors for a :class:`PlumeGeometry`; :class:`ColumnPlumeSource` wraps the
-two as a ``coupled.TransportBackend``. The design is on the image-fit page of
-the docs (``design/01_tier1_image_fit.md``).
+two as a ``coupled.TransportBackend``. A geometry with a centreline bends the
+ridge: m(d) is interpolated linearly between knots ``knot_spacing`` apart
+(:func:`centreline_offset`). The design is on the image-fit page of the docs
+(``design/01_tier1_image_fit.md``).
 """
 
 from __future__ import annotations
@@ -153,6 +155,55 @@ def power_law_width(
     return width
 
 
+def centreline_offset(
+    downwind: Float[Array, "*obs"],
+    centreline: Float[Array, " knot"],
+    *,
+    knot_spacing: float,
+) -> Float[Array, "*obs"]:
+    """Crosswind offset of the centreline at each downwind distance.
+
+    m(d) = m_k + (m_{k+1} − m_k) (d − d_k) / Δ_d between the knots d_k = k Δ_d,
+    with m₀ = 0 at d₀ = 0, m(d) = m_K beyond the last knot and m(d) = 0 upwind.
+
+    Algorithm:
+        1. Prepend the source knot: d₀ = 0 with m₀ = 0.
+        2. Interpolate linearly; hold m₀ upwind and m_K beyond d_K.
+
+    Args:
+        downwind: Downwind distance d [m].
+        centreline: Offsets m_k [m] at the knots d_k = k Δ_d, k = 1, …, K.
+        knot_spacing: Knot spacing Δ_d [m].
+
+    Returns:
+        The offset m(d) [m].
+
+    Examples:
+        Halfway between the source and the first knot the offset is half of
+        m₁; beyond the last knot it is held:
+
+        >>> import jax.numpy as jnp
+        >>> offset = centreline_offset(
+        ...     jnp.array([-100.0, 90.0, 180.0, 270.0, 1000.0]),
+        ...     jnp.array([20.0, 60.0]),
+        ...     knot_spacing=180.0,
+        ... )
+        >>> bool(jnp.allclose(offset, jnp.array([0.0, 10.0, 20.0, 40.0, 60.0])))
+        True
+    """
+    centreline = jnp.asarray(centreline)
+    n_knots = centreline.shape[0]
+    # d_k = k Δ_d for k = 0, …, K
+    knot_index = jnp.arange(n_knots + 1, dtype=centreline.dtype)
+    knot_distance = knot_spacing * knot_index
+    # (m₀, m₁, …, m_K) with m₀ = 0
+    source_offset = jnp.zeros((1,), dtype=centreline.dtype)
+    knot_offset = jnp.concatenate([source_offset, centreline])
+    # m(d), linear between the knots, m₀ for d < 0 and m_K for d ≥ d_K
+    offset = jnp.interp(downwind, knot_distance, knot_offset)
+    return offset
+
+
 def unit_column(
     downwind: Float[Array, "*obs"],
     crosswind: Float[Array, "*obs"],
@@ -244,6 +295,10 @@ def unit_column(
     return response * ramp
 
 
+def _optional_array(value: ArrayLike | None) -> Array | None:
+    return None if value is None else jnp.asarray(value)
+
+
 class PlumeGeometry(eqx.Module):
     """The fitted variables of a column plume: where it starts, heads and widens.
 
@@ -253,6 +308,8 @@ class PlumeGeometry(eqx.Module):
             pointing downwind.
         reference_width: Width w_ref [m] at the reference distance.
         width_exponent: Growth exponent b of the width law.
+        centreline: Crosswind offsets m_k [m] at the knots d_k = k Δ_d, with
+            Δ_d the plume's ``knot_spacing``; ``None`` is a straight plume.
 
     Examples:
         Scalars are stored as arrays, so the geometry is a pytree of leaves:
@@ -267,26 +324,43 @@ class PlumeGeometry(eqx.Module):
         ... )
         >>> len(jax.tree_util.tree_leaves(geometry))
         4
+
+        A centreline adds one leaf of K knots:
+
+        >>> bent = PlumeGeometry(
+        ...     location=jnp.zeros(2),
+        ...     direction=0.3,
+        ...     reference_width=150.0,
+        ...     width_exponent=0.9,
+        ...     centreline=jnp.zeros(5),
+        ... )
+        >>> len(jax.tree_util.tree_leaves(bent))
+        5
     """
 
     location: Float[Array, " axis"] = eqx.field(converter=jnp.asarray)
     direction: Float[Array, ""] = eqx.field(converter=jnp.asarray)
     reference_width: Float[Array, ""] = eqx.field(converter=jnp.asarray)
     width_exponent: Float[Array, ""] = eqx.field(converter=jnp.asarray)
+    centreline: Float[Array, " knot"] | None = eqx.field(
+        default=None, converter=_optional_array
+    )
 
 
 class ColumnPlume(eqx.Module):
     """Column of a steady Gaussian plume per unit line density.
 
-    r(s; θ) = exp(−c² / 2w²) / (√(2π) w) for d > 0, else 0, with
-    w² = w₀² + w_ref² (d / d_ref)^(2b), so that ΔΩ = q r for q = Q / U.
+    r(s; θ) = exp(−(c − m(d))² / 2w²) / (√(2π) w) for d > 0, else 0, with
+    w² = w₀² + w_ref² (d / d_ref)^(2b), so that ΔΩ = q r for q = Q / U. The
+    centreline m(d) is zero for a straight plume.
 
     Algorithm:
         1. Rotate the receptors into the plume frame: d = (s − s₀)ᵀ e_∥,
            c = (s − s₀)ᵀ e_⊥.
         2. Evaluate the width w(d) on d clipped at the source.
-        3. Evaluate the Gaussian ridge, or its average across a pixel.
-        4. Apply the upwind cut, hard or as a logistic ramp.
+        3. Interpolate the centreline m(d), if the geometry has one.
+        4. Evaluate the Gaussian ridge, or its average across a pixel.
+        5. Apply the upwind cut, hard or as a logistic ramp.
 
     Attributes:
         reference_distance: Distance d_ref [m] at which the width is w_ref.
@@ -296,10 +370,13 @@ class ColumnPlume(eqx.Module):
             ``None`` is the hard cut.
         pixel_size: Pixel side g [m] for the crosswind average; ``None`` is
             point evaluation.
+        knot_spacing: Downwind spacing Δ_d [m] of the centreline knots;
+            required when the geometry carries a centreline.
 
     Raises:
-        ParameterError: If a length is not positive, or ``initial_width`` is
-            negative.
+        ParameterError: If a length is not positive, ``initial_width`` is
+            negative, or a geometry with a centreline meets a plume without
+            ``knot_spacing``.
 
     Examples:
         The crosswind integral of the response is 1 at every distance:
@@ -345,6 +422,7 @@ class ColumnPlume(eqx.Module):
     initial_width: float = 0.0
     upwind_scale: float | None = None
     pixel_size: float | None = None
+    knot_spacing: float | None = None
 
     def __check_init__(self) -> None:
         if self.reference_distance <= 0.0:
@@ -357,6 +435,8 @@ class ColumnPlume(eqx.Module):
             raise ParameterError(f"upwind_scale must be > 0, got {self.upwind_scale}")
         if self.pixel_size is not None and self.pixel_size <= 0.0:
             raise ParameterError(f"pixel_size must be > 0, got {self.pixel_size}")
+        if self.knot_spacing is not None and self.knot_spacing <= 0.0:
+            raise ParameterError(f"knot_spacing must be > 0, got {self.knot_spacing}")
 
     def __call__(
         self,
@@ -379,24 +459,39 @@ class ColumnPlume(eqx.Module):
             initial_width=self.initial_width,
         )
 
+        # --- centreline ---
+        offset = None
+        if geometry.centreline is not None:
+            if self.knot_spacing is None:
+                raise ParameterError(
+                    "ColumnPlume: the geometry has a centreline, so the plume "
+                    "needs a `knot_spacing`."
+                )
+            # m(d), linear between the knots d_k = k Δ_d
+            offset = centreline_offset(
+                downwind, geometry.centreline, knot_spacing=self.knot_spacing
+            )
+
         # --- column per unit line density ---
-        # r = exp(−c² / 2w²) / (√(2π) w)
+        # r = exp(−(c − m)² / 2w²) / (√(2π) w)
         response = unit_column(
             downwind,
             crosswind,
             width,
+            centreline=offset,
             upwind_scale=self.upwind_scale,
             pixel_size=self.pixel_size,
         )
         return response
 
     def get_config(self) -> dict[str, Any]:
-        """The four fixed choices, as plain floats."""
+        """The five fixed choices, as plain floats."""
         return {
             "reference_distance": self.reference_distance,
             "initial_width": self.initial_width,
             "upwind_scale": self.upwind_scale,
             "pixel_size": self.pixel_size,
+            "knot_spacing": self.knot_spacing,
         }
 
     @classmethod
@@ -414,8 +509,8 @@ class ColumnPlumeSource(AbstractControlledSource):
 
     It declares the geometry as control blocks: ``location`` ``(2,)``,
     ``direction`` ``()``, ``log_reference_width`` ``()`` and
-    ``width_exponent`` ``()``, scaled by ``line_density`` or
-    ``log_line_density``. Q and U enter the column only as q = Q / U, so
+    ``width_exponent`` ``()``, and ``centreline`` ``(K,)`` when the geometry
+    carries K knots, scaled by ``line_density`` or ``log_line_density``. Q and U enter the column only as q = Q / U, so
     there is no ``wind`` block and no ``emission_rate``; the wind is applied
     after the fit (``CoupledResult.with_wind``).
 
@@ -459,14 +554,19 @@ class ColumnPlumeSource(AbstractControlledSource):
     def control_blocks(self) -> Mapping[str, tuple[int, ...]]:
         """The geometry: ``location`` ``(2,)`` and three scalars.
 
-        ``direction``, ``log_reference_width`` and ``width_exponent``.
+        ``direction``, ``log_reference_width`` and ``width_exponent``, plus
+        ``centreline`` ``(K,)`` when the geometry carries K knots.
         """
-        return {
+        blocks = {
             "location": (2,),
             "direction": (),
             "log_reference_width": (),
             "width_exponent": (),
         }
+        centreline = self.geometry.centreline
+        if centreline is not None:
+            blocks["centreline"] = tuple(centreline.shape)
+        return blocks
 
     @property
     def emission_blocks(self) -> tuple[str, ...]:
@@ -535,6 +635,7 @@ class ColumnPlumeSource(AbstractControlledSource):
             direction=control.get("direction", self.geometry.direction),
             reference_width=reference_width,
             width_exponent=control.get("width_exponent", self.geometry.width_exponent),
+            centreline=control.get("centreline", self.geometry.centreline),
         )
         return geometry
 
@@ -543,6 +644,7 @@ __all__ = [
     "ColumnPlume",
     "ColumnPlumeSource",
     "PlumeGeometry",
+    "centreline_offset",
     "plume_frame",
     "power_law_width",
     "unit_column",
