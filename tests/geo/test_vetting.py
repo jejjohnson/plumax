@@ -49,7 +49,13 @@ def _carriers(scene, *, mf: np.ndarray | None = None) -> tuple:
 
 
 def _operator(scene, **kwargs) -> PlumeVetting:
-    return PlumeVetting(scene.window, scene.table, scene.delta_grid, box=BOX, **kwargs)
+    return PlumeVetting(
+        window=scene.window,
+        table=scene.table,
+        delta_grid=scene.delta_grid,
+        box=BOX,
+        **kwargs,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -176,7 +182,12 @@ def test_wavelengths_that_do_not_match_the_bands_raise(scene) -> None:
 
 def test_a_table_that_does_not_match_the_fitting_bands_raises(scene) -> None:
     cube, mf = _carriers(scene)
-    op = PlumeVetting(scene.window, scene.table[:, :-1], scene.delta_grid, n_null=0)
+    op = PlumeVetting(
+        window=scene.window,
+        table=scene.table[:, :-1],
+        delta_grid=scene.delta_grid,
+        n_null=0,
+    )
     with pytest.raises(ShapeError, match="table"):
         op(cube, mf, scene.masks)
 
