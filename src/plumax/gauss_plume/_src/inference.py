@@ -57,11 +57,15 @@ def _lognormal_from_moments(mean: float, std: float) -> tuple[jnp.ndarray, jnp.n
 
         σ² = ln(1 + (std / mean)²),   μ = ln(mean) − σ²/2.
     """
-    cv_sq = (std / mean) ** 2
-    sigma_log_sq = jnp.log1p(cv_sq)
-    sigma_log = jnp.sqrt(sigma_log_sq)
-    mu_log = jnp.log(mean) - 0.5 * sigma_log_sq
-    return mu_log, sigma_log
+    # CV² = (std / mean)²
+    squared_cv = (std / mean) ** 2
+    # σ² = ln(1 + CV²)
+    log_variance = jnp.log1p(squared_cv)
+    # σ = √σ²
+    log_std = jnp.sqrt(log_variance)
+    # μ = ln(mean) − σ²/2
+    log_mean = jnp.log(mean) - 0.5 * log_variance
+    return log_mean, log_std
 
 
 class EmissionRateSamples(dict):
@@ -203,17 +207,19 @@ def gaussian_plume_model(
             "observations=None for prior-predictive mode."
         )
 
-    mu_log, sigma_log = _lognormal_from_moments(
+    log_mean, log_std = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(mu_log, sigma_log))
+    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(log_mean, log_std))
 
     if infer_stability:
         stability_probs = jnp.ones(len(STABILITY_CLASSES)) / len(STABILITY_CLASSES)
         stability_idx = numpyro.sample(
             "stability_idx", dist.Categorical(probs=stability_probs)
         )
-        all_params = jnp.stack([BRIGGS_DISPERSION_PARAMS[c] for c in STABILITY_CLASSES])
+        all_params = jnp.stack(
+            [BRIGGS_DISPERSION_PARAMS[name] for name in STABILITY_CLASSES]
+        )
         dispersion_params = all_params[stability_idx]
     else:
         dispersion_params = get_dispersion_params(stability_class)
@@ -221,12 +227,12 @@ def gaussian_plume_model(
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     if forward_inputs_present:
-        x_obs, y_obs, z_obs = receptor_coords
+        easting_obs, northing_obs, height_obs = receptor_coords
         src_x, src_y, src_z = source_location
         predicted = plume_concentration(
-            x_obs,
-            y_obs,
-            z_obs,
+            easting_obs,
+            northing_obs,
+            height_obs,
             src_x,
             src_y,
             src_z,
@@ -343,7 +349,7 @@ def infer_emission_rate(
             "infer_emission_rate: `observation_coords` must be (x, y, z); "
             f"got length {len(observation_coords)}"
         )
-    coords = tuple(np.asarray(c) for c in observation_coords)
+    coords = tuple(np.asarray(coord) for coord in observation_coords)
     for axis_name, arr in zip("xyz", coords, strict=False):
         if arr.shape != obs.shape:
             raise ValueError(
@@ -368,12 +374,15 @@ def infer_emission_rate(
             f"(got {background_prior_std!r})"
         )
 
-    theta_rad = np.deg2rad(wind_direction)
-    wind_u = float(-wind_speed * np.sin(theta_rad))
-    wind_v = float(-wind_speed * np.cos(theta_rad))
+    # θ = wind direction in radians
+    direction_rad = np.deg2rad(wind_direction)
+    # u = −U sin θ
+    wind_u = float(-wind_speed * np.sin(direction_rad))
+    # v = −U cos θ
+    wind_v = float(-wind_speed * np.cos(direction_rad))
 
     obs_jax = jnp.asarray(obs)
-    coords_jax = tuple(jnp.asarray(c) for c in coords)
+    coords_jax = tuple(jnp.asarray(coord) for coord in coords)
 
     inner = NUTS(gaussian_plume_model)
     # Discrete latents can't be handled by NUTS on their own without
@@ -406,7 +415,7 @@ def infer_emission_rate(
     if print_summary:
         mcmc.print_summary()
 
-    draws = {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    draws = {name: np.asarray(value) for name, value in mcmc.get_samples().items()}
     return EmissionRateSamples(draws, prior_mean=prior_mean, prior_std=prior_std)
 
 
@@ -414,7 +423,7 @@ def infer_emission_rate(
 
 
 def _check_multi_source_layout(
-    k_max: int,
+    num_slots: int,
     candidate_locations: Float[ArrayLike, "candidate 2"] | None,
     source_bounds: tuple[tuple[float, float], tuple[float, float]] | None,
     prior_active: float,
@@ -424,18 +433,20 @@ def _check_multi_source_layout(
             "multi_source_plume_model: give exactly one of `candidate_locations` "
             "(fixed slots) or `source_bounds` (free, x-ordered slots)"
         )
-    if k_max < 1:
-        raise ValueError(f"multi_source_plume_model: `k_max` must be ≥ 1, got {k_max}")
+    if num_slots < 1:
+        raise ValueError(
+            f"multi_source_plume_model: `num_slots` must be ≥ 1, got {num_slots}"
+        )
     if candidate_locations is not None:
         shape = np.shape(candidate_locations)
-        if shape != (k_max, 2):
+        if shape != (num_slots, 2):
             raise ValueError(
                 "multi_source_plume_model: `candidate_locations` must have shape "
-                f"(k_max, 2) = ({k_max}, 2), got {shape}"
+                f"(num_slots, 2) = ({num_slots}, 2), got {shape}"
             )
     if source_bounds is not None:
-        (x_low, x_high), (y_low, y_high) = source_bounds
-        if not (x_low < x_high and y_low < y_high):
+        (easting_min, easting_max), (northing_min, northing_max) = source_bounds
+        if not (easting_min < easting_max and northing_min < northing_max):
             raise ValueError(
                 "multi_source_plume_model: `source_bounds` needs low < high on "
                 f"both axes, got {source_bounds!r}"
@@ -469,11 +480,11 @@ def _masked_source_prior(
     else:
         active = numpyro.deterministic("active", jnp.ones(k_max))
 
-    mu_log, sigma_log = _lognormal_from_moments(
+    log_mean, log_std = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
     emission_rate = numpyro.sample(
-        "emission_rate", dist.LogNormal(mu_log, sigma_log).expand([k_max]).to_event(1)
+        "emission_rate", dist.LogNormal(log_mean, log_std).expand([k_max]).to_event(1)
     )
 
     if candidate_locations is not None:
@@ -481,13 +492,16 @@ def _masked_source_prior(
         source_x = numpyro.deterministic("source_x", locations[:, 0])
         source_y = numpyro.deterministic("source_y", locations[:, 1])
     else:
-        (x_low, x_high), (y_low, y_high) = source_bounds
+        (easting_min, easting_max), (northing_min, northing_max) = source_bounds
         spacing = numpyro.sample("x_spacing", dist.Dirichlet(jnp.ones(k_max + 1)))
-        # x_k = x_low + (x_high − x_low) Σ_{j ≤ k} w_j: ordered west to east
+        # x_k = x_min + (x_max − x_min) Σ_{j ≤ k} w_j: ordered west to east
         ordered = jnp.cumsum(spacing)[:k_max]
-        source_x = numpyro.deterministic("source_x", x_low + (x_high - x_low) * ordered)
+        source_x = numpyro.deterministic(
+            "source_x", easting_min + (easting_max - easting_min) * ordered
+        )
         source_y = numpyro.sample(
-            "source_y", dist.Uniform(y_low, y_high).expand([k_max]).to_event(1)
+            "source_y",
+            dist.Uniform(northing_min, northing_max).expand([k_max]).to_event(1),
         )
 
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
@@ -689,7 +703,7 @@ def infer_multi_source(
             "infer_multi_source: `observation_coords` must be (x, y, z); "
             f"got length {len(observation_coords)}"
         )
-    coords = tuple(np.asarray(c) for c in observation_coords)
+    coords = tuple(np.asarray(coord) for coord in observation_coords)
     for axis_name, arr in zip("xyz", coords, strict=True):
         if arr.shape != obs.shape:
             raise ValueError(
@@ -708,9 +722,12 @@ def infer_multi_source(
             )
     _check_multi_source_layout(k_max, candidate_locations, source_bounds, prior_active)
 
-    theta_rad = np.deg2rad(wind_direction)
-    wind_u = float(-wind_speed * np.sin(theta_rad))
-    wind_v = float(-wind_speed * np.cos(theta_rad))
+    # θ = wind direction in radians
+    direction_rad = np.deg2rad(wind_direction)
+    # u = −U sin θ
+    wind_u = float(-wind_speed * np.sin(direction_rad))
+    # v = −U cos θ
+    wind_v = float(-wind_speed * np.cos(direction_rad))
 
     return _run_masked_k(
         multi_source_plume_model,
@@ -723,7 +740,7 @@ def infer_multi_source(
         num_chains=num_chains,
         seed=seed,
         progress_bar=progress_bar,
-        receptor_coords=tuple(jnp.asarray(c) for c in coords),
+        receptor_coords=tuple(jnp.asarray(coord) for coord in coords),
         wind_u=wind_u,
         wind_v=wind_v,
         source_bounds=source_bounds,

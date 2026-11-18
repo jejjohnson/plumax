@@ -138,8 +138,8 @@ class CentrelinePrior(eqx.Module):
             conditioned = gram_knots - correction
 
         # --- jitter ---
-        n_knots = knot_distance.shape[0]
-        identity = jnp.eye(n_knots, dtype=conditioned.dtype)
+        num_knots = knot_distance.shape[0]
+        identity = jnp.eye(num_knots, dtype=conditioned.dtype)
         # K_DD = k₀ + jitter σ_m² I
         covariance = conditioned + self.jitter * source_variance * identity
         return covariance
