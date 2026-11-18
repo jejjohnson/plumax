@@ -168,7 +168,7 @@ def load_era5(
         dims = ("time", "level", "lat", "lon")
         u_east = levels["u"].transpose(*dims).values
         v_north = levels["v"].transpose(*dims).values
-        omega = levels["w"].transpose(*dims).values
+        pressure_velocity = levels["w"].transpose(*dims).values
         temperature = levels["t"].transpose(*dims).values
         pressure_pa = pressure.transpose(*dims).values
         height_agl = height.transpose(*dims).values
@@ -178,23 +178,37 @@ def load_era5(
         clock = TimeAxis.from_datetimes(levels["time"].values)
 
     # --- longitudes in file order → increasing from the subset's west edge ---
-    reorder = lambda f: einx.get_at("... [lon], k -> ... k", f, lon_order)
-    fields = (u_east, v_north, omega, temperature, pressure_pa, height_agl)
-    u_east, v_north, omega, temperature, pressure_pa, height_agl = map(reorder, fields)
+    reorder = lambda field: einx.get_at("... [lon], k -> ... k", field, lon_order)
+    fields = (
+        u_east,
+        v_north,
+        pressure_velocity,
+        temperature,
+        pressure_pa,
+        height_agl,
+    )
+    (
+        u_east,
+        v_north,
+        pressure_velocity,
+        temperature,
+        pressure_pa,
+        height_agl,
+    ) = map(reorder, fields)
     pbl_height = reorder(pbl_height)
 
     # --- vertical velocity ---
     # ρ = p / (R_d T)
     density = pressure_pa / (R_DRY * temperature)
     # w = −ω / (ρ g)
-    w = -omega / (density * GRAVITY)
+    wind_up = -pressure_velocity / (density * GRAVITY)
 
     # --- longitude seam ---
     if _is_periodic(lon):
         # append the first column after the last, so points between it and 360°
         # interpolate across the seam
-        fields = (u_east, v_north, temperature, pressure_pa, w, height_agl)
-        u_east, v_north, temperature, pressure_pa, w, height_agl = map(
+        fields = (u_east, v_north, temperature, pressure_pa, wind_up, height_agl)
+        u_east, v_north, temperature, pressure_pa, wind_up, height_agl = map(
             _close_seam, fields
         )
         pbl_height = _close_seam(pbl_height)
@@ -208,20 +222,20 @@ def load_era5(
     to_index = _regular_index_map(lat, lon, frame)
     points = stagger_points(plume_grid, frame, to_index, loader="load_era5")
     at_t = points["t"]
-    on_levels = lambda f: _interpolate_vertical(height_agl, f, target_heights)
+    on_levels = lambda field: _interpolate_vertical(height_agl, field, target_heights)
     u_frame, v_frame = frame_wind(on_levels(u_east), on_levels(v_north), points)
-    w_t = bilinear_at(on_levels(w), at_t.i, at_t.j)
+    wind_up_t = bilinear_at(on_levels(wind_up), at_t.i, at_t.j)
     temperature_t = bilinear_at(on_levels(temperature), at_t.i, at_t.j)
     pressure_t = bilinear_at(on_levels(pressure_pa), at_t.i, at_t.j)
     pbl_height_t = bilinear_at(pbl_height, at_t.i, at_t.j)
     dtype = plume_grid.x.dtype
-    as_jax = lambda a: jnp.asarray(a, dtype=dtype)
+    as_jax = lambda array: jnp.asarray(array, dtype=dtype)
     return MetField(
         plume_grid=plume_grid,
         times=as_jax(clock.seconds),
         u=as_jax(u_frame),
         v=as_jax(v_frame),
-        w=as_jax(w_t),
+        w=as_jax(wind_up_t),
         temperature=as_jax(temperature_t),
         pressure=as_jax(pressure_t),
         pbl_height=as_jax(pbl_height_t),
@@ -240,20 +254,20 @@ def _require_hypsometric_height():
     return xrops.atm.hypsometric_height
 
 
-def _normalise(ds: xr.Dataset) -> xr.Dataset:
+def _normalise(dataset: xr.Dataset) -> xr.Dataset:
     """CDS names → ``time`` / ``level`` / ``lat`` / ``lon``, both axes ascending."""
-    renames = {old: new for old, new in _RENAMES.items() if old in ds.variables}
-    ds = ds.rename(renames)
+    renames = {old: new for old, new in _RENAMES.items() if old in dataset.variables}
+    dataset = dataset.rename(renames)
     scalar_coords = [
         name
         for name in ("number", "expver")
-        if name in ds.coords and ds[name].ndim == 0
+        if name in dataset.coords and dataset[name].ndim == 0
     ]
-    return ds.drop_vars(scalar_coords).sortby("lat").sortby("lon")
+    return dataset.drop_vars(scalar_coords).sortby("lat").sortby("lon")
 
 
-def _require(ds: xr.Dataset, names: tuple[str, ...], path: str | Path) -> None:
-    missing = [name for name in names if name not in ds]
+def _require(dataset: xr.Dataset, names: tuple[str, ...], path: str | Path) -> None:
+    missing = [name for name in names if name not in dataset]
     if missing:
         raise MissingVariableError(f"load_era5: {path!s} lacks {missing}")
 
@@ -281,16 +295,16 @@ def _unwrap_longitudes(
     Raises:
         GridMismatchError: If the unwrapped axis is not evenly spaced.
     """
-    n_lon = lon.size
-    identity = np.arange(n_lon)
-    if n_lon < 2 or _is_periodic(lon):
+    num_lon = lon.size
+    identity = np.arange(num_lon)
+    if num_lon < 2 or _is_periodic(lon):
         return lon, identity
     # g_k = λ_{k+1} − λ_k, cyclically: the last gap closes through +360°
     closed = einx.id("n, one -> (n + one)", lon, lon[:1] + 360.0)
     gaps = np.diff(closed)
     # the subset starts after its widest gap
-    start = (int(np.argmax(gaps)) + 1) % n_lon
-    order = (identity + start) % n_lon
+    start = (int(np.argmax(gaps)) + 1) % num_lon
+    order = (identity + start) % num_lon
     rotated = lon[order]
     # λ'_k = λ'_0 + ((λ'_k − λ'_0) mod 360°), increasing
     unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
@@ -330,18 +344,18 @@ def _regular_index_map(
     last_i = lon.size if periodic else lon.size - 1
 
     def to_index(
-        x: Float[np.ndarray, "y x"], y: Float[np.ndarray, "y x"]
+        frame_x: Float[np.ndarray, "y x"], frame_y: Float[np.ndarray, "y x"]
     ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
-        point_lat, point_lon = frame.to_latlon(x, y)
+        point_lat, point_lon = frame.to_latlon(frame_x, frame_y)
         # (λ − λ₀) mod 360°
         lon_offset = np.mod(point_lon - lon[0], 360.0)
         # i = (λ − λ₀) / Δλ
-        i = lon_offset / lon_step
+        index_x = lon_offset / lon_step
         # j = (φ − φ₀) / Δφ
-        j = (point_lat - lat[0]) / lat_step
-        inside_i = (i >= 0) & (i <= last_i)
-        inside_j = (j >= 0) & (j <= lat.size - 1)
-        inside = inside_i & inside_j
-        return np.where(inside, i, np.nan), np.where(inside, j, np.nan)
+        index_y = (point_lat - lat[0]) / lat_step
+        inside_x = (index_x >= 0) & (index_x <= last_i)
+        inside_y = (index_y >= 0) & (index_y <= lat.size - 1)
+        inside = inside_x & inside_y
+        return np.where(inside, index_x, np.nan), np.where(inside, index_y, np.nan)
 
     return to_index

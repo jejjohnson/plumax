@@ -155,10 +155,10 @@ class LocalFrame:
         # (E, N) = UTM(φ, λ)
         easting, northing = forward.transform(lon_array, lat_array)
         # x = E − E₀
-        x = np.asarray(np.asarray(easting) - origin_easting)
+        frame_x = np.asarray(np.asarray(easting) - origin_easting)
         # y = N − N₀
-        y = np.asarray(np.asarray(northing) - origin_northing)
-        return x, y
+        frame_y = np.asarray(np.asarray(northing) - origin_northing)
+        return frame_x, frame_y
 
     def to_latlon(
         self,
@@ -216,13 +216,15 @@ class LocalFrame:
         lat_array, lon_array = np.broadcast_arrays(
             np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
         )
-        x0, y0 = self.to_xy(lat_array, lon_array)
+        x_origin, y_origin = self.to_xy(lat_array, lon_array)
         x_east, y_east = self.to_xy(lat_array, lon_array + AXIS_STEP_DEGREES)
         x_north, y_north = self.to_xy(lat_array + AXIS_STEP_DEGREES, lon_array)
         # ∂(x, y)/∂λ ≈ ((x, y)(φ, λ + δ) − (x, y)(φ, λ)) / δ
-        east = einx.id("..., ... -> ... (1 + 1)", x_east - x0, y_east - y0)
+        east = einx.id("..., ... -> ... (1 + 1)", x_east - x_origin, y_east - y_origin)
         # ∂(x, y)/∂φ ≈ ((x, y)(φ + δ, λ) − (x, y)(φ, λ)) / δ
-        north = einx.id("..., ... -> ... (1 + 1)", x_north - x0, y_north - y0)
+        north = einx.id(
+            "..., ... -> ... (1 + 1)", x_north - x_origin, y_north - y_origin
+        )
         # ‖e‖ = √(Σ_c e_c²)
         east_norm = np.sqrt(einx.sum("... [c]", east**2))
         north_norm = np.sqrt(einx.sum("... [c]", north**2))
@@ -266,17 +268,17 @@ class LocalFrame:
             >>> i.tolist(), j.tolist()
             ([0, -1], [1, -1])
         """
-        x, y = self.to_xy(lat, lon)
+        frame_x, frame_y = self.to_xy(lat, lon)
         grid_x = np.asarray(grid.x, dtype=float)
         grid_y = np.asarray(grid.y, dtype=float)
         # i = ⌊(x − x₀ + Δx/2) / Δx⌋
-        i = np.floor((x - grid_x[0] + 0.5 * grid.dx) / grid.dx).astype(int)
+        index_x = np.floor((frame_x - grid_x[0] + 0.5 * grid.dx) / grid.dx).astype(int)
         # j = ⌊(y − y₀ + Δy/2) / Δy⌋
-        j = np.floor((y - grid_y[0] + 0.5 * grid.dy) / grid.dy).astype(int)
-        outside_x = (i < 0) | (i >= grid_x.size)
-        outside_y = (j < 0) | (j >= grid_y.size)
+        index_y = np.floor((frame_y - grid_y[0] + 0.5 * grid.dy) / grid.dy).astype(int)
+        outside_x = (index_x < 0) | (index_x >= grid_x.size)
+        outside_y = (index_y < 0) | (index_y >= grid_y.size)
         outside = outside_x | outside_y
-        return np.where(outside, -1, i), np.where(outside, -1, j)
+        return np.where(outside, -1, index_x), np.where(outside, -1, index_y)
 
     def get_config(self) -> dict[str, Any]:
         """The frame's fields, for ``from_config``."""
