@@ -19,7 +19,6 @@ PACKAGE = Path(__file__).resolve().parents[1] / "src" / "plumax"
 FACADE_HOOKS = frozenset({"__getattr__", "__dir__"})
 #: packages whose public modules still hold logic, by the issue that moves them
 NOT_YET_MOVED = {
-    "population": 295,
     "les_fvm": 296,
     "geo": 297,
 }
