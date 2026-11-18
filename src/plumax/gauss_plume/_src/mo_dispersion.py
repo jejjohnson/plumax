@@ -125,6 +125,9 @@ def golder_stability_class(
     """
     inverse_obukhov_length = jnp.asarray(inverse_obukhov_length)
     boundaries = golder_class_boundaries(z0)
+    if inverse_obukhov_length.size == 0:
+        # einx rejects a zero-size axis; no lengths, no classes
+        return jnp.zeros(inverse_obukhov_length.shape, dtype=int)
     # 1[(1/L)_k < 1/L] for every boundary k
     above = einx.greater(
         "..., boundary -> ... boundary", inverse_obukhov_length, boundaries

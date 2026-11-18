@@ -76,6 +76,14 @@ def test_the_mask_itself_is_avoided_without_exclude(mask: np.ndarray) -> None:
     assert not (out & mask).any()
 
 
+def test_an_empty_exclude_stack_is_no_exclude(mask: np.ndarray) -> None:
+    no_masks = np.zeros((0, H, W), dtype=bool)
+    np.testing.assert_array_equal(
+        null_masks(mask, 10, key=jax.random.key(5), exclude=no_masks),
+        null_masks(mask, 10, key=jax.random.key(5)),
+    )
+
+
 # ── the key is the only randomness ────────────────────────────────────────
 
 
