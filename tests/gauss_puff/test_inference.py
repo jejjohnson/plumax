@@ -170,6 +170,26 @@ def test_gaussian_puff_rw_model_rejects_zero_puffs():
         )
 
 
+def test_gaussian_puff_rw_model_runs_with_one_puff():
+    # one release: the walk is its anchored first rate alone, with no steps
+    schedule = WindSchedule.from_speed_direction(
+        jnp.linspace(0, 10, 3), jnp.full(3, 5.0), jnp.full(3, 270.0)
+    )
+    predictive = Predictive(gaussian_puff_rw_model, num_samples=2)
+    draws = predictive(
+        jax.random.PRNGKey(0),
+        observations=jnp.array([1e-7]),
+        receptor_coords=(jnp.zeros(1), jnp.zeros(1), jnp.ones(1)),
+        observation_times=jnp.array([5.0]),
+        source_location=(0.0, 0.0, 2.0),
+        schedule=schedule,
+        release_times=jnp.array([0.0]),
+        release_interval=1.0,
+    )
+    assert draws["emission_rate"].shape == (2, 1)
+    assert bool(jnp.all(draws["emission_rate"] > 0.0))
+
+
 def test_infer_emission_timeseries_validates_inputs():
     # Shared validator — empty observations should fail fast.
     with pytest.raises(ValueError, match=r"must contain ≥ 1 point"):
