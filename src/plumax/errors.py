@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from plumax._src.errors import (
     ControlBlockError,
+    ConvergenceError,
     DomainError,
     GridMismatchError,
     MissingExtraError,
@@ -18,6 +19,7 @@ from plumax._src.errors import (
 
 __all__ = [
     "ControlBlockError",
+    "ConvergenceError",
     "DomainError",
     "GridMismatchError",
     "MissingExtraError",
