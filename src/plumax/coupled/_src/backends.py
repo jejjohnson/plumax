@@ -132,12 +132,12 @@ class LagrangianSource:
     def __post_init__(self) -> None:
         if len(self.winds) == 0:
             raise ValueError("LagrangianSource: need at least one member wind.")
-        n_cells = int(self.domain_x[2]) * int(self.domain_y[2])
+        num_cells = int(self.domain_x[2]) * int(self.domain_y[2])
         pattern_cells = np.shape(self.emission_pattern)[0]
-        if pattern_cells != n_cells:
+        if pattern_cells != num_cells:
             raise GridMismatchError(
                 f"LagrangianSource: `emission_pattern` has {pattern_cells} cells "
-                f"but the footprint grid has {n_cells}."
+                f"but the footprint grid has {num_cells}."
             )
 
     @classmethod
@@ -173,9 +173,11 @@ class LagrangianSource:
         """
         x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
         y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
-        ix = int(np.searchsorted(x_edges, location[0], side="right")) - 1
-        iy = int(np.searchsorted(y_edges, location[1], side="right")) - 1
-        if not (0 <= ix < x_edges.size - 1 and 0 <= iy < y_edges.size - 1):
+        col_index = int(np.searchsorted(x_edges, location[0], side="right")) - 1
+        row_index = int(np.searchsorted(y_edges, location[1], side="right")) - 1
+        in_x = 0 <= col_index < x_edges.size - 1
+        in_y = 0 <= row_index < y_edges.size - 1
+        if not (in_x and in_y):
             raise DomainError(
                 f"LagrangianSource.point: {location} lies outside the footprint grid."
             )
@@ -183,9 +185,10 @@ class LagrangianSource:
         cell_area = (x_edges[1] - x_edges[0]) * (y_edges[1] - y_edges[0])
         pattern = np.zeros((x_edges.size - 1, y_edges.size - 1))
         # q_s = 1 / A_cell in the containing cell
-        pattern[ix, iy] = 1.0 / cell_area
+        pattern[col_index, row_index] = 1.0 / cell_area
+        flat_pattern = einx.id("x y -> (x y)", pattern)
         return cls(
-            emission_pattern=jnp.asarray(pattern.reshape(-1)),
+            emission_pattern=jnp.asarray(flat_pattern),
             winds=tuple(winds),
             turbulence=turbulence,
             domain_x=domain_x,
@@ -207,9 +210,15 @@ class LagrangianSource:
         levels = np.asarray(self.column_z, dtype=float)
         receptors = np.asarray(instrument.receptors, dtype=float)
         # every receptor (x_i, y_i) at every level z_k, level fastest
-        horizontal = np.repeat(receptors, levels.size, axis=0)
-        heights = np.tile(levels, receptors.shape[0])
-        points = np.column_stack([horizontal, heights])
+        horizontal = einx.id(
+            "receptor coord -> (receptor level) coord", receptors, level=levels.size
+        )
+        heights = einx.id(
+            "level -> (receptor level) 1", levels, receptor=receptors.shape[0]
+        )
+        points = einx.id(
+            "point coord, point 1 -> point (coord + 1)", horizontal, heights
+        )
         return ensemble_footprints(
             list(self.winds),
             jnp.asarray(points),
@@ -244,7 +253,7 @@ class LagrangianSource:
             The response r_inst, one column per emission pattern when the
             pattern has a parameter axis.
         """
-        n_levels = int(np.shape(self.column_z)[0])
+        num_levels = int(np.shape(self.column_z)[0])
         footprints = self.footprints(instrument)
         # F̄ = mean_e F_e
         mean_footprint = einx.mean("member point cell -> point cell", footprints)
@@ -261,7 +270,7 @@ class LagrangianSource:
             # c = ρ_air F̄ q
             concentration = self.air_density * mixing_ratio
             profiles = einx.id(
-                "(obs level) -> obs level", concentration, level=n_levels
+                "(obs level) -> obs level", concentration, level=num_levels
             )
             return observation.column(profiles)
         # F̄ q_p, one per pattern
@@ -271,7 +280,7 @@ class LagrangianSource:
         # c_p = ρ_air F̄ q_p
         concentration = self.air_density * mixing_ratio
         profiles = einx.id(
-            "(obs level) param -> param obs level", concentration, level=n_levels
+            "(obs level) param -> param obs level", concentration, level=num_levels
         )
         columns = jax.vmap(observation.column)(profiles)
         return einx.id("param obs -> obs param", columns)
@@ -299,15 +308,15 @@ class EulerianSource:
     @functools.cached_property
     def unit_history(self) -> Float[Array, "time level y x"]:
         """Interior field history of a unit constant emission, one solve."""
-        n_times = self.forward.save_times.shape[0]
-        unit = jnp.ones(n_times, dtype=self.forward.save_times.dtype)
+        num_times = self.forward.save_times.shape[0]
+        unit = jnp.ones(num_times, dtype=self.forward.save_times.dtype)
         return self.forward.concentration_history(unit)
 
     @property
     def plume_grid(self) -> PlumeGrid3D:
         """The analysis grid the transport runs on."""
-        n_times = self.forward.save_times.shape[0]
-        unit = jnp.ones(n_times, dtype=self.forward.save_times.dtype)
+        num_times = self.forward.save_times.shape[0]
+        unit = jnp.ones(num_times, dtype=self.forward.save_times.dtype)
         return self.forward.rhs_factory(unit).plume_grid
 
     def time_index(self, instrument: Instrument) -> int:

@@ -33,6 +33,7 @@ import dataclasses
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+import einx
 import gaussx as gx
 import jax
 import jax.numpy as jnp
@@ -140,32 +141,37 @@ def _stack_design(
     ``(G, r, m, bg)`` with ``r`` the stacked observation variance, ``m`` the
     stacked observation mask and ``bg`` the stacked background offset.
     """
-    n_inst = len(forward.instruments)
+    num_instruments = len(forward.instruments)
     cols_bias = []
     response_blocks = []
     var_blocks = []
     mask_blocks = []
-    for i, (inst, resp) in enumerate(
+    for index, (inst, resp) in enumerate(
         zip(forward.instruments, forward.responses, strict=True)
     ):
-        n = inst.n_obs
-        response_blocks.append(resp[:, None] if resp.ndim == 1 else resp)
+        obs_size = inst.n_obs
+        if resp.ndim == 1:
+            # r_inst as a one-column design block
+            response_blocks.append(einx.id("obs -> obs 1", resp))
+        else:
+            response_blocks.append(resp)
         var_blocks.append(inst.observation_variance())
         mask_blocks.append(inst.observation_mask())
-        indicator = jnp.zeros((n, n_inst)).at[:, i].set(1.0)
+        indicator = jnp.zeros((obs_size, num_instruments)).at[:, index].set(1.0)
         cols_bias.append(indicator)
-    response = jnp.concatenate(response_blocks, axis=0)  # (n_total, n_param)
-    bias_cols = jnp.concatenate(cols_bias, axis=0)  # (n_total, n_inst)
-    g = jnp.concatenate([response, bias_cols], axis=1)  # (n_total, n_param + n_inst)
-    r = jnp.concatenate(var_blocks)  # (n_total,)
-    m = jnp.concatenate(mask_blocks)  # (n_total,)
-    bg = jnp.asarray(forward.source.background, dtype=float)
-    return g, r, m, bg
+    response = jnp.concatenate(response_blocks, axis=0)
+    bias_cols = jnp.concatenate(cols_bias, axis=0)
+    # G = [R_Q | bias indicators]
+    design = einx.id("obs param, obs inst -> obs (param + inst)", response, bias_cols)
+    obs_variance = jnp.concatenate(var_blocks)
+    mask = jnp.concatenate(mask_blocks)
+    background = jnp.asarray(forward.source.background, dtype=float)
+    return design, obs_variance, mask, background
 
 
 def _n_emission_params(forward: CoupledForward) -> int:
     """Emission parameters per response: 1 for a vector, its columns otherwise."""
-    widths = {1 if r.ndim == 1 else int(r.shape[1]) for r in forward.responses}
+    widths = {1 if resp.ndim == 1 else int(resp.shape[1]) for resp in forward.responses}
     if len(widths) != 1:
         raise ValueError(
             "fuse_observations: every instrument's response must have the same "
@@ -212,7 +218,7 @@ def _information_form_analysis(
     """
     vdx = require_vardax("fuse_observations")
     psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
-    oi = vdx.OptimalInterpolation(
+    analysis = vdx.OptimalInterpolation(
         obs_op=vdx.LinearObs(operator=lx.MatrixLinearOperator(design)),
         prior_mean=prior_mean,
         prior_cov_op=lx.MatrixLinearOperator(prior_covariance, psd),
@@ -220,11 +226,14 @@ def _information_form_analysis(
         form="state",
         solver=lx.Cholesky(),
     )
-    batch = vdx.Batch1D(input=shifted_obs[None], mask=mask[None])
-    posterior = oi.posterior(batch)
-    n_state = prior_mean.shape[0]
+    # one analysis in the batch: y − c and m with a leading batch axis
+    batch_input = einx.id("obs -> 1 obs", shifted_obs)
+    batch_mask = einx.id("obs -> 1 obs", mask)
+    batch = vdx.Batch1D(input=batch_input, mask=batch_mask)
+    posterior = analysis.posterior(batch)
+    state_size = prior_mean.shape[0]
     # P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹, one lazy mat-vec per basis vector
-    covariance = jax.vmap(posterior.cov.mv)(jnp.eye(n_state, dtype=prior_mean.dtype))
+    covariance = jax.vmap(posterior.cov.mv)(jnp.eye(state_size, dtype=prior_mean.dtype))
     return posterior.mean, gx.symmetrize(covariance)
 
 
@@ -283,60 +292,69 @@ def fuse_observations(
             for inst in forward.instruments
         )
         forward = dataclasses.replace(forward, instruments=screened)
-    n_inst = len(forward.instruments)
-    n_param = _n_emission_params(forward)
-    n_state = n_param + n_inst
-    theta_b = jnp.asarray(prior_mean, dtype=float)
-    b = jnp.asarray(prior_covariance, dtype=float)
-    if theta_b.shape != (n_state,):
+    num_instruments = len(forward.instruments)
+    param_size = _n_emission_params(forward)
+    # D_x = n_param + n_inst
+    state_size = param_size + num_instruments
+    prior_mean_vector = jnp.asarray(prior_mean, dtype=float)
+    prior_covariance_matrix = jnp.asarray(prior_covariance, dtype=float)
+    if prior_mean_vector.shape != (state_size,):
         raise ValueError(
             f"fuse_observations: `prior_mean` must be (n_param + n_inst = "
-            f"{n_state},); "
-            f"got {theta_b.shape}."
+            f"{state_size},); "
+            f"got {prior_mean_vector.shape}."
         )
-    if b.shape != (n_state, n_state):
+    if prior_covariance_matrix.shape != (state_size, state_size):
         raise ValueError(
-            f"fuse_observations: `prior_covariance` must be ({n_state}, {n_state}); "
-            f"got {b.shape}."
+            f"fuse_observations: `prior_covariance` must be "
+            f"({state_size}, {state_size}); "
+            f"got {prior_covariance_matrix.shape}."
         )
-    if len(observations) != n_inst:
+    if len(observations) != num_instruments:
         raise ValueError(
             f"fuse_observations: got {len(observations)} observation vectors for "
-            f"{n_inst} instruments."
+            f"{num_instruments} instruments."
         )
     obs_blocks = []
     for inst, obs in zip(forward.instruments, observations, strict=True):
-        o = jnp.asarray(obs, dtype=float)
-        if o.shape != (inst.n_obs,):
+        observed = jnp.asarray(obs, dtype=float)
+        if observed.shape != (inst.n_obs,):
             raise ValueError(
                 f"fuse_observations: observation for {inst.name!r} must be "
-                f"({inst.n_obs},); got {o.shape}."
+                f"({inst.n_obs},); got {observed.shape}."
             )
-        obs_blocks.append(o)
-    y = jnp.concatenate(obs_blocks)
+        obs_blocks.append(observed)
+    stacked_obs = jnp.concatenate(obs_blocks)
 
-    g, r, m, bg = _stack_design(forward)
-    theta, posterior_cov = _information_form_analysis(
-        g, y - bg, m, r, prior_mean=theta_b, prior_covariance=b
+    design, obs_variance, mask, background = _stack_design(forward)
+    # y − c_bg
+    shifted_obs = stacked_obs - background
+    posterior_mean, posterior_cov = _information_form_analysis(
+        design,
+        shifted_obs,
+        mask,
+        obs_variance,
+        prior_mean=prior_mean_vector,
+        prior_covariance=prior_covariance_matrix,
     )
 
     std = jnp.sqrt(jnp.clip(jnp.diag(posterior_cov), 0.0, None))
     names = tuple(inst.name for inst in forward.instruments)
-    emission = theta[0] if n_param == 1 else theta[:n_param]
-    emission_std = std[0] if n_param == 1 else std[:n_param]
+    emission = posterior_mean[0] if param_size == 1 else posterior_mean[:param_size]
+    emission_std = std[0] if param_size == 1 else std[:param_size]
     return FusionPosterior(
         emission_rate=emission,
         emission_std=emission_std,
-        biases=theta[n_param:],
-        bias_std=std[n_param:],
-        mean=theta,
+        biases=posterior_mean[param_size:],
+        bias_std=std[param_size:],
+        mean=posterior_mean,
         covariance=posterior_cov,
         instrument_names=names,
         pixels_used=jnp.stack(
             [full_weight_pixels(inst) for inst in forward.instruments]
         ),
-        prior_mean=theta_b,
-        prior_covariance=b,
+        prior_mean=prior_mean_vector,
+        prior_covariance=prior_covariance_matrix,
     )
 
 

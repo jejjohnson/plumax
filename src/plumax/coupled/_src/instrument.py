@@ -133,27 +133,35 @@ class Instrument(eqx.Module):
             ValueError: if any resulting variance is non-positive (a zero/negative
                 variance would blow up or invert the likelihood weight).
         """
-        n = self.n_obs
-        r = (
-            jnp.broadcast_to(jnp.asarray(self.retrieval_variance, dtype=float), (n,))
-            + jnp.broadcast_to(
-                jnp.asarray(self.representation_variance, dtype=float), (n,)
+        obs_size = self.n_obs
+        # R = R_retr + R_repr + R_align
+        obs_variance = (
+            jnp.broadcast_to(
+                jnp.asarray(self.retrieval_variance, dtype=float), (obs_size,)
             )
-            + jnp.broadcast_to(jnp.asarray(self.alignment_variance, dtype=float), (n,))
+            + jnp.broadcast_to(
+                jnp.asarray(self.representation_variance, dtype=float), (obs_size,)
+            )
+            + jnp.broadcast_to(
+                jnp.asarray(self.alignment_variance, dtype=float), (obs_size,)
+            )
         )
         # Eager positivity check, skipped under jit / grad / vmap — the fusion
-        # forward calls this from inside a traced cost, where ``r`` is a tracer
+        # forward calls this from inside a traced cost, where ``obs_variance`` is a tracer
         # (every jnp op inside a trace is, even on concrete inputs) and a
-        # host-bool conversion would raise. Guard on ``r`` itself, using the
+        # host-bool conversion would raise. Guard on ``obs_variance`` itself, using the
         # shared ``_is_traced`` helper to match the inversion modules.
-        if not _is_traced(r) and bool(jnp.any(r <= 0.0)):
+        if not _is_traced(obs_variance) and bool(jnp.any(obs_variance <= 0.0)):
             raise ValueError(
                 f"Instrument {self.name!r}: total observation variance must be > 0 "
                 "(check retrieval / representation / alignment variances)."
             )
         if self.variance_inflation is not None:
-            r = r * jnp.asarray(self.variance_inflation, dtype=float)
-        return r
+            # R ← ρ R, the per-pixel variance inflation
+            obs_variance = obs_variance * jnp.asarray(
+                self.variance_inflation, dtype=float
+            )
+        return obs_variance
 
 
 __all__ = ["Instrument"]
