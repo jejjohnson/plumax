@@ -98,13 +98,15 @@ def vertical_diffusion_tendency(
     """
     # Face-centred diffusivity at k-1/2.
     if jnp.ndim(jnp.asarray(kappa_z)) == 0:
-        kappa_face = jnp.asarray(kappa_z)  # broadcast scalar
+        # a scalar diffusivity broadcasts
+        face_diffusivity = jnp.asarray(kappa_z)
     else:
-        kappa_face = 0.5 * (kappa_z[:-1] + kappa_z[1:])
+        # K_{k-1/2} = ½ (K_{k-1} + K_k)
+        face_diffusivity = 0.5 * (kappa_z[:-1] + kappa_z[1:])
 
     # Flux at k-1/2: -K_z * (C[k] - C[k-1]) / dz
     grad_face = (concentration[1:] - concentration[:-1]) / dz
-    flux_face = kappa_face * grad_face  # shape [Nz - 1, Ny, Nx]
+    flux_face = face_diffusivity * grad_face
 
     # Tendency = (F_{k+1/2} - F_{k-1/2}) / dz at interior T[k].
     tendency_interior = (flux_face[1:] - flux_face[:-1]) / dz
