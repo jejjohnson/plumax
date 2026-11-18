@@ -452,6 +452,10 @@ class CoupledResult:
         line_density_std: Posterior standard deviation of q (NaN without the
             posterior).
         wind: ``(U, s_U)`` [m s⁻¹] that :meth:`with_wind` applied, or ``None``.
+        emission_block: The emission block the solve fitted, as its backend
+            declared it; ``None`` for a result built by hand, whose block is
+            then read from the names in ``map_estimate`` and ``prior``. A
+            name that starts with ``log_`` is lognormal in the payload.
 
     For a scalar Q it also carries the Tier V per-event payload
     (``population.PerEventPosterior``): draws of Q from the Laplace marginal
@@ -476,6 +480,7 @@ class CoupledResult:
     line_density: jax.Array | None = None
     line_density_std: jax.Array | None = None
     wind: tuple[float, float] | None = None
+    emission_block: str | None = None
 
     def with_wind(self, *, speed: float, speed_std: float) -> CoupledResult:
         """The same result with the emission rate filled in, Q = q U.
@@ -560,7 +565,7 @@ class CoupledResult:
             PayloadError: Without the Laplace posterior, for a vector Q, or
                 for a line density with no wind applied.
         """
-        block = _emission_block(self.map_estimate)
+        block = self._payload_block(self.map_estimate)
         if self.std is None:
             raise PayloadError(
                 "CoupledResult.samples needs the Laplace posterior; solve with "
@@ -581,9 +586,15 @@ class CoupledResult:
             # Q = q U
             line_density = GaussianEmission(center, spread).sample(line_key, n)
             return line_density * wind.sample(wind_key, n)
-        if block == "log_emission_rate":
+        if block.startswith("log_"):
             return LognormalEmission(center, spread).sample(key, n)
         return GaussianEmission(center, spread).sample(key, n)
+
+    def _payload_block(self, blocks: Mapping[str, jax.Array]) -> str:
+        """The fitted emission block, or the one ``blocks`` names."""
+        if self.emission_block is not None:
+            return self.emission_block
+        return _emission_block(blocks)
 
     def _wind_law(self, method: str) -> LognormalEmission:
         """The lognormal wind :meth:`with_wind` applied."""
@@ -611,7 +622,7 @@ class CoupledResult:
                 "CoupledResult.prior_logpdf: this result carries no prior; build "
                 "it with solve_coupled."
             )
-        block = _emission_block(self.prior.mean)
+        block = self._payload_block(self.prior.mean)
         center = jnp.asarray(self.prior.mean[block], dtype=float)
         _require_scalar(center, "prior_logpdf")
         # Q's diagonal entry of Σ_θ, at its offset in the flattened layout
@@ -638,13 +649,13 @@ class CoupledResult:
                 center + wind.loc, jnp.hypot(jnp.sqrt(variance), wind.scale)
             )
             return law.log_prob(q)
-        if block == "log_emission_rate":
+        if block.startswith("log_"):
             return LognormalEmission(center, jnp.sqrt(variance)).log_prob(q)
         return GaussianEmission(center, jnp.sqrt(variance)).log_prob(q)
 
 
 def _emission_block(blocks: Mapping[str, jax.Array]) -> str:
-    """The emission block a control or a prior holds."""
+    """The emission block a hand-built result's control or prior holds."""
     for name in ("log_emission_rate", "log_line_density", "line_density"):
         if name in blocks:
             return name
@@ -796,6 +807,7 @@ def solve_coupled(
         prior=prior,
         line_density=line_density,
         line_density_std=line_density_std,
+        emission_block=block,
     )
 
 

@@ -553,3 +553,47 @@ def test_line_density_interval_is_calibrated():
     # 3 binomial standard errors around 0.683
     tolerance = 3 * math.sqrt(0.683 * 0.317 / n_scenes)
     assert abs(coverage - 0.683) < tolerance, f"coverage {coverage:.3f}"
+
+
+class _FluxSource(AbstractControlledSource):
+    """A controlled backend with its own emission names and no geometry."""
+
+    scale: float = 0.01
+    background: float = 0.0
+
+    @property
+    def control_blocks(self):
+        return {}
+
+    @property
+    def emission_blocks(self):
+        return ("mass_flux", "log_mass_flux")
+
+    def column_response(self, instrument):
+        return self.response_at(instrument, {})
+
+    def response_at(self, instrument, control):
+        # r = s 1
+        return jnp.full(instrument.n_obs, self.scale)
+
+
+@pytest.mark.slow
+def test_payload_follows_the_backend_emission_block():
+    source = _FluxSource()
+    instrument = _instrument(_receptors(length=120.0, half_width=60.0))
+    # y = exp(log F) r + ε with F = 2
+    observation = 2.0 * source.column_response(instrument)
+    prior = CoupledPrior.from_std({"log_mass_flux": 0.0}, {"log_mass_flux": 2.0})
+    result = solve_coupled(_problem(source, instrument, observation, prior))
+    assert result.emission_block == "log_mass_flux"
+    draws = result.samples(jax.random.PRNGKey(0), 1000)
+    # lognormal draws: positive, around exp(log F*)
+    assert bool(jnp.all(draws > 0.0))
+    np.testing.assert_allclose(jnp.median(draws), 2.0, rtol=0.05)
+    # log π(F) of log F ~ N(0, 4)
+    expected = (
+        -jnp.log(2.0) - 0.5 * jnp.log(2 * math.pi * 4.0) - jnp.log(2.0) ** 2 / 8.0
+    )
+    np.testing.assert_allclose(
+        result.prior_logpdf(jnp.asarray(2.0)), expected, rtol=1e-10
+    )
