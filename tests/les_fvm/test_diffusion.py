@@ -12,6 +12,7 @@ import pytest
 from scipy.optimize import brentq
 
 from plumax.gauss_puff.dispersion import calculate_pg_dispersion, get_pg_params
+from plumax.les_fvm._src.simulate import _max_diffusivity
 from plumax.les_fvm.diffusion import (
     EddyDiffusivity,
     diffusion_tendency,
@@ -21,7 +22,6 @@ from plumax.les_fvm.diffusion import (
     smagorinsky_k_h,
 )
 from plumax.les_fvm.grid import make_grid
-from plumax.les_fvm.simulate import _max_diffusivity
 from plumax.les_fvm.wind import uniform_wind_field, wind_field_from_callable
 from plumax.met.surface_layer import KARMAN, SurfaceLayer
 

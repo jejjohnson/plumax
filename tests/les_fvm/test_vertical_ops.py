@@ -5,7 +5,7 @@ from __future__ import annotations
 import jax.numpy as jnp
 import numpy as np
 
-from plumax.les_fvm._vertical_ops import (
+from plumax.les_fvm._src.vertical_ops import (
     vertical_advection_tendency,
     vertical_diffusion_tendency,
 )

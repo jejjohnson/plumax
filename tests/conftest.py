@@ -38,6 +38,7 @@ _TYPED_PACKAGES = (
     "plumax.gauss_puff._src",
     "plumax.geo._src",
     "plumax.lagrangian._src",
+    "plumax.les_fvm._src",
     "plumax.met._src",
     "plumax.obs._src",
     "plumax.population._src",
