@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import equinox as eqx
 import jax.numpy as jnp
+from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
 
@@ -74,7 +75,7 @@ def vertical_advection_tendency(
 @eqx.filter_jit
 def vertical_diffusion_tendency(
     concentration: Float[Array, "Nz Ny Nx"],
-    kappa_z: float | Float[Array, "Nz Ny Nx"],
+    kappa_z: Float[ArrayLike, ""] | Float[Array, "Nz Ny Nx"],
     dz: float,
 ) -> Float[Array, "Nz Ny Nx"]:
     """Central-difference ``∂_z(K_z ∂_z C)`` at interior T-points.

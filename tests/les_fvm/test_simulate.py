@@ -530,7 +530,7 @@ def test_ssprk3_from_integrix_matches_finitevolx(monkeypatch):
     to 1e-12 in float64."""
     from finitevolx import RK3SSP as FinitevolxRK3SSP
 
-    from plumax.les_fvm import simulate as simulate_module
+    from plumax.les_fvm._src import simulate as simulate_module
 
     kwargs = _common_kwargs(solver="ssprk3")
     integrix_run = simulate_eulerian_dispersion(**kwargs)

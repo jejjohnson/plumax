@@ -17,6 +17,7 @@ from plumax.les_fvm import (
     posterior_covariance,
     solve_4dvar,
 )
+from tests._type_check import raises_checked
 
 
 pytest.importorskip("vardax")
@@ -243,12 +244,13 @@ def _unsolved_problem():
 
 
 def test_psas_names_the_vardax_issue_it_waits_on():
-    with pytest.raises(ValueError, match="vardax/issues/72"):
+    # "psas" is not a method the Literal allows, so the hook may reject it first
+    with raises_checked(ValueError, "vardax/issues/72", parameter="method"):
         solve_4dvar(_unsolved_problem(), method="psas")
 
 
 def test_unknown_method_is_rejected():
-    with pytest.raises(ValueError, match="unknown method"):
+    with raises_checked(ValueError, "unknown method", parameter="method"):
         solve_4dvar(_unsolved_problem(), method="newton")
 
 
