@@ -85,10 +85,11 @@ class PlumeSource(AbstractControlledSource):
 
     def wind_uv(self) -> tuple[float, float]:
         """Wind ``(u, v)`` [m/s] from speed + meteorological direction."""
-        theta = np.deg2rad(self.wind_direction)
-        u = -self.wind_speed * np.sin(theta)
-        v = -self.wind_speed * np.cos(theta)
-        return float(u), float(v)
+        direction = np.deg2rad(self.wind_direction)
+        # (u, v) = −s (sin φ, cos φ)
+        wind_east = -self.wind_speed * np.sin(direction)
+        wind_north = -self.wind_speed * np.cos(direction)
+        return float(wind_east), float(wind_north)
 
     @property
     def control_blocks(self) -> Mapping[str, tuple[int, ...]]:
@@ -150,24 +151,36 @@ def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
     """
     z = jnp.asarray(source.column_z, dtype=float)
     receptors = jnp.asarray(instrument.receptors, dtype=float)
-    n_obs = receptors.shape[0]
-    n_z = z.shape[0]
+    obs_size = receptors.shape[0]
+    num_levels = z.shape[0]
 
-    # Build (n_obs * n_z) receptor points: every (x, y) crossed with every z.
-    x = jnp.repeat(receptors[:, 0], n_z)
-    y = jnp.repeat(receptors[:, 1], n_z)
-    z_tiled = jnp.tile(z, n_obs)
+    # every receptor (x_i, y_i) at every level z_k, level fastest
+    easting = einx.id("receptor -> (receptor level)", receptors[:, 0], level=num_levels)
+    northing = einx.id(
+        "receptor -> (receptor level)", receptors[:, 1], level=num_levels
+    )
+    height = einx.id("level -> (receptor level)", z, receptor=obs_size)
 
-    sx, sy, sz = source.location
-    u, v = source.wind_uv()
+    source_x, source_y, source_z = source.location
+    wind_east, wind_north = source.wind_uv()
     dispersion = get_dispersion_params(source.stability_class)
 
-    conc = plume_concentration_vmap(
-        x, y, z_tiled, sx, sy, sz, u, v, 1.0, dispersion
-    )  # unit Q
-    conc = conc.reshape(n_obs, n_z)
+    # c(x, y, z; Q = 1)
+    concentration = plume_concentration_vmap(
+        easting,
+        northing,
+        height,
+        source_x,
+        source_y,
+        source_z,
+        wind_east,
+        wind_north,
+        1.0,
+        dispersion,
+    )
+    profiles = einx.id("(obs level) -> obs level", concentration, level=num_levels)
     observation = ColumnObservation.trapezoid(z, averaging_kernel=instrument.ak)
-    return observation.column(conc)
+    return observation.column(profiles)
 
 
 def plume_response(
@@ -194,19 +207,19 @@ def plume_response(
     """
     levels = jnp.asarray(source.column_z, dtype=float)
     receptors = jnp.asarray(instrument.receptors, dtype=float)
-    n_levels = levels.shape[0]
+    num_levels = levels.shape[0]
     # every receptor at every level, level fastest
-    x = einx.id("obs -> (obs level)", receptors[:, 0], level=n_levels)
-    y = einx.id("obs -> (obs level)", receptors[:, 1], level=n_levels)
-    z = einx.id("level -> (obs level)", levels, obs=receptors.shape[0])
+    easting = einx.id("obs -> (obs level)", receptors[:, 0], level=num_levels)
+    northing = einx.id("obs -> (obs level)", receptors[:, 1], level=num_levels)
+    height = einx.id("level -> (obs level)", levels, obs=receptors.shape[0])
     direction = jnp.deg2rad(wind[1])
     # (u, v) = −s (sin φ, cos φ)
     wind_u = -wind[0] * jnp.sin(direction)
     wind_v = -wind[0] * jnp.cos(direction)
     concentration = plume_concentration_vmap(
-        x,
-        y,
-        z,
+        easting,
+        northing,
+        height,
         location[0],
         location[1],
         source.location[2],
@@ -215,7 +228,7 @@ def plume_response(
         1.0,
         get_dispersion_params(source.stability_class),
     )
-    profiles = einx.id("(obs level) -> obs level", concentration, level=n_levels)
+    profiles = einx.id("(obs level) -> obs level", concentration, level=num_levels)
     observation = ColumnObservation.trapezoid(levels, averaging_kernel=instrument.ak)
     return observation.column(profiles)
 
@@ -289,8 +302,8 @@ class CoupledForward:
                 f"{len(self.instruments)} instruments."
             )
         return [
-            _scale_response(resp, emission_rate) + self.source.background + b
-            for resp, b in zip(self.responses, biases, strict=True)
+            _scale_response(resp, emission_rate) + self.source.background + bias
+            for resp, bias in zip(self.responses, biases, strict=True)
         ]
 
 

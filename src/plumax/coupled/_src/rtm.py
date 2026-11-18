@@ -46,6 +46,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -146,19 +147,25 @@ def column_mass_to_delta_vmr(
             f"must be > 0 (got p_atm={p_atm!r}, T_K={T_K!r}, "
             f"path_length_cm={path_length_cm!r})."
         )
-    m = jnp.asarray(column_mass_kg_m2, dtype=float)
+    column_mass = jnp.asarray(column_mass_kg_m2, dtype=float)
     # Gas column number density [molecules/cm²].
-    n_gas_cm2 = m * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
+    # N_gas = m (N_A / M_CH₄) / 1e4
+    gas_column_cm2 = (
+        column_mass * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
+    )
     # Air number density [molecules/cm³] — the ideal-gas relation inlined with
     # ``jnp`` (rather than the NumPy ``radtrax.slab.number_density_cm3``) so a
     # traced ``p_atm`` / ``T_K`` flows through differentiably, honouring the
     # pure-JAX contract; identical formula and constants.
     p_atm_j = jnp.asarray(p_atm, dtype=float)
     T_K_j = jnp.asarray(T_K, dtype=float)
-    n_air_cm3 = (p_atm_j * ATM_TO_PA) / (BOLTZMANN_J_PER_K * T_K_j) / CM3_PER_M3
+    # n_air = p / (k_B T) / 1e6
+    air_density_cm3 = (p_atm_j * ATM_TO_PA) / (BOLTZMANN_J_PER_K * T_K_j) / CM3_PER_M3
     # Air column number density [molecules/cm²].
-    n_air_cm2 = n_air_cm3 * jnp.asarray(path_length_cm, dtype=float)
-    return n_gas_cm2 / n_air_cm2
+    # N_air = n_air L
+    air_column_cm2 = air_density_cm3 * jnp.asarray(path_length_cm, dtype=float)
+    # ΔVMR = N_gas / N_air
+    return gas_column_cm2 / air_column_cm2
 
 
 @dataclass(frozen=True)
@@ -220,7 +227,7 @@ class RadianceObservationOperator:
             path_length_cm=self.path_length_cm,
         )
 
-    def _forward_hr(self, delta_vmr: float):
+    def _forward_hr(self, vmr_enhancement: float):
         """Single-receptor normalised Beer–Lambert forward (NumPy ForwardResult)."""
         return forward_nonlinear_normalized(
             self.ds,
@@ -228,7 +235,7 @@ class RadianceObservationOperator:
             T_K=self.T_K,
             p_atm=self.p_atm,
             vmr_background=self.vmr_background,
-            delta_vmr=float(delta_vmr),
+            delta_vmr=float(vmr_enhancement),
             path_length_cm=self.path_length_cm,
             amf=self.amf,
             var=self.var,
@@ -247,9 +254,11 @@ class RadianceObservationOperator:
         spec = np.asarray(spectrum_hr, dtype=float)
         if self.srf is None:
             return spec
-        wl_obs = 1e7 / np.asarray(self.nu_obs, dtype=float)  # nm, decreasing
-        order = np.argsort(wl_obs)  # → ascending wavelength for np.interp
-        wl_obs_sorted = wl_obs[order]
+        # λ = 1e7 / ν, in nm and decreasing
+        obs_wavelength = 1e7 / np.asarray(self.nu_obs, dtype=float)
+        # → ascending wavelength for np.interp
+        order = np.argsort(obs_wavelength)
+        wl_obs_sorted = obs_wavelength[order]
         srf_wl = np.asarray(self.srf.wavelengths_hr_nm, dtype=float)
         # Reject (rather than silently extrapolate) an SRF grid that reaches
         # outside the modelled ``nu_obs`` window: ``np.interp`` would repeat the
@@ -297,7 +306,7 @@ class RadianceObservationOperator:
                 "RadianceObservationOperator.predict: `column_enhancement` must "
                 f"be 1-D (n_obs,); got shape {cols.shape}."
             )
-        rows = [self.predict_single(float(c)) for c in cols]
+        rows = [self.predict_single(float(column)) for column in cols]
         return np.stack(rows, axis=0)
 
     def linearize_single(self, column_mass_kg_m2: float) -> np.ndarray:
@@ -410,10 +419,11 @@ class LayeredRadianceOperator(eqx.Module):
         plume = self.state.add_column(
             self.gas, self.delta_column(column_mass_kg_m2), self.profile
         )
-        y = self.model(plume, self.surface, self.geometry)
+        radiance = self.model(plume, self.surface, self.geometry)
         if self.normalise:
-            y = y / self.model(self.state, self.surface, self.geometry)
-        return y
+            # y(ΔX) / y(0)
+            radiance = radiance / self.model(self.state, self.surface, self.geometry)
+        return radiance
 
     def predict(self, column_enhancement: jax.Array | np.ndarray) -> jax.Array:
         """Per-receptor band values, shape ``(n_obs, n_channels)``.
@@ -422,13 +432,13 @@ class LayeredRadianceOperator(eqx.Module):
             column_enhancement: Per-receptor column mass enhancement [kg/m²],
                 shape ``(n_obs,)`` (e.g. ``Q · column_response``).
         """
-        m = jnp.asarray(column_enhancement, dtype=float)
-        if m.ndim != 1:
+        column_mass = jnp.asarray(column_enhancement, dtype=float)
+        if column_mass.ndim != 1:
             raise ValueError(
                 "LayeredRadianceOperator.predict: `column_enhancement` must be "
-                f"1-D (n_obs,); got shape {m.shape}."
+                f"1-D (n_obs,); got shape {column_mass.shape}."
             )
-        return jax.vmap(self.predict_single)(m)
+        return jax.vmap(self.predict_single)(column_mass)
 
 
 def radiance_response(
@@ -522,8 +532,9 @@ class LinearisedRadianceOperator:
 
     def predict_single(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
         """Linearised normalised radiance ``baseline + gain · mass`` for one receptor."""
-        m = jnp.asarray(column_mass_kg_m2, dtype=float)
-        return self.baseline + self.gain * m
+        column_mass = jnp.asarray(column_mass_kg_m2, dtype=float)
+        # L = L₀ + g m
+        return self.baseline + self.gain * column_mass
 
     def predict(self, column_enhancement: jax.Array) -> jax.Array:
         """Per-receptor linearised radiance, shape ``(n_obs, n_channels)``.
@@ -531,13 +542,16 @@ class LinearisedRadianceOperator:
         Fully differentiable / vectorised JAX (unlike the nonlinear operator's
         NumPy LUT path): ``baseline[None, :] + mass[:, None] · gain[None, :]``.
         """
-        m = jnp.asarray(column_enhancement, dtype=float)
-        if m.ndim != 1:
+        column_mass = jnp.asarray(column_enhancement, dtype=float)
+        if column_mass.ndim != 1:
             raise ValueError(
                 "LinearisedRadianceOperator.predict: `column_enhancement` must "
-                f"be 1-D (n_obs,); got shape {m.shape}."
+                f"be 1-D (n_obs,); got shape {column_mass.shape}."
             )
-        return self.baseline[None, :] + m[:, None] * self.gain[None, :]
+        # g m
+        scaled = einx.multiply("obs, channel -> obs channel", column_mass, self.gain)
+        # L = L₀ + g m
+        return einx.add("channel, obs channel -> obs channel", self.baseline, scaled)
 
 
 def linearise(

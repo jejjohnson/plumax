@@ -84,8 +84,8 @@ def solve_coupled_multistart(
     counts = {
         name: value.shape[0] if value.ndim else 0 for name, value in values.items()
     }
-    n_starts = next(iter(counts.values()))
-    if n_starts == 0 or any(count != n_starts for count in counts.values()):
+    num_starts = next(iter(counts.values()))
+    if num_starts == 0 or any(count != num_starts for count in counts.values()):
         raise ControlBlockError(
             "solve_coupled_multistart: every block of `starts` needs the same "
             f"leading number of starts, at least one; got {counts}."
@@ -93,9 +93,9 @@ def solve_coupled_multistart(
 
     # --- one solve per start ---
     results = []
-    for j in range(n_starts):
+    for start_index in range(num_starts):
         # θ⁽⁰⁾_j
-        initial = {name: value[j] for name, value in values.items()}
+        initial = {name: value[start_index] for name, value in values.items()}
         results.append(solve_coupled(problem, initial=initial, **solve_options))
 
     # --- the lowest converged cost ---
@@ -103,7 +103,7 @@ def solve_coupled_multistart(
     converged = np.array([result.converged for result in results], dtype=bool)
     if not bool(converged.any()):
         raise ConvergenceError(
-            f"solve_coupled_multistart: none of the {n_starts} starts converged; "
+            f"solve_coupled_multistart: none of the {num_starts} starts converged; "
             "raise `max_steps` or check the starts."
         )
     # j* = argmin_j 𝒥(θ*_j) over the converged j

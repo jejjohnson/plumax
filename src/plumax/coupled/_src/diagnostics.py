@@ -121,12 +121,12 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     """
     prior = problem.prior
     prior_mean, unflatten = prior.flatten()
-    theta = jnp.asarray(result.mean, dtype=prior_mean.dtype)
-    n_param = prior_mean.shape[0]
+    params = jnp.asarray(result.mean, dtype=prior_mean.dtype)
+    param_size = prior_mean.shape[0]
 
     # --- Jacobian at the MAP ---
     # J_h = ∂h / ∂θ at θ*
-    obs_jacobian = _stacked_jacobian(problem, unflatten)(theta)
+    obs_jacobian = _stacked_jacobian(problem, unflatten)(params)
 
     # --- Fisher information ---
     stacked = problem.stacked_observations()
@@ -168,11 +168,11 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
         "row a, a b, b col -> row col", cholesky, fisher, cholesky
     )
     # I + Lᵀ F L
-    whitened_precision = jnp.eye(n_param, dtype=fisher.dtype) + whitened_fisher
+    whitened_precision = jnp.eye(param_size, dtype=fisher.dtype) + whitened_fisher
     # (I + Lᵀ F L)⁻¹
     whitened_covariance = jnp.linalg.inv(whitened_precision)
     # d_s = tr(I − (I + Lᵀ F L)⁻¹)
-    dofs = n_param - jnp.trace(whitened_covariance)
+    dofs = param_size - jnp.trace(whitened_covariance)
     # Σ_θ|y = L (I + Lᵀ F L)⁻¹ Lᵀ
     posterior_covariance = einx.dot(
         "row a, a b, col b -> row col", cholesky, whitened_covariance, cholesky
@@ -183,29 +183,31 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     # 1 − [Σ_θ|y]_aa / [Σ_θ]_aa
     data_fraction = 1.0 - jnp.diagonal(posterior_covariance) / prior_variance
     # (θ* − μ_θ) / √[Σ_θ]_aa
-    prior_pull = (theta - prior_mean) / jnp.sqrt(prior_variance)
+    prior_pull = (params - prior_mean) / jnp.sqrt(prior_variance)
 
     # --- residuals ---
-    predictions = problem.predict(unflatten(theta))
+    predictions = problem.predict(unflatten(params))
     reduced_chi2, rms_residual = {}, {}
     start = 0
     for instrument in problem.forward.instruments:
         size = int(np.size(predictions[instrument.name]))
         stop = start + size
-        # rₙ = yₙ − hₙ(θ*), ωₙ, σₙ²
-        residual = stacked.values[start:stop] - jnp.ravel(predictions[instrument.name])
+        # rₙ = yₙ − hₙ(θ*)
+        predicted = einx.id("... -> (...)", predictions[instrument.name])
+        residual = stacked.values[start:stop] - predicted
+        # ωₙ, σₙ²
         weight = stacked.mask[start:stop]
         variance = stacked.variance[start:stop]
         start = stop
         # N_i = Σₙ ωₙ
-        n_kept = einx.sum("[obs]", weight)
+        num_kept = einx.sum("[obs]", weight)
         # Σₙ ωₙ rₙ² / σₙ²
         chi2 = einx.sum("[obs]", weight * jnp.square(residual) / variance)
         # χ²_red = Σₙ ωₙ rₙ² / σₙ² / (N_i − d_s)
-        reduced_chi2[instrument.name] = _ratio(chi2, n_kept - dofs)
+        reduced_chi2[instrument.name] = _ratio(chi2, num_kept - dofs)
         # rms = √(Σₙ ωₙ rₙ² / N_i)
         squared = einx.sum("[obs]", weight * jnp.square(residual))
-        rms_residual[instrument.name] = float(np.sqrt(_ratio(squared, n_kept)))
+        rms_residual[instrument.name] = float(np.sqrt(_ratio(squared, num_kept)))
 
     return FitDiagnostics(
         fisher_information=np.asarray(fisher),

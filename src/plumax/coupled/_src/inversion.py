@@ -207,7 +207,8 @@ class CoupledPrior:
             entry = jnp.asarray(covariance[name], dtype=float)
             if _broadcasts(entry.shape, shape):
                 # σ per element
-                std = jnp.ravel(jnp.broadcast_to(entry, shape))
+                broadcast_std = jnp.broadcast_to(entry, shape)
+                std = einx.id("... -> (...)", broadcast_std)
                 if not bool(jnp.all(std > 0.0)):
                     raise ControlBlockError(
                         f"CoupledPrior.from_blocks: the standard deviation of "
@@ -351,9 +352,9 @@ class CoupledProblem:
                 raise ValueError(
                     f"CoupledProblem: no `radiance_variance` for {name!r}."
                 )
-        self._check_blocks(n_instruments=len(names))
+        self._check_blocks(num_instruments=len(names))
 
-    def _check_blocks(self, n_instruments: int) -> None:
+    def _check_blocks(self, num_instruments: int) -> None:
         """The prior's blocks against the backend's declarations."""
         source = self.forward.source
         declared, emission = _declarations(source)
@@ -378,7 +379,7 @@ class CoupledProblem:
                 f"CoupledProblem: give exactly one of {list(emission)} for "
                 f"{type(source).__name__}; got {present}."
             )
-        shapes = {**declared, "background": (), "biases": (n_instruments,)}
+        shapes = {**declared, "background": (), "biases": (num_instruments,)}
         for name, expected in shapes.items():
             if name not in self.prior.mean:
                 continue
@@ -431,8 +432,8 @@ class CoupledProblem:
         background = control.get(
             "background", jnp.asarray(self.forward.source.background, dtype=float)
         )
-        n_instruments = len(self.forward.instruments)
-        biases = control.get("biases", jnp.zeros(n_instruments))
+        num_instruments = len(self.forward.instruments)
+        biases = control.get("biases", jnp.zeros(num_instruments))
         predictions = {}
         for index, (instrument, response) in enumerate(
             zip(self.forward.instruments, self.responses(control), strict=True)
@@ -448,12 +449,11 @@ class CoupledProblem:
     def predict_stacked(self, control: Mapping[str, jax.Array]) -> jax.Array:
         """Every instrument's prediction, flattened and stacked, shape ``(D_y,)``."""
         predictions = self.predict(control)
-        return jnp.concatenate(
-            [
-                jnp.ravel(predictions[instrument.name])
-                for instrument in self.forward.instruments
-            ]
-        )
+        flat_predictions = [
+            einx.id("... -> (...)", predictions[instrument.name])
+            for instrument in self.forward.instruments
+        ]
+        return jnp.concatenate(flat_predictions)
 
     def stacked_observations(self) -> StackedObservations:
         """Observations, masks and Σ_ε stacked like :meth:`predict_stacked`.
@@ -466,7 +466,7 @@ class CoupledProblem:
             observation = jnp.asarray(self.observations[instrument.name], dtype=float)
             mask = instrument.observation_mask()
             if instrument.name in self.radiance_ops:
-                n_channels = observation.shape[-1]
+                num_channels = observation.shape[-1]
                 variance = jnp.broadcast_to(
                     jnp.asarray(self.radiance_variance[instrument.name], dtype=float),
                     observation.shape,
@@ -476,7 +476,7 @@ class CoupledProblem:
                     variance = einx.multiply(
                         "obs channel, obs -> obs channel", variance, inflation
                     )
-                mask = einx.id("obs -> obs channel", mask, channel=n_channels)
+                mask = einx.id("obs -> obs channel", mask, channel=num_channels)
             else:
                 variance = instrument.observation_variance()
             if observation.shape != mask.shape:
@@ -485,9 +485,10 @@ class CoupledProblem:
                     f"{observation.shape}; expected {mask.shape}."
                 )
             # y = 0 where m = 0
-            values.append(jnp.ravel(jnp.where(mask > 0.0, observation, 0.0)))
-            masks.append(jnp.ravel(mask))
-            variances.append(jnp.ravel(variance))
+            kept_observation = jnp.where(mask > 0.0, observation, 0.0)
+            values.append(einx.id("... -> (...)", kept_observation))
+            masks.append(einx.id("... -> (...)", mask))
+            variances.append(einx.id("... -> (...)", variance))
         return StackedObservations(
             values=jnp.concatenate(values),
             mask=jnp.concatenate(masks),
@@ -821,12 +822,14 @@ def solve_coupled(
     # --- prior and whitened control ---
     prior = problem.prior
     prior_mean, unflatten = prior.flatten()
-    n_param = prior_mean.shape[0]
+    param_size = prior_mean.shape[0]
     # Σ_θ = L Lᵀ
     cholesky = prior.cholesky()
     # θ = μ_θ + L χ, ½ ‖χ‖²
     basis = vdx.linear_basis(cholesky, variance=1.0)
-    linear_control = vdx.LinearParameterization(basis, background=prior_mean[None])
+    # μ_θ on a (1, D_θ) row
+    prior_row = einx.id("param -> 1 param", prior_mean)
+    linear_control = vdx.LinearParameterization(basis, background=prior_row)
     control = linear_control
     if initial is not None:
         # χ₀ = L⁻¹ (θ₀ − μ_θ)
@@ -845,7 +848,7 @@ def solve_coupled(
 
     model = vdx.ThreeDVar(
         obs_op=vdx.CallableObs(fn=stacked_prediction, materialise=True),
-        prior_mean=prior_mean[None],
+        prior_mean=prior_row,
         prior_cov_op=prior.row_operator(),
         obs_cov_op=stacked.obs_cov_op(),
         minimiser=vdx.OptimistixMinimiser(
@@ -859,8 +862,8 @@ def solve_coupled(
     # --- MAP ---
     # θ* = argmin 𝒥(θ)
     analysis, outcome = model.analyse(batch)
-    theta = analysis[0, 0]
-    map_estimate = unflatten(theta)
+    params = analysis[0, 0]
+    map_estimate = unflatten(params)
 
     # --- Laplace posterior ---
     covariance = None
@@ -868,14 +871,22 @@ def solve_coupled(
     if laplace:
         # the posterior at θ* does not depend on the start, and vardax takes it
         # from the affine parameterization
-        affine_model = eqx.tree_at(lambda m: m.parameterization, model, linear_control)
-        # Σ_θ|y = (Σ_θ⁻¹ + J_hᵀ Σ_ε⁻¹ J_h)⁻¹
-        posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-            theta[None], affine_model, batch
+        affine_model = eqx.tree_at(
+            lambda module: module.parameterization, model, linear_control
         )
-        columns = jax.vmap(
-            lambda basis_vector: posterior.cov.mv(basis_vector[None])[0]
-        )(jnp.eye(n_param, dtype=theta.dtype))
+        # Σ_θ|y = (Σ_θ⁻¹ + J_hᵀ Σ_ε⁻¹ J_h)⁻¹
+        params_row = einx.id("param -> 1 param", params)
+        posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
+            params_row, affine_model, batch
+        )
+
+        def posterior_column(basis_vector: jax.Array) -> jax.Array:
+            # Σ_θ|y e_k on a (1, D_θ) row
+            basis_row = einx.id("param -> 1 param", basis_vector)
+            column_row = posterior.cov.mv(basis_row)
+            return einx.id("1 param -> param", column_row)
+
+        columns = jax.vmap(posterior_column)(jnp.eye(param_size, dtype=params.dtype))
         covariance = gx.symmetrize(columns)
         marginal_std = jnp.sqrt(jnp.clip(jnp.diagonal(covariance), 0.0, None))
         std = unflatten(marginal_std)
@@ -905,7 +916,7 @@ def solve_coupled(
     return CoupledResult(
         map_estimate=map_estimate,
         std=std,
-        mean=theta,
+        mean=params,
         covariance=covariance,
         emission_rate=emission_rate,
         emission_std=emission_std,
