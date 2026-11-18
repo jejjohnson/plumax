@@ -174,6 +174,17 @@ def test_without_exclude_only_the_seeds_are_kept_out(
     assert (pool & mask).any()  # mask pixels that are not seeds can join
 
 
+def test_an_empty_exclude_stack_excludes_nothing(
+    mf: np.ndarray, mask: np.ndarray
+) -> None:
+    seeds = np.asarray(select_seeds(mf, mask))
+    no_masks = np.zeros((0, *mf.shape), dtype=bool)
+    np.testing.assert_array_equal(
+        background_pool(mf, seeds, threshold=0.2, exclude=no_masks, box=5),
+        background_pool(mf, seeds, threshold=0.2, box=5),
+    )
+
+
 def test_the_threshold_is_strict_and_nan_never_joins() -> None:
     mf = np.zeros((5, 5))
     mf[0, 0], mf[0, 1], mf[0, 2] = 1.0, -1.0, np.nan

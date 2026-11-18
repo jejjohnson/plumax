@@ -328,6 +328,12 @@ def test_linearise_baseline_and_gain_shapes(synthetic_lut, nu_obs):
     assert float(jnp.min(lin.gain)) < 0.0
 
 
+def test_linearised_radiance_of_no_receptors_is_empty(synthetic_lut, nu_obs):
+    lin = linearise(_operator(synthetic_lut, nu_obs))
+    radiance = lin.predict(jnp.zeros((0,)))
+    assert radiance.shape == (0, np.shape(lin.gain)[0])
+
+
 def test_linearised_matches_nonlinear_to_first_order(synthetic_lut, nu_obs):
     # For a small enhancement the linearised radiance ≈ the exact Beer–Lambert
     # forward; the tangent is exact at 0 and first-order accurate near it.
