@@ -184,14 +184,16 @@ vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.5" }
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
 # The geotoolz packages (the `geo` and `io` extras) are pinned to one geotoolz
-# commit, df8c228 on main: geoops 0.18.1 on pipekit-ops and the GeoArray
+# commit, 5742376 on main: geoops 0.18.1 on pipekit-ops and the GeoArray
 # carrier, geoarray beside it, and the xarray lane moved in from xrtoolz
-# (xrops 0.5.1, xrproducts 0.5.0), which has no release from geotoolz yet. functax is geoarray's own git dependency, at the tag
+# (xrops 0.5.1, xrproducts 0.5.0), which has no release from geotoolz yet. The
+# commit carries the plume-product openers (geotoolz#744) and the EMIT QA
+# presets (geotoolz#747) that `obs.load_emit_plume_complex` uses. functax is geoarray's own git dependency, at the tag
 # geotoolz pins.
-geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
-geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
-xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
-xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "df8c228090b675365abd3fe272890f6a055434c6" }
+geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
+geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
+xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
+xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
 functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.6" }
 
 [dependency-groups]

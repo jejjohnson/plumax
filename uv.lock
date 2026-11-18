@@ -1259,7 +1259,7 @@ wheels = [
 [[package]]
 name = "geotoolz-array"
 version = "0.4.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-array&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-array&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9#5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
 dependencies = [
     { name = "affine" },
     { name = "functax" },
@@ -1272,7 +1272,7 @@ dependencies = [
 [[package]]
 name = "geotoolz-ops"
 version = "0.18.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9#5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
 dependencies = [
     { name = "affine" },
     { name = "einx" },
@@ -3374,7 +3374,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.2.5"
+version = "0.2.6"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -3475,7 +3475,7 @@ requires-dist = [
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
@@ -3497,8 +3497,8 @@ requires-dist = [
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
     { name = "xarray" },
-    { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
-    { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
+    { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "xtremax", marker = "extra == 'population'", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 provides-extras = ["inference", "io", "notebooks", "assim", "emulate", "population", "geo"]
@@ -3508,7 +3508,7 @@ dev = [
     { name = "argminax", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
     { name = "beartype", specifier = ">=0.22" },
     { name = "georeader-spaceml", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", extras = ["morph"], git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "geotoolz-ops", extras = ["morph"], git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "numpyro", specifier = ">=0.21" },
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
@@ -3520,8 +3520,8 @@ dev = [
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
     { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
-    { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6" },
-    { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6" },
+    { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
+    { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 docs = [
@@ -5289,7 +5289,7 @@ wheels = [
 [[package]]
 name = "xrtoolz-ops"
 version = "0.5.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9#5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
 dependencies = [
     { name = "dask", extra = ["array"] },
     { name = "geotoolz-array" },
@@ -5315,7 +5315,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-products"
 version = "0.5.0"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=df8c228090b675365abd3fe272890f6a055434c6#df8c228090b675365abd3fe272890f6a055434c6" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9#5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
 dependencies = [
     { name = "numpy" },
     { name = "pandas" },

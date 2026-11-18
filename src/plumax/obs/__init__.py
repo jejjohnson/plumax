@@ -11,6 +11,15 @@ variance) plus the observed column-mass enhancement
 - :func:`load_emit_l2b` — EMIT L2B CH₄ enhancement (ppm·m).
 - :func:`load_ghgsat_l2` — GHGSat per-plume XCH₄.
 
+For the image fit, one plume rather than a whole scene:
+
+- :func:`load_emit_plume_complex` — one catalogued plume of an EMIT scene as
+  a :class:`PlumeScene`: the window around its outline with the sensitivity
+  as the averaging kernel, a per-pixel noise, the quality mask, the
+  pseudo-origin and a starting direction.
+- :func:`matched_filter_scene` — the same observation from radtrax's score,
+  noise and sensitivity maps.
+
 The files are read with xrproducts's openers; needs the ``io`` extra.
 """
 
@@ -24,13 +33,21 @@ from plumax.obs.ingest import (
     ppb_to_column_mass,
     ppm_m_to_column_mass,
 )
+from plumax.obs.plume_scene import (
+    PlumeScene,
+    load_emit_plume_complex,
+    matched_filter_scene,
+)
 
 
 __all__ = [
     "ColumnObservation",
+    "PlumeScene",
     "load_emit_l2b",
+    "load_emit_plume_complex",
     "load_ghgsat_l2",
     "load_tropomi_l2",
+    "matched_filter_scene",
     "ppb_to_column_mass",
     "ppm_m_to_column_mass",
 ]
