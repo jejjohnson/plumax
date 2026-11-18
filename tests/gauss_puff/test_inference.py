@@ -9,9 +9,9 @@ import pytest
 from numpyro.infer import Predictive
 
 from plumax.gauss_puff import make_release_times
+from plumax.gauss_puff._src.inference import _predict_observations
 from plumax.gauss_puff.dispersion import get_dispersion_scheme
 from plumax.gauss_puff.inference import (
-    _predict_observations,
     gaussian_puff_model,
     gaussian_puff_rw_model,
     infer_emission_rate,

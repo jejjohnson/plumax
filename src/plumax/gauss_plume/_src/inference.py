@@ -109,7 +109,7 @@ class EmissionRateSamples(dict):
 def gaussian_plume_model(
     observations: jnp.ndarray | None = None,
     receptor_coords: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None,
-    source_location: tuple[int | float, int | float, int | float] | None = None,
+    source_location: tuple[float, float, float] | None = None,
     wind_u: float | None = None,
     wind_v: float | None = None,
     stability_class: str = "C",
@@ -247,7 +247,7 @@ def gaussian_plume_model(
 def infer_emission_rate(
     observations: NDArray,
     observation_coords: tuple[NDArray, NDArray, NDArray],
-    source_location: tuple[int | float, int | float, int | float],
+    source_location: tuple[float, float, float],
     wind_speed: float,
     wind_direction: float,
     stability_class: str = "C",
