@@ -82,6 +82,13 @@ def _hill(q, q50, slope):
     return expit(slope * np.log(q / q50))
 
 
+def test_union_of_no_events_is_empty():
+    # a batch with no events gives no probabilities, in both forms
+    empty = jnp.zeros((0,))
+    assert pod_union([SATELLITE_A, SATELLITE_B], empty).shape == (0,)
+    assert log_pod_union([SATELLITE_A, SATELLITE_B])(empty).shape == (0,)
+
+
 @pytest.mark.parametrize(
     ("model", "curve"),
     [
