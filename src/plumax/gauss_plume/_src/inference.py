@@ -100,7 +100,7 @@ class EmissionRateSamples(dict):
         """n draws of Q, resampled with replacement from the NUTS draws."""
         return EmpiricalEmission(self["emission_rate"]).sample(key, n)
 
-    def prior_logpdf(self, q: jax.Array) -> jax.Array:
+    def prior_logpdf(self, q: Float[ArrayLike, "*draw"]) -> jax.Array:
         """log π(q) of the emission-rate prior of :func:`gaussian_plume_model`."""
         prior = LognormalEmission.from_moments(self.prior_mean, self.prior_std)
         return prior.log_prob(q)
