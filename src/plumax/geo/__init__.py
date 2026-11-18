@@ -6,6 +6,9 @@
   enhancement, the cross-sectional flux and column-unit conversion.
 - :mod:`plumax.geo.plume_array`: the array functions under them
   (`plume_mask`, `wind_advection_cone`, `convert_column_units`, ...).
+- :mod:`plumax.geo.starts`: the starting values of an image fit, the
+  direction from the source to the mask's centroid (`plume_direction`) and a
+  grid of source positions (`source_offset_grid`) for a multistart solve.
 - :mod:`plumax.geo.vetting`: `PlumeVetting`, :mod:`plumax.vetting`'s
   candidate vetting and scene null on GeoArrays, as one Dataset (#157).
 
@@ -32,7 +35,9 @@ _LAZY = {
     "PlumeVetting": "vetting",
     "WindAdvectionCone": "plume",
     "convert_column_units": "plume_array",
+    "plume_direction": "starts",
     "plume_mask": "plume_array",
+    "source_offset_grid": "starts",
     "wind_advection_cone": "plume_array",
 }
 
@@ -68,6 +73,7 @@ if TYPE_CHECKING:
         plume_mask,
         wind_advection_cone,
     )
+    from plumax.geo.starts import plume_direction, source_offset_grid
     from plumax.geo.vetting import PlumeVetting
 
 
@@ -84,6 +90,8 @@ __all__ = [
     "PlumeVetting",
     "WindAdvectionCone",
     "convert_column_units",
+    "plume_direction",
     "plume_mask",
+    "source_offset_grid",
     "wind_advection_cone",
 ]

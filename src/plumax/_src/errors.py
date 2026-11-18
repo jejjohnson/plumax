@@ -49,3 +49,7 @@ class PayloadError(PlumaxError, ValueError):
 
 class ControlBlockError(PlumaxError, ValueError):
     """A prior names a block its backend does not declare, or one of the wrong shape."""
+
+
+class ConvergenceError(PlumaxError, RuntimeError):
+    """No start of a multistart solve converged."""

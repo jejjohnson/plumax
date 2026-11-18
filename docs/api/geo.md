@@ -35,6 +35,18 @@ Plume post-processing on GeoArrays, behind the `[geo]` extra (`pip install 'plum
       members:
         - PlumeVetting
 
+## `starts`: starting values of an image fit
+
+The starting direction of a column-plume fit, from the source to the centroid of the plume mask, and the grid of source positions that [`solve_coupled_multistart`](coupled_inversion.md) starts from.
+
+::: plumax.geo.starts
+    options:
+      show_root_heading: false
+      heading_level: 3
+      members:
+        - plume_direction
+        - source_offset_grid
+
 ## `plume_array`: the array functions
 
 ::: plumax.geo.plume_array

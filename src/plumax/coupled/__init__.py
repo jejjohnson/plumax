@@ -46,6 +46,12 @@ rate, with the per-instrument bias as a first-class state element:
   forward, prior and masks, vardax solves (``ThreeDVar``, L-BFGS) and gives the
   Laplace posterior. Needs the ``assim`` extra.
 
+- ``multistart`` — the inversion from several starting controls, keeping the
+  lowest cost (:func:`solve_coupled_multistart`, :class:`MultistartResult`).
+- ``diagnostics`` — what the data determined in a fit and how well it fits
+  (:func:`fit_diagnostics`, :class:`FitDiagnostics`): the Fisher information,
+  the prior-free Cramér–Rao bound, the data fraction, the degrees of freedom
+  for signal, the prior pull and the residual statistics.
 - ``k_sources`` — masked-K multi-source handling across instruments
   (:class:`MaskedKPrior`, :func:`infer_masked_k_sources`,
   :func:`build_masked_k_problem`, :func:`saturation_rate`), on Tier I's slot prior and
@@ -61,11 +67,13 @@ from __future__ import annotations
 
 from plumax.coupled import (
     backends,
+    diagnostics,
     forward,
     fusion,
     instrument,
     inversion,
     k_sources,
+    multistart,
     quality,
     rtm,
 )
@@ -75,6 +83,7 @@ from plumax.coupled.backends import (
     LagrangianSource,
     TransportBackend,
 )
+from plumax.coupled.diagnostics import FitDiagnostics, fit_diagnostics
 from plumax.coupled.forward import (
     CoupledForward,
     PlumeSource,
@@ -98,6 +107,7 @@ from plumax.coupled.k_sources import (
     saturation_rate,
     slot_responses,
 )
+from plumax.coupled.multistart import MultistartResult, solve_coupled_multistart
 from plumax.coupled.quality import (
     FlagPolicy,
     QualityFlag,
@@ -125,6 +135,7 @@ __all__ = [
     "CoupledProblem",
     "CoupledResult",
     "EulerianSource",
+    "FitDiagnostics",
     "FlagPolicy",
     "FusionPosterior",
     "Instrument",
@@ -132,6 +143,7 @@ __all__ = [
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "MaskedKPrior",
+    "MultistartResult",
     "PlumeSource",
     "QualityFlag",
     "QualityPolicy",
@@ -146,6 +158,8 @@ __all__ = [
     "column_response",
     "contribution_report",
     "default_prior",
+    "diagnostics",
+    "fit_diagnostics",
     "forward",
     "fuse_observations",
     "fusion",
@@ -155,6 +169,7 @@ __all__ = [
     "k_sources",
     "linearise",
     "masked_k_coupled_model",
+    "multistart",
     "predict_observation",
     "quality",
     "radiance_response",
@@ -163,5 +178,6 @@ __all__ = [
     "saturation_rate",
     "slot_responses",
     "solve_coupled",
+    "solve_coupled_multistart",
     "stack_observations",
 ]

@@ -34,9 +34,10 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 import einx
+import equinox as eqx
 import gaussx as gx
 import jax
 import jax.numpy as jnp
@@ -766,6 +767,7 @@ def _require_scalar(value: jax.Array, method: str) -> None:
 def solve_coupled(
     problem: CoupledProblem,
     *,
+    initial: Mapping[str, Float[Array, "*shape"] | float] | None = None,
     method: Literal["lbfgs", "gauss_newton"] = "lbfgs",
     laplace: bool = True,
     rtol: float = 1e-8,
@@ -780,11 +782,15 @@ def solve_coupled(
         1. Flatten the prior to μ_θ, factor Σ_θ = L Lᵀ.
         2. Stack observations, masks and Σ_ε over the instruments.
         3. ``vardax.ThreeDVar`` with the stacked forward as a ``CallableObs``
-           and the whitened control θ = μ_θ + L χ; minimise with L-BFGS.
+           and the whitened control θ = μ_θ + L χ; minimise with L-BFGS from
+           χ₀ = L⁻¹ (θ₀ − μ_θ), where θ₀ is ``initial`` (μ_θ by default).
         4. ``vardax.LaplaceCovariance`` at θ*, materialised.
 
     Args:
         problem: The coupled problem.
+        initial: Control the minimiser starts from, by block; blocks left
+            out start at the prior mean. The prior is not changed, so the
+            cost is the same from every start.
         method: ``"lbfgs"``. ``"gauss_newton"`` waits on vardax's
             Gauss–Newton minimiser (jejjohnson/vardax#72).
         laplace: Also compute the Laplace posterior.
@@ -797,6 +803,8 @@ def solve_coupled(
 
     Raises:
         NotImplementedError: For ``method="gauss_newton"``.
+        ControlBlockError: If ``initial`` names a block the prior lacks, or
+            one of the wrong shape.
         ImportError: Without the ``assim`` extra.
     """
     if method == "gauss_newton":
@@ -818,7 +826,15 @@ def solve_coupled(
     cholesky = prior.cholesky()
     # θ = μ_θ + L χ, ½ ‖χ‖²
     basis = vdx.linear_basis(cholesky, variance=1.0)
-    control = vdx.LinearParameterization(basis, background=prior_mean[None])
+    linear_control = vdx.LinearParameterization(basis, background=prior_mean[None])
+    control = linear_control
+    if initial is not None:
+        # χ₀ = L⁻¹ (θ₀ − μ_θ)
+        start = _initial_control(prior, initial)
+        whitened_start = jax.scipy.linalg.solve_triangular(
+            cholesky, start - prior_mean, lower=True
+        )
+        control = _StartedParameterization(linear_control, whitened_start)
 
     # --- observations ---
     stacked = problem.stacked_observations()
@@ -852,9 +868,12 @@ def solve_coupled(
     covariance = None
     std = None
     if laplace:
+        # the posterior at θ* does not depend on the start, and vardax takes it
+        # from the affine parameterization
+        affine_model = eqx.tree_at(lambda m: m.parameterization, model, linear_control)
         # Σ_θ|y = (Σ_θ⁻¹ + J_hᵀ Σ_ε⁻¹ J_h)⁻¹
         posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-            theta[None], model, batch
+            theta[None], affine_model, batch
         )
         columns = jax.vmap(
             lambda basis_vector: posterior.cov.mv(basis_vector[None])[0]
@@ -902,6 +921,52 @@ def solve_coupled(
         line_density_std=line_density_std,
         emission_block=block,
     )
+
+
+def _initial_control(
+    prior: CoupledPrior, initial: Mapping[str, Float[Array, "*shape"] | float]
+) -> Float[Array, " param"]:
+    """θ₀ flattened like μ_θ: the given blocks, the prior mean elsewhere."""
+    unknown = sorted(set(initial) - set(prior.mean))
+    if unknown:
+        raise ControlBlockError(
+            f"solve_coupled: `initial` names {unknown}, which the prior does not "
+            f"hold; it holds {sorted(prior.mean)}."
+        )
+    blocks = {
+        name: jnp.asarray(value, dtype=float) for name, value in prior.mean.items()
+    }
+    for name, value in initial.items():
+        start = jnp.asarray(value, dtype=float)
+        if start.shape != blocks[name].shape:
+            raise ControlBlockError(
+                f"solve_coupled: `initial[{name!r}]` must have shape "
+                f"{blocks[name].shape}; got {start.shape}."
+            )
+        blocks[name] = start
+    flat, _ = ravel_pytree(blocks)
+    return flat
+
+
+class _StartedParameterization(eqx.Module):
+    """A vardax parameterization that starts the minimiser at χ₀, not at 0.
+
+    ``decode`` and ``penalty`` are the wrapped parameterization's, so the cost
+    is unchanged; only ``init_control`` differs.
+    """
+
+    inner: Any
+    start: Float[Array, " param"]
+
+    def decode(self, theta: jax.Array, t: float | None = None) -> jax.Array:
+        return self.inner.decode(theta, t)
+
+    def penalty(self, theta: jax.Array) -> jax.Array:
+        return self.inner.penalty(theta)
+
+    def init_control(self, *, key: Any = None) -> jax.Array:
+        del key
+        return self.start
 
 
 def _emission_moments(
