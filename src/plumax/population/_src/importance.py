@@ -108,6 +108,9 @@ class EventEvidence(eqx.Module):
         """log Σₛ exp(ℓₛ + g(qₛ)), per event."""
         # tₛ = ℓₛ + g(qₛ)
         terms = self.log_terms(log_integrand)
+        if terms.size == 0:
+            # einx rejects a zero-size axis; a sum over no nodes is log 0 = −∞
+            return jnp.full(terms.shape[:-1], -jnp.inf, dtype=terms.dtype)
         return einx.logsumexp("... [node]", terms)
 
     def effective_sample_size(

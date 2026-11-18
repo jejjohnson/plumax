@@ -235,27 +235,39 @@ def tmtpp_iw_model(
         event_coverage = None
         if coverage is not None:
             coverage = jnp.asarray(coverage, dtype=bool)
-            # cₑ = ∨ₖ cₑₖ
-            covered = einx.any("event [instrument]", coverage)
-            event_mask = eqx.error_if(
-                event_mask,
-                jnp.any(event_mask & ~covered),
-                "tmtpp_iw_model: a detection has no covering instrument",
-            )
-            # a padding row needs some instrument for a finite log P_d^∪
-            padded_coverage = einx.where(
-                "event, event instrument, -> event instrument", covered, coverage, True
-            )
-            event_coverage = einx.id(
-                "event instrument -> event 1 instrument", padded_coverage
-            )
+            num_instruments = coverage.shape[1]
+            if coverage.shape[0] == 0:
+                # einx rejects a zero-size axis; with no events nothing is checked
+                event_coverage = jnp.zeros((0, 1, num_instruments), dtype=bool)
+            else:
+                # cₑ = ∨ₖ cₑₖ
+                covered = einx.any("event [instrument]", coverage)
+                event_mask = eqx.error_if(
+                    event_mask,
+                    jnp.any(event_mask & ~covered),
+                    "tmtpp_iw_model: a detection has no covering instrument",
+                )
+                # a padding row needs some instrument for a finite log P_d^∪
+                padded_coverage = einx.where(
+                    "event, event instrument, -> event instrument",
+                    covered,
+                    coverage,
+                    True,
+                )
+                event_coverage = einx.id(
+                    "event instrument -> event 1 instrument", padded_coverage
+                )
         event_tod_bin = None
         if binned:
             # event_times count from t₀, the bins from t = 0
             event_bins = tod_bin_index(
                 window[0] + event_times[:num_rows], tod_origin=tod_origin
             )
-            event_tod_bin = einx.id("event -> event 1", event_bins)
+            if event_bins.shape[0] == 0:
+                # einx rejects a zero-size axis
+                event_tod_bin = jnp.zeros((0, 1), dtype=event_bins.dtype)
+            else:
+                event_tod_bin = einx.id("event -> event 1", event_bins)
         event_log_pod = log_pod_union(
             pods,
             coverage=event_coverage,
