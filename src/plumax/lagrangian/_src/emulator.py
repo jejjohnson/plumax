@@ -44,7 +44,7 @@ from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 
 from plumax._src.errors import ParameterError
 from plumax._src.vardax import require_vardax
-from plumax.lagrangian.footprint import (
+from plumax.lagrangian._src.footprint import (
     _backward_steps,
     _flux_sensitivity,
     _surface_edges,
