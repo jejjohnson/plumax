@@ -12,6 +12,7 @@ takes the two sets as flat indices (``np.flatnonzero``).
 
 from __future__ import annotations
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -103,10 +104,14 @@ def select_seeds(
         "select_seeds: the mask holds no pixel with a finite matched-filter score",
     )
     cap = jnp.nanpercentile(jnp.where(inside, mf, jnp.nan), cap_percentile)
-    score = jnp.where(inside & (mf <= cap), mf, -jnp.inf).ravel()
+    # score(p) = MF(p) on {p ∈ M : MF(p) ≤ q}, −∞ elsewhere
+    score_image = jnp.where(inside & (mf <= cap), mf, -jnp.inf)
+    score = einx.id("H W -> (H W)", score_image)
     _, top = jax.lax.top_k(score, min(k, score.size))
-    seeds = jnp.zeros(score.shape, dtype=bool).at[top].set(True)
-    seeds = (seeds & jnp.isfinite(score)).reshape(mf.shape)
+    top_k = jnp.zeros(score.shape, dtype=bool).at[top].set(True)
+    # I₀ = top_k ∩ {score > −∞}
+    seeds_flat = top_k & jnp.isfinite(score)
+    seeds = einx.id("(H W) -> H W", seeds_flat, H=mf.shape[0])
     for _ in range(grow):
         seeds = dilate(seeds) & inside
     return seeds
@@ -181,13 +186,20 @@ def background_pool(
     seeds = jnp.asarray(seeds, dtype=bool)
     _check_image("background_pool", mf, seeds, "seeds")
     height, width = mf.shape
-    rows = jnp.any(seeds, axis=1)  # (H,)
-    cols = jnp.any(seeds, axis=0)  # (W,)
-    r0, r1 = jnp.argmax(rows), height - 1 - jnp.argmax(rows[::-1])
-    c0, c1 = jnp.argmax(cols), width - 1 - jnp.argmax(cols[::-1])
-    i = jnp.arange(height)[:, None]
-    j = jnp.arange(width)[None, :]
-    near = (i >= r0 - box) & (i <= r1 + box) & (j >= c0 - box) & (j <= c1 + box)
+    rows = einx.any("H [W]", seeds)
+    cols = einx.any("[H] W", seeds)
+    first_row = jnp.argmax(rows)
+    last_row = height - 1 - jnp.argmax(rows[::-1])
+    first_col = jnp.argmax(cols)
+    last_col = width - 1 - jnp.argmax(cols[::-1])
+    row = jnp.arange(height)
+    col = jnp.arange(width)
+    # near_row(y) = 1[first_row − box ≤ y ≤ last_row + box]
+    near_row = (row >= first_row - box) & (row <= last_row + box)
+    # near_col(x) = 1[first_col − box ≤ x ≤ last_col + box]
+    near_col = (col >= first_col - box) & (col <= last_col + box)
+    # box(I) = near_row ⊗ near_col
+    near = einx.logical_and("H, W -> H W", near_row, near_col)
     pool = near & jnp.any(rows) & ~seeds & (jnp.abs(mf) < threshold)
     if exclude is not None:
         exclude = jnp.asarray(exclude, dtype=bool)
@@ -196,7 +208,8 @@ def background_pool(
                 f"background_pool: exclude must be (C, {height}, {width}), "
                 f"got {exclude.shape}"
             )
-        pool &= ~jnp.any(exclude, axis=0)
+        # O = O ∖ ⋃_c M_c
+        pool &= ~einx.any("[C] H W", exclude)
     return _require_any(
         pool,
         "background_pool: the pool is empty; no pixel near the seeds is "
@@ -205,29 +218,36 @@ def background_pool(
 
 
 def _check_image(
-    name: str, mf: Float[Array, "H W"], other: Bool[Array, "H W"], other_name: str
+    name: str,
+    enhancement: Float[Array, "H W"],
+    other: Bool[Array, "H W"],
+    other_name: str,
 ) -> None:
-    """Raise unless ``mf`` is 2-D and ``other`` has its shape."""
-    if mf.ndim != 2:
-        raise ShapeError(f"{name}: mf must be (H, W), got {mf.shape}")
-    if other.shape != mf.shape:
+    """Raise unless ``enhancement`` is 2-D and ``other`` has its shape."""
+    if enhancement.ndim != 2:
+        raise ShapeError(f"{name}: mf must be (H, W), got {enhancement.shape}")
+    if other.shape != enhancement.shape:
         raise ShapeError(
-            f"{name}: {other_name} has shape {other.shape}, mf has {mf.shape}"
+            f"{name}: {other_name} has shape {other.shape}, mf has {enhancement.shape}"
         )
 
 
-def _check_percentile(p: Float[ArrayLike, ""]) -> Float[Array, ""]:
-    """``p`` as an array, after failing outside (0, 100]: eagerly, or under ``jit``."""
-    p = jnp.asarray(p, dtype=float)
-    bad = ~((p > 0.0) & (p <= 100.0))
+def _check_percentile(percentile: Float[ArrayLike, ""]) -> Float[Array, ""]:
+    """``percentile`` as an array, after failing outside (0, 100].
+
+    It fails eagerly, or under ``jit``.
+    """
+    percentile = jnp.asarray(percentile, dtype=float)
+    # bad = ¬(0 < q ≤ 100)
+    bad = ~((percentile > 0.0) & (percentile <= 100.0))
     message = "select_seeds: cap_percentile must be in (0, 100]"
     try:
         out_of_range = bool(bad)
     except (jax.errors.TracerBoolConversionError, jax.errors.ConcretizationTypeError):
-        return eqx.error_if(p, bad, message)
+        return eqx.error_if(percentile, bad, message)
     if out_of_range:
-        raise ParameterError(f"{message}, got {float(p)}")
-    return p
+        raise ParameterError(f"{message}, got {float(percentile)}")
+    return percentile
 
 
 def _require_any(mask: Bool[Array, "H W"], message: str) -> Bool[Array, "H W"]:

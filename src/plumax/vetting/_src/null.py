@@ -17,6 +17,7 @@ the gradient path. Nothing here is differentiable.
 
 from __future__ import annotations
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -108,7 +109,8 @@ def null_masks(
                 f"null_masks: exclude must be (C, {height}, {width}), got "
                 f"{exclude.shape}"
             )
-        banned |= np.any(exclude, axis=0)
+        # M_banned = M ∪ ⋃_c M_c
+        banned |= einx.any("[C] H W", exclude)
     size = int(mask.sum())
     if size == 0:
         raise DegenerateInputError("null_masks: the mask is empty")
@@ -193,9 +195,11 @@ def null_pvalue(score: float, null_scores: Float[ArrayLike, " S"]) -> float:
     score = float(score)
     if not np.isfinite(score):
         raise DegenerateInputError(f"null_pvalue: the score is {score}, not finite")
-    finite = jnp.isfinite(null_scores)  # (S,)
-    n_finite = int(jnp.sum(finite))
-    if n_finite == 0:
+    finite = jnp.isfinite(null_scores)
+    # S' = ∑_s 1[D_s finite]
+    num_finite = int(jnp.sum(finite))
+    if num_finite == 0:
         raise DegenerateInputError("null_pvalue: no null score is finite")
     at_least_as_good = jnp.sum(finite & (null_scores <= score))
-    return float(at_least_as_good) / n_finite
+    # p̂ = (1/S') ∑_s 1[D_s ≤ D]
+    return float(at_least_as_good) / num_finite
