@@ -80,29 +80,35 @@ def pbl_height_bulk_richardson(
     grid_surface = grid_z[0] - 0.5 * grid.dz
     # h_k = z_k − z_surface
     heights = grid_z - grid_surface
-    u = np.asarray(field.u, dtype=np.float64)
-    v = np.asarray(field.v, dtype=np.float64)
+    wind_x = np.asarray(field.u, dtype=np.float64)
+    wind_y = np.asarray(field.v, dtype=np.float64)
     # each U-point's western neighbour, the edge column repeating itself
-    u_west = einx.id(
-        "t z y first, t z y rest -> t z y (first + rest)", u[..., :1], u[..., :-1]
+    wind_x_west = einx.id(
+        "t z y first, t z y rest -> t z y (first + rest)",
+        wind_x[..., :1],
+        wind_x[..., :-1],
     )
     # each V-point's southern neighbour
-    v_south = einx.id(
+    wind_y_south = einx.id(
         "t z first x, t z rest x -> t z (first + rest) x",
-        v[..., :1, :],
-        v[..., :-1, :],
+        wind_y[..., :1, :],
+        wind_y[..., :-1, :],
     )
     # u_T = (u_{i−1/2} + u_{i+1/2}) / 2
-    u_centre = 0.5 * (u + u_west)
+    wind_x_centre = 0.5 * (wind_x + wind_x_west)
     # v_T = (v_{j−1/2} + v_{j+1/2}) / 2
-    v_centre = 0.5 * (v + v_south)
+    wind_y_centre = 0.5 * (wind_y + wind_y_south)
     temperature = np.asarray(field.temperature, dtype=np.float64)
     pressure = np.asarray(field.pressure, dtype=np.float64)
     # θ = T (p_ref / p)^{R_d / c_p}
-    theta = temperature * (P_REFERENCE / pressure) ** (R_DRY / CP_DRY)
+    potential_temperature = temperature * (P_REFERENCE / pressure) ** (R_DRY / CP_DRY)
     dims = ("time", "level", "y", "x")
     profiles = xr.Dataset(
-        {"theta_v": (dims, theta), "u": (dims, u_centre), "v": (dims, v_centre)},
+        {
+            "theta_v": (dims, potential_temperature),
+            "u": (dims, wind_x_centre),
+            "v": (dims, wind_y_centre),
+        },
         coords={"z_agl": ("level", heights)},
     )
     result = xrops.atm.pbl_height_bulk_richardson(

@@ -166,8 +166,10 @@ class DiurnalSinusoidalIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        phi = 2.0 * jnp.pi * (self.phase_hours / 24.0)
-        raw = self.lambda_0 + self.amplitude * jnp.sin(2.0 * jnp.pi * t - phi)
+        # φ = 2π (φ_h / 24)
+        phase = 2.0 * jnp.pi * (self.phase_hours / 24.0)
+        # λ = λ₀ + A sin(2π t − φ)
+        raw = self.lambda_0 + self.amplitude * jnp.sin(2.0 * jnp.pi * t - phase)
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:
@@ -407,8 +409,10 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
         ω_s = 2.0 * jnp.pi / 365.25
         amp_mean = (self.amp_summer + self.amp_winter) / 2.0
         amp_diff = (self.amp_summer - self.amp_winter) / 2.0
-        A_t = amp_mean + amp_diff * jnp.sin(ω_s * (t - self.peak_day))
-        raw = self.lambda_0 + A_t * jnp.sin(2.0 * jnp.pi * t - φ_d)
+        # A(t) = A_mean + A_diff sin(ω_s (t − t_peak))
+        seasonal_amplitude = amp_mean + amp_diff * jnp.sin(ω_s * (t - self.peak_day))
+        # λ = λ₀ + A(t) sin(2π t − φ_d)
+        raw = self.lambda_0 + seasonal_amplitude * jnp.sin(2.0 * jnp.pi * t - φ_d)
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:
@@ -492,11 +496,13 @@ class OperationalScheduleIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹]. Shape ``(N,)``.
         """
-        h = (t % 1.0) * 24.0
-        k = 50.0
-        duty = 1.0 / (1.0 + jnp.exp(-k * (h - self.start_hour))) - 1.0 / (
-            1.0 + jnp.exp(-k * (h - self.end_hour))
-        )
+        # h = (t mod 1) · 24
+        hour_of_day = (t % 1.0) * 24.0
+        steepness = 50.0
+        # duty = σ(h − h_start) − σ(h − h_end)
+        duty = 1.0 / (
+            1.0 + jnp.exp(-steepness * (hour_of_day - self.start_hour))
+        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.end_hour)))
         return self.lambda_idle + (self.lambda_active - self.lambda_idle) * duty
 
     def max_intensity(self) -> jnp.ndarray:
@@ -578,8 +584,9 @@ class WeibullRenewalIntensity(eqx.Module):
             Instantaneous hazard [events day⁻¹]. Shape ``(N,)``.
         """
         Δt = jnp.clip(t_since_last, min=1e-8)
-        k, η = self.shape, self.scale
-        return (k / η) * (Δt / η) ** (k - 1.0)
+        shape, scale = self.shape, self.scale
+        # h(Δt) = (k / η) (Δt / η)^(k − 1)
+        return (shape / scale) * (Δt / scale) ** (shape - 1.0)
 
     @classmethod
     def sample_priors(cls) -> WeibullRenewalIntensity:
@@ -729,13 +736,17 @@ class CoalMineVentilationIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹]. Shape ``(N,)``.
         """
-        h = (t % 1.0) * 24.0
-        d = t % 7.0
-        k = 50.0
-        shift = 1.0 / (1.0 + jnp.exp(-k * (h - self.shift_start))) - 1.0 / (
-            1.0 + jnp.exp(-k * (h - self.shift_end))
-        )
-        maint = jnp.exp(-0.5 * ((d - self.maintenance_day) / 0.3) ** 2)
+        # h = (t mod 1) · 24
+        hour_of_day = (t % 1.0) * 24.0
+        # d = t mod 7
+        day_of_week = t % 7.0
+        steepness = 50.0
+        # shift = σ(h − h_start) − σ(h − h_end)
+        shift = 1.0 / (
+            1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_start))
+        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_end)))
+        # m = exp(−½ ((d − d_maint) / 0.3)²)
+        maint = jnp.exp(-0.5 * ((day_of_week - self.maintenance_day) / 0.3) ** 2)
         return maint * self.lambda_maintenance + (1.0 - maint) * (
             shift * self.lambda_extraction + (1.0 - shift) * self.lambda_idle
         )
@@ -929,11 +940,13 @@ class OffshorePlatformIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        h = (t % 1.0) * 24.0
-        k = 50.0
-        crew = 1.0 / (1.0 + jnp.exp(-k * (h - self.shift_start))) - 1.0 / (
-            1.0 + jnp.exp(-k * (h - self.shift_end))
-        )
+        # h = (t mod 1) · 24
+        hour_of_day = (t % 1.0) * 24.0
+        steepness = 50.0
+        # crew = σ(h − h_on) − σ(h − h_off)
+        crew = 1.0 / (
+            1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_start))
+        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_end)))
         raw = (
             self.lambda_0
             + self.amp_tidal * jnp.sin(2.0 * jnp.pi / self.tidal_period_days * t)
@@ -1019,10 +1032,15 @@ class WetlandPermafrostIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹]. Shape ``(N,)``.
         """
-        t_yr = t % 365.25
-        w = self.transition_width
-        g_thaw = 1.0 / (1.0 + jnp.exp(-(t_yr - self.thaw_onset_day) / w))
-        g_freeze = 1.0 - 1.0 / (1.0 + jnp.exp(-(t_yr - self.freeze_onset_day) / w))
+        # t_yr = t mod 365.25
+        day_of_year = t % 365.25
+        width = self.transition_width
+        # G_thaw = σ((t_yr − t_thaw) / w)
+        g_thaw = 1.0 / (1.0 + jnp.exp(-(day_of_year - self.thaw_onset_day) / width))
+        # G_freeze = 1 − σ((t_yr − t_freeze) / w)
+        g_freeze = 1.0 - 1.0 / (
+            1.0 + jnp.exp(-(day_of_year - self.freeze_onset_day) / width)
+        )
         return (
             self.lambda_frozen
             + (self.lambda_peak - self.lambda_frozen) * g_thaw * g_freeze
@@ -1114,14 +1132,23 @@ class LivestockFeedlotIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        h = (t % 1.0) * 24.0
-        w = self.feed_response_width
-        g_am = jnp.exp(-0.5 * ((h - self.morning_feed_hour) / w) ** 2)
-        g_pm = jnp.exp(-0.5 * ((h - self.evening_feed_hour) / w) ** 2)
+        # h = (t mod 1) · 24
+        hour_of_day = (t % 1.0) * 24.0
+        width = self.feed_response_width
+        # G_am = exp(−(h − h_am)² / (2w²))
+        morning_gate = jnp.exp(
+            -0.5 * ((hour_of_day - self.morning_feed_hour) / width) ** 2
+        )
+        # G_pm = exp(−(h − h_pm)² / (2w²))
+        evening_gate = jnp.exp(
+            -0.5 * ((hour_of_day - self.evening_feed_hour) / width) ** 2
+        )
         seasonal = self.amp_seasonal * jnp.sin(
             2.0 * jnp.pi / 365.25 * (t - self.peak_day)
         )
-        raw = self.lambda_0 + self.amp_feeding * (g_am + g_pm) + seasonal
+        raw = (
+            self.lambda_0 + self.amp_feeding * (morning_gate + evening_gate) + seasonal
+        )
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:

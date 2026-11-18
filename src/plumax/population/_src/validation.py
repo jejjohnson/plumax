@@ -17,6 +17,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -75,7 +76,8 @@ def rank_uniformity_pvalues(
     jitter = np.random.default_rng(seed).uniform(size=host_ranks.shape)
     # u = (r + U) / (L + 1)
     positions = (host_ranks + jitter) / (n_draws + 1)
-    pvalues = [kstest(column, "uniform").pvalue for column in positions.T]
+    by_param = einx.id("draw param -> param draw", positions)
+    pvalues = [kstest(column, "uniform").pvalue for column in by_param]
     return jnp.asarray(pvalues)
 
 
@@ -144,7 +146,7 @@ def run_sbc(
     names = tuple(sorted(template))
     data_shape = jax.eval_shape(simulate, data_key, prior_sample(prior_key))
     draws_shape = jax.eval_shape(fit, fit_key, data_shape)
-    n_draws = int(draws_shape[names[0]].shape[0])
+    num_draws = int(draws_shape[names[0]].shape[0])
 
     def one(simulation_key: Array) -> Int[Array, " param"]:
         prior_key, data_key, fit_key = jax.random.split(simulation_key, 3)
@@ -157,9 +159,9 @@ def run_sbc(
     ranks = jax.lax.map(one, jax.random.split(key, n_sims), batch_size=batch_size)
     return SBCResult(
         ranks=ranks,
-        ks_pvalues=rank_uniformity_pvalues(ranks, n_draws),
+        ks_pvalues=rank_uniformity_pvalues(ranks, num_draws),
         param_names=names,
-        n_draws=n_draws,
+        n_draws=num_draws,
     )
 
 
@@ -177,7 +179,8 @@ def _swap_prior(
             raise PayloadError(
                 "prior_swap_test: every event needs q_samples and prior_logpdf."
             )
-        draws = np.ravel(np.asarray(event.q_samples, dtype=float))
+        posterior_draws = np.asarray(event.q_samples, dtype=float)
+        draws = einx.id("... -> (...)", posterior_draws)
         # w ∝ π_new(q) / π_old(q): posterior draws under the new prior, without the tier
         log_ratio = log_prior(jnp.asarray(draws)) - event.prior_logpdf(
             jnp.asarray(draws)
@@ -263,8 +266,8 @@ def _regime_correlation(
     *,
     key: Array,
     window: tuple[float, float],
-    mu: float,
-    sigma: float,
+    mark_log_mean: float,
+    mark_log_std: float,
     slope: float,
     q50_std: float,
     max_ground: int,
@@ -283,20 +286,26 @@ def _regime_correlation(
     pod = InstrumentPOD("stress", "log_logistic", q50, q50_std, slope)
     count_key, mark_key, keep_key, mcmc_key = jax.random.split(key, 4)
     span = window[1] - window[0]
-    n_ground = int(jax.random.poisson(count_key, rate * span))
-    if n_ground > max_ground:
+    num_ground = int(jax.random.poisson(count_key, rate * span))
+    if num_ground > max_ground:
         raise ValueError(
-            f"identifiability_stress: {n_ground} ground events exceed {max_ground}."
+            f"identifiability_stress: {num_ground} ground events exceed {max_ground}."
         )
     # Q ~ LogNormal(μ, σ²)
-    marks = jnp.exp(mu + sigma * jax.random.normal(mark_key, (n_ground,)))
+    marks = jnp.exp(
+        mark_log_mean + mark_log_std * jax.random.normal(mark_key, (num_ground,))
+    )
     # keep with probability P_d(Q), at the true Q₅₀
-    log_uniform = jnp.log(jax.random.uniform(keep_key, (n_ground,)))
+    log_uniform = jnp.log(jax.random.uniform(keep_key, (num_ground,)))
     detected = marks[log_uniform < log_pod_union([pod])(marks)]
-    n_detected = int(detected.shape[0])
+    num_detected = int(detected.shape[0])
     # a constant λ's likelihood depends on the times only through their count
-    times = np.linspace(window[0], window[1], n_detected + 2)[1:-1]
+    times = np.linspace(window[0], window[1], num_detected + 2)[1:-1]
     event_times, mask = padded_event_buffer(times, window)
+    # einx cannot name an empty axis, and a regime may detect nothing
+    detected_column = jnp.zeros((0, 1), dtype=detected.dtype)
+    if num_detected:
+        detected_column = einx.id("event -> event 1", detected)
     mcmc = MCMC(
         NUTS(tmtpp_iw_model),
         num_warmup=num_warmup,
@@ -307,7 +316,7 @@ def _regime_correlation(
         mcmc_key,
         event_times,
         mask,
-        EventEvidence(jnp.zeros((n_detected, 1)), detected[:, None]),
+        EventEvidence(jnp.zeros((num_detected, 1)), detected_column),
         mark=LognormalMark(),
         intensity="constant",
         window=window,
@@ -365,8 +374,8 @@ def identifiability_stress(
     confounded_key, separated_key = jax.random.split(key)
     settings: dict[str, Any] = {
         "window": window,
-        "mu": mu,
-        "sigma": sigma,
+        "mark_log_mean": mu,
+        "mark_log_std": sigma,
         "slope": slope,
         "q50_std": q50_std,
         "max_ground": max_ground,

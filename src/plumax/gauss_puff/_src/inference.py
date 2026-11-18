@@ -19,11 +19,13 @@ reused here to keep the plume and puff inference helpers aligned.
 
 from __future__ import annotations
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
 import numpyro.distributions as dist
+from jaxtyping import Array, Float
 from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
@@ -102,10 +104,10 @@ def _require_forward_inputs(
 
 
 def _predict_observations(
-    emission_per_puff: jnp.ndarray,  # (N_puffs,) per-puff mass [kg]
-    release_times: jnp.ndarray,  # (N_puffs,)
-    receptor_coords: tuple,  # (x, y, z) each (N_obs,)
-    observation_times: jnp.ndarray,  # (N_obs,) per-observation evaluation time
+    emission_per_puff: Float[Array, " N"],
+    release_times: Float[Array, " N"],
+    receptor_coords: tuple[Float[Array, " M"], Float[Array, " M"], Float[Array, " M"]],
+    observation_times: Float[Array, " M"],
     source_location: tuple,
     schedule: WindSchedule,
     dispersion_params: jnp.ndarray,
@@ -123,42 +125,65 @@ def _predict_observations(
     adaptive ODE solves per likelihood evaluation into one, without changing the
     result (same integrals, to solver tolerance).
     """
-    x_obs, y_obs, z_obs = receptor_coords
+    receptor_x, receptor_y, receptor_z = receptor_coords
     src_x, src_y, src_z = source_location
 
     # One diffrax solve over the union of release + observation times. SaveAt
     # needs monotone times, so sort and unshuffle with the double-argsort trick.
     all_times = jnp.concatenate([release_times, observation_times])
     order = jnp.argsort(all_times)
-    i_u_s, i_v_s, s_s = cumulative_wind_integrals(schedule, all_times[order])
+    east_sorted, north_sorted, travel_sorted = cumulative_wind_integrals(
+        schedule, all_times[order]
+    )
     inv = jnp.argsort(order)
-    i_u, i_v, s_cum = i_u_s[inv], i_v_s[inv], s_s[inv]
+    east_integral = east_sorted[inv]
+    north_integral = north_sorted[inv]
+    travel_integral = travel_sorted[inv]
 
-    n_rel = release_times.shape[0]
-    i_u_rel, i_v_rel, s_rel = i_u[:n_rel], i_v[:n_rel], s_cum[:n_rel]
-    i_u_obs, i_v_obs, s_obs = i_u[n_rel:], i_v[n_rel:], s_cum[n_rel:]
+    num_releases = release_times.shape[0]
+    east_release = east_integral[:num_releases]
+    north_release = north_integral[:num_releases]
+    travel_release = travel_integral[:num_releases]
+    east_obs = east_integral[num_releases:]
+    north_obs = north_integral[num_releases:]
+    travel_obs = travel_integral[num_releases:]
 
     mass_arr = jnp.broadcast_to(jnp.asarray(emission_per_puff), release_times.shape)
 
-    def predict_one(x_k, y_k, z_k, t_k, iu_now, iv_now, s_now):
-        # Rebuild the puff ensemble at t_k from the shared release-time integrals
-        # (mirrors evolve_puffs, but with no per-observation ODE solve).
-        active = release_times <= t_k
-        x = src_x + jnp.where(active, iu_now - i_u_rel, 0.0)
-        y = src_y + jnp.where(active, iv_now - i_v_rel, 0.0)
-        z = jnp.full_like(release_times, src_z)
-        s = jnp.where(active, s_now - s_rel, 0.0)
+    def predict_one(
+        point_x,
+        point_y,
+        point_z,
+        point_time,
+        east_now,
+        north_now,
+        travel_now,
+    ):
+        # Rebuild the puff ensemble at point_time from the shared release-time
+        # integrals (mirrors evolve_puffs, but with no per-observation ODE solve).
+        active = release_times <= point_time
+        # x_i = x_src + I_u(t) − I_u(t_i)
+        position_x = src_x + jnp.where(active, east_now - east_release, 0.0)
+        # y_i = y_src + I_v(t) − I_v(t_i)
+        position_y = src_y + jnp.where(active, north_now - north_release, 0.0)
+        position_z = jnp.full_like(release_times, src_z)
+        # s_i = S(t) − S(t_i)
+        travel = jnp.where(active, travel_now - travel_release, 0.0)
         mass = jnp.where(active, mass_arr, 0.0)
         puff_state = PuffState(
             release_times=release_times,
-            x=x,
-            y=y,
-            z=z,
-            travel_distance=s,
+            x=position_x,
+            y=position_y,
+            z=position_z,
+            travel_distance=travel,
             mass=mass,
         )
         single = simulate_puff_field(
-            (jnp.atleast_1d(x_k), jnp.atleast_1d(y_k), jnp.atleast_1d(z_k)),
+            (
+                einx.id(" -> 1", point_x),
+                einx.id(" -> 1", point_y),
+                einx.id(" -> 1", point_z),
+            ),
             puff_state,
             dispersion_params,
             dispersion_fn,
@@ -166,7 +191,13 @@ def _predict_observations(
         return single[0]
 
     return jax.vmap(predict_one)(
-        x_obs, y_obs, z_obs, observation_times, i_u_obs, i_v_obs, s_obs
+        receptor_x,
+        receptor_y,
+        receptor_z,
+        observation_times,
+        east_obs,
+        north_obs,
+        travel_obs,
     )
 
 
@@ -253,10 +284,10 @@ def gaussian_puff_model(
         )
     dispersion_params = scheme_params_dict[stability_class]
 
-    mu_log, sigma_log = _lognormal_from_moments(
+    log_mean, log_std = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(mu_log, sigma_log))
+    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(log_mean, log_std))
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     # The forward model is evaluated whenever its inputs are present —
@@ -335,26 +366,35 @@ def gaussian_puff_rw_model(
         )
     dispersion_params = scheme_params_dict[stability_class]
 
-    n_puffs = release_times.shape[0]
-    if n_puffs == 0:
+    num_puffs = release_times.shape[0]
+    if num_puffs == 0:
         raise ValueError(
             "gaussian_puff_rw_model: `release_times` must contain ≥ 1 puff; "
             "got n_puffs=0. Check that t_end − t_start ≥ 1/release_frequency."
         )
 
-    mu_log, sigma_log = _lognormal_from_moments(
+    log_mean, log_std = _lognormal_from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
 
     innovations = numpyro.sample(
         "innovations",
-        dist.Normal(0.0, 1.0).expand([n_puffs]).to_event(1),
+        dist.Normal(0.0, 1.0).expand([num_puffs]).to_event(1),
     )
     # Build ln Q_i by cumulative sum of scaled innovations, first anchored
     # to the LogNormal prior location.
-    first = mu_log + sigma_log * innovations[0]
+    # ln Q₀ = μ_log + σ_log ε₀
+    first = log_mean + log_std * innovations[0]
+    # δ_i = σ_rw ε_i
     increments = rw_step_std * innovations[1:]
-    log_q = jnp.concatenate([first[None], first + jnp.cumsum(increments)])
+    # ln Q_i = ln Q₀ + Σ_{j ≤ i} δ_j
+    cumulative_increments = jnp.cumsum(increments)
+    later = first + cumulative_increments
+    if num_puffs == 1:
+        # einx rejects a zero-size axis; one puff is ln Q₀ alone
+        log_q = einx.id(" -> 1", first)
+    else:
+        log_q = einx.id(", step -> (1 + step)", first, later)
     emission_series = numpyro.deterministic("emission_rate", jnp.exp(log_q))
 
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
@@ -409,7 +449,7 @@ def _validate_inference_inputs(
             f"{func_name}: `observation_coords` must be (x, y, z); "
             f"got length {len(observation_coords)}"
         )
-    coords = tuple(np.asarray(c) for c in observation_coords)
+    coords = tuple(np.asarray(coord) for coord in observation_coords)
     for axis_name, arr in zip("xyz", coords, strict=False):
         if arr.shape != obs.shape:
             raise ValueError(
@@ -422,27 +462,27 @@ def _validate_inference_inputs(
             f"{func_name}: `observation_times` shape {times.shape} "
             f"≠ observations shape {obs.shape}"
         )
-    wt = np.asarray(wind_times)
-    ws = np.asarray(wind_speed)
-    wd = np.asarray(wind_direction)
-    if wt.ndim != 1 or wt.size == 0:
+    wind_times_np = np.asarray(wind_times)
+    wind_speed_np = np.asarray(wind_speed)
+    wind_direction_np = np.asarray(wind_direction)
+    if wind_times_np.ndim != 1 or wind_times_np.size == 0:
         raise ValueError(f"{func_name}: `wind_times` must be 1-D with ≥ 1 entry")
-    if ws.shape != wt.shape:
+    if wind_speed_np.shape != wind_times_np.shape:
         raise ValueError(
-            f"{func_name}: `wind_speed` shape {ws.shape} must match "
-            f"`wind_times` shape {wt.shape}"
+            f"{func_name}: `wind_speed` shape {wind_speed_np.shape} must match "
+            f"`wind_times` shape {wind_times_np.shape}"
         )
-    if wd.shape != wt.shape:
+    if wind_direction_np.shape != wind_times_np.shape:
         raise ValueError(
-            f"{func_name}: `wind_direction` shape {wd.shape} must match "
-            f"`wind_times` shape {wt.shape}"
+            f"{func_name}: `wind_direction` shape {wind_direction_np.shape} must "
+            f"match `wind_times` shape {wind_times_np.shape}"
         )
     # The cumulative wind integrals are solved from schedule.times[0], so any
     # release or observation time earlier than the first wind knot lands before
     # the ODE's t0 and raises an opaque diffrax error deep inside the trace.
     # Catch it here with a clear message. (Extrapolation past wind_times[-1] is
     # supported — see `cumulative_wind_integrals`.)
-    wind_start = float(wt[0])
+    wind_start = float(wind_times_np[0])
     if t_start < wind_start:
         raise ValueError(
             f"{func_name}: `t_start` ({t_start!r}) is before the wind schedule "
@@ -558,7 +598,7 @@ def infer_emission_rate(
     puff_durations = release_durations(release_times, t_end)
 
     obs_jax = jnp.asarray(obs)
-    coords_jax = tuple(jnp.asarray(c) for c in coords)
+    coords_jax = tuple(jnp.asarray(coord) for coord in coords)
     times_jax = jnp.asarray(times)
 
     mcmc = MCMC(
@@ -587,7 +627,7 @@ def infer_emission_rate(
     )
     if print_summary:
         mcmc.print_summary()
-    return {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}
 
 
 def infer_emission_timeseries(
@@ -666,7 +706,7 @@ def infer_emission_timeseries(
     mcmc.run(
         jax.random.PRNGKey(seed),
         observations=jnp.asarray(obs),
-        receptor_coords=tuple(jnp.asarray(c) for c in coords),
+        receptor_coords=tuple(jnp.asarray(coord) for coord in coords),
         observation_times=jnp.asarray(times),
         source_location=source_location,
         schedule=schedule,
@@ -683,4 +723,4 @@ def infer_emission_timeseries(
     )
     if print_summary:
         mcmc.print_summary()
-    return {k: np.asarray(v) for k, v in mcmc.get_samples().items()}
+    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}

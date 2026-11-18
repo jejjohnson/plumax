@@ -15,6 +15,7 @@ import json
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, ClassVar
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -144,11 +145,11 @@ class PlumeVetting(Operator):
     def _apply(
         self,
         cube: GeoArray,
-        mf: GeoArray,
+        enhancement: GeoArray,
         masks: Bool[np.ndarray, "C H W"],
     ) -> xr.Dataset:
         require_geoarray(cube, "PlumeVetting")
-        require_grid_match(cube, mf, "PlumeVetting", names=("cube", "mf"))
+        require_grid_match(cube, enhancement, "PlumeVetting", names=("cube", "mf"))
         radiance = np.asarray(cube)
         if radiance.ndim != 3:
             raise ShapeError(
@@ -162,23 +163,28 @@ class PlumeVetting(Operator):
                 f"{radiance.shape[1:]}, got {masks.shape}"
             )
         # vet_candidate takes the cube as (H, W, B)
-        radiance = np.moveaxis(radiance, 0, -1)
-        score = np.asarray(single_band(np.asarray(mf), name="mf"))
+        radiance = einx.id("channel y x -> y x channel", radiance)
+        score = np.asarray(single_band(np.asarray(enhancement), name="mf"))
 
         # nodata pixels never enter a candidate, the pool or a null copy
-        invalid = np.any(np.asarray(invalid_values(cube)), axis=0)
-        invalid |= np.asarray(single_band(invalid_values(mf), name="mf"))
+        # invalid = ∃ band: nodata
+        invalid = einx.any("[band] y x", np.asarray(invalid_values(cube)))
+        invalid |= np.asarray(single_band(invalid_values(enhancement), name="mf"))
         exclude = masks
         if invalid.any():
-            exclude = np.concatenate([masks, invalid[None]])
+            # exclude = masks ∪ {invalid}; einx.id cannot size an empty stack
+            if masks.shape[0] == 0:
+                exclude = einx.id("y x -> 1 y x", invalid)
+            else:
+                exclude = einx.id("mask y x, y x -> (mask + 1) y x", masks, invalid)
             masks = masks & ~invalid
 
         fit_bands = self.window.fit_bands(wavelength_nm)
-        n_fit = int(fit_bands.sum())
+        num_fit_bands = int(fit_bands.sum())
         table = jnp.asarray(self.table)
-        if table.ndim != 2 or table.shape[1] != n_fit:
+        if table.ndim != 2 or table.shape[1] != num_fit_bands:
             raise ShapeError(
-                f"PlumeVetting: table must be (D, {n_fit}), one column per "
+                f"PlumeVetting: table must be (D, {num_fit_bands}), one column per "
                 f"fitting band of the cube's wavelengths, got {table.shape}"
             )
 
@@ -209,13 +215,13 @@ class PlumeVetting(Operator):
                 continue
             key, subkey = jax.random.split(key)
             copies = null_masks(mask, self.n_null, key=subkey, exclude=exclude)
-            null_scores = np.array([self._null_score(vet, c) for c in copies])
+            null_scores = np.array([self._null_score(vet, copy) for copy in copies])
             p_null.append(null_pvalue(float(result.d_norm), null_scores))
 
         return self._dataset(rows, p_null, wavelength_nm[fit_bands])
 
     @staticmethod
-    def _wavelengths(cube: GeoArray, n_bands: int) -> np.ndarray:
+    def _wavelengths(cube: GeoArray, num_bands: int) -> np.ndarray:
         wavelengths = (getattr(cube, "attrs", None) or {}).get("wavelengths")
         if wavelengths is None:
             raise ShapeError(
@@ -223,10 +229,10 @@ class PlumeVetting(Operator):
                 "attrs['wavelengths']"
             )
         wavelength_nm = np.asarray(wavelengths, dtype=float)
-        if wavelength_nm.shape != (n_bands,):
+        if wavelength_nm.shape != (num_bands,):
             raise ShapeError(
                 f"PlumeVetting: attrs['wavelengths'] has shape "
-                f"{wavelength_nm.shape}, the cube {n_bands} bands"
+                f"{wavelength_nm.shape}, the cube {num_bands} bands"
             )
         return wavelength_nm
 
@@ -249,20 +255,22 @@ class PlumeVetting(Operator):
         candidate = ("candidate",)
         per_band = ("candidate", "band")
         if rows:
-            ratio = np.stack([np.asarray(r.ratio) for r in rows])
-            continuum = np.stack([np.asarray(r.fit.continuum) for r in rows])
-            transmittance = np.stack([np.asarray(r.fit.transmittance) for r in rows])
+            ratio = np.stack([np.asarray(row.ratio) for row in rows])
+            continuum = np.stack([np.asarray(row.fit.continuum) for row in rows])
+            transmittance = np.stack(
+                [np.asarray(row.fit.transmittance) for row in rows]
+            )
         else:
             ratio = continuum = transmittance = np.empty((0, wavelength_nm.size))
-        delta = np.array([float(r.delta) for r in rows])
-        d_norm = np.array([float(r.d_norm) for r in rows])
-        n_pairs = np.array([r.n_pairs for r in rows], dtype=np.int64)
+        column_enhancement = np.array([float(row.delta) for row in rows])
+        d_norm = np.array([float(row.d_norm) for row in rows])
+        num_pairs = np.array([row.n_pairs for row in rows], dtype=np.int64)
         return xr.Dataset(
             {
-                "delta_x_mol_m2": (candidate, delta),
+                "delta_x_mol_m2": (candidate, column_enhancement),
                 "d_norm": (candidate, d_norm),
                 "p_null": (candidate, np.array(p_null, dtype=float)),
-                "n_pairs": (candidate, n_pairs),
+                "n_pairs": (candidate, num_pairs),
                 "ratio": (per_band, ratio),
                 "continuum": (per_band, continuum),
                 "fit": (per_band, continuum * transmittance),
@@ -311,7 +319,7 @@ class PlumeVetting(Operator):
         config = dict(config)
         window = dict(config.pop("window"))
         for name in ("fit_nm", "absorbing_nm"):
-            window[name] = tuple(tuple(r) for r in window[name])
+            window[name] = tuple(tuple(band) for band in window[name])
         return cls(
             AbsorptionWindow(**window),
             table,

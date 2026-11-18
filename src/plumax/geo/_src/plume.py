@@ -110,9 +110,9 @@ __all__ = [
 ]
 
 
-def _single_band_nan(x: GeoArray | np.ndarray) -> np.ndarray:
-    """Single-band ``(H, W)`` float map of ``x`` with nodata pixels set to NaN."""
-    return squeeze_single_band(mask_invalid_to_nan(x))
+def _single_band_nan(array: GeoArray | np.ndarray) -> np.ndarray:
+    """Single-band ``(H, W)`` float map of ``array`` with nodata pixels set to NaN."""
+    return squeeze_single_band(mask_invalid_to_nan(array))
 
 
 def _masked_mass(enhancement: np.ndarray, mask: np.ndarray, area: float) -> float:
@@ -131,14 +131,14 @@ def _masked_mass(enhancement: np.ndarray, mask: np.ndarray, area: float) -> floa
     return float(total.value)
 
 
-def _instance_labels(x: GeoArray | np.ndarray) -> np.ndarray:
-    """``(H, W)`` int64 label image of ``x`` with nodata pixels as background.
+def _instance_labels(array: GeoArray | np.ndarray) -> np.ndarray:
+    """``(H, W)`` int64 label image of ``array`` with nodata pixels as background.
 
     A positive fill (a uint8 raster's ``255``) would otherwise read as one
     more instance.
     """
-    labels = squeeze_single_band(np.asarray(x)).astype(np.int64, copy=False)
-    valid = squeeze_single_band(valid_pixels(x))
+    labels = squeeze_single_band(np.asarray(array)).astype(np.int64, copy=False)
+    valid = squeeze_single_band(valid_pixels(array))
     return np.where(valid, labels, 0)
 
 
@@ -183,15 +183,15 @@ class PlumeMask(Operator):
         self.nbins = nbins
 
     @over_frames
-    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
+    def _apply(self, enhancement: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         mask = plume_mask(
-            _single_band_nan(gt),
+            _single_band_nan(enhancement),
             threshold=self.threshold,
             min_area_px=self.min_area_px,
             connectivity=self.connectivity,
             nbins=self.nbins,
         )
-        return wrap_like(gt, mask, fill_value=False)
+        return wrap_like(enhancement, mask, fill_value=False)
 
 
 class PlumeContours(Operator):
@@ -226,21 +226,21 @@ class PlumeContours(Operator):
         self.connectivity = connectivity
 
     @over_frames
-    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
-        valid = valid_pixels(gt)
+    def _apply(self, mask: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
+        valid = valid_pixels(mask)
         labels = label_components(
-            squeeze_single_band(np.asarray(gt)).astype(bool) & valid,
+            squeeze_single_band(np.asarray(mask)).astype(bool) & valid,
             min_area_px=self.min_area_px,
             connectivity=self.connectivity,
         )
         if not self.return_labels:
-            return wrap_like(gt, labels > 0, fill_value=False)
+            return wrap_like(mask, labels > 0, fill_value=False)
         # ``carried_fill`` is None unless the fill is an int32 value; a
         # positive fill would collide with a component label.
-        fill = carried_fill(gt, labels.dtype)
+        fill = carried_fill(mask, labels.dtype)
         if fill is None or isinstance(fill, bool | np.bool_) or fill > 0:
             fill = 0
-        return wrap_filled(gt, labels, fill_value=fill, valid=valid)
+        return wrap_filled(mask, labels, fill_value=fill, valid=valid)
 
 
 class PlumeFootprint(Operator):
@@ -304,22 +304,23 @@ class PlumeFootprint(Operator):
             None
             if extra_properties is None
             else tuple(
-                reject_config_summary(f, "extra_properties") for f in extra_properties
+                reject_config_summary(extra_property, "extra_properties")
+                for extra_property in extra_properties
             )
         )
 
     def _apply(
-        self, gt: GeoArray, enhancement: GeoArray | np.ndarray | None = None
+        self, mask: GeoArray, enhancement: GeoArray | np.ndarray | None = None
     ) -> gpd.GeoDataFrame:
-        require_ndim(gt, (2, 3), "PlumeFootprint")
-        require_geoarray(gt, "PlumeFootprint")
-        require_projected_crs(gt, "PlumeFootprint")
+        require_ndim(mask, (2, 3), "PlumeFootprint")
+        require_geoarray(mask, "PlumeFootprint")
+        require_projected_crs(mask, "PlumeFootprint")
         if enhancement is not None:
             require_grid_match(
-                gt, enhancement, "PlumeFootprint", names=("mask", "enhancement")
+                mask, enhancement, "PlumeFootprint", names=("mask", "enhancement")
             )
-        mask_arr = squeeze_single_band(np.asarray(gt))
-        valid = squeeze_single_band(valid_pixels(gt))
+        mask_arr = squeeze_single_band(np.asarray(mask))
+        valid = squeeze_single_band(valid_pixels(mask))
         if mask_arr.dtype == bool:
             labels = label_components(
                 mask_arr & valid,
@@ -360,19 +361,23 @@ class PlumeFootprint(Operator):
             if "label" in props.columns:
                 indexed = props.set_index("label", drop=False)
             else:
-                synthetic_labels = sorted(int(v) for v in np.unique(labels) if v != 0)
+                synthetic_labels = sorted(
+                    int(value) for value in np.unique(labels) if value != 0
+                )
                 indexed = props.copy()
                 indexed.index = pd.Index(synthetic_labels[: len(indexed)])
-            props_by_label = {int(k): v for k, v in indexed.to_dict("index").items()}
+            props_by_label = {
+                int(label): record for label, record in indexed.to_dict("index").items()
+            }
 
         rows: list[dict[str, Any]] = []
-        for label_id in sorted(int(v) for v in np.unique(labels) if v != 0):
+        for label_id in sorted(int(value) for value in np.unique(labels) if value != 0):
             component = labels == label_id
-            n_pixels = int(component.sum())
+            num_pixels = int(component.sum())
             # One component can still vectorise to several 4-connected
             # polygons (diagonal-only contacts); union them.
             geometries = vectorize.get_polygons(
-                component, min_area=0.0, tolerance=0.0, transform=affine_of(gt)
+                component, min_area=0.0, tolerance=0.0, transform=affine_of(mask)
             )
             if not geometries:
                 continue
@@ -392,17 +397,17 @@ class PlumeFootprint(Operator):
             def _nan_safe(
                 reducer: Callable[[np.ndarray], float],
                 key: str,
-                rp: dict[str, Any] = region_props,
+                props: dict[str, Any] = region_props,
                 vals: np.ndarray | None = component_values,
             ) -> float:
                 # Prefer the regionprops_table value, but fall back to the
                 # NaN-aware reducer when skimage propagates NaN through
                 # ``mean_intensity`` / ``max_intensity`` (it does not ignore
                 # NaNs internally). ``vals`` is non-None here.
-                rp_val = rp.get(key)
-                if rp_val is None or not np.isfinite(float(rp_val)):
+                region_value = props.get(key)
+                if region_value is None or not np.isfinite(float(region_value)):
                     return float(reducer(vals))
-                return float(rp_val)
+                return float(region_value)
 
             mean_enhancement = (
                 None
@@ -422,7 +427,7 @@ class PlumeFootprint(Operator):
                     "centroid": geometry.centroid,
                     "mean_enhancement": mean_enhancement,
                     "max_enhancement": max_enhancement,
-                    "n_pixels": n_pixels,
+                    "n_pixels": num_pixels,
                     "label_id": label_id,
                 }
             )
@@ -442,9 +447,9 @@ class PlumeFootprint(Operator):
                     "label_id": [],
                 },
                 geometry="geometry",
-                crs=gt.crs,
+                crs=mask.crs,
             )
-        return gpd.GeoDataFrame(rows, geometry="geometry", crs=gt.crs)
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=mask.crs)
 
     def get_config(self) -> dict[str, Any]:
         return {
@@ -453,7 +458,10 @@ class PlumeFootprint(Operator):
             "properties": list(self.properties),
             "extra_properties": None
             if self.extra_properties is None
-            else [{"callable": callable_name(f)} for f in self.extra_properties],
+            else [
+                {"callable": callable_name(extra_property)}
+                for extra_property in self.extra_properties
+            ],
         }
 
 
@@ -512,13 +520,13 @@ class WindAdvectionCone(Operator):
         self.crs = crs
 
     @over_frames
-    def _apply(self, gt: GeoArray) -> GeoArray:
-        require_geoarray(gt, "WindAdvectionCone")
-        require_projected_crs(gt, "WindAdvectionCone")
-        arr = squeeze_single_band(np.asarray(gt))
+    def _apply(self, geo_array: GeoArray) -> GeoArray:
+        require_geoarray(geo_array, "WindAdvectionCone")
+        require_projected_crs(geo_array, "WindAdvectionCone")
+        arr = squeeze_single_band(np.asarray(geo_array))
         source = self.source
         if self.crs is not None:
-            if gt.crs is None:
+            if geo_array.crs is None:
                 raise ValueError(
                     "WindAdvectionCone was given source crs="
                     f"{self.crs!r} but the input GeoArray has no CRS, so "
@@ -527,20 +535,20 @@ class WindAdvectionCone(Operator):
                     "with crs=None."
                 )
             src_crs = CRS.from_user_input(self.crs)
-            dst_crs = CRS.from_user_input(gt.crs)
+            dst_crs = CRS.from_user_input(geo_array.crs)
             if src_crs != dst_crs:
                 transformer = Transformer.from_crs(src_crs, dst_crs, always_xy=True)
                 source = transformer.transform(*source)
         mask = wind_advection_cone(
             arr.shape,
-            affine_of(gt),
+            affine_of(geo_array),
             source=source,
             wind_u=self.wind_u,
             wind_v=self.wind_v,
             half_angle_deg=self.half_angle_deg,
             max_distance=self.max_distance,
         )
-        return wrap_like(gt, mask, fill_value=False)
+        return wrap_like(geo_array, mask, fill_value=False)
 
 
 class IMEEstimate(Operator):
@@ -633,23 +641,23 @@ class IMEEstimate(Operator):
         self.uncertainty_fraction = uncertainty_fraction
 
     def _apply(
-        self, gt: GeoArray, plume_mask: GeoArray | np.ndarray
+        self, geo_array: GeoArray, plume_mask: GeoArray | np.ndarray
     ) -> dict[str, float]:
-        require_ndim(gt, (2, 3), "IMEEstimate")
-        require_geoarray(gt, "IMEEstimate")
-        require_projected_crs(gt, "IMEEstimate")
+        require_ndim(geo_array, (2, 3), "IMEEstimate")
+        require_geoarray(geo_array, "IMEEstimate")
+        require_projected_crs(geo_array, "IMEEstimate")
         require_grid_match(
-            gt, plume_mask, "IMEEstimate", names=("enhancement", "plume_mask")
+            geo_array, plume_mask, "IMEEstimate", names=("enhancement", "plume_mask")
         )
         mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
-        enhancement = _single_band_nan(gt)
+        enhancement = _single_band_nan(geo_array)
         area = (
             self.pixel_area_m2
             if self.pixel_area_m2 is not None
-            else pixel_area(affine_of(gt))
+            else pixel_area(affine_of(geo_array))
         )
         ime_kg = _masked_mass(enhancement, mask, area)
-        length_m = plume_length(mask, affine_of(gt), method=self.length_method)
+        length_m = plume_length(mask, affine_of(geo_array), method=self.length_method)
         rate = 0.0 if length_m == 0.0 else ime_kg * self.wind_speed / length_m
         out = {
             "ime_kg": ime_kg,
@@ -740,26 +748,33 @@ class CrossSectionalFlux(Operator):
         self.transect_spacing_m = transect_spacing_m
 
     def _apply(
-        self, gt: GeoArray, plume_mask: GeoArray | np.ndarray
+        self, geo_array: GeoArray, plume_mask: GeoArray | np.ndarray
     ) -> gpd.GeoDataFrame:
-        require_ndim(gt, (2, 3), "CrossSectionalFlux")
-        require_geoarray(gt, "CrossSectionalFlux")
-        require_projected_crs(gt, "CrossSectionalFlux")
+        require_ndim(geo_array, (2, 3), "CrossSectionalFlux")
+        require_geoarray(geo_array, "CrossSectionalFlux")
+        require_projected_crs(geo_array, "CrossSectionalFlux")
         require_grid_match(
-            gt, plume_mask, "CrossSectionalFlux", names=("enhancement", "plume_mask")
+            geo_array,
+            plume_mask,
+            "CrossSectionalFlux",
+            names=("enhancement", "plume_mask"),
         )
         wind_norm = float(np.hypot(self.wind_u, self.wind_v))
         if wind_norm == 0.0:
             raise ValueError("wind vector must be non-zero")
         mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
-        enhancement = _single_band_nan(gt)
-        area = pixel_area(affine_of(gt))
+        enhancement = _single_band_nan(geo_array)
+        area = pixel_area(affine_of(geo_array))
         width = float(np.sqrt(area))
-        xs, ys = pixel_centers(mask.shape, affine_of(gt))
-        dx = xs - self.source[0]
-        dy = ys - self.source[1]
-        along = (dx * self.wind_u + dy * self.wind_v) / wind_norm
-        across = (-dx * self.wind_v + dy * self.wind_u) / wind_norm
+        easting, northing = pixel_centers(mask.shape, affine_of(geo_array))
+        # Δx = x − x_source
+        offset_x = easting - self.source[0]
+        # Δy = y − y_source
+        offset_y = northing - self.source[1]
+        # a = (Δx u + Δy v) / ‖w‖
+        along = (offset_x * self.wind_u + offset_y * self.wind_v) / wind_norm
+        # c = (−Δx v + Δy u) / ‖w‖
+        across = (-offset_x * self.wind_v + offset_y * self.wind_u) / wind_norm
         rows: list[dict[str, Any]] = []
         for idx in range(self.n_transects):
             distance = (idx + 1) * self.transect_spacing_m
@@ -774,14 +789,16 @@ class CrossSectionalFlux(Operator):
                 float(np.max(np.abs(across[mask]))) if mask.any() else width,
                 width,
             )
-            cx = self.source[0] + (self.wind_u / wind_norm) * distance
-            cy = self.source[1] + (self.wind_v / wind_norm) * distance
-            px = -self.wind_v / wind_norm
-            py = self.wind_u / wind_norm
+            # s_c = s₀ + d w / ‖w‖
+            centre_x = self.source[0] + (self.wind_u / wind_norm) * distance
+            centre_y = self.source[1] + (self.wind_v / wind_norm) * distance
+            # e_⊥ = (−v, u) / ‖w‖
+            normal_x = -self.wind_v / wind_norm
+            normal_y = self.wind_u / wind_norm
             line = LineString(
                 [
-                    (cx - px * half_len, cy - py * half_len),
-                    (cx + px * half_len, cy + py * half_len),
+                    (centre_x - normal_x * half_len, centre_y - normal_y * half_len),
+                    (centre_x + normal_x * half_len, centre_y + normal_y * half_len),
                 ]
             )
             rows.append(
@@ -793,7 +810,7 @@ class CrossSectionalFlux(Operator):
                     "n_pixels": int(on_transect.sum()),
                 }
             )
-        return gpd.GeoDataFrame(rows, geometry="geometry", crs=gt.crs)
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=geo_array.crs)
 
 
 class ColumnToMass(Operator):
@@ -829,17 +846,17 @@ class ColumnToMass(Operator):
         self.units_in = units_in
         self.units_out = units_out
 
-    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
+    def _apply(self, column: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         out = convert_column_units(
-            np.asarray(gt),
+            np.asarray(column),
             gas=self.gas,
             units_in=self.units_in,
             units_out=self.units_out,
         )
         if np.ndim(out) < 2:
-            return wrap_like(gt, out)
+            return wrap_like(column, out)
         out = np.asarray(out, dtype=np.result_type(out, np.float32))
-        return wrap_filled(gt, out, fill_value=np.nan)
+        return wrap_filled(column, out, fill_value=np.nan)
 
 
 def _iter_instances(
@@ -857,12 +874,17 @@ def _iter_instances(
     out: list[tuple[int, np.ndarray, tuple[int, int, int, int]]] = []
     for lbl_value in ids:
         lbl = int(lbl_value)
-        sl = slices[lbl - 1]
-        if sl is None:
+        bounds = slices[lbl - 1]
+        if bounds is None:
             continue
-        y_sl, x_sl = sl
-        compact = work[sl] == lbl
-        bbox = (int(y_sl.start), int(x_sl.start), int(y_sl.stop), int(x_sl.stop))
+        row_slice, col_slice = bounds
+        compact = work[bounds] == lbl
+        bbox = (
+            int(row_slice.start),
+            int(col_slice.start),
+            int(row_slice.stop),
+            int(col_slice.stop),
+        )
         out.append((lbl, compact, bbox))
     return out
 
@@ -926,8 +948,8 @@ class PlumeShapeFilter(Operator):
         self.max_fiber_width = float(max_fiber_width)
 
     @over_frames
-    def _apply(self, gt: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
-        labels = _instance_labels(gt)
+    def _apply(self, geo_labels: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
+        labels = _instance_labels(geo_labels)
         kept: set[int] = set()
         for lbl, compact, _bbox in _iter_instances(labels):
             area = int(compact.sum())
@@ -954,7 +976,7 @@ class PlumeShapeFilter(Operator):
         else:
             keep_mask = np.isin(labels, list(kept))
             out = np.where(keep_mask, labels, 0).astype(np.int32, copy=False)
-        return wrap_like(gt, out, fill_value=0)
+        return wrap_like(geo_labels, out, fill_value=0)
 
 
 def _major_axis_length(compact_mask: np.ndarray) -> float:
@@ -968,27 +990,39 @@ def _major_axis_length(compact_mask: np.ndarray) -> float:
 def _in_out_mask_stats(
     values: np.ndarray, mask: np.ndarray
 ) -> tuple[float, float, float, float, float, float]:
-    """``(mean_plume, bg_mean, bg_std, contrast, z_score, ipa)`` from
+    """``(mean_plume, background_mean, background_std, contrast, z_score, ipa)`` from
     Pérez Carrasco et al. (2026), ``rfc_utils.xch4_metrics``."""
     plume_data = values[mask]
     plume_data = plume_data[np.isfinite(plume_data)]
     if plume_data.size == 0:
         nan = float("nan")
         return nan, nan, nan, nan, nan, nan
-    bg = values[~mask]
-    bg = bg[np.isfinite(bg)]
-    if bg.size == 0:
+    background = values[~mask]
+    background = background[np.isfinite(background)]
+    if background.size == 0:
         # Fallback used in the paper: synthesise a background by shifting
         # the plume distribution down by one std. Keeps the metric
         # well-defined when the mask covers the entire valid area.
-        bg = plume_data - float(np.std(plume_data))
-    bg_mean = float(np.mean(bg))
-    bg_std = float(np.std(bg))
+        background = plume_data - float(np.std(plume_data))
+    # μ_b = mean of the background
+    background_mean = float(np.mean(background))
+    # σ_b = std of the background
+    background_std = float(np.std(background))
+    # μ_p = mean of the plume
     mean_plume = float(np.mean(plume_data))
-    contrast = mean_plume / bg_mean if bg_mean != 0 else float("nan")
-    z_score = (mean_plume - bg_mean) / bg_std if bg_std > 0 else float("nan")
-    ipa = float(np.sum(plume_data) - bg_mean * plume_data.size) / plume_data.size
-    return mean_plume, bg_mean, bg_std, contrast, z_score, ipa
+    # C = μ_p / μ_b
+    contrast = mean_plume / background_mean if background_mean != 0 else float("nan")
+    # z = (μ_p − μ_b) / σ_b
+    z_score = (
+        (mean_plume - background_mean) / background_std
+        if background_std > 0
+        else float("nan")
+    )
+    # IPA = (Σ_p − μ_b N_p) / N_p
+    ipa = (
+        float(np.sum(plume_data) - background_mean * plume_data.size) / plume_data.size
+    )
+    return mean_plume, background_mean, background_std, contrast, z_score, ipa
 
 
 class PlumeColumnStats(Operator):
@@ -1016,11 +1050,13 @@ class PlumeColumnStats(Operator):
     _terminal: ClassVar[bool] = True
 
     def _apply(
-        self, gt: GeoArray | np.ndarray, column: GeoArray | np.ndarray
+        self, geo_labels: GeoArray | np.ndarray, column: GeoArray | np.ndarray
     ) -> pd.DataFrame:
-        require_ndim(gt, (2, 3), "PlumeColumnStats")
-        require_grid_match(gt, column, "PlumeColumnStats", names=("labels", "column"))
-        labels = _instance_labels(gt)
+        require_ndim(geo_labels, (2, 3), "PlumeColumnStats")
+        require_grid_match(
+            geo_labels, column, "PlumeColumnStats", names=("labels", "column")
+        )
+        labels = _instance_labels(geo_labels)
         col_arr = _single_band_nan(column).astype(float, copy=False)
         if col_arr.shape != labels.shape:
             raise ValueError(
@@ -1029,19 +1065,19 @@ class PlumeColumnStats(Operator):
             )
         rows: list[dict[str, Any]] = []
         for lbl, compact, bbox in _iter_instances(labels):
-            y0, x0, y1, x1 = bbox
+            row_start, col_start, row_stop, col_stop = bbox
             full_mask = np.zeros_like(col_arr, dtype=bool)
-            full_mask[y0:y1, x0:x1] = compact
-            mean_plume, bg_mean, bg_std, contrast, z_score, ipa = _in_out_mask_stats(
-                col_arr, full_mask
+            full_mask[row_start:row_stop, col_start:col_stop] = compact
+            mean_plume, background_mean, background_std, contrast, z_score, ipa = (
+                _in_out_mask_stats(col_arr, full_mask)
             )
             rows.append(
                 {
                     "label": lbl,
                     "area": int(compact.sum()),
                     "mean_enhancement": mean_plume,
-                    "background_mean": bg_mean,
-                    "background_std": bg_std,
+                    "background_mean": background_mean,
+                    "background_std": background_std,
                     "contrast": contrast,
                     "z_score": z_score,
                     "intensity_per_area": ipa,
@@ -1092,15 +1128,16 @@ def _qnd_polynomial(
     theoretical_cdf = stats.norm(loc=scene.mean(), scale=scene.std()).cdf(q_values)
     sorted_in = np.sort(in_mask)
     empirical_cdf = np.searchsorted(sorted_in, q_values, side="right") / sorted_in.size
-    ks = np.abs(empirical_cdf - theoretical_cdf)
-    return np.polyfit(quantiles, ks, degree)
+    # d = |F_emp − F_theory|
+    ks_distance = np.abs(empirical_cdf - theoretical_cdf)
+    return np.polyfit(quantiles, ks_distance, degree)
 
 
 def _dbscan_clump_count(
     values: np.ndarray,
     mask: np.ndarray,
     *,
-    eps: float,
+    neighbourhood_radius: float,
     min_samples: int,
     perc_threshold: float,
 ) -> int:
@@ -1133,7 +1170,9 @@ def _dbscan_clump_count(
     coords = np.argwhere(high_mask)
     if coords.shape[0] == 0:
         return 0
-    labels_db = DBSCAN(eps=eps, min_samples=min_samples).fit_predict(coords)
+    labels_db = DBSCAN(eps=neighbourhood_radius, min_samples=min_samples).fit_predict(
+        coords
+    )
     non_noise = labels_db[labels_db != -1]
     return int(np.unique(non_noise).size)
 
@@ -1198,17 +1237,19 @@ class PlumeQNDFeatures(Operator):
 
     def _apply(
         self,
-        gt: GeoArray | np.ndarray,
+        geo_labels: GeoArray | np.ndarray,
         column: GeoArray | np.ndarray,
         albedo: GeoArray | np.ndarray | None = None,
     ) -> pd.DataFrame:
-        require_ndim(gt, (2, 3), "PlumeQNDFeatures")
-        require_grid_match(gt, column, "PlumeQNDFeatures", names=("labels", "column"))
+        require_ndim(geo_labels, (2, 3), "PlumeQNDFeatures")
+        require_grid_match(
+            geo_labels, column, "PlumeQNDFeatures", names=("labels", "column")
+        )
         if albedo is not None:
             require_grid_match(
-                gt, albedo, "PlumeQNDFeatures", names=("labels", "albedo")
+                geo_labels, albedo, "PlumeQNDFeatures", names=("labels", "albedo")
             )
-        labels = _instance_labels(gt)
+        labels = _instance_labels(geo_labels)
         col_arr = _single_band_nan(column).astype(float, copy=False)
         if col_arr.shape != labels.shape:
             raise ValueError(
@@ -1225,23 +1266,23 @@ class PlumeQNDFeatures(Operator):
                     f"{alb_arr.shape} does not match label shape {labels.shape}"
                 )
 
-        col_keys = [f"qnd_column_c{i}" for i in range(self.degree + 1)]
-        alb_keys = [f"qnd_albedo_c{i}" for i in range(self.degree + 1)]
+        col_keys = [f"qnd_column_c{power}" for power in range(self.degree + 1)]
+        alb_keys = [f"qnd_albedo_c{power}" for power in range(self.degree + 1)]
         rows: list[dict[str, Any]] = []
         for lbl, compact, bbox in _iter_instances(labels):
-            y0, x0, y1, x1 = bbox
+            row_start, col_start, row_stop, col_stop = bbox
             full_mask = np.zeros_like(col_arr, dtype=bool)
-            full_mask[y0:y1, x0:x1] = compact
+            full_mask[row_start:row_stop, col_start:col_stop] = compact
             qnd_col = _qnd_polynomial(col_arr, full_mask, self.degree)
             qnd_alb = (
                 _qnd_polynomial(alb_arr, full_mask, self.degree)
                 if alb_arr is not None
                 else np.full(self.degree + 1, np.nan)
             )
-            n_clumps = _dbscan_clump_count(
+            num_clumps = _dbscan_clump_count(
                 col_arr,
                 full_mask,
-                eps=self.eps,
+                neighbourhood_radius=self.eps,
                 min_samples=self.min_samples,
                 perc_threshold=self.perc_threshold,
             )
@@ -1251,7 +1292,7 @@ class PlumeQNDFeatures(Operator):
             row: dict[str, Any] = {
                 "label": lbl,
                 "area": int(compact.sum()),
-                "n_clumps": n_clumps,
+                "n_clumps": num_clumps,
                 "contrast": contrast,
                 "z_score": z_score,
                 "intensity_per_area": ipa,

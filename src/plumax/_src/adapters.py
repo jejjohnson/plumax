@@ -88,14 +88,14 @@ class RadtranObservationOperator:
         self.amf = amf
         self.var = var
 
-    def _forward(self, delta_vmr: float):
+    def _forward(self, state: float):
         return forward_nonlinear_normalized(
             self.ds,
             self.nu_obs,
             T_K=self.T_K,
             p_atm=self.p_atm,
             vmr_background=self.vmr_background,
-            delta_vmr=float(delta_vmr),
+            delta_vmr=float(state),
             path_length_cm=self.path_length_cm,
             amf=self.amf,
             var=self.var,

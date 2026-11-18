@@ -53,20 +53,20 @@ class _LogLinearIntensity(eqx.Module):
     covariates: Callable[[Array], Array]
     rate_scale: float
 
-    def __call__(self, t: Array) -> Array:
+    def __call__(self, time: Array) -> Array:
         # z(t) · β
         linear = einx.dot(
-            "... covariate, covariate -> ...", self.covariates(t), self.beta
+            "... covariate, covariate -> ...", self.covariates(time), self.beta
         )
         # c exp(β₀ + z(t) · β)
         return self.rate_scale * jnp.exp(self.beta0 + linear)
 
 
 def _compensator(
-    kernel: Any, start: ArrayLike, stop: ArrayLike, *, n_points: int
+    kernel: Any, start: ArrayLike, stop: ArrayLike, *, num_points: int
 ) -> Float[Array, "*time"]:
     # Λ(a, b) = ∫ₐᵇ λ(t) dt
-    log_intensity = LogIntensity(kernel, n_integration_points=n_points)
+    log_intensity = LogIntensity(kernel, n_integration_points=num_points)
     return log_intensity.integrate(start, stop)
 
 
@@ -108,9 +108,9 @@ def expected_count(
         True
     """
     kernel = poisson_kernel(intensity, theta, caller="expected_count")
-    n_points = _quadrature_points(float(horizon), nodes_per_day)
+    num_points = _quadrature_points(float(horizon), nodes_per_day)
     start = jnp.asarray(t, dtype=float)
-    return _compensator(kernel, start, start + horizon, n_points=n_points)
+    return _compensator(kernel, start, start + horizon, num_points=num_points)
 
 
 def occurrence_probability(
@@ -215,7 +215,7 @@ def expected_wait_time(
     # ΔΛₖ = ∫ λ(t + s) ds over cell k
     increments = jax.vmap(
         lambda low, high: _compensator(
-            kernel, start + low, start + high, n_points=nodes_per_cell
+            kernel, start + low, start + high, num_points=nodes_per_cell
         )
     )(lags[:-1], lags[1:])
     # Λ(t, t + sₖ) = Σ_{j ≤ k} ΔΛⱼ
@@ -332,8 +332,10 @@ def posterior_metric(
         )
 
         def member(draw: Any) -> Array:
-            beta0, beta = draw
-            kernel = _LogLinearIntensity(beta0, beta, covariates, rate_scale)
+            intercept, coefficients = draw
+            kernel = _LogLinearIntensity(
+                intercept, coefficients, covariates, rate_scale
+            )
             return metric(kernel, *args, **metric_kwargs)
 
     else:

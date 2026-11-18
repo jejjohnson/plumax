@@ -4,8 +4,7 @@ The fixture is written at test time: a 40 × 40 scene of 60 m pixels on the
 analysis frame with a plume along 30° from a source, its sensitivity,
 uncertainty and L2A mask rasters, and a two-plume GeoJSON. The loaders read
 files on the host, so there is no gradient, ``jit`` or ``vmap`` to take of
-them; the arrays of the ``PlumeScene`` they return go through
-``eqx.filter_jit``.
+them; the ``PlumeScene`` they return goes through ``eqx.filter_jit`` whole.
 """
 
 from __future__ import annotations
@@ -346,24 +345,21 @@ def test_scaling_the_score_scales_the_observation(frame, scale):
 # ── the scene through JAX ───────────────────────────────────────────────────
 
 
-def test_plume_scene_arrays_pass_through_filter_jit(paths, frame):
-    # coupled.Instrument is a frozen dataclass, not a pytree (it checks its
-    # shapes with NumPy on construction), so the scene's arrays go in with
-    # the instrument filtered out
+def test_plume_scene_passes_through_filter_jit_whole(paths, frame):
     scene = _load(paths, frame)
     assert isinstance(scene, PlumeScene)
-    arrays = eqx.filter(scene, eqx.is_array)
 
     @eqx.filter_jit
     def weighted_sum(s: PlumeScene) -> jnp.ndarray:
-        # ∑ₙ [in plume] yₙ, and the direction carried through
-        return jnp.sum(jnp.where(s.in_plume, s.enhancement, 0.0)) + 0.0 * s.direction
+        # ∑ₙ [in plume] σₙ⁻² yₙ, reading the instrument inside the trace
+        weight = 1.0 / s.instrument.observation_variance()
+        in_plume = jnp.where(s.in_plume, weight * s.enhancement, 0.0)
+        return jnp.sum(in_plume) + 0.0 * s.direction
 
-    expected = np.sum(
-        np.where(np.asarray(scene.in_plume), np.asarray(scene.enhancement), 0.0)
-    )
-    assert float(weighted_sum(arrays)) == pytest.approx(float(expected), rel=1e-12)
-    assert scene.window_shape == arrays.window_shape
+    variance = np.asarray(scene.instrument.observation_variance())
+    weighted = np.asarray(scene.enhancement) / variance
+    expected = np.sum(np.where(np.asarray(scene.in_plume), weighted, 0.0))
+    assert float(weighted_sum(scene)) == pytest.approx(float(expected), rel=1e-6)
 
 
 # ── errors and dtypes ───────────────────────────────────────────────────────

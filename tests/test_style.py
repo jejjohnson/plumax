@@ -98,18 +98,7 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
 }
 
 #: package -> sites still to rewrite; each issue under #311 deletes its entry
-PENDING: dict[str, int] = {
-    "_src": 1,
-    "coupled": 27,
-    "gauss_plume": 9,
-    "gauss_puff": 11,
-    "geo": 12,
-    "lagrangian": 13,
-    "les_fvm": 17,
-    "obs": 10,
-    "population": 17,
-    "vetting": 8,
-}
+PENDING: dict[str, int] = {}
 
 
 def _kind(node: ast.AST) -> list[str]:

@@ -87,8 +87,21 @@ def calculate_briggs_dispersion(
     sigma_z : jnp.ndarray
         Vertical dispersion coefficient [m], same shape as ``distance``.
     """
-    ay, by, cy, az, bz, cz = params
-    x = jnp.maximum(distance, 1.0)
-    sigma_y = ay * x * jnp.power(1.0 + by * x, cy)
-    sigma_z = az * x * jnp.power(1.0 + bz * x, cz)
-    return sigma_y, sigma_z
+    (
+        scale_y,
+        shift_y,
+        exponent_y,
+        scale_z,
+        shift_z,
+        exponent_z,
+    ) = params
+    downwind = jnp.maximum(distance, 1.0)
+    # σ_y = a_y x (1 + b_y x)^{c_y}
+    crosswind_spread = (
+        scale_y * downwind * jnp.power(1.0 + shift_y * downwind, exponent_y)
+    )
+    # σ_z = a_z x (1 + b_z x)^{c_z}
+    vertical_spread = (
+        scale_z * downwind * jnp.power(1.0 + shift_z * downwind, exponent_z)
+    )
+    return crosswind_spread, vertical_spread

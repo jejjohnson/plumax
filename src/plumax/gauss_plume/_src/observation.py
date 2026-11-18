@@ -134,8 +134,8 @@ class ColumnObservation(eqx.Module):
             DomainError: If a receptor lies outside the grid.
             ValueError: If both ``instrument`` and ``receptor_index`` are given.
         """
-        nz = plume_grid.interior_shape[0]
-        layer_weights = jnp.full(nz, plume_grid.dz, dtype=plume_grid.z.dtype)
+        num_levels = plume_grid.interior_shape[0]
+        layer_weights = jnp.full(num_levels, plume_grid.dz, dtype=plume_grid.z.dtype)
         if instrument is None:
             return cls(layer_weights=layer_weights, receptor_index=receptor_index)
         if receptor_index is not None:
@@ -144,9 +144,11 @@ class ColumnObservation(eqx.Module):
                 "`receptor_index`, not both."
             )
         receptors = np.asarray(instrument.receptors, dtype=float)
-        ix = _containing_cell(receptors[:, 0], np.asarray(plume_grid.x), "x")
-        iy = _containing_cell(receptors[:, 1], np.asarray(plume_grid.y), "y")
-        index = jnp.asarray(np.column_stack([iy, ix]))
+        col_index = _containing_cell(receptors[:, 0], np.asarray(plume_grid.x), "x")
+        row_index = _containing_cell(receptors[:, 1], np.asarray(plume_grid.y), "y")
+        # index_r = (iy_r, ix_r)
+        index = einx.id("receptor, receptor -> receptor (1 + 1)", row_index, col_index)
+        index = jnp.asarray(index)
         return cls(
             layer_weights=layer_weights,
             averaging_kernel=instrument.ak,
@@ -183,10 +185,10 @@ class ColumnObservation(eqx.Module):
         if self.receptor_index is None:
             profiles = einx.id("level y x -> (y x) level", concentration)
         else:
-            iy = self.receptor_index[:, 0]
-            ix = self.receptor_index[:, 1]
+            row_index = self.receptor_index[:, 0]
+            col_index = self.receptor_index[:, 1]
             # c_{k,i} = c[k, iy_i, ix_i]
-            gathered = concentration[:, iy, ix]
+            gathered = concentration[:, row_index, col_index]
             profiles = einx.id("level obs -> obs level", gathered)
         return self.column(profiles)
 

@@ -96,15 +96,18 @@ def interpolate_in_time(
     Returns:
         ``values`` interpolated at ``t``; shape ``values.shape[1:]``.
     """
-    n_time = int(times.shape[0])
-    if n_time == 1:
+    num_time = int(times.shape[0])
+    if num_time == 1:
         return values[0]
-    t_c = jnp.clip(jnp.asarray(t, dtype=times.dtype), times[0], times[-1])
-    hi = jnp.clip(jnp.searchsorted(times, t_c, side="right"), 1, n_time - 1)
-    lo = hi - 1
-    t_lo, t_hi = times[lo], times[hi]
-    frac = (t_c - t_lo) / (t_hi - t_lo)
-    return (1.0 - frac) * values[lo] + frac * values[hi]
+    clamped_time = jnp.clip(jnp.asarray(t, dtype=times.dtype), times[0], times[-1])
+    searched = jnp.searchsorted(times, clamped_time, side="right")
+    upper = jnp.clip(searched, 1, num_time - 1)
+    lower = upper - 1
+    time_lower, time_upper = times[lower], times[upper]
+    # θ = (t_c − t_lo) / (t_hi − t_lo)
+    frac = (clamped_time - time_lower) / (time_upper - time_lower)
+    # (1 − θ) v_lo + θ v_hi
+    return (1.0 - frac) * values[lower] + frac * values[upper]
 
 
 def to_prescribed_wind(field: MetField) -> PrescribedWindField:

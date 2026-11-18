@@ -127,20 +127,20 @@ def load_wrf(
     # temperature, and decodes the time axis.
     with open_wrfout(
         path, times=times, variables=rotation if has_rotation else None
-    ) as ds:
-        dx_wrf = float(ds.attrs["DX"])
-        dy_wrf = float(ds.attrs["DY"])
+    ) as dataset:
+        spacing_x = float(dataset.attrs["DX"])
+        spacing_y = float(dataset.attrs["DY"])
         if in_frame:
-            u_mass, v_mass = _earth_relative_wind(ds)
-            lat_mass, lon_mass = _latlon(ds)
+            u_mass, v_mass = _earth_relative_wind(dataset)
+            lat_mass, lon_mass = _latlon(dataset)
         else:
-            u_mass, v_mass = _grid_relative_wind(ds)
-        w_mass = ds["w"].values
-        temperature = ds["temperature"].values
-        pressure = ds["pressure"].values
-        height_agl = np.broadcast_to(ds["z_agl"].values, u_mass.shape)
-        pbl_height = ds["pbl_height"].values
-        clock = TimeAxis.from_datetimes(ds["time"].values)
+            u_mass, v_mass = _grid_relative_wind(dataset)
+        w_mass = dataset["w"].values
+        temperature = dataset["temperature"].values
+        pressure = dataset["pressure"].values
+        height_agl = np.broadcast_to(dataset["z_agl"].values, u_mass.shape)
+        pbl_height = dataset["pbl_height"].values
+        clock = TimeAxis.from_datetimes(dataset["time"].values)
 
     # --- vertical targets ---
     # The analysis grid's lower boundary is its surface (``make_grid``
@@ -151,16 +151,18 @@ def load_wrf(
     # h_k = z_k − z_surface
     target_heights = grid_z - grid_surface
     dtype = plume_grid.x.dtype
-    as_jax = lambda a: jnp.asarray(a, dtype=dtype)
+    as_jax = lambda array: jnp.asarray(array, dtype=dtype)
 
     if in_frame:
         # --- horizontal, by lat/lon ---
         to_index = _wrf_index_map(lat_mass, lon_mass, origin)
         points = stagger_points(plume_grid, origin, to_index, loader="load_wrf")
         at_t = points["t"]
-        on_levels = lambda f: _interpolate_vertical(height_agl, f, target_heights)
+        on_levels = lambda field: _interpolate_vertical(
+            height_agl, field, target_heights
+        )
         u_frame, v_frame = frame_wind(on_levels(u_mass), on_levels(v_mass), points)
-        w_t = bilinear_at(on_levels(w_mass), at_t.i, at_t.j)
+        wind_up_t = bilinear_at(on_levels(w_mass), at_t.i, at_t.j)
         temperature_t = bilinear_at(on_levels(temperature), at_t.i, at_t.j)
         pressure_t = bilinear_at(on_levels(pressure), at_t.i, at_t.j)
         pbl_height_t = bilinear_at(pbl_height, at_t.i, at_t.j)
@@ -169,7 +171,7 @@ def load_wrf(
             times=as_jax(clock.seconds),
             u=as_jax(u_frame),
             v=as_jax(v_frame),
-            w=as_jax(w_t),
+            w=as_jax(wind_up_t),
             temperature=as_jax(temperature_t),
             pressure=as_jax(pressure_t),
             pbl_height=as_jax(pbl_height_t),
@@ -177,17 +179,34 @@ def load_wrf(
         )
 
     # --- horizontal, by WRF metres ---
-    n_y_w, n_x_w = u_mass.shape[-2:]
+    num_y_wrf, num_x_wrf = u_mass.shape[-2:]
     x_t = np.asarray(plume_grid.x, dtype=np.float64) + origin[0]
     y_t = np.asarray(plume_grid.y, dtype=np.float64) + origin[1]
+    # x_U = x_T + Δx/2
     x_u = x_t + 0.5 * plume_grid.dx
+    # y_V = y_T + Δy/2
     y_v = y_t + 0.5 * plume_grid.dy
-    _check_inside(x_u, y_v, dx_w=dx_wrf, dy_w=dy_wrf, n_x_w=n_x_w, n_y_w=n_y_w)
-    _check_inside(x_t, y_t, dx_w=dx_wrf, dy_w=dy_wrf, n_x_w=n_x_w, n_y_w=n_y_w)
+    _check_inside(
+        x_u,
+        y_v,
+        spacing_x=spacing_x,
+        spacing_y=spacing_y,
+        num_x=num_x_wrf,
+        num_y=num_y_wrf,
+    )
+    _check_inside(
+        x_t,
+        y_t,
+        spacing_x=spacing_x,
+        spacing_y=spacing_y,
+        num_x=num_x_wrf,
+        num_y=num_y_wrf,
+    )
 
-    def onto(field: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
+    def onto(field: np.ndarray, easting: np.ndarray, northing: np.ndarray):
         column = _interpolate_vertical(height_agl, field, target_heights)
-        return _bilinear(column, x / dx_wrf, y / dy_wrf)
+        # (fx, fy) = (x / DX, y / DY)
+        return _bilinear(column, easting / spacing_x, northing / spacing_y)
 
     return MetField(
         plume_grid=plume_grid,
@@ -197,7 +216,7 @@ def load_wrf(
         w=as_jax(onto(w_mass, x_t, y_t)),
         temperature=as_jax(onto(temperature, x_t, y_t)),
         pressure=as_jax(onto(pressure, x_t, y_t)),
-        pbl_height=as_jax(_bilinear(pbl_height, x_t / dx_wrf, y_t / dy_wrf)),
+        pbl_height=as_jax(_bilinear(pbl_height, x_t / spacing_x, y_t / spacing_y)),
         t0=clock.t0_iso,
     )
 
@@ -214,7 +233,7 @@ def _require_open_wrfout():
 
 
 def _earth_relative_wind(
-    ds: xr.Dataset,
+    dataset: xr.Dataset,
 ) -> tuple[Float[np.ndarray, "time level y x"], Float[np.ndarray, "time level y x"]]:
     """Mass-point eastward and northward wind ``(u_e, v_n)``.
 
@@ -222,29 +241,29 @@ def _earth_relative_wind(
         MissingVariableError: If the file has no ``COSALPHA`` / ``SINALPHA``, so
             only WRF's grid-relative wind is known.
     """
-    u, v = ds["u"], ds["v"]
-    if u.attrs.get("grid_relative") == "true":
+    wind_east, wind_north = dataset["u"], dataset["v"]
+    if wind_east.attrs.get("grid_relative") == "true":
         raise MissingVariableError(
             "load_wrf: placing the grid by a LocalFrame needs the earth-relative "
             "wind, and this file has no COSALPHA / SINALPHA to rotate WRF's "
             "grid-relative U / V; pass `origin=(x, y)` in WRF metres instead"
         )
-    return u.values, v.values
+    return wind_east.values, wind_north.values
 
 
 def _latlon(
-    ds: xr.Dataset,
+    dataset: xr.Dataset,
 ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
     """Static mass-point latitude and longitude (first step on a moving nest).
 
     Raises:
         MissingVariableError: If the file has no ``XLAT`` / ``XLONG``.
     """
-    if "lat" not in ds.coords or "lon" not in ds.coords:
+    if "lat" not in dataset.coords or "lon" not in dataset.coords:
         raise MissingVariableError(
             "load_wrf: placing the grid by a LocalFrame needs XLAT / XLONG in the file"
         )
-    lat, lon = ds["lat"], ds["lon"]
+    lat, lon = dataset["lat"], dataset["lon"]
     # a moving nest: v1 places the grid where the nest starts
     if "time" in lat.dims:
         lat, lon = lat.isel(time=0), lon.isel(time=0)
@@ -269,29 +288,31 @@ def _wrf_index_map(
 
     # (x, y) of every mass point in the frame
     mass_x, mass_y = frame.to_xy(lat, lon)
-    n_rows, n_cols = lat.shape
+    num_rows, num_cols = lat.shape
     rows, cols = np.meshgrid(
-        np.arange(n_rows, dtype=float), np.arange(n_cols, dtype=float), indexing="ij"
+        np.arange(num_rows, dtype=float),
+        np.arange(num_cols, dtype=float),
+        indexing="ij",
     )
     nodes = einx.id("y x, y x -> (y x) (1 + 1)", mass_x, mass_y)
     node_indices = einx.id("y x, y x -> (y x) (1 + 1)", cols, rows)
     interpolant = scipy.interpolate.LinearNDInterpolator(nodes, node_indices)
 
     def to_index(
-        x: Float[np.ndarray, "y x"], y: Float[np.ndarray, "y x"]
+        frame_x: Float[np.ndarray, "y x"], frame_y: Float[np.ndarray, "y x"]
     ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
-        queries = einx.id("y x, y x -> (y x) (1 + 1)", x, y)
+        queries = einx.id("y x, y x -> (y x) (1 + 1)", frame_x, frame_y)
         # (i, j) = 𝓘(x, y)
         indices = interpolant(queries)
-        n_y, n_x = x.shape
-        i, j = einx.id("(y x) c -> c y x", indices, y=n_y, x=n_x)
-        return i, j
+        num_y, num_x = frame_x.shape
+        index_x, index_y = einx.id("(y x) c -> c y x", indices, y=num_y, x=num_x)
+        return index_x, index_y
 
     return to_index
 
 
 def _grid_relative_wind(
-    ds: xr.Dataset,
+    dataset: xr.Dataset,
 ) -> tuple[Float[np.ndarray, "time level y x"], Float[np.ndarray, "time level y x"]]:
     """Mass-point ``(u, v)`` along the WRF grid axes.
 
@@ -302,22 +323,33 @@ def _grid_relative_wind(
     (``u_e = u cos α − v sin α``, ``v_n = v cos α + u sin α``) when the file
     carries ``COSALPHA`` / ``SINALPHA``; the inverse rotation above undoes it.
     """
-    u, v = ds["u"], ds["v"]
-    if u.attrs.get("grid_relative") == "true":
-        return u.values, v.values
-    cos_alpha, sin_alpha = ds["COSALPHA"], ds["SINALPHA"]
+    wind_east, wind_north = dataset["u"], dataset["v"]
+    if wind_east.attrs.get("grid_relative") == "true":
+        return wind_east.values, wind_north.values
+    cos_alpha, sin_alpha = dataset["COSALPHA"], dataset["SINALPHA"]
     # u = u_e cos α + v_n sin α
-    u_grid = u * cos_alpha + v * sin_alpha
+    u_grid = wind_east * cos_alpha + wind_north * sin_alpha
     # v = v_n cos α − u_e sin α
-    v_grid = v * cos_alpha - u * sin_alpha
-    return u_grid.transpose(*u.dims).values, v_grid.transpose(*v.dims).values
+    v_grid = wind_north * cos_alpha - wind_east * sin_alpha
+    return (
+        u_grid.transpose(*wind_east.dims).values,
+        v_grid.transpose(*wind_north.dims).values,
+    )
 
 
 def _check_inside(
-    x: np.ndarray, y: np.ndarray, *, dx_w: float, dy_w: float, n_x_w: int, n_y_w: int
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    spacing_x: float,
+    spacing_y: float,
+    num_x: int,
+    num_y: int,
 ) -> None:
-    x_max = (n_x_w - 1) * dx_w
-    y_max = (n_y_w - 1) * dy_w
+    # x_max = (n_x − 1) DX
+    x_max = (num_x - 1) * spacing_x
+    # y_max = (n_y − 1) DY
+    y_max = (num_y - 1) * spacing_y
     if x.min() < 0.0 or x.max() > x_max or y.min() < 0.0 or y.max() > y_max:
         raise ValueError(
             "load_wrf: the analysis grid (including its U-/V-point half-cell "
@@ -337,17 +369,21 @@ def _interpolate_vertical(
     increasing along the level axis; returns ``(n_time, nz, ny, nx)``.
     Targets outside a column's range take that column's end value.
     """
-    n_lev = z_src.shape[1]
+    num_levels = z_src.shape[1]
     out = np.empty((field.shape[0], z_target.shape[0], *field.shape[2:]), field.dtype)
-    for k, zk in enumerate(z_target):
-        hi = np.clip((z_src <= zk).sum(axis=1), 1, n_lev - 1)[:, None]
-        lo = hi - 1
-        z_lo = np.take_along_axis(z_src, lo, axis=1)[:, 0]
-        z_hi = np.take_along_axis(z_src, hi, axis=1)[:, 0]
-        f_lo = np.take_along_axis(field, lo, axis=1)[:, 0]
-        f_hi = np.take_along_axis(field, hi, axis=1)[:, 0]
-        frac = np.clip((zk - z_lo) / (z_hi - z_lo), 0.0, 1.0)
-        out[:, k] = (1.0 - frac) * f_lo + frac * f_hi
+    for target, target_height in enumerate(z_target):
+        upper = np.clip((z_src <= target_height).sum(axis=1), 1, num_levels - 1)[
+            :, None
+        ]
+        lower = upper - 1
+        z_lower = np.take_along_axis(z_src, lower, axis=1)[:, 0]
+        z_upper = np.take_along_axis(z_src, upper, axis=1)[:, 0]
+        field_lower = np.take_along_axis(field, lower, axis=1)[:, 0]
+        field_upper = np.take_along_axis(field, upper, axis=1)[:, 0]
+        # θ = clip((z_k − z_lo) / (z_hi − z_lo), 0, 1)
+        frac = np.clip((target_height - z_lower) / (z_upper - z_lower), 0.0, 1.0)
+        # (1 − θ) f_lo + θ f_hi
+        out[:, target] = (1.0 - frac) * field_lower + frac * field_upper
     return out
 
 
@@ -358,15 +394,18 @@ def _bilinear(field: np.ndarray, fx: np.ndarray, fy: np.ndarray) -> np.ndarray:
     (WRF metres divided by ``DX`` / ``DY``); returns ``field`` resampled to
     ``(..., ny, nx)``.
     """
-    n_y, n_x = field.shape[-2:]
-    i0 = np.clip(np.floor(fx).astype(int), 0, n_x - 2)
-    j0 = np.clip(np.floor(fy).astype(int), 0, n_y - 2)
-    wx = (fx - i0)[None, :]
-    wy = (fy - j0)[:, None]
-    jj, ii = j0[:, None], i0[None, :]
+    num_y, num_x = field.shape[-2:]
+    col_low = np.clip(np.floor(fx).astype(int), 0, num_x - 2)
+    row_low = np.clip(np.floor(fy).astype(int), 0, num_y - 2)
+    # a = fx − ⌊fx⌋
+    weight_x = (fx - col_low)[None, :]
+    # b = fy − ⌊fy⌋
+    weight_y = (fy - row_low)[:, None]
+    rows, cols = row_low[:, None], col_low[None, :]
+    # (1−b)(1−a) f₀₀ + (1−b) a f₀₁ + b (1−a) f₁₀ + b a f₁₁
     return (
-        (1.0 - wy) * (1.0 - wx) * field[..., jj, ii]
-        + (1.0 - wy) * wx * field[..., jj, ii + 1]
-        + wy * (1.0 - wx) * field[..., jj + 1, ii]
-        + wy * wx * field[..., jj + 1, ii + 1]
+        (1.0 - weight_y) * (1.0 - weight_x) * field[..., rows, cols]
+        + (1.0 - weight_y) * weight_x * field[..., rows, cols + 1]
+        + weight_y * (1.0 - weight_x) * field[..., rows + 1, cols]
+        + weight_y * weight_x * field[..., rows + 1, cols + 1]
     )

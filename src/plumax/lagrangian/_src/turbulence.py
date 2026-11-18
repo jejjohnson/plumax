@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import einx
 import jax
 import jax.numpy as jnp
 
@@ -148,70 +149,85 @@ def hanna_profiles(
         dispersion model FLEXPART version 6.2. *Atmos. Chem. Phys.* 5,
         2461–2474, eqs. 20–33.
     """
-    z = jnp.asarray(z, dtype=float)
-    h = pbl_height
-    zh = jnp.clip(z / h, 0.0, 1.0)
-    us = u_star
-    ws = w_star
-    us_safe = jnp.maximum(us, _SIGMA_FLOOR)
-    f_c = jnp.abs(coriolis_parameter)
+    height = jnp.asarray(z, dtype=float)
+    # ζ = z / h, held inside [0, 1]
+    relative_height = jnp.clip(height / pbl_height, 0.0, 1.0)
+    # u_* ← max(u_*, ε)
+    u_star_safe = jnp.maximum(u_star, _SIGMA_FLOOR)
+    # |f|
+    coriolis = jnp.abs(coriolis_parameter)
 
     # --- Unstable (convective), L < 0 ---
-    sig_u2_conv = (12.0 + 0.5 * h / jnp.maximum(-obukhov_length, 1e-6)) ** (
+    # σ_u² = (12 + h / 2|L|)^(2/3) u_*²
+    sig_u2_conv = (12.0 + 0.5 * pbl_height / jnp.maximum(-obukhov_length, 1e-6)) ** (
         2.0 / 3.0
-    ) * us**2
-    sig_w2_conv = 1.74 * us**2 * (1.0 - 0.8 * zh) ** 2 + (
-        0.35 * ws**2 * (zh ** (2.0 / 3.0)) * (1.0 - 0.8 * zh) ** 2
+    ) * u_star**2
+    # σ_w² = 1.74 u_*² (1 − 0.8 ζ)² + 0.35 w_*² ζ^(2/3) (1 − 0.8 ζ)²
+    sig_w2_conv = 1.74 * u_star**2 * (1.0 - 0.8 * relative_height) ** 2 + (
+        0.35
+        * w_star**2
+        * (relative_height ** (2.0 / 3.0))
+        * (1.0 - 0.8 * relative_height) ** 2
     )
     sig_w_conv = jnp.sqrt(jnp.maximum(sig_w2_conv, 0.0))
-    sig_uv_conv = jnp.sqrt(jnp.maximum(sig_u2_conv, 0.0)) * jnp.ones_like(z)
-    tau_w_conv = 0.15 * h / jnp.maximum(sig_w_conv, _SIGMA_FLOOR)
-    tau_uv_conv = 0.15 * h / jnp.maximum(sig_uv_conv, _SIGMA_FLOOR)
+    # σ_u,conv = √σ_u²
+    sig_uv_conv = jnp.sqrt(jnp.maximum(sig_u2_conv, 0.0)) * jnp.ones_like(height)
+    # τ_L,w = 0.15 h / σ_w
+    timescale_w_conv = 0.15 * pbl_height / jnp.maximum(sig_w_conv, _SIGMA_FLOOR)
+    # τ_L,uv = 0.15 h / σ_uv
+    timescale_uv_conv = 0.15 * pbl_height / jnp.maximum(sig_uv_conv, _SIGMA_FLOOR)
 
     # --- Stable, L > 0: Stohl et al. (2005) eqs. 29–33 ---
-    decay = jnp.maximum(1.0 - zh, 1e-3)
+    # 1 − ζ, floored
+    decay = jnp.maximum(1.0 - relative_height, 1e-3)
     # σ_u = 2.0 u_* (1 − z/h)
-    sig_u_stab = 2.0 * us * decay
+    sig_u_stab = 2.0 * u_star * decay
     # σ_v = σ_w = 1.3 u_* (1 − z/h)
-    sig_vw_stab = 1.3 * us * decay
+    sig_vw_stab = 1.3 * u_star * decay
     # τ_L,u = 0.15 (h/σ_u)(z/h)^0.5
-    tau_u_stab = (
+    timescale_u_stable = (
         0.15
-        * h
+        * pbl_height
         / jnp.maximum(sig_u_stab, _SIGMA_FLOOR)
-        * jnp.sqrt(jnp.maximum(zh, 1e-3))
+        * jnp.sqrt(jnp.maximum(relative_height, 1e-3))
     )
     # τ_L,v = 0.07 (h/σ_v)(z/h)^0.5
-    tau_v_stab = (
+    timescale_v_stable = (
         0.07
-        * h
+        * pbl_height
         / jnp.maximum(sig_vw_stab, _SIGMA_FLOOR)
-        * jnp.sqrt(jnp.maximum(zh, 1e-3))
+        * jnp.sqrt(jnp.maximum(relative_height, 1e-3))
     )
     # τ_L,w = 0.1 (h/σ_w)(z/h)^0.8
-    tau_w_stab = (
-        0.1 * h / jnp.maximum(sig_vw_stab, _SIGMA_FLOOR) * jnp.maximum(zh, 1e-3) ** 0.8
+    timescale_w_stable = (
+        0.1
+        * pbl_height
+        / jnp.maximum(sig_vw_stab, _SIGMA_FLOOR)
+        * jnp.maximum(relative_height, 1e-3) ** 0.8
     )
 
     # --- Neutral: Stohl et al. (2005) eqs. 26–28 ---
     # σ_u = 2.0 u_* exp(−3fz/u_*)
-    sig_u_neut = 2.0 * us * jnp.exp(-3.0 * f_c * z / us_safe)
+    sig_u_neut = 2.0 * u_star * jnp.exp(-3.0 * coriolis * height / u_star_safe)
     # σ_v = σ_w = 1.3 u_* exp(−2fz/u_*)
-    sig_vw_neut = 1.3 * us * jnp.exp(-2.0 * f_c * z / us_safe)
+    sig_vw_neut = 1.3 * u_star * jnp.exp(-2.0 * coriolis * height / u_star_safe)
     # τ_L = 0.5 z / σ_w / (1 + 15fz/u_*)
-    tau_neut = (
+    timescale_neutral = (
         0.5
-        * z
+        * height
         / jnp.maximum(sig_vw_neut, _SIGMA_FLOOR)
-        / (1.0 + 15.0 * f_c * z / us_safe)
+        / (1.0 + 15.0 * coriolis * height / u_star_safe)
     )
-    tau_neut = jnp.maximum(tau_neut, 1.0)
+    # τ_L ← max(τ_L, 1)
+    timescale_neutral = jnp.maximum(timescale_neutral, 1.0)
 
     # --- regime: neutral when h/|L| < 1 (FLEXPART hanna.f90); L = 0 is neutral ---
     is_neutral_sentinel = obukhov_length == 0.0
     safe_length = jnp.where(is_neutral_sentinel, 1.0, obukhov_length)
     # h/|L|, with 1/L = 0 at the sentinel
-    stability_ratio = jnp.where(is_neutral_sentinel, 0.0, h / jnp.abs(safe_length))
+    stability_ratio = jnp.where(
+        is_neutral_sentinel, 0.0, pbl_height / jnp.abs(safe_length)
+    )
     neutral = stability_ratio < 1.0
     unstable = jnp.logical_and(~neutral, obukhov_length < 0.0)
     stable = jnp.logical_and(~neutral, obukhov_length > 0.0)
@@ -219,17 +235,27 @@ def hanna_profiles(
     def pick(conv: jax.Array, stab: jax.Array, neut: jax.Array) -> jax.Array:
         return jnp.where(unstable, conv, jnp.where(stable, stab, neut))
 
-    sigma_u = pick(sig_uv_conv, sig_u_stab, sig_u_neut)
-    sigma_v = pick(0.8 * sig_uv_conv, sig_vw_stab, sig_vw_neut)
-    sigma_w = pick(sig_w_conv, sig_vw_stab, sig_vw_neut)
-    tau_u = pick(tau_uv_conv, tau_u_stab, tau_neut)
-    tau_v = pick(tau_uv_conv, tau_v_stab, tau_neut)
-    tau_w = pick(tau_w_conv, tau_w_stab, tau_neut)
+    std_u = pick(sig_uv_conv, sig_u_stab, sig_u_neut)
+    std_v = pick(0.8 * sig_uv_conv, sig_vw_stab, sig_vw_neut)
+    std_w = pick(sig_w_conv, sig_vw_stab, sig_vw_neut)
+    timescale_u = pick(timescale_uv_conv, timescale_u_stable, timescale_neutral)
+    timescale_v = pick(timescale_uv_conv, timescale_v_stable, timescale_neutral)
+    timescale_w = pick(timescale_w_conv, timescale_w_stable, timescale_neutral)
 
-    sigma = jnp.stack([sigma_u, sigma_v, sigma_w], axis=-1)
-    tau = jnp.stack([tau_u, tau_v, tau_w], axis=-1)
-    tau = jnp.maximum(tau, 1.0)
-    return sigma, tau
+    if height.size == 0:
+        # einx rejects empty axes; no heights have empty profiles
+        empty_std = jnp.zeros((*height.shape, 3), dtype=std_u.dtype)
+        empty_timescale = jnp.zeros((*height.shape, 3), dtype=timescale_u.dtype)
+        return empty_std, empty_timescale
+    # σ = [σ_u, σ_v, σ_w]
+    std = einx.id("..., ..., ... -> ... (1 + 1 + 1)", std_u, std_v, std_w)
+    # τ_L = [τ_u, τ_v, τ_w]
+    timescale = einx.id(
+        "..., ..., ... -> ... (1 + 1 + 1)", timescale_u, timescale_v, timescale_w
+    )
+    # τ_L ← max(τ_L, 1)
+    timescale = jnp.maximum(timescale, 1.0)
+    return std, timescale
 
 
 @dataclass(frozen=True)

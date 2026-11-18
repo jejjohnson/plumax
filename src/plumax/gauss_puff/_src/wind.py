@@ -91,10 +91,13 @@ class WindSchedule(eqx.Module):
         """
         times_j = jnp.asarray(times, dtype=jnp.float32)
         speed_j = jnp.asarray(wind_speed, dtype=jnp.float32)
-        theta = jnp.deg2rad(jnp.asarray(wind_direction, dtype=jnp.float32))
-        u = -speed_j * jnp.sin(theta)
-        v = -speed_j * jnp.cos(theta)
-        return cls(times=times_j, u_wind=u, v_wind=v)
+        # θ = direction · π / 180
+        direction_radians = jnp.deg2rad(jnp.asarray(wind_direction, dtype=jnp.float32))
+        # u = −|V| sin θ
+        wind_east = -speed_j * jnp.sin(direction_radians)
+        # v = −|V| cos θ
+        wind_north = -speed_j * jnp.cos(direction_radians)
+        return cls(times=times_j, u_wind=wind_east, v_wind=wind_north)
 
     def _interp_u(self) -> diffrax.LinearInterpolation:
         return diffrax.LinearInterpolation(ts=self.times, ys=self.u_wind)
@@ -108,8 +111,9 @@ class WindSchedule(eqx.Module):
 
     def speed_at(self, t: Float[Array, ""]) -> Float[Array, ""]:
         """Interpolate the wind speed |V(t)| at time ``t``."""
-        u, v = self.wind_at(t)
-        return jnp.sqrt(u**2 + v**2)
+        wind_east, wind_north = self.wind_at(t)
+        # |V| = √(u² + v²)
+        return jnp.sqrt(wind_east**2 + wind_north**2)
 
 
 @eqx.filter_jit
@@ -148,25 +152,29 @@ def cumulative_wind_integrals(
     interp_u = schedule._interp_u()
     interp_v = schedule._interp_v()
 
-    def rhs(t: Float[Array, ""], y: Float[Array, " 3"], args) -> Float[Array, " 3"]:
-        u = interp_u.evaluate(t)
-        v = interp_v.evaluate(t)
-        speed = jnp.sqrt(u**2 + v**2)
-        return jnp.stack([u, v, speed])
+    def rhs(
+        time: Float[Array, ""], state: Float[Array, " 3"], args
+    ) -> Float[Array, " 3"]:
+        wind_east = interp_u.evaluate(time)
+        wind_north = interp_v.evaluate(time)
+        # |V| = √(u² + v²)
+        speed = jnp.sqrt(wind_east**2 + wind_north**2)
+        return jnp.stack([wind_east, wind_north, speed])
 
-    t0 = schedule.times[0]
-    t1 = jnp.maximum(save_at[-1], schedule.times[-1])
+    start_time = schedule.times[0]
+    # t₁ = max(t_save,last, t_knot,last)
+    end_time = jnp.maximum(save_at[-1], schedule.times[-1])
 
     sol = diffrax.diffeqsolve(
         diffrax.ODETerm(rhs),
         diffrax.Tsit5(),
-        t0=t0,
-        t1=t1,
+        t0=start_time,
+        t1=end_time,
         dt0=None,
         y0=jnp.zeros(3, dtype=schedule.u_wind.dtype),
         saveat=diffrax.SaveAt(ts=save_at),
         stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
         max_steps=None,
     )
-    ys = sol.ys
-    return ys[:, 0], ys[:, 1], ys[:, 2]
+    integrals = sol.ys
+    return integrals[:, 0], integrals[:, 1], integrals[:, 2]

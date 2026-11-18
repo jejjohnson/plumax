@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+import einx
 import numpy as np
 from jaxtyping import Bool, Float, Num, Shaped
 from scipy.spatial import ConvexHull, QhullError
@@ -197,11 +198,15 @@ def wind_advection_cone(
     if max_distance <= 0.0:
         raise ValueError("max_distance must be positive")
 
-    xs, ys = pixel_centers(shape, transform)
-    dx = xs - source[0]
-    dy = ys - source[1]
-    distances = np.hypot(dx, dy)
-    projection = (dx * wind_u + dy * wind_v) / wind_norm
+    easting, northing = pixel_centers(shape, transform)
+    # Δx = x − x_source
+    offset_x = easting - source[0]
+    # Δy = y − y_source
+    offset_y = northing - source[1]
+    # d = √(Δx² + Δy²)
+    distances = np.hypot(offset_x, offset_y)
+    # s = (Δx u + Δy v) / ‖w‖
+    projection = (offset_x * wind_u + offset_y * wind_v) / wind_norm
     cos_angle = np.divide(
         projection,
         distances,
@@ -281,8 +286,14 @@ def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
     except QhullError:
         order = np.lexsort((points[:, 1], points[:, 0]))
         candidates = points[order[[0, -1]]]
-    diff = candidates[:, None, :] - candidates[None, :, :]
-    return float(np.sqrt(np.max(np.sum(diff**2, axis=-1))))
+    # δ = p_first − p_second
+    offset = einx.subtract(
+        "first coord, second coord -> first second coord", candidates, candidates
+    )
+    # d² = Σ_coord δ²
+    squared = einx.sum("first second [coord]", offset**2)
+    # D = √(max_{first,second} d²)
+    return float(np.sqrt(einx.max("[first second]", squared)))
 
 
 def plume_length(
@@ -341,8 +352,9 @@ def plume_length(
     active = np.asarray(mask, dtype=bool)
     if not active.any():
         return 0.0
-    xs, ys = pixel_centers(active.shape, transform)
-    points = np.column_stack([xs[active], ys[active]])
+    easting, northing = pixel_centers(active.shape, transform)
+    # p = (x, y) at the active pixel centres
+    points = einx.id("point, point -> point (1 + 1)", easting[active], northing[active])
     if points.shape[0] == 1:
         # Single pixel: use one linear pixel size as the length proxy.
         return float(np.sqrt(pixel_area(transform)))
@@ -359,8 +371,14 @@ def plume_length(
             coords = np.asarray(hull.coords)
         else:
             coords = points
-        diff = coords[:, None, :] - coords[None, :, :]
-        return float(np.sqrt(np.max(np.sum(diff**2, axis=-1))))
+        # δ = p_first − p_second
+        offset = einx.subtract(
+            "first coord, second coord -> first second coord", coords, coords
+        )
+        # d² = Σ_coord δ²
+        squared = einx.sum("first second [coord]", offset**2)
+        # D = √(max_{first,second} d²)
+        return float(np.sqrt(einx.max("[first second]", squared)))
     if method == "skeleton":
         length = skeleton_length(active, step=transform)
         if length <= 0.0:

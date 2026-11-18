@@ -24,6 +24,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Mapping, Sequence
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -184,7 +185,10 @@ def masked_k_coupled_model(
         if fixed_responses is not None:
             design = fixed_responses[index]
         else:
-            locations = jnp.stack([sources.x, sources.y], axis=-1)
+            # x_k = (x_k, y_k)
+            locations = einx.id(
+                "source, source -> source (1 + 1)", sources.x, sources.y
+            )
             design = slot_responses(transport, [instrument], locations)[0]
         # Σ_k a_k Q_k r_i(x_k, y_k) + c_bg
         predicted = design @ active_rates + background
@@ -330,7 +334,7 @@ def build_masked_k_problem(
             f"at least one slot on, got {mask.tolist()}."
         )
     emission = LognormalEmission.from_moments(prior.emission_mean, prior.emission_std)
-    n_active = int(mask.sum())
+    num_active = int(mask.sum())
     forward = CoupledForward(
         source=transport,
         instruments=tuple(instruments),
@@ -338,11 +342,11 @@ def build_masked_k_problem(
     )
     coupled_prior = CoupledPrior.from_std(
         {
-            "log_emission_rate": emission.loc * jnp.ones(n_active),
+            "log_emission_rate": emission.loc * jnp.ones(num_active),
             "background": 0.0,
         },
         {
-            "log_emission_rate": emission.scale * jnp.ones(n_active),
+            "log_emission_rate": emission.scale * jnp.ones(num_active),
             "background": prior.background_std,
         },
     )

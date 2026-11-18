@@ -31,6 +31,7 @@ a modelling choice of plumax, not part of Golder (1972) (see its docstring).
 
 from __future__ import annotations
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -124,8 +125,15 @@ def golder_stability_class(
     """
     inverse_obukhov_length = jnp.asarray(inverse_obukhov_length)
     boundaries = golder_class_boundaries(z0)
-    above = inverse_obukhov_length[..., None] > boundaries
-    return jnp.sum(above, axis=-1)
+    if inverse_obukhov_length.size == 0:
+        # einx rejects a zero-size axis; no lengths, no classes
+        return jnp.zeros(inverse_obukhov_length.shape, dtype=int)
+    # 1[(1/L)_k < 1/L] for every boundary k
+    above = einx.greater(
+        "..., boundary -> ... boundary", inverse_obukhov_length, boundaries
+    )
+    # class = Σ_k 1[(1/L)_k < 1/L]
+    return einx.sum("... [boundary]", above)
 
 
 def golder_stability_index(
@@ -169,15 +177,18 @@ def golder_stability_index(
     half_width_a = 0.5 * (boundaries[1] - boundaries[0])
     # Δ_F = ((1/L)_EF − (1/L)_DE) / 2
     half_width_f = 0.5 * (boundaries[4] - boundaries[3])
-    neutral = jnp.zeros((1,), dtype=boundaries.dtype)
-    knots = jnp.concatenate(
-        [
-            (boundaries[0] - half_width_a)[None],
-            boundaries[:3],
-            neutral,
-            boundaries[3:],
-            (boundaries[4] + half_width_f)[None],
-        ]
+    # first knot (1/L)_AB − Δ_A and last knot (1/L)_EF + Δ_F
+    first_knot = boundaries[0] - half_width_a
+    last_knot = boundaries[4] + half_width_f
+    neutral = jnp.zeros((), dtype=boundaries.dtype)
+    # knots in increasing 1/L, with the neutral knot 0 between C|D and D|E
+    knots = einx.id(
+        ", lower, , upper, -> (1 + lower + 1 + upper + 1)",
+        first_knot,
+        boundaries[:3],
+        neutral,
+        boundaries[3:],
+        last_knot,
     )
     index_knots = jnp.asarray(_INDEX_KNOTS, dtype=boundaries.dtype)
     return jnp.interp(inverse_obukhov_length, knots, index_knots)
@@ -300,24 +311,28 @@ class GolderDispersion(eqx.Module):
         self, distance: Float[Array, "*shape"]
     ) -> tuple[Float[Array, "*shape"], Float[Array, "*shape"]]:
         # σ^PG(x; k) for every class k, stacked along a leading class axis
-        params = jnp.stack([BRIGGS_DISPERSION_PARAMS[c] for c in STABILITY_CLASSES])
-        sigma_y_all, sigma_z_all = jax.vmap(
+        params = jnp.stack(
+            [BRIGGS_DISPERSION_PARAMS[name] for name in STABILITY_CLASSES]
+        )
+        crosswind_all, vertical_all = jax.vmap(
             calculate_briggs_dispersion, in_axes=(None, 0)
         )(distance, params)
         if not self.interpolate:
             stability_class = golder_stability_class(
                 self.inverse_obukhov_length, self.z0
             )
-            return sigma_y_all[stability_class], sigma_z_all[stability_class]
+            return crosswind_all[stability_class], vertical_all[stability_class]
         index = golder_stability_index(self.inverse_obukhov_length, self.z0)
         lower = jnp.clip(jnp.floor(index), 0, len(STABILITY_CLASSES) - 2)
         lower = lower.astype(jnp.int32)
         # w = s − ⌊s⌋
         weight = index - lower
         # σ = (1 − w) σ^PG(⌊s⌋) + w σ^PG(⌊s⌋ + 1)
-        sigma_y = (1.0 - weight) * sigma_y_all[lower] + weight * sigma_y_all[lower + 1]
-        sigma_z = (1.0 - weight) * sigma_z_all[lower] + weight * sigma_z_all[lower + 1]
-        return sigma_y, sigma_z
+        crosswind_spread = (1.0 - weight) * crosswind_all[lower]
+        crosswind_spread = crosswind_spread + weight * crosswind_all[lower + 1]
+        vertical_spread = (1.0 - weight) * vertical_all[lower]
+        vertical_spread = vertical_spread + weight * vertical_all[lower + 1]
+        return crosswind_spread, vertical_spread
 
 
 __all__ = [

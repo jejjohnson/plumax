@@ -160,39 +160,40 @@ def vet_candidate(
             f"vet_candidate: wavelength_nm has shape {wavelength_nm.shape}, the "
             f"cube {cube.shape}; need (B,) with the cube's (H, W, B)"
         )
-    fit_b = window.fit_bands(wavelength_nm)  # (B,)
-    n_fit = int(fit_b.sum())
-    if table.ndim != 2 or table.shape[1] != n_fit:
+    fit_b = window.fit_bands(wavelength_nm)
+    # B_f = ∑_b 1[b is a fitting band]
+    num_fit = int(fit_b.sum())
+    if table.ndim != 2 or table.shape[1] != num_fit:
         raise ShapeError(
-            f"vet_candidate: table must be (D, {n_fit}), one column per band of "
-            f"the window's {n_fit} fitting bands, got {table.shape}"
+            f"vet_candidate: table must be (D, {num_fit}), one column per band of "
+            f"the window's {num_fit} fitting bands, got {table.shape}"
         )
 
     seeds = select_seeds(mf, mask, k=k)  # (H, W)
     pool = background_pool(
         mf, seeds, threshold=window.mf_background_mol_m2, exclude=exclude, box=box
     )  # (H, W)
-    i_in, i_out = pair_pixels(
+    pair_in, pair_out = pair_pixels(
         cube,
         np.flatnonzero(seeds),
         np.flatnonzero(pool),
         window.pairing_bands(wavelength_nm),
         keep=keep,
     )  # (N,), (N,)
-    ratio = ratio_spectrum(cube, i_in, i_out)[fit_b]  # (Bf,)
-    wl_fit = wavelength_nm[fit_b]  # (Bf,)
-    fit = fit_transmittance(ratio, table, delta_grid, wl_fit, degree=degree)
+    ratio = ratio_spectrum(cube, pair_in, pair_out)[fit_b]
+    fit_wavelength = wavelength_nm[fit_b]
+    fit = fit_transmittance(ratio, table, delta_grid, fit_wavelength, degree=degree)
     no_gas = fit_transmittance(
         ratio,
         jnp.ones_like(table[:1]),
         jnp.zeros(1, table.dtype),
-        wl_fit,
+        fit_wavelength,
         degree=degree,
     )
     return VettingResult(
         delta=fit.delta,
         d_norm=d_norm(ratio, fit),
-        n_pairs=int(i_in.size),
+        n_pairs=int(pair_in.size),
         ratio=ratio,
         fit=fit,
         residual_ss_no_gas=no_gas.residual_ss,

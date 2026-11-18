@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import einx
 import equinox as eqx
 import jax.numpy as jnp
 from finitevolx import CartesianGrid3D
@@ -117,45 +118,51 @@ def make_grid(
         four interior cells in every horizontal direction) or if any
         physical extent is non-positive.
     """
-    x_min, x_max, nx_int = domain_x
-    y_min, y_max, ny_int = domain_y
-    z_min, z_max, nz_int = domain_z
+    lower_x, upper_x, num_cells_x = domain_x
+    lower_y, upper_y, num_cells_y = domain_y
+    lower_z, upper_z, num_cells_z = domain_z
 
-    for label, count in (("x", nx_int), ("y", ny_int), ("z", nz_int)):
+    for label, count in (("x", num_cells_x), ("y", num_cells_y), ("z", num_cells_z)):
         if count < 4:
             raise ValueError(
                 f"make_grid: need at least 4 interior cells in {label} "
                 f"for WENO5 stencils (got {count})"
             )
 
-    Lx = float(x_max - x_min)
-    Ly = float(y_max - y_min)
-    Lz = float(z_max - z_min)
-    for label, L, expr in (
-        ("x", Lx, "x_max - x_min"),
-        ("y", Ly, "y_max - y_min"),
-        ("z", Lz, "z_max - z_min"),
+    extent_x = float(upper_x - lower_x)
+    extent_y = float(upper_y - lower_y)
+    extent_z = float(upper_z - lower_z)
+    for label, extent, expr in (
+        ("x", extent_x, "x_max - x_min"),
+        ("y", extent_y, "y_max - y_min"),
+        ("z", extent_z, "z_max - z_min"),
     ):
-        if L <= 0.0:
+        if extent <= 0.0:
             raise ValueError(
-                f"make_grid: {label}-extent must be positive (got {expr} = {L})"
+                f"make_grid: {label}-extent must be positive (got {expr} = {extent})"
             )
 
     grid = CartesianGrid3D.from_interior(
-        nx_interior=int(nx_int),
-        ny_interior=int(ny_int),
-        nz_interior=int(nz_int),
-        Lx=Lx,
-        Ly=Ly,
-        Lz=Lz,
+        nx_interior=int(num_cells_x),
+        ny_interior=int(num_cells_y),
+        nz_interior=int(num_cells_z),
+        Lx=extent_x,
+        Ly=extent_y,
+        Lz=extent_z,
     )
     # Interior cell centres — offset by half a cell from the lower edge,
     # matching the finitevolX convention of co-locating T-points at
     # cell centres and drop ghost cells at i = 0 and i = Nx - 1.
-    x = jnp.asarray(x_min + (jnp.arange(nx_int, dtype=dtype) + 0.5) * (Lx / nx_int))
-    y = jnp.asarray(y_min + (jnp.arange(ny_int, dtype=dtype) + 0.5) * (Ly / ny_int))
-    z = jnp.asarray(z_min + (jnp.arange(nz_int, dtype=dtype) + 0.5) * (Lz / nz_int))
-    return PlumeGrid3D(grid=grid, x=x, y=y, z=z)
+    # x_c = x_min + (i + ½) Lx / nx
+    cell_index_x = jnp.arange(num_cells_x, dtype=dtype)
+    centres_x = jnp.asarray(lower_x + (cell_index_x + 0.5) * (extent_x / num_cells_x))
+    # y_c = y_min + (j + ½) Ly / ny
+    cell_index_y = jnp.arange(num_cells_y, dtype=dtype)
+    centres_y = jnp.asarray(lower_y + (cell_index_y + 0.5) * (extent_y / num_cells_y))
+    # z_c = z_min + (k + ½) Lz / nz
+    cell_index_z = jnp.arange(num_cells_z, dtype=dtype)
+    centres_z = jnp.asarray(lower_z + (cell_index_z + 0.5) * (extent_z / num_cells_z))
+    return PlumeGrid3D(grid=grid, x=centres_x, y=centres_y, z=centres_z)
 
 
 def coord_arrays_from_grid(
@@ -169,9 +176,9 @@ def coord_arrays_from_grid(
     X, Y, Z = jnp.meshgrid(plume_grid.x, plume_grid.y, plume_grid.z, indexing="xy")
     # meshgrid(indexing="xy") returns (Ny, Nx, Nz) — reorder to (Nz, Ny, Nx)
     # to match field layout.
-    X = jnp.transpose(X, (2, 0, 1))
-    Y = jnp.transpose(Y, (2, 0, 1))
-    Z = jnp.transpose(Z, (2, 0, 1))
+    X = einx.id("y x z -> z y x", X)
+    Y = einx.id("y x z -> z y x", Y)
+    Z = einx.id("y x z -> z y x", Z)
     return X, Y, Z
 
 

@@ -221,7 +221,7 @@ def load_emit_plume_complex(
     xrproducts, _ = _readers()
 
     # --- read ---
-    ds = xrproducts.open_emit_ch4_l2b(
+    dataset = xrproducts.open_emit_ch4_l2b(
         enhancement_path,
         sensitivity_path=sensitivity_path,
         uncertainty_path=uncertainty_path,
@@ -234,20 +234,20 @@ def load_emit_plume_complex(
             f"load_emit_plume_complex: {plume_id!r} is not in {outlines_path!s}; "
             f"it has {ids}"
         )
-    if "ch4_uncertainty" not in ds and retrieval_sigma_ppm_m is None:
+    if "ch4_uncertainty" not in dataset and retrieval_sigma_ppm_m is None:
         raise MissingVariableError(
             "load_emit_plume_complex: no uncertainty raster; pass "
             "`uncertainty_path` or `retrieval_sigma_ppm_m`"
         )
-    enhancement = _raster(ds["ch4_enhancement"])
-    lat, lon = _raster(ds["lat"]), _raster(ds["lon"])
+    enhancement = _raster(dataset["ch4_enhancement"])
+    lat, lon = _raster(dataset["lat"]), _raster(dataset["lon"])
     dtype = enhancement.dtype
-    if "ch4_sensitivity" in ds:
-        sensitivity = _raster(ds["ch4_sensitivity"])
+    if "ch4_sensitivity" in dataset:
+        sensitivity = _raster(dataset["ch4_sensitivity"])
     else:
         sensitivity = np.ones_like(enhancement)
-    if "ch4_uncertainty" in ds:
-        uncertainty = _raster(ds["ch4_uncertainty"])
+    if "ch4_uncertainty" in dataset:
+        uncertainty = _raster(dataset["ch4_uncertainty"])
     else:
         uncertainty = np.full_like(enhancement, retrieval_sigma_ppm_m)
     flags = np.zeros(enhancement.shape, dtype=np.int32)
@@ -270,32 +270,41 @@ def load_emit_plume_complex(
 
     # --- convert ---
     # κ, ppm m → kg m⁻²
-    kappa = float(
+    mass_per_ppm_m = float(
         ppm_m_to_column_mass(1.0, pressure_pa=pressure_pa, temperature_k=temperature_k)
     )
     # yₙ = κ Eₙ
-    column_mass = (kappa * fields["enhancement"]).astype(dtype)
+    column_mass = (mass_per_ppm_m * fields["enhancement"]).astype(dtype)
     if uncertainty_of == "truth":
         # σₙ = κ Aₙ uₙ
-        sigma = kappa * fields["sensitivity"] * fields["uncertainty"]
+        obs_noise_std = mass_per_ppm_m * fields["sensitivity"] * fields["uncertainty"]
     else:
         # σₙ = κ uₙ
-        sigma = kappa * fields["uncertainty"]
+        obs_noise_std = mass_per_ppm_m * fields["uncertainty"]
 
     # --- mask ---
     keep, mask = _pixel_mask(
-        column_mass, fields["sensitivity"], sigma, fields["lat"], fields["lon"]
+        column_mass,
+        fields["sensitivity"],
+        obs_noise_std,
+        fields["lat"],
+        fields["lon"],
     )
     mask &= fields["flags"] == 0
     kept = _kept_pixels(
-        column_mass, fields["sensitivity"], sigma, mask, keep, fields["flags"]
+        column_mass,
+        fields["sensitivity"],
+        obs_noise_std,
+        mask,
+        keep,
+        fields["flags"],
     )
 
     # --- geometry ---
     # sₙ = (xₙ, yₙ) in the frame
-    x, y = frame.to_xy(fields["lat"], fields["lon"])
-    pixel_size = _pixel_size(x, y)
-    receptors = einx.id("p, p -> p (1 + 1)", x[keep], y[keep])
+    easting, northing = frame.to_xy(fields["lat"], fields["lon"])
+    pixel_size = _pixel_size(easting, northing)
+    receptors = einx.id("p, p -> p (1 + 1)", easting[keep], northing[keep])
     outline_x, outline_y = frame.to_xy(ring[:, 1], ring[:, 0])
     outline = einx.id("v, v -> v (1 + 1)", outline_x, outline_y)
     in_plume = _inside(receptors, outline)
@@ -305,7 +314,7 @@ def load_emit_plume_complex(
     pixel_index = einx.id("p, p -> p (1 + 1)", row_index, col_index)
 
     observation = _column_observation(
-        name, receptors, kept, _scene_time(ds), clock, dtype
+        name, receptors, kept, _scene_time(dataset), clock, dtype
     )
     return PlumeScene(
         observation=observation,
@@ -399,22 +408,24 @@ def matched_filter_scene(
     dtype = np.result_type(values.dtype, np.float32)
     column_mass = (factor * values).astype(dtype)
     # σₙ = M σ_α,n
-    sigma = factor * np.broadcast_to(np.asarray(score_std, dtype=dtype), values.shape)
+    obs_noise_std = factor * np.broadcast_to(
+        np.asarray(score_std, dtype=dtype), values.shape
+    )
     gain = (
         np.ones_like(column_mass)
         if sensitivity is None
         else np.asarray(sensitivity, dtype=dtype)
     )
     lat, lon = np.asarray(lat), np.asarray(lon)
-    keep, mask = _pixel_mask(column_mass, gain, sigma, lat, lon)
+    keep, mask = _pixel_mask(column_mass, gain, obs_noise_std, lat, lon)
     flags = np.zeros(values.shape, dtype=np.int32)
     if exclude is not None:
         excluded = np.asarray(exclude, dtype=bool)
         flags = np.where(excluded, int(QualityFlag.CLOUD), 0).astype(np.int32)
         mask &= ~excluded
-    kept = _kept_pixels(column_mass, gain, sigma, mask, keep, flags)
-    x, y = frame.to_xy(lat, lon)
-    receptors = einx.id("p, p -> p (1 + 1)", x[keep], y[keep])
+    kept = _kept_pixels(column_mass, gain, obs_noise_std, mask, keep, flags)
+    easting, northing = frame.to_xy(lat, lon)
+    receptors = einx.id("p, p -> p (1 + 1)", easting[keep], northing[keep])
     return _column_observation(name, receptors, kept, np.datetime64("NaT"), None, dtype)
 
 
@@ -445,7 +456,11 @@ def _quality_flags(
         ) from err
     quality = xr.open_dataset(quality_path)
     quality = quality.rename(
-        {k: v for k, v in _SWATH_DIMS.items() if k in quality.dims}
+        {
+            swath: raster
+            for swath, raster in _SWATH_DIMS.items()
+            if swath in quality.dims
+        }
     )
     if "mask" not in quality:
         raise MissingVariableError(f"{quality_path!s} has no `mask` variable")
@@ -461,7 +476,13 @@ def _quality_flags(
     )
     if glt_path is not None:
         glt = xr.open_dataset(glt_path)
-        glt = glt.rename({k: v for k, v in _SWATH_DIMS.items() if k in glt.dims})
+        glt = glt.rename(
+            {
+                swath: raster
+                for swath, raster in _SWATH_DIMS.items()
+                if swath in glt.dims
+            }
+        )
         glt_x = np.asarray(glt["glt_x"].values, dtype=np.int64)
         glt_y = np.asarray(glt["glt_y"].values, dtype=np.int64)
         filled = (glt_x > 0) & (glt_y > 0)
@@ -489,12 +510,18 @@ def _window(
     margin_px: int,
 ) -> tuple[tuple[int, int], tuple[int, int]]:
     """Row and column ranges of the outline's bounding box plus the margin."""
-    lon_min, lat_min = np.min(ring, axis=0)
-    lon_max, lat_max = np.max(ring, axis=0)
+    lon_min, lat_min = einx.min("[vertex] coord", ring)
+    lon_max, lat_max = einx.max("[vertex] coord", ring)
     located = np.isfinite(lat) & np.isfinite(lon)
     # half a pixel in degrees, the slack at the scene's edge
-    half_lon = 0.5 * float(np.nanmedian(np.abs(np.diff(lon, axis=1))))
-    half_lat = 0.5 * float(np.nanmedian(np.abs(np.diff(lat, axis=0))))
+    # Δλ = λ[:, c + 1] − λ[:, c]
+    lon_step = lon[:, 1:] - lon[:, :-1]
+    # Δφ = φ[r + 1, :] − φ[r, :]
+    lat_step = lat[1:, :] - lat[:-1, :]
+    # half_λ = ½ medianₙ |Δλₙ|
+    half_lon = 0.5 * float(np.nanmedian(np.abs(lon_step)))
+    # half_φ = ½ medianₙ |Δφₙ|
+    half_lat = 0.5 * float(np.nanmedian(np.abs(lat_step)))
     inside_scene = (
         lon_min >= np.nanmin(lon) - half_lon
         and lon_max <= np.nanmax(lon) + half_lon
@@ -519,15 +546,15 @@ def _window(
             "bounding box"
         )
     rows, cols = np.nonzero(in_box)
-    n_row, n_col = lat.shape
+    num_rows, num_cols = lat.shape
     # [r₀ − margin, r₁ + margin], clipped to the scene
     row_range = (
         max(int(rows.min()) - margin_px, 0),
-        min(int(rows.max()) + margin_px + 1, n_row),
+        min(int(rows.max()) + margin_px + 1, num_rows),
     )
     col_range = (
         max(int(cols.min()) - margin_px, 0),
-        min(int(cols.max()) + margin_px + 1, n_col),
+        min(int(cols.max()) + margin_px + 1, num_cols),
     )
     return row_range, col_range
 
@@ -535,26 +562,30 @@ def _window(
 def _pixel_mask(
     column_mass: np.ndarray,
     sensitivity: np.ndarray,
-    sigma: np.ndarray,
+    obs_noise_std: np.ndarray,
     lat: np.ndarray,
     lon: np.ndarray,
 ) -> tuple[Bool[np.ndarray, "row col"], Bool[np.ndarray, "row col"]]:
     """Pixels kept in the arrays, and those of them the fit uses."""
     located = np.isfinite(lat) & np.isfinite(lon)
-    finite = np.isfinite(column_mass), np.isfinite(sensitivity), np.isfinite(sigma)
+    finite = (
+        np.isfinite(column_mass),
+        np.isfinite(sensitivity),
+        np.isfinite(obs_noise_std),
+    )
     # dropped: no location, or none of the three fields
     keep = located & (finite[0] | finite[1] | finite[2])
     # ωₙ = 1: every field finite, Aₙ > 0, σₙ > 0
     usable = finite[0] & finite[1] & finite[2]
     positive = np.where(usable, sensitivity, 0.0) > 0.0
-    noisy = np.where(usable, sigma, 0.0) > 0.0
+    noisy = np.where(usable, obs_noise_std, 0.0) > 0.0
     return keep, keep & usable & positive & noisy
 
 
 def _kept_pixels(
     column_mass: np.ndarray,
     sensitivity: np.ndarray,
-    sigma: np.ndarray,
+    obs_noise_std: np.ndarray,
     mask: np.ndarray,
     keep: np.ndarray,
     flags: np.ndarray,
@@ -564,7 +595,7 @@ def _kept_pixels(
         raise ScreeningError(
             "no pixel survives the fill, sensitivity and quality screening"
         )
-    variance = np.square(sigma)
+    variance = np.square(obs_noise_std)
     # σ² of a masked pixel: the median of the used ones, so it stays valid
     filler = float(np.median(variance[mask]))
     return {
@@ -577,12 +608,25 @@ def _kept_pixels(
     }
 
 
-def _pixel_size(x: np.ndarray, y: np.ndarray) -> float:
+def _pixel_size(
+    easting: Float[np.ndarray, "row col"], northing: Float[np.ndarray, "row col"]
+) -> float:
     """g = medianₙ ‖sₙ₊₁ − sₙ‖₂ over row and column neighbours."""
-    # ‖sₙ₊₁ − sₙ‖ along each row and down each column
-    along_row = np.hypot(np.diff(x, axis=1), np.diff(y, axis=1))
-    along_col = np.hypot(np.diff(x, axis=0), np.diff(y, axis=0))
-    spacings = np.concatenate([np.ravel(along_row), np.ravel(along_col)])
+    # ‖sₙ₊₁ − sₙ‖ along each row, between neighbouring columns
+    along_row = np.hypot(
+        easting[:, 1:] - easting[:, :-1], northing[:, 1:] - northing[:, :-1]
+    )
+    # ‖sₙ₊₁ − sₙ‖ down each column, between neighbouring rows
+    along_col = np.hypot(
+        easting[1:, :] - easting[:-1, :], northing[1:, :] - northing[:-1, :]
+    )
+    # a one-pixel side has no neighbours, and einx.id rejects an empty axis
+    neighbours = [dist for dist in (along_row, along_col) if dist.size > 0]
+    if not neighbours:
+        raise ScreeningError("the window has no two neighbouring located pixels")
+    spacings = np.concatenate(
+        [einx.id("row col -> (row col)", dist) for dist in neighbours]
+    )
     spacings = spacings[np.isfinite(spacings)]
     if spacings.size == 0:
         raise ScreeningError("the window has no two neighbouring located pixels")
@@ -593,21 +637,21 @@ def _inside(
     points: Float[np.ndarray, "pixel 2"], ring: Float[np.ndarray, "vertex 2"]
 ) -> Bool[np.ndarray, " pixel"]:
     """Point-in-polygon by the even-odd rule, for a closed ring."""
-    x, y = points[:, 0], points[:, 1]
+    easting, northing = points[:, 0], points[:, 1]
     # edges (x₁, y₁) → (x₂, y₂) of the ring
     start, end = ring[:-1], ring[1:]
     # the edges with one end above each point's y and one not
-    above_start = einx.greater("edge, pixel -> pixel edge", start[:, 1], y)
-    above_end = einx.greater("edge, pixel -> pixel edge", end[:, 1], y)
+    above_start = einx.greater("edge, pixel -> pixel edge", start[:, 1], northing)
+    above_end = einx.greater("edge, pixel -> pixel edge", end[:, 1], northing)
     straddles = above_start != above_end
     # (x₂ − x₁) / (y₂ − y₁), finite where an edge straddles
     rise = end[:, 1] - start[:, 1]
     slope = (end[:, 0] - start[:, 0]) / np.where(rise == 0.0, 1.0, rise)
     # crossing x of each edge at the point's height: x₁ + (y − y₁)(x₂ − x₁)/(y₂ − y₁)
-    height = einx.subtract("pixel, edge -> pixel edge", y, start[:, 1])
+    height = einx.subtract("pixel, edge -> pixel edge", northing, start[:, 1])
     crossing = einx.add("edge, pixel edge -> pixel edge", start[:, 0], height * slope)
     # crossings to the right of the point
-    to_the_right = einx.less("pixel, pixel edge -> pixel edge", x, crossing)
+    to_the_right = einx.less("pixel, pixel edge -> pixel edge", easting, crossing)
     crossings = einx.sum("pixel [edge]", (straddles & to_the_right).astype(np.int64))
     # inside when the count is odd
     return crossings % 2 == 1
@@ -626,8 +670,8 @@ def _origin(
     origin_lon = float(entry["origin_lon"].values)
     origin_lat = float(entry["origin_lat"].values)
     if math.isfinite(origin_lon) and math.isfinite(origin_lat):
-        x, y = frame.to_xy(origin_lat, origin_lon)
-        return np.array([float(x), float(y)])
+        easting, northing = frame.to_xy(origin_lat, origin_lon)
+        return np.array([float(easting), float(northing)])
     candidates = in_plume & kept["mask"]
     if not bool(candidates.any()):
         raise ScreeningError(

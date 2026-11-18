@@ -29,6 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -63,13 +64,13 @@ SUPPORT_DECADES = 4.0
 
 
 def _log_integrand(
-    mark: Mark, theta: dict[str, Any], log_pod: Callable[[Array], Array] | None
+    mark: Mark, params: dict[str, Any], log_pod: Callable[[Array], Array] | None
 ) -> Callable[[Array], Array]:
-    def log_integrand(q: Array) -> Array:
+    def log_integrand(emission_rate: Array) -> Array:
         # log f(q | θ) + log P_d(q)
-        value = mark.log_prob(q, **theta)
+        value = mark.log_prob(emission_rate, **params)
         if log_pod is not None:
-            value = value + log_pod(q)
+            value = value + log_pod(emission_rate)
         return value
 
     return log_integrand
@@ -139,15 +140,15 @@ def mark_iw_model(
     """
     import numpyro
 
-    theta = mark.numpyro_prior("mark")
-    integrand = _log_integrand(mark, theta, log_pod)
+    params = mark.numpyro_prior("mark")
+    integrand = _log_integrand(mark, params, log_pod)
     # mᵢ(θ) = log Σₛ exp(ℓᵢₛ + g(qᵢₛ))
     mark_terms = evidence.log_mark_term(integrand)
     support = support or default_support(evidence)
-    log_rate = log_thinned_rate(mark, theta, log_pod, support)
-    n_events = mark_terms.shape[0]
+    log_rate = log_thinned_rate(mark, params, log_pod, support)
+    num_events = mark_terms.shape[0]
     # Σᵢ mᵢ − N log p̄
-    numpyro.factor("marks", jnp.sum(mark_terms) - n_events * log_rate)
+    numpyro.factor("marks", jnp.sum(mark_terms) - num_events * log_rate)
 
 
 def tmtpp_iw_model(
@@ -215,7 +216,7 @@ def tmtpp_iw_model(
     intervals = _check_coverage_arguments(
         log_pod, pods, coverage, coverage_intervals, window
     )
-    theta = mark.numpyro_prior("mark")
+    params = mark.numpyro_prior("mark")
     kernel = INTENSITY_REGISTRY[intensity].sample_priors()
     process = make_process(kernel, window)
     # Σᵢ log λ(tᵢ) over the real events
@@ -226,29 +227,47 @@ def tmtpp_iw_model(
     binned = pods is not None and is_tod_binned(pods)
     calibration = None
     event_log_pod = log_pod
-    n_rows = evidence.q_samples.shape[0]
+    num_rows = evidence.q_samples.shape[0]
     # mask is a contiguous prefix, so this is every row of an unpadded evidence
-    event_mask = mask[:n_rows]
+    event_mask = mask[:num_rows]
     if pods is not None:
         calibration = calibration_prior(pods)
         event_coverage = None
         if coverage is not None:
             coverage = jnp.asarray(coverage, dtype=bool)
-            covered = jnp.any(coverage, axis=-1)
-            event_mask = eqx.error_if(
-                event_mask,
-                jnp.any(event_mask & ~covered),
-                "tmtpp_iw_model: a detection has no covering instrument",
-            )
-            # a padding row needs some instrument for a finite log P_d^∪
-            event_coverage = jnp.where(covered[:, None], coverage, True)[:, None, :]
+            num_instruments = coverage.shape[1]
+            if coverage.shape[0] == 0:
+                # einx rejects a zero-size axis; with no events nothing is checked
+                event_coverage = jnp.zeros((0, 1, num_instruments), dtype=bool)
+            else:
+                # cₑ = ∨ₖ cₑₖ
+                covered = einx.any("event [instrument]", coverage)
+                event_mask = eqx.error_if(
+                    event_mask,
+                    jnp.any(event_mask & ~covered),
+                    "tmtpp_iw_model: a detection has no covering instrument",
+                )
+                # a padding row needs some instrument for a finite log P_d^∪
+                padded_coverage = einx.where(
+                    "event, event instrument, -> event instrument",
+                    covered,
+                    coverage,
+                    True,
+                )
+                event_coverage = einx.id(
+                    "event instrument -> event 1 instrument", padded_coverage
+                )
         event_tod_bin = None
         if binned:
             # event_times count from t₀, the bins from t = 0
             event_bins = tod_bin_index(
-                window[0] + event_times[:n_rows], tod_origin=tod_origin
+                window[0] + event_times[:num_rows], tod_origin=tod_origin
             )
-            event_tod_bin = event_bins[:, None]
+            if event_bins.shape[0] == 0:
+                # einx rejects a zero-size axis
+                event_tod_bin = jnp.zeros((0, 1), dtype=event_bins.dtype)
+            else:
+                event_tod_bin = einx.id("event -> event 1", event_bins)
         event_log_pod = log_pod_union(
             pods,
             coverage=event_coverage,
@@ -257,7 +276,7 @@ def tmtpp_iw_model(
         )
 
     # --- marks ---
-    integrand = _log_integrand(mark, theta, event_log_pod)
+    integrand = _log_integrand(mark, params, event_log_pod)
     mark_terms = evidence.log_mark_term(integrand)
     marks = jnp.sum(jnp.where(event_mask, mark_terms, 0.0))
 
@@ -270,7 +289,7 @@ def tmtpp_iw_model(
         thinned = _binned_compensator(
             kernel,
             mark,
-            theta,
+            params,
             pods,
             calibration,
             whole_window if intervals is None else intervals,
@@ -283,13 +302,13 @@ def tmtpp_iw_model(
             log_pod if pods is None else log_pod_union(pods, calibration=calibration)
         )
         log_rate = log_thinned_rate(
-            mark, theta, window_log_pod, support, n_nodes=n_nodes
+            mark, params, window_log_pod, support, n_nodes=n_nodes
         )
         # Λ(T) p̄
         thinned = process.effective_integrated_intensity() * jnp.exp(log_rate)
     else:
         thinned = _covered_compensator(
-            kernel, mark, theta, pods, calibration, intervals, support, n_nodes
+            kernel, mark, params, pods, calibration, intervals, support, n_nodes
         )
     # Σᵢ [log λ(tᵢ) + mᵢ] − Λ(T) p̄
     numpyro.factor("tmtpp", ground + marks - thinned)
@@ -340,12 +359,12 @@ def _check_coverage_arguments(
 def _covered_compensator(
     kernel: Any,
     mark: Mark,
-    theta: dict[str, Any],
+    params: dict[str, Any],
     pods: Sequence[InstrumentPOD] | None,
     calibration: dict[str, dict[str, Array]] | None,
     intervals: list[tuple[float, float, np.ndarray]],
     support: tuple[float, float],
-    n_nodes: int,
+    num_nodes: int,
 ) -> Float[Array, ""]:
     from plumax.population._src.processes import (
         NODES_PER_DAY,
@@ -366,7 +385,7 @@ def _covered_compensator(
             pods, coverage=jnp.asarray(covering), calibration=calibration
         )
         # log p̄_w
-        log_rate = log_thinned_rate(mark, theta, log_pod, support, n_nodes=n_nodes)
+        log_rate = log_thinned_rate(mark, params, log_pod, support, n_nodes=num_nodes)
         # Σ_w Λ_w p̄_w
         thinned = thinned + expected_events * jnp.exp(log_rate)
     return thinned
@@ -375,12 +394,12 @@ def _covered_compensator(
 def _binned_compensator(
     kernel: Any,
     mark: Mark,
-    theta: dict[str, Any],
+    params: dict[str, Any],
     pods: Sequence[InstrumentPOD],
     calibration: dict[str, dict[str, Array]] | None,
     intervals: list[tuple[float, float, np.ndarray]],
     support: tuple[float, float],
-    n_nodes: int,
+    num_nodes: int,
     tod_origin: float,
 ) -> Float[Array, ""]:
     from plumax.population._src.processes import expected_events_by_tod_bin
@@ -400,12 +419,12 @@ def _binned_compensator(
         log_rates = jax.vmap(
             lambda tod_bin, mask=mask: log_thinned_rate(
                 mark,
-                theta,
+                params,
                 log_pod_union(
                     pods, coverage=mask, calibration=calibration, tod_bin=tod_bin
                 ),
                 support,
-                n_nodes=n_nodes,
+                n_nodes=num_nodes,
             )
         )(bins)
         # Σ_b Λ_w,b p̄_w,b
@@ -584,16 +603,22 @@ def fit_size_distribution_iw(
         for name, value in draws.items()
         if name.startswith(prefix) and not name.startswith(f"{prefix}raw_")
     }
-    theta = {
-        name: jnp.asarray(np.mean(value, axis=0)) for name, value in samples.items()
+    # θ̂ = (1 / S) Σₛ θ⁽ˢ⁾
+    params = {
+        name: jnp.asarray(einx.mean("[draw] ...", value))
+        for name, value in samples.items()
     }
-    log_weights = np.asarray(evidence.log_terms(_log_integrand(family, theta, log_pod)))
+    log_weights = np.asarray(
+        evidence.log_terms(_log_integrand(family, params, log_pod))
+    )
     ess = np.asarray(integrix_expect.effective_sample_size(jnp.asarray(log_weights)))
     pareto_k = np.full(ess.shape, math.nan)
     if regime is Regime.FULL:
         # one k̂ per event, batched over the events
-        _, k_hat = integrix_expect.pareto_smoothed_log_weights(jnp.asarray(log_weights))
-        pareto_k = np.asarray(k_hat)
+        _, tail_shape = integrix_expect.pareto_smoothed_log_weights(
+            jnp.asarray(log_weights)
+        )
+        pareto_k = np.asarray(tail_shape)
     warn_on_collapse(ess, log_weights.shape[-1], pareto_k)
     return MarkPosterior(
         mark=mark, regime=regime, samples=samples, ess=ess, pareto_k=pareto_k

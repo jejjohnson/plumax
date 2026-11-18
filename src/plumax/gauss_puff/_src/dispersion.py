@@ -121,12 +121,31 @@ def calculate_pg_dispersion(
     sigma_z : jnp.ndarray
         Vertical dispersion coefficient [m].
     """
-    ay, by, cy, az, bz, cz = params
-    s = jnp.maximum(distance, 1.0)
-    ln_s = jnp.log(s)
-    sigma_y = jnp.exp(ay + by * ln_s + cy * ln_s**2)
-    sigma_z = jnp.exp(az + bz * ln_s + cz * ln_s**2)
-    return sigma_y, sigma_y, sigma_z
+    (
+        crosswind_intercept,
+        crosswind_slope,
+        crosswind_curvature,
+        vertical_intercept,
+        vertical_slope,
+        vertical_curvature,
+    ) = params
+    # s = max(s₀, 1)
+    clamped_distance = jnp.maximum(distance, 1.0)
+    # ln s = log(s)
+    log_distance = jnp.log(clamped_distance)
+    # σ_y = exp(a_y + b_y ln s + c_y (ln s)²)
+    crosswind_spread = jnp.exp(
+        crosswind_intercept
+        + crosswind_slope * log_distance
+        + crosswind_curvature * log_distance**2
+    )
+    # σ_z = exp(a_z + b_z ln s + c_z (ln s)²)
+    vertical_spread = jnp.exp(
+        vertical_intercept
+        + vertical_slope * log_distance
+        + vertical_curvature * log_distance**2
+    )
+    return crosswind_spread, crosswind_spread, vertical_spread
 
 
 @jit
@@ -153,8 +172,8 @@ def calculate_briggs_dispersion_xyz(
     sigma_x, sigma_y, sigma_z : jnp.ndarray
         Dispersion coefficients [m]. ``σ_x = σ_y``.
     """
-    sigma_y, sigma_z = calculate_briggs_dispersion(distance, params)
-    return sigma_y, sigma_y, sigma_z
+    crosswind_spread, vertical_spread = calculate_briggs_dispersion(distance, params)
+    return crosswind_spread, crosswind_spread, vertical_spread
 
 
 # Dispatcher registry mapping scheme names to (params_dict, calculator).

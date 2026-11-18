@@ -106,13 +106,13 @@ class MaskedSources(eqx.Module):
         dispersion_params: Float[Array, " param"],
     ) -> Float[Array, "source obs"]:
         """Unit-rate plume c₁(𝐬_i; x_k, y_k) of every slot at every receptor."""
-        x_obs, y_obs, z_obs = receptor_coords
+        easting_obs, northing_obs, height_obs = receptor_coords
 
         def one_source(source_x, source_y):
             return plume_concentration(
-                x_obs,
-                y_obs,
-                z_obs,
+                easting_obs,
+                northing_obs,
+                height_obs,
                 source_x,
                 source_y,
                 source_z,

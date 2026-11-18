@@ -96,15 +96,16 @@ def lognorm_cdf(x: ArrayLike, x50: float, s: float) -> np.ndarray:
     Raises:
         ValueError: If any of ``x``, ``x50``, ``s`` are non-positive.
     """
-    x_arr = np.asarray(x)
-    if np.any(x_arr <= 0.0):
+    rates = np.asarray(x)
+    if np.any(rates <= 0.0):
         raise ValueError("lognorm_cdf: all entries of `x` must be > 0")
     if not (x50 > 0.0):
         raise ValueError(f"lognorm_cdf: `x50` must be > 0 (got {x50!r})")
     if not (s > 0.0):
         raise ValueError(f"lognorm_cdf: `s` must be > 0 (got {s!r})")
+    # P_d = 1 − ½ erfc((ln x − ln x₅₀) / (√2 s))
     return 1.0 - 0.5 * scipy.special.erfc(
-        (np.log(x_arr) - np.log(x50)) / (np.sqrt(2.0) * s)
+        (np.log(rates) - np.log(x50)) / (np.sqrt(2.0) * s)
     )
 
 
@@ -142,25 +143,30 @@ def pod_powerlaw_model(
     """
     N = len(x_obs)
 
-    alpha = numpyro.sample("alpha", dist.Uniform(1.1, 4.5))
-    x0 = numpyro.sample("x0", dist.Uniform(1.0, 20000.0))
-    sk = numpyro.sample("sk", dist.Uniform(0.1, 1.5))
+    exponent = numpyro.sample("alpha", dist.Uniform(1.1, 4.5))
+    pod_median = numpyro.sample("x0", dist.Uniform(1.0, 20000.0))
+    pod_width = numpyro.sample("sk", dist.Uniform(0.1, 1.5))
 
     sum_log_x = jnp.sum(jnp.log(x_obs))
     # q(x) = Φ((ln x − ln x0)/sk) as a Normal CDF; log-evaluate via
     # `norm.logcdf` so the far-left tail stays finite instead of underflowing
     # to −inf for parameter draws with large x0 / small sk (which would
     # otherwise break NUTS with NaN gradients).
-    u = (jnp.log(x_obs) - jnp.log(x0)) / sk
-    sum_log_q = jnp.sum(jax_norm.logcdf(u))
+    standardized_rate = (jnp.log(x_obs) - jnp.log(pod_median)) / pod_width
+    sum_log_q = jnp.sum(jax_norm.logcdf(standardized_rate))
 
-    xi_values = jnp.linspace(jnp.log(x_min), jnp.log(x_max), num_integration_points)
-    pod_on_grid = 1.0 - 0.5 * erfc((xi_values - jnp.log(x0)) / (sk * jnp.sqrt(2.0)))
-    integrand = pod_on_grid * jnp.exp(-alpha * xi_values + xi_values)
-    I_theta = jnp.trapezoid(integrand, xi_values)
+    log_grid = jnp.linspace(jnp.log(x_min), jnp.log(x_max), num_integration_points)
+    # q(ξ) = 1 − ½ erfc((ξ − ln x₀) / (√2 sk))
+    pod_on_grid = 1.0 - 0.5 * erfc(
+        (log_grid - jnp.log(pod_median)) / (pod_width * jnp.sqrt(2.0))
+    )
+    # q(ξ) e^{(1 − α) ξ}
+    integrand = pod_on_grid * jnp.exp(-exponent * log_grid + log_grid)
+    I_theta = jnp.trapezoid(integrand, log_grid)
     I_theta = jnp.clip(I_theta, min=1e-300)
 
-    logL = -alpha * sum_log_x + sum_log_q - N * jnp.log(I_theta)
+    # log L = −α Σ log x + Σ log q − N log I(θ)
+    logL = -exponent * sum_log_x + sum_log_q - N * jnp.log(I_theta)
     numpyro.factor("log_likelihood", logL)
 
 

@@ -47,8 +47,9 @@ class GaussianSource(eqx.Module):
 
     def __call__(self, t: Float[ArrayLike, ""]) -> Float[Array, "Nz Ny Nx"]:
         """Source tendency ``q(t) * density`` at interior T-points, zero-padded."""
-        q = self.emission_fn(t)
-        interior = q * self.density
+        emission_rate = self.emission_fn(t)
+        # S = q ρ_s
+        interior = emission_rate * self.density
         return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="constant")
 
 
@@ -84,8 +85,8 @@ class SurfaceFluxSource(eqx.Module):
     def __call__(self, t: Float[ArrayLike, ""]) -> Float[Array, "Nz Ny Nx"]:
         """Source tendency at interior T-points, zero-padded."""
         flux = self.flux_fn(t)
-        ny, nx = flux.shape
-        interior = jnp.zeros((self.n_layers, ny, nx), dtype=flux.dtype)
+        num_rows, num_cols = flux.shape
+        interior = jnp.zeros((self.n_layers, num_rows, num_cols), dtype=flux.dtype)
         # ∂C/∂t = q / Δz in the lowest layer
         interior = interior.at[0].set(flux / self.layer_thickness)
         return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="constant")
@@ -122,18 +123,19 @@ def make_gaussian_source(
         If ``emission_rate`` is a constant that is negative, or if the
         source location lies outside the interior domain.
     """
-    x_src, y_src, z_src = (float(c) for c in source_location)
-    x_min, x_max = float(plume_grid.x[0]), float(plume_grid.x[-1])
-    y_min, y_max = float(plume_grid.y[0]), float(plume_grid.y[-1])
-    z_min, z_max = float(plume_grid.z[0]), float(plume_grid.z[-1])
-    if not (
-        x_min <= x_src <= x_max and y_min <= y_src <= y_max and z_min <= z_src <= z_max
-    ):
+    source_x, source_y, source_z = (float(coord) for coord in source_location)
+    lower_x, upper_x = float(plume_grid.x[0]), float(plume_grid.x[-1])
+    lower_y, upper_y = float(plume_grid.y[0]), float(plume_grid.y[-1])
+    lower_z, upper_z = float(plume_grid.z[0]), float(plume_grid.z[-1])
+    x_inside = lower_x <= source_x <= upper_x
+    y_inside = lower_y <= source_y <= upper_y
+    z_inside = lower_z <= source_z <= upper_z
+    if not (x_inside and y_inside and z_inside):
         raise ValueError(
             "make_gaussian_source: source_location "
             f"{source_location!r} lies outside the interior domain "
-            f"x∈[{x_min}, {x_max}], y∈[{y_min}, {y_max}], "
-            f"z∈[{z_min}, {z_max}]"
+            f"x∈[{lower_x}, {upper_x}], y∈[{lower_y}, {upper_y}], "
+            f"z∈[{lower_z}, {upper_z}]"
         )
 
     if callable(emission_rate):
@@ -147,8 +149,8 @@ def make_gaussian_source(
             )
         q_const_arr = jnp.asarray(q_const, dtype=plume_grid.x.dtype)
 
-        def emission_fn(t):
-            del t
+        def emission_fn(time):
+            del time
             return q_const_arr
 
     if source_radius is None:
@@ -162,8 +164,10 @@ def make_gaussian_source(
             )
 
     X, Y, Z = coord_arrays_from_grid(plume_grid)
-    r2 = (X - x_src) ** 2 + (Y - y_src) ** 2 + (Z - z_src) ** 2
-    profile = jnp.exp(-r2 / (2.0 * source_radius**2))
+    # r² = (x − x_s)² + (y − y_s)² + (z − z_s)²
+    squared_distance = (X - source_x) ** 2 + (Y - source_y) ** 2 + (Z - source_z) ** 2
+    # ρ ∝ exp(−r² / (2 σ²))
+    profile = jnp.exp(-squared_distance / (2.0 * source_radius**2))
     # Normalise so ∫ density dV = 1 over the interior (discrete sum × Δx Δy Δz).
     cell_volume = plume_grid.dx * plume_grid.dy * plume_grid.dz
     total = jnp.sum(profile) * cell_volume

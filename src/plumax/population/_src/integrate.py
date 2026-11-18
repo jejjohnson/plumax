@@ -11,6 +11,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Callable
 
+import einx
 import integrix.expect as ix_expect
 import jax.numpy as jnp
 import numpy as np
@@ -105,9 +106,10 @@ def pareto_smoothed_log_weights(log_weights: ArrayLike) -> tuple[np.ndarray, flo
     Examples:
         >>> import numpy as np
         >>> log_weights = np.random.default_rng(0).normal(0.0, 0.3, 1000)
-        >>> smoothed, k_hat = pareto_smoothed_log_weights(log_weights)
+        >>> smoothed, tail_shape = pareto_smoothed_log_weights(log_weights)
         >>> # float32 unless the caller enables x64, hence the tolerance
-        >>> bool(np.isclose(np.logaddexp.reduce(smoothed), 0.0, atol=1e-5)), k_hat < 0.7
+        >>> converged = bool(np.isclose(np.logaddexp.reduce(smoothed), 0.0, atol=1e-5))
+        >>> converged, tail_shape < 0.7
         (True, True)
 
     References:
@@ -115,6 +117,7 @@ def pareto_smoothed_log_weights(log_weights: ArrayLike) -> tuple[np.ndarray, flo
         sampling, arXiv:1507.02646.
     """
     _deprecated("pareto_smoothed_log_weights")
-    flat = jnp.ravel(jnp.asarray(log_weights, dtype=float))
-    smoothed, k_hat = ix_expect.pareto_smoothed_log_weights(flat)
-    return np.asarray(smoothed), float(k_hat)
+    weights = jnp.asarray(log_weights, dtype=float)
+    flat = einx.id("... -> (...)", weights)
+    smoothed, tail_shape = ix_expect.pareto_smoothed_log_weights(flat)
+    return np.asarray(smoothed), float(tail_shape)
