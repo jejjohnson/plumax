@@ -82,10 +82,10 @@ def plume_direction(
 
     # --- centroid ---
     # sₙ = (xₙ, yₙ), the pixel centres
-    xs, ys = pixel_centers(mask.shape, transform)
+    easting, northing = pixel_centers(mask.shape, transform)
     # s̄ = ∑ₙ ωₙ sₙ / ∑ₙ ωₙ
-    centroid_x = float(einx.dot("row col, row col ->", weight, xs)) / total
-    centroid_y = float(einx.dot("row col, row col ->", weight, ys)) / total
+    centroid_x = float(einx.dot("row col, row col ->", weight, easting)) / total
+    centroid_y = float(einx.dot("row col, row col ->", weight, northing)) / total
 
     # --- direction ---
     # s̄ − s₀

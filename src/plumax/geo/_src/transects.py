@@ -160,15 +160,20 @@ def cross_plume_transects(
         )
     # g = √|det A|, the pixel side
     pixel_side = math.sqrt(pixel_area(transform))
-    delta = pixel_side if sample_spacing is None else float(sample_spacing)
-    _check_sampling(n_transects, spacing, half_length, delta, order, pixel_side)
+    # δ, the sample spacing along a transect
+    spacing_sample = pixel_side if sample_spacing is None else float(sample_spacing)
+    _check_sampling(
+        n_transects, spacing, half_length, spacing_sample, order, pixel_side
+    )
 
     # --- sample points ---
     # d_k = k Δ_d, k = 1, …, T
     distance = spacing * np.arange(1, n_transects + 1, dtype=np.float64)
     # c_j = (j − (S − 1)/2) δ, S = 2 round(h / δ) + 1
-    half_samples = round(half_length / delta)
-    offset = delta * np.arange(-half_samples, half_samples + 1, dtype=np.float64)
+    half_samples = round(half_length / spacing_sample)
+    offset = spacing_sample * np.arange(
+        -half_samples, half_samples + 1, dtype=np.float64
+    )
     # e_∥ = (cos φ, sin φ),  e_⊥ = (−sin φ, cos φ)
     along = np.array([math.cos(direction), math.sin(direction)])
     across = np.array([-math.sin(direction), math.cos(direction)])
@@ -192,9 +197,12 @@ def cross_plume_transects(
     # v_kj = 𝓘_ΔΩ(p_kj)
     values = ndimage.map_coordinates(filled, coordinates, order=order, mode="nearest")
     # a sample is outside when its nearest pixel is
-    n_row, n_col = image.shape
+    num_rows, num_cols = image.shape
     inside = (
-        (rows >= -0.5) & (rows <= n_row - 0.5) & (cols >= -0.5) & (cols <= n_col - 0.5)
+        (rows >= -0.5)
+        & (rows <= num_rows - 0.5)
+        & (cols >= -0.5)
+        & (cols <= num_cols - 0.5)
     )
     near_nodata = _near_nodata(nodata, coordinates)
     values = np.where(inside & ~near_nodata, values, np.nan)
@@ -322,7 +330,7 @@ def fit_transect_gaussians(
     if min_width <= 0.0:
         raise ParameterError(f"min_width must be > 0, got {min_width}")
     offset = np.asarray(profiles.offset, dtype=np.float64)
-    delta = profiles.sample_spacing
+    spacing_sample = profiles.sample_spacing
     # m_max = 2 h
     bound = 2.0 * float(np.max(np.abs(offset))) if max_offset is None else max_offset
     if bound <= 0.0:
@@ -331,11 +339,11 @@ def fit_transect_gaussians(
     upper = np.array([np.inf, bound, np.inf])
     moments = transect_moments(profiles)
 
-    n_transect = profiles.values.shape[0]
-    estimates = np.full((n_transect, 3), np.nan)
-    converged = np.zeros(n_transect, dtype=bool)
-    for k in range(n_transect):
-        row = np.asarray(profiles.values[k], dtype=np.float64)
+    num_transects = profiles.values.shape[0]
+    estimates = np.full((num_transects, 3), np.nan)
+    converged = np.zeros(num_transects, dtype=bool)
+    for transect in range(num_transects):
+        row = np.asarray(profiles.values[transect], dtype=np.float64)
         finite = np.isfinite(row)
         if int(finite.sum()) < 3:
             continue
@@ -348,10 +356,10 @@ def fit_transect_gaussians(
         scale = float(np.max(np.abs(row[finite])))
         samples = row[finite] / scale
         start = _gaussian_start(
-            float(moments["line_density"][k]) / scale,
+            float(moments["line_density"][transect]) / scale,
             samples,
             positions,
-            delta,
+            spacing_sample,
             lower,
             upper,
         )
@@ -365,10 +373,14 @@ def fit_transect_gaussians(
             args=(positions, samples),
         )
         # q = s_k q̃
-        estimates[k] = fit.x * np.array([scale, 1.0, 1.0])
-        converged[k] = bool(fit.success) and not bool(np.any(fit.active_mask != 0))
+        estimates[transect] = fit.x * np.array([scale, 1.0, 1.0])
+        converged[transect] = bool(fit.success) and not bool(
+            np.any(fit.active_mask != 0)
+        )
     dtype = profiles.values.dtype
-    line_density, centre, width = estimates.astype(dtype).T
+    # q, m, w per transect, parameters first
+    params = einx.id("transect param -> param transect", estimates.astype(dtype))
+    line_density, centre, width = params
     return {
         "line_density": line_density,
         "centre": centre,
@@ -627,12 +639,12 @@ class CrossPlumeProfile(Operator):
             "order": self.order,
         }
 
-    def _apply(self, gt: GeoArray) -> gpd.GeoDataFrame:
-        require_ndim(gt, (2, 3), "CrossPlumeProfile")
-        require_geoarray(gt, "CrossPlumeProfile")
-        require_projected_crs(gt, "CrossPlumeProfile")
-        enhancement = squeeze_single_band(mask_invalid_to_nan(gt))
-        transform = affine_of(gt)
+    def _apply(self, geo_array: GeoArray) -> gpd.GeoDataFrame:
+        require_ndim(geo_array, (2, 3), "CrossPlumeProfile")
+        require_geoarray(geo_array, "CrossPlumeProfile")
+        require_projected_crs(geo_array, "CrossPlumeProfile")
+        enhancement = squeeze_single_band(mask_invalid_to_nan(geo_array))
+        transform = affine_of(geo_array)
         profiles = cross_plume_transects(
             enhancement,
             transform,
@@ -652,7 +664,7 @@ class CrossPlumeProfile(Operator):
         across = np.array([-math.sin(self.direction), math.cos(self.direction)])
         first, last = float(profiles.offset[0]), float(profiles.offset[-1])
         rows: list[dict[str, Any]] = []
-        for k, distance in enumerate(profiles.distance.tolist()):
+        for transect, distance in enumerate(profiles.distance.tolist()):
             # s₀ + d_k e_∥ + c e_⊥ at the two ends
             middle = np.asarray(self.source) + distance * along
             line = LineString([middle + first * across, middle + last * across])
@@ -660,39 +672,39 @@ class CrossPlumeProfile(Operator):
                 {
                     "geometry": line,
                     "distance_m": distance,
-                    "line_density_kg_m": float(moments["line_density"][k]),
-                    "centre_m": float(fits["centre"][k]),
-                    "width_m": float(fits["width"][k]),
-                    "centre_smooth_m": float(smoothed[k]),
-                    "converged": bool(fits["converged"][k]),
+                    "line_density_kg_m": float(moments["line_density"][transect]),
+                    "centre_m": float(fits["centre"][transect]),
+                    "width_m": float(fits["width"][transect]),
+                    "centre_smooth_m": float(smoothed[transect]),
+                    "converged": bool(fits["converged"][transect]),
                 }
             )
-        return gpd.GeoDataFrame(rows, geometry="geometry", crs=gt.crs)
+        return gpd.GeoDataFrame(rows, geometry="geometry", crs=geo_array.crs)
 
 
 def _check_sampling(
     n_transects: int,
     spacing: float,
     half_length: float,
-    delta: float,
+    spacing_sample: float,
     order: int,
     pixel_side: float,
 ) -> None:
     if n_transects < 1:
         raise ParameterError(f"n_transects must be ≥ 1, got {n_transects}")
-    if spacing <= 0.0 or half_length <= 0.0 or delta <= 0.0:
+    if spacing <= 0.0 or half_length <= 0.0 or spacing_sample <= 0.0:
         raise ParameterError(
             "spacing, half_length and sample_spacing must be > 0, got "
-            f"{spacing}, {half_length} and {delta}"
+            f"{spacing}, {half_length} and {spacing_sample}"
         )
     if spacing < pixel_side * (1.0 - 1e-9):
         raise ParameterError(
             f"spacing {spacing} m is below one pixel ({pixel_side} m): closer "
             "transects reuse the same pixels"
         )
-    if round(half_length / delta) < 1:
+    if round(half_length / spacing_sample) < 1:
         raise ParameterError(
-            f"half_length {half_length} m is below one sample ({delta} m)"
+            f"half_length {half_length} m is below one sample ({spacing_sample} m)"
         )
     if not 0 <= order <= 5:
         raise ParameterError(f"order must be in 0 to 5, got {order}")
@@ -703,12 +715,12 @@ def _pixel_indices(
 ) -> tuple[Float[np.ndarray, "transect offset"], Float[np.ndarray, "transect offset"]]:
     """Fractional ``(row, col)`` of each point, pixel centres at integers."""
     # (x − c, y − f)
-    x = points[..., 0] - transform.c
-    y = points[..., 1] - transform.f
+    easting = points[..., 0] - transform.c
+    northing = points[..., 1] - transform.f
     # [col + ½, row + ½] = A⁻¹ (x − c, y − f), with A = [[a, b], [d, e]]
     determinant = transform.a * transform.e - transform.b * transform.d
-    col = (transform.e * x - transform.b * y) / determinant - 0.5
-    row = (-transform.d * x + transform.a * y) / determinant - 0.5
+    col = (transform.e * easting - transform.b * northing) / determinant - 0.5
+    row = (-transform.d * easting + transform.a * northing) / determinant - 0.5
     return row, col
 
 
@@ -737,15 +749,15 @@ def _gaussian_start(
     line_density: float,
     samples: np.ndarray,
     positions: np.ndarray,
-    delta: float,
+    spacing_sample: float,
     lower: np.ndarray,
     upper: np.ndarray,
 ) -> np.ndarray:
     """(q̂_k, c_argmax, 2δ), moved inside the bounds."""
     peak = float(np.max(np.maximum(samples, 0.0)))
     # q₀ = q̂_k, or a pixel of the peak when the signed sum is not positive
-    rate = line_density if line_density > 0.0 else max(delta * peak, 1e-30)
-    start = np.array([rate, float(positions[np.argmax(samples)]), 2.0 * delta])
+    rate = line_density if line_density > 0.0 else max(spacing_sample * peak, 1e-30)
+    start = np.array([rate, float(positions[np.argmax(samples)]), 2.0 * spacing_sample])
     # strictly inside [lower, upper]
     margin = 1e-6 * np.maximum(np.abs(lower), 1.0)
     return np.clip(
@@ -785,7 +797,12 @@ def _gaussian_jacobian(
     )
     by_centre = profile * scaled / width
     by_width = profile * (scaled**2 - 1.0) / width
-    return np.stack([by_rate, by_centre, by_width], axis=-1)
+    return einx.id(
+        "position, position, position -> position (1 + 1 + 1)",
+        by_rate,
+        by_centre,
+        by_width,
+    )
 
 
 __all__ = [
