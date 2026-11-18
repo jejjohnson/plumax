@@ -220,18 +220,18 @@ def load_tropomi_l2(
     xrproducts, dry_air_column = _readers()
 
     # --- read ---
-    ds = xrproducts.open_tropomi_ch4_l2(path, qa_min=qa_min)
-    ds = dry_air_column(ds, surface_pressure="sp")
-    xch4 = ds["xch4_bias_corrected"]
+    dataset = xrproducts.open_tropomi_ch4_l2(path, qa_min=qa_min)
+    dataset = dry_air_column(dataset, surface_pressure="sp")
+    xch4 = dataset["xch4_bias_corrected"]
     pixel_dims = list(xch4.dims)
-    kernel = ds["column_averaging_kernel"].isel(layer=surface_layer)
+    kernel = dataset["column_averaging_kernel"].isel(layer=surface_layer)
     fields = {
         "xch4": xch4,
-        "sigma": ds["xch4_precision"],
+        "sigma": dataset["xch4_precision"],
         "kernel": kernel,
-        "dry_air": ds["dry_air_column"],
-        "lat": ds["lat"],
-        "lon": ds["lon"],
+        "dry_air": dataset["dry_air_column"],
+        "lat": dataset["lat"],
+        "lon": dataset["lon"],
     }
 
     # --- screen ---
@@ -245,12 +245,13 @@ def load_tropomi_l2(
     if background_ppb is None:
         background_ppb = float(np.median(kept["xch4"]))
     # Δχ = XCH₄ − b
-    delta_ppb = kept["xch4"] - background_ppb
-    enhancement = ppb_to_column_mass(delta_ppb, kept["dry_air"])
-    sigma = ppb_to_column_mass(kept["sigma"], kept["dry_air"])
-    when = _scene_time(ds)
+    mixing_ratio_enhancement = kept["xch4"] - background_ppb
+    enhancement = ppb_to_column_mass(mixing_ratio_enhancement, kept["dry_air"])
+    # σ_Ω = σ_χ · 10⁻⁹ · N_dry · M / N_A
+    obs_noise_std = ppb_to_column_mass(kept["sigma"], kept["dry_air"])
+    when = _scene_time(dataset)
     return _observation(
-        name, frame, kept, enhancement, sigma, kept["kernel"], when, clock
+        name, frame, kept, enhancement, obs_noise_std, kept["kernel"], when, clock
     )
 
 
@@ -296,11 +297,11 @@ def load_emit_l2b(
         ScreeningError: If no pixel survives the screening.
     """
     xrproducts, _ = _readers()
-    ds = xrproducts.open_emit_ch4_l2b(path, glt_path=glt_path)
-    if "ch4_uncertainty" in ds:
-        sigma_field = ds["ch4_uncertainty"]
+    dataset = xrproducts.open_emit_ch4_l2b(path, glt_path=glt_path)
+    if "ch4_uncertainty" in dataset:
+        noise_field = dataset["ch4_uncertainty"]
     elif retrieval_sigma_ppm_m is not None:
-        sigma_field = xr.full_like(ds["ch4_enhancement"], retrieval_sigma_ppm_m)
+        noise_field = xr.full_like(dataset["ch4_enhancement"], retrieval_sigma_ppm_m)
     else:
         raise MissingVariableError(
             "load_emit_l2b: the file has no `ch4_uncertainty`; pass "
@@ -313,11 +314,11 @@ def load_emit_l2b(
         )
 
     return _scene_observation(
-        ds,
+        dataset,
         "ch4_enhancement",
-        sigma_field,
+        noise_field,
         to_mass,
-        sigma_to_mass=to_mass,
+        noise_to_mass=to_mass,
         name=name,
         frame=frame,
         bbox=bbox,
@@ -363,8 +364,8 @@ def load_ghgsat_l2(
         ScreeningError: If no pixel survives the screening.
     """
     xrproducts, dry_air_column = _readers()
-    ds = xrproducts.open_ghgsat_ch4_l2(path)
-    if "xch4" not in ds:
+    dataset = xrproducts.open_ghgsat_ch4_l2(path)
+    if "xch4" not in dataset:
         raise MissingVariableError(f"load_ghgsat_l2: {path!s} has no `xch4`")
     surface = xr.Dataset({"sp": surface_pressure_pa})
     dry_air = float(dry_air_column(surface)["dry_air_column"])
@@ -376,18 +377,18 @@ def load_ghgsat_l2(
             float(np.median(kept)) if background_ppb is None else background_ppb
         )
         # Δχ = XCH₄ − b
-        delta_ppb = kept - background
-        return ppb_to_column_mass(delta_ppb, dry_air)
+        mixing_ratio_enhancement = kept - background
+        return ppb_to_column_mass(mixing_ratio_enhancement, dry_air)
 
-    def sigma_to_mass(kept: Float[np.ndarray, " pixel"]) -> Float[np.ndarray, " pixel"]:
+    def noise_to_mass(kept: Float[np.ndarray, " pixel"]) -> Float[np.ndarray, " pixel"]:
         return ppb_to_column_mass(kept, dry_air)
 
     return _scene_observation(
-        ds,
+        dataset,
         "xch4",
-        xr.full_like(ds["xch4"], retrieval_sigma_ppb),
+        xr.full_like(dataset["xch4"], retrieval_sigma_ppb),
         to_mass,
-        sigma_to_mass=sigma_to_mass,
+        noise_to_mass=noise_to_mass,
         name=name,
         frame=frame,
         bbox=bbox,
@@ -400,18 +401,18 @@ def _flatten(values: Shaped[np.ndarray, " ..."]) -> Shaped[np.ndarray, " pixel"]
 
 
 def _scene_observation(
-    ds: xr.Dataset,
+    dataset: xr.Dataset,
     variable: str,
-    sigma_field: xr.DataArray,
+    noise_field: xr.DataArray,
     to_mass: ToMass,
     *,
-    sigma_to_mass: ToMass,
+    noise_to_mass: ToMass,
     name: str,
     frame: LocalFrame,
     bbox: BBox | None,
     clock: TimeAxis | None,
 ) -> ColumnObservation:
-    values = ds[variable]
+    values = dataset[variable]
     raster_dims = [dim for dim in values.dims if dim != "time"]
 
     def pixels_of(field: xr.DataArray) -> Shaped[np.ndarray, " pixel"]:
@@ -423,16 +424,19 @@ def _scene_observation(
 
     pixels = {
         "value": pixels_of(values),
-        "sigma": pixels_of(sigma_field),
-        "lat": pixels_of(ds["lat"]),
-        "lon": pixels_of(ds["lon"]),
+        "sigma": pixels_of(noise_field),
+        "lat": pixels_of(dataset["lat"]),
+        "lon": pixels_of(dataset["lon"]),
     }
     kept = _screen(pixels, bbox)
     enhancement = to_mass(kept["value"])
-    sigma = sigma_to_mass(kept["sigma"])
+    # σ_Ω from the screened noise field
+    obs_noise_std = noise_to_mass(kept["sigma"])
     unit_kernel = np.ones_like(kept["value"])
-    when = _scene_time(ds)
-    return _observation(name, frame, kept, enhancement, sigma, unit_kernel, when, clock)
+    when = _scene_time(dataset)
+    return _observation(
+        name, frame, kept, enhancement, obs_noise_std, unit_kernel, when, clock
+    )
 
 
 def _screen(
@@ -453,13 +457,13 @@ def _screen(
     return {key: values[keep] for key, values in pixels.items()}
 
 
-def _scene_time(ds: xr.Dataset) -> np.datetime64:
+def _scene_time(dataset: xr.Dataset) -> np.datetime64:
     """The middle scanline time of a swath, else the scene's timestamp."""
-    if "scanline_time" in ds.coords:
-        stamps = np.sort(_flatten(ds["scanline_time"].values))
+    if "scanline_time" in dataset.coords:
+        stamps = np.sort(_flatten(dataset["scanline_time"].values))
         return stamps[stamps.size // 2]
-    if "time" in ds.coords:
-        return _flatten(np.asarray(ds["time"].values))[0]
+    if "time" in dataset.coords:
+        return _flatten(np.asarray(dataset["time"].values))[0]
     return np.datetime64("NaT")
 
 
@@ -468,17 +472,17 @@ def _observation(
     frame: LocalFrame,
     kept: dict[str, Float[np.ndarray, " kept"]],
     enhancement: Float[np.ndarray, " kept"],
-    sigma: Float[np.ndarray, " kept"],
+    obs_noise_std: Float[np.ndarray, " kept"],
     kernel: Float[np.ndarray, " kept"],
     when: np.datetime64,
     clock: TimeAxis | None,
 ) -> ColumnObservation:
-    x, y = frame.to_xy(kept["lat"], kept["lon"])
-    receptors = einx.id("p, p -> p (1 + 1)", x, y)
+    easting, northing = frame.to_xy(kept["lat"], kept["lon"])
+    receptors = einx.id("p, p -> p (1 + 1)", easting, northing)
     no_clock = clock is None or np.isnat(when)
     seconds = 0.0 if no_clock else float(clock.to_seconds(when))
     # R_retr = σ_Ω²
-    retrieval_variance = sigma**2
+    retrieval_variance = obs_noise_std**2
     instrument = Instrument(
         name=name,
         receptors=jnp.asarray(receptors),
