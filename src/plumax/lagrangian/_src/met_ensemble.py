@@ -25,12 +25,9 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
+from plumax.lagrangian._src.inversion import _blue_update, _check_inversion_shapes
 from plumax.lagrangian.footprint import compute_footprint
-from plumax.lagrangian.inversion import (
-    GaussianPosterior,
-    _blue_update,
-    _check_inversion_shapes,
-)
+from plumax.lagrangian.inversion import GaussianPosterior
 
 
 if TYPE_CHECKING:
