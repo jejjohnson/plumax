@@ -208,8 +208,10 @@ def background_pool(
                 f"background_pool: exclude must be (C, {height}, {width}), "
                 f"got {exclude.shape}"
             )
-        # O = O ∖ ⋃_c M_c
-        pool &= ~einx.any("[C] H W", exclude)
+        # einx rejects a zero-size axis; no masks exclude nothing
+        if exclude.shape[0] > 0:
+            # O = O ∖ ⋃_c M_c
+            pool &= ~einx.any("[C] H W", exclude)
     return _require_any(
         pool,
         "background_pool: the pool is empty; no pixel near the seeds is "
