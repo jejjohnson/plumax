@@ -167,7 +167,7 @@ def masked_k_coupled_model(
     import numpyro
     import numpyro.distributions as dist
 
-    from plumax.gauss_plume.inference import _masked_source_prior
+    from plumax.gauss_plume._src.inference import _masked_source_prior
 
     sources, background = _masked_source_prior(
         k_max=k_max,
@@ -233,7 +233,10 @@ def infer_masked_k_sources(
     Raises:
         ValueError: On missing observations or an invalid slot layout.
     """
-    from plumax.gauss_plume.inference import _check_multi_source_layout, _run_masked_k
+    from plumax.gauss_plume._src.inference import (
+        _check_multi_source_layout,
+        _run_masked_k,
+    )
 
     names = {instrument.name for instrument in instruments}
     if set(observations) != names:

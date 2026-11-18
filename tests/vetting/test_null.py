@@ -13,11 +13,11 @@ from __future__ import annotations
 import jax
 import numpy as np
 import pytest
-from radtrax import DegenerateInputError, ParameterError
+from radtrax import DegenerateInputError, ParameterError, ShapeError
 from scipy import stats
 
 from plumax.vetting import null_masks, null_pvalue
-from tests.vetting._errors import raises_shape_error
+from tests._type_check import raises_checked
 from tests.vetting._vetting_scene import notebook_scene, vet_d_norm
 
 
@@ -153,11 +153,15 @@ def test_bad_parameters_raise(mask: np.ndarray, kwargs: dict, match: str) -> Non
 
 
 def test_shapes_are_checked(mask: np.ndarray) -> None:
-    with raises_shape_error(r"mask must be \(H, W\)", parameter="mask"):
+    with raises_checked(ShapeError, r"mask must be \(H, W\)", parameter="mask"):
         null_masks(mask[None], 3, key=jax.random.key(0))
-    with raises_shape_error(r"exclude must be \(C, 24, 32\)", parameter="exclude"):
+    with raises_checked(
+        ShapeError, r"exclude must be \(C, 24, 32\)", parameter="exclude"
+    ):
         null_masks(mask, 3, key=jax.random.key(0), exclude=mask)
-    with raises_shape_error(r"null_scores must be \(S,\)", parameter="null_scores"):
+    with raises_checked(
+        ShapeError, r"null_scores must be \(S,\)", parameter="null_scores"
+    ):
         null_pvalue(0.5, np.zeros((2, 3)))
 
 

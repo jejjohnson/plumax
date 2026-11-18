@@ -27,8 +27,8 @@ from plumax.coupled import (
     solve_coupled,
 )
 from plumax.coupled.inversion import plume_response
+from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.dispersion import get_dispersion_params
-from plumax.gauss_plume.inference import _lognormal_from_moments
 from plumax.gauss_plume.multi_source import MaskedSources, MultiSourcePosterior
 
 
