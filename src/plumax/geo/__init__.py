@@ -9,6 +9,9 @@
 - :mod:`plumax.geo.starts`: the starting values of an image fit, the
   direction from the source to the mask's centroid (`plume_direction`) and a
   grid of source positions (`source_offset_grid`) for a multistart solve.
+- :mod:`plumax.geo.transects`: cross-plume transects of a column image
+  (`cross_plume_transects`, `CrossPlumeProfile`), each one's line density,
+  centre and width, the smoothed centreline and the width law.
 - :mod:`plumax.geo.vetting`: `PlumeVetting`, :mod:`plumax.vetting`'s
   candidate vetting and scene null on GeoArrays, as one Dataset (#157).
 
@@ -24,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 _LAZY = {
     "ColumnToMass": "plume",
+    "CrossPlumeProfile": "transects",
     "CrossSectionalFlux": "plume",
     "IMEEstimate": "plume",
     "PlumeColumnStats": "plume",
@@ -33,11 +37,17 @@ _LAZY = {
     "PlumeQNDFeatures": "plume",
     "PlumeShapeFilter": "plume",
     "PlumeVetting": "vetting",
+    "TransectProfiles": "transects",
     "WindAdvectionCone": "plume",
     "convert_column_units": "plume_array",
+    "cross_plume_transects": "transects",
+    "fit_transect_gaussians": "transects",
+    "fit_width_law": "transects",
     "plume_direction": "starts",
     "plume_mask": "plume_array",
+    "smooth_centreline": "transects",
     "source_offset_grid": "starts",
+    "transect_moments": "transects",
     "wind_advection_cone": "plume_array",
 }
 
@@ -74,11 +84,21 @@ if TYPE_CHECKING:
         wind_advection_cone,
     )
     from plumax.geo.starts import plume_direction, source_offset_grid
+    from plumax.geo.transects import (
+        CrossPlumeProfile,
+        TransectProfiles,
+        cross_plume_transects,
+        fit_transect_gaussians,
+        fit_width_law,
+        smooth_centreline,
+        transect_moments,
+    )
     from plumax.geo.vetting import PlumeVetting
 
 
 __all__ = [
     "ColumnToMass",
+    "CrossPlumeProfile",
     "CrossSectionalFlux",
     "IMEEstimate",
     "PlumeColumnStats",
@@ -88,10 +108,16 @@ __all__ = [
     "PlumeQNDFeatures",
     "PlumeShapeFilter",
     "PlumeVetting",
+    "TransectProfiles",
     "WindAdvectionCone",
     "convert_column_units",
+    "cross_plume_transects",
+    "fit_transect_gaussians",
+    "fit_width_law",
     "plume_direction",
     "plume_mask",
+    "smooth_centreline",
     "source_offset_grid",
+    "transect_moments",
     "wind_advection_cone",
 ]

@@ -47,6 +47,23 @@ The starting direction of a column-plume fit, from the source to the centroid of
         - plume_direction
         - source_offset_grid
 
+## `transects`: cross-plume transects
+
+Profiles of the enhancement across the plume at regular downwind distances, by spline interpolation of the image, and each profile's line density, centre and width. `CrossPlumeProfile` returns them as one table on a GeoArray; the array functions underneath give the smoothed centreline and the width law, the starting values of a [column-plume fit](coupled_inversion.md). They are NumPy and SciPy code, outside any traced path.
+
+::: plumax.geo.transects
+    options:
+      show_root_heading: false
+      heading_level: 3
+      members:
+        - CrossPlumeProfile
+        - TransectProfiles
+        - cross_plume_transects
+        - transect_moments
+        - fit_transect_gaussians
+        - smooth_centreline
+        - fit_width_law
+
 ## `plume_array`: the array functions
 
 ::: plumax.geo.plume_array
