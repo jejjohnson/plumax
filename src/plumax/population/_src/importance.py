@@ -39,11 +39,11 @@ from collections.abc import Callable
 from enum import StrEnum
 from typing import TYPE_CHECKING, Literal
 
+import einx
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 from integrix import expect as integrix_expect
-from jax.scipy.special import logsumexp
 from jaxtyping import Array, Float
 
 from plumax._src.errors import PayloadError
@@ -106,7 +106,9 @@ class EventEvidence(eqx.Module):
         self, log_integrand: Callable[[Array], Array]
     ) -> Float[Array, "*event"]:
         """log Σₛ exp(ℓₛ + g(qₛ)), per event."""
-        return logsumexp(self.log_terms(log_integrand), axis=-1)
+        # tₛ = ℓₛ + g(qₛ)
+        terms = self.log_terms(log_integrand)
+        return einx.logsumexp("... [node]", terms)
 
     def effective_sample_size(
         self, log_integrand: Callable[[Array], Array] | None = None
@@ -189,7 +191,8 @@ def event_evidence(
                 "event_evidence: the FULL regime needs posterior draws; pass a key "
                 "to event_from_posterior."
             )
-        nodes = jnp.ravel(jnp.asarray(event.q_samples, dtype=float))
+        draws = jnp.asarray(event.q_samples, dtype=float)
+        nodes = einx.id("... -> (...)", draws)
         # ℓₛ = −log π(qₛ) − log S
         log_weights = -prior_logpdf(nodes) - math.log(nodes.shape[0])
         return EventEvidence(
@@ -305,8 +308,10 @@ def ess_report(
         pareto_k = None
         if Regime(regime) is Regime.FULL:
             # one k̂ per event, batched over the events
-            _, k_hat = integrix_expect.pareto_smoothed_log_weights(jnp.asarray(log_w))
-            pareto_k = np.asarray(k_hat)
+            _, tail_shape = integrix_expect.pareto_smoothed_log_weights(
+                jnp.asarray(log_w)
+            )
+            pareto_k = np.asarray(tail_shape)
         warn_on_collapse(ess, log_w.shape[-1], pareto_k)
     return ess
 

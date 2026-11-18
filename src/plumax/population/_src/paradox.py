@@ -157,13 +157,16 @@ def compute_E_Pd(
     Returns:
         E[P_d] ∈ [0, 1].
     """
-    u = np.linspace(mu - 6.0 * sigma, mu + 6.0 * sigma, n_quad)
-    Q = np.exp(u)
+    # u = ln Q on [μ − 6σ, μ + 6σ]
+    log_rate = np.linspace(mu - 6.0 * sigma, mu + 6.0 * sigma, n_quad)
+    Q = np.exp(log_rate)
+    # N(u; μ, σ²) = exp(−(u − μ)² / (2σ²)) / (σ √(2π))
     gauss_kernel = (1.0 / (sigma * np.sqrt(2.0 * np.pi))) * np.exp(
-        -((u - mu) ** 2) / (2.0 * sigma**2)
+        -((log_rate - mu) ** 2) / (2.0 * sigma**2)
     )
     pod_values = logistic_pod(Q, Q_50, k)
-    return float(np.trapezoid(pod_values * gauss_kernel, u))
+    # E[P_d] = ∫ P_d(e^u) N(u; μ, σ²) du
+    return float(np.trapezoid(pod_values * gauss_kernel, log_rate))
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -248,12 +251,13 @@ def simulate_paradox(
     rng = np.random.default_rng(config.seed)
 
     Lambda_true = config.Lambda_true
-    N_true = int(rng.poisson(lam=Lambda_true))
+    num_true = int(rng.poisson(lam=Lambda_true))
 
-    if E_Pd is None:
-        E_Pd = compute_E_Pd(config.mu, config.sigma, config.Q_50, config.k)
+    expected_pod = E_Pd
+    if expected_pod is None:
+        expected_pod = compute_E_Pd(config.mu, config.sigma, config.Q_50, config.k)
 
-    if N_true == 0:
+    if num_true == 0:
         return ParadoxResult(
             config=config,
             N_true=0,
@@ -264,7 +268,7 @@ def simulate_paradox(
             E_Q_obs_mc=0.0,
             M_true_mc=0.0,
             M_obs_mc=0.0,
-            E_Pd=E_Pd,
+            E_Pd=expected_pod,
             M_true_analytic=config.M_true_analytic,
             average_overestimation_ratio=np.nan,
             mass_underestimation_ratio=np.nan,
@@ -272,19 +276,19 @@ def simulate_paradox(
             MMSF=np.nan,
         )
 
-    marks_true = rng.lognormal(mean=config.mu, sigma=config.sigma, size=N_true)
+    marks_true = rng.lognormal(mean=config.mu, sigma=config.sigma, size=num_true)
 
     pod_per_event = logistic_pod(marks_true, config.Q_50, config.k)
-    survived = rng.uniform(size=N_true) < pod_per_event
+    survived = rng.uniform(size=num_true) < pod_per_event
     marks_obs = marks_true[survived]
-    N_obs = int(survived.sum())
+    num_observed = int(survived.sum())
 
     D = config.duration
 
     E_Q_true_mc = float(np.mean(marks_true))
     M_true_mc = float(np.sum(marks_true) * D)
 
-    if N_obs > 0:
+    if num_observed > 0:
         E_Q_obs_mc = float(np.mean(marks_obs))
         M_obs_mc = float(np.sum(marks_obs) * D)
     else:
@@ -307,15 +311,15 @@ def simulate_paradox(
 
     return ParadoxResult(
         config=config,
-        N_true=N_true,
-        N_obs=N_obs,
+        N_true=num_true,
+        N_obs=num_observed,
         marks_true=marks_true,
         marks_obs=marks_obs,
         E_Q_true_mc=E_Q_true_mc,
         E_Q_obs_mc=E_Q_obs_mc,
         M_true_mc=M_true_mc,
         M_obs_mc=M_obs_mc,
-        E_Pd=E_Pd,
+        E_Pd=expected_pod,
         M_true_analytic=config.M_true_analytic,
         average_overestimation_ratio=avg_overest,
         mass_underestimation_ratio=mass_underest,
@@ -349,15 +353,17 @@ def run_scenario_grid(
     for cfg in configs:
         # Quadrature for E[P_d] depends only on (mu, sigma, Q_50, k), not on
         # the seed — compute it once per scenario and reuse across trials.
-        e_pd = compute_E_Pd(cfg.mu, cfg.sigma, cfg.Q_50, cfg.k)
+        expected_pod = compute_E_Pd(cfg.mu, cfg.sigma, cfg.Q_50, cfg.k)
         trials = [
-            simulate_paradox(dataclasses.replace(cfg, seed=cfg.seed + i), E_Pd=e_pd)
-            for i in range(n_mc_per_scenario)
+            simulate_paradox(
+                dataclasses.replace(cfg, seed=cfg.seed + offset), E_Pd=expected_pod
+            )
+            for offset in range(n_mc_per_scenario)
         ]
-        mmsfs = [t.MMSF for t in trials if np.isfinite(t.MMSF)]
+        mmsfs = [trial.MMSF for trial in trials if np.isfinite(trial.MMSF)]
         if mmsfs:
             median_mmsf = float(np.median(mmsfs))
-            best = min(trials, key=lambda t: abs(t.MMSF - median_mmsf))
+            best = min(trials, key=lambda trial: abs(trial.MMSF - median_mmsf))
         else:
             best = trials[0]
         results.append(best)

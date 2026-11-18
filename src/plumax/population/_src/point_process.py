@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import einx
 import numpy as np
 from jax.typing import ArrayLike
 from jaxtyping import Float, Int
@@ -79,10 +80,10 @@ class PoissonRatePosterior:
             The ``(low, high)`` interval bounds.
         """
         tail = (1.0 - level) / 2.0
-        lo, hi = stats.gamma.ppf(
+        lower, upper = stats.gamma.ppf(
             [tail, 1.0 - tail], a=self.alpha, scale=1.0 / self.beta
         )
-        return float(lo), float(hi)
+        return float(lower), float(upper)
 
 
 @dataclass(frozen=True)
@@ -110,7 +111,7 @@ class InhomogeneousIntensityPosterior:
     @property
     def beta_mean(self) -> np.ndarray:
         """Posterior-mean coefficients ``(n_covariates,)``."""
-        return np.mean(self.beta_samples, axis=0)
+        return einx.mean("[draw] ...", self.beta_samples)
 
 
 def fit_poisson_rate(
@@ -149,18 +150,22 @@ def fit_poisson_rate(
         msg = f"duration must be positive, got {duration!r}"
         raise ValueError(msg)
 
-    n = catalog.n_events
+    num_events = catalog.n_events
     exposure = float(area) * float(duration)
     return PoissonRatePosterior(
-        alpha=float(prior_shape) + n,
+        alpha=float(prior_shape) + num_events,
         beta=float(prior_rate) + exposure,
-        n_events=n,
+        n_events=num_events,
         exposure=exposure,
     )
 
 
 def _inhomogeneous_log_likelihood(
-    beta0: Any, beta: Any, x: Any, xq: Any, wq: Any
+    intercept: Any,
+    coefficients: Any,
+    event_covariates: Any,
+    node_covariates: Any,
+    node_weights: Any,
 ) -> Any:
     """Log-likelihood ``sum_i log lambda(x_i) - sum_q w_q lambda(x_q)``.
 
@@ -175,12 +180,12 @@ def _inhomogeneous_log_likelihood(
 
     def log_intensity(covariates: Any) -> Any:
         # log lambda(x) = beta0 + x . beta
-        return beta0 + covariates @ beta
+        return intercept + covariates @ coefficients
 
     # Lambda = sum_q w_q lambda(x_q)
-    integrated = jnp.sum(wq * jnp.exp(log_intensity(xq)))
-    mask = jnp.ones(x.shape[0], dtype=bool)
-    return ipp_spatial_log_prob(x, mask, log_intensity, integrated)
+    integrated = jnp.sum(node_weights * jnp.exp(log_intensity(node_covariates)))
+    mask = jnp.ones(event_covariates.shape[0], dtype=bool)
+    return ipp_spatial_log_prob(event_covariates, mask, log_intensity, integrated)
 
 
 def fit_inhomogeneous_intensity(
@@ -273,18 +278,21 @@ def fit_inhomogeneous_intensity(
     import numpyro.distributions as dist
     from numpyro.infer import MCMC, NUTS
 
-    n_cov = cov.shape[1]
+    num_covariates = cov.shape[1]
     cov_j = jax.numpy.asarray(cov)
     quad_j = jax.numpy.asarray(quad)
     weights_j = jax.numpy.asarray(weights)
 
-    def model(x: Any, xq: Any, wq: Any) -> None:
-        beta0 = numpyro.sample("beta0", dist.Normal(0.0, beta_prior_scale))
-        beta = numpyro.sample(
-            "beta", dist.Normal(0.0, beta_prior_scale).expand([n_cov]).to_event(1)
+    def model(event_covariates: Any, node_covariates: Any, node_weights: Any) -> None:
+        intercept = numpyro.sample("beta0", dist.Normal(0.0, beta_prior_scale))
+        coefficients = numpyro.sample(
+            "beta",
+            dist.Normal(0.0, beta_prior_scale).expand([num_covariates]).to_event(1),
         )
         # Added via numpyro.factor because it is not a per-observation density.
-        log_likelihood = _inhomogeneous_log_likelihood(beta0, beta, x, xq, wq)
+        log_likelihood = _inhomogeneous_log_likelihood(
+            intercept, coefficients, event_covariates, node_covariates, node_weights
+        )
         numpyro.factor("point_process", log_likelihood)
 
     kernel = NUTS(model)
@@ -295,7 +303,12 @@ def fit_inhomogeneous_intensity(
         num_chains=num_chains,
         progress_bar=False,
     )
-    mcmc.run(jax.random.PRNGKey(seed), x=cov_j, xq=quad_j, wq=weights_j)
+    mcmc.run(
+        jax.random.PRNGKey(seed),
+        event_covariates=cov_j,
+        node_covariates=quad_j,
+        node_weights=weights_j,
+    )
     samples = mcmc.get_samples()
     return InhomogeneousIntensityPosterior(
         beta0_samples=np.asarray(samples["beta0"]),

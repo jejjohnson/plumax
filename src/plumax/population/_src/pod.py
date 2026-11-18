@@ -395,8 +395,9 @@ class ConcentrationProxyPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
-        logit = self.beta_0 + self.beta_1 * x
+        log_proxy = log_concentration_proxy(Q, U, p)
+        # logit = β₀ + β₁ x
+        logit = self.beta_0 + self.beta_1 * log_proxy
         return 1.0 / (1.0 + jnp.exp(-logit))
 
     @classmethod
@@ -577,13 +578,15 @@ class VaryingCoefficientPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
-        beta_1 = (
+        log_proxy = log_concentration_proxy(Q, U, p)
+        # β₁ = γ₀ + γ_a · albedo + γ_θ · cos θ
+        slope = (
             self.gamma_base
             + self.gamma_albedo * albedo
             + self.gamma_cos_theta * cos_theta
         )
-        logit = self.beta_0 + beta_1 * x
+        # logit = β₀ + β₁ x
+        logit = self.beta_0 + slope * log_proxy
         return 1.0 / (1.0 + jnp.exp(-logit))
 
     @classmethod
@@ -663,8 +666,9 @@ class SNRBasedPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = snr_proxy(Q, U, p, albedo, sigma_noise)
-        logit = self.beta_0 + self.beta_1 * x
+        log_snr = snr_proxy(Q, U, p, albedo, sigma_noise)
+        # logit = β₀ + β₁ x
+        logit = self.beta_0 + self.beta_1 * log_snr
         return 1.0 / (1.0 + jnp.exp(-logit))
 
     @classmethod
@@ -744,10 +748,11 @@ class SpectralAwarePOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
+        log_proxy = log_concentration_proxy(Q, U, p)
+        # logit = β₀ + β_proxy x + β_bands ln n_bands + β_res ln res + β_a albedo
         logit = (
             self.beta_0
-            + self.beta_proxy * x
+            + self.beta_proxy * log_proxy
             + self.beta_n_bands * jnp.log(jnp.clip(n_bands, min=1.0))
             + self.beta_spectral_res * jnp.log(jnp.clip(spectral_res_nm, min=0.01))
             + self.beta_albedo * albedo
@@ -844,18 +849,21 @@ class FullVaryingCoefficientPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
+        log_proxy = log_concentration_proxy(Q, U, p)
 
-        beta_0 = self.beta_0_base + self.beta_0_noise * jnp.log(
+        # β₀ = β₀_base + β₀_noise ln σ_noise
+        intercept = self.beta_0_base + self.beta_0_noise * jnp.log(
             jnp.clip(sigma_noise, min=1e-6)
         )
-        beta_1 = (
+        # β₁ = γ₀ + γ_a · albedo + γ_θ · cos θ + γ_bands ln n_bands
+        slope = (
             self.gamma_base
             + self.gamma_albedo * albedo
             + self.gamma_cos_theta * cos_theta
             + self.gamma_n_bands * jnp.log(jnp.clip(n_bands, min=1.0))
         )
-        logit = beta_0 + beta_1 * x
+        # logit = β₀ + β₁ x
+        logit = intercept + slope * log_proxy
         return 1.0 / (1.0 + jnp.exp(-logit))
 
     @classmethod
@@ -931,10 +939,11 @@ class ProbitPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
-        z = self.beta_0 + self.beta_1 * x
+        log_proxy = log_concentration_proxy(Q, U, p)
+        # z = β₀ + β₁ x
+        probit_score = self.beta_0 + self.beta_1 * log_proxy
         # Φ(z) via the error function: Φ(z) = 0.5 · (1 + erf(z / √2))
-        return 0.5 * (1.0 + _jax_erf(z / jnp.sqrt(2.0)))
+        return 0.5 * (1.0 + _jax_erf(probit_score / jnp.sqrt(2.0)))
 
     @classmethod
     def sample_priors(cls) -> ProbitPOD:
@@ -1001,9 +1010,11 @@ class CloglogPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        x = log_concentration_proxy(Q, U, p)
-        eta = self.beta_0 + self.beta_1 * x
-        return 1.0 - jnp.exp(-jnp.exp(eta))
+        log_proxy = log_concentration_proxy(Q, U, p)
+        # η = β₀ + β₁ x
+        linear_predictor = self.beta_0 + self.beta_1 * log_proxy
+        # P_d = 1 − exp(−e^η)
+        return 1.0 - jnp.exp(-jnp.exp(linear_predictor))
 
     @classmethod
     def sample_priors(cls) -> CloglogPOD:

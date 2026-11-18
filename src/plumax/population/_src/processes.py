@@ -27,6 +27,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -254,12 +255,12 @@ def make_process(
     if not stop > start:
         raise ValueError(f"make_process: window must have t₁ > t₀, got {window}.")
     window_length = stop - start
-    n_points = _quadrature_points(window_length, nodes_per_day)
-    log_intensity = LogIntensity(kernel, origin=start, n_integration_points=n_points)
+    num_points = _quadrature_points(window_length, nodes_per_day)
+    log_intensity = LogIntensity(kernel, origin=start, n_integration_points=num_points)
     return point_processes.operators.InhomogeneousPoissonProcess(
         log_intensity,
         observation_window=window_length,
-        n_integration_points=n_points,
+        n_integration_points=num_points,
     )
 
 
@@ -351,11 +352,10 @@ def detection_process(
     marked = operators.MarkedTemporalPointProcess(
         ground, point_processes.constant_mark_distribution(mark_distribution)
     )
-    if n_integration_points is None:
-        n_integration_points = getattr(ground, "n_integration_points", 100)
-    return operators.ThinningProcess(
-        marked, retention, n_integration_points=n_integration_points
-    )
+    num_points = n_integration_points
+    if num_points is None:
+        num_points = getattr(ground, "n_integration_points", 100)
+    return operators.ThinningProcess(marked, retention, n_integration_points=num_points)
 
 
 def padded_event_buffer(
@@ -387,18 +387,21 @@ def padded_event_buffer(
         ([1.0, 3.0, 5.0], [True, True, False])
     """
     start, stop = (float(edge) for edge in window)
-    host_times = np.sort(np.asarray(times, dtype=float).ravel())
+    flat_times = np.asarray(times, dtype=float)
+    if flat_times.size:
+        flat_times = einx.id("... -> (...)", flat_times)
+    host_times = np.sort(flat_times)
     if host_times.size and (host_times[0] < start or host_times[-1] > stop):
         raise ValueError(
             f"padded_event_buffer: every time must lie in the window {window}."
         )
-    n_events = host_times.size
-    length = n_events if max_events is None else max_events
-    if length < n_events:
+    num_events = host_times.size
+    length = num_events if max_events is None else max_events
+    if length < num_events:
         raise ValueError(
-            f"padded_event_buffer: max_events={length} < {n_events} events."
+            f"padded_event_buffer: max_events={length} < {num_events} events."
         )
     window_time = np.full(length, stop - start)
-    window_time[:n_events] = host_times - start
-    mask = np.arange(length) < n_events
+    window_time[:num_events] = host_times - start
+    mask = np.arange(length) < num_events
     return jnp.asarray(window_time), jnp.asarray(mask)
