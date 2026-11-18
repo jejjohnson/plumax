@@ -548,6 +548,10 @@ class LinearisedRadianceOperator:
                 "LinearisedRadianceOperator.predict: `column_enhancement` must "
                 f"be 1-D (n_obs,); got shape {column_mass.shape}."
             )
+        if column_mass.shape[0] == 0:
+            # einx rejects a zero-size axis; no receptors, no radiances
+            dtype = jnp.result_type(self.baseline, column_mass, self.gain)
+            return jnp.zeros((0, np.shape(self.gain)[0]), dtype=dtype)
         # g m
         scaled = einx.multiply("obs, channel -> obs channel", column_mass, self.gain)
         # L = L₀ + g m
