@@ -385,7 +385,7 @@ class ColumnPlume(eqx.Module):
         >>> import jax.numpy as jnp
         >>> crosswind = jnp.linspace(-3000.0, 3000.0, 6001)
         >>> downwind = jnp.full_like(crosswind, 2000.0)
-        >>> receptors = einx.rearrange(
+        >>> receptors = einx.id(
         ...     "obs, obs -> obs (1 + 1)", downwind, crosswind
         ... )
         >>> geometry = PlumeGeometry(

@@ -181,13 +181,13 @@ class ColumnObservation(eqx.Module):
             The observation y_i at each receptor.
         """
         if self.receptor_index is None:
-            profiles = einx.rearrange("level y x -> (y x) level", concentration)
+            profiles = einx.id("level y x -> (y x) level", concentration)
         else:
             iy = self.receptor_index[:, 0]
             ix = self.receptor_index[:, 1]
             # c_{k,i} = c[k, iy_i, ix_i]
             gathered = concentration[:, iy, ix]
-            profiles = einx.rearrange("level obs -> obs level", gathered)
+            profiles = einx.id("level obs -> obs level", gathered)
         return self.column(profiles)
 
 

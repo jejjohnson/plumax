@@ -72,7 +72,7 @@ class CentrelinePrior(eqx.Module):
 
         The matrix is symmetric:
 
-        >>> transposed = einx.rearrange("row col -> col row", covariance)
+        >>> transposed = einx.id("row col -> col row", covariance)
         >>> bool(jnp.allclose(covariance, transposed))
         True
 

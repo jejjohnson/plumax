@@ -49,7 +49,7 @@ def _receptors(length=1800.0, half_width=600.0):
     xs = np.arange(-2 * PIXEL, length + 1.0, PIXEL)
     ys = np.arange(-half_width, half_width + 1.0, PIXEL)
     gx, gy = jnp.meshgrid(jnp.asarray(xs), jnp.asarray(ys), indexing="ij")
-    return einx.rearrange("x y, x y -> (x y) (1 + 1)", gx, gy)
+    return einx.id("x y, x y -> (x y) (1 + 1)", gx, gy)
 
 
 def _plume(reference_distance=900.0):
@@ -294,7 +294,7 @@ def test_response_at_gradient_matches_central_differences(block):
             (response(value + step * unit) - response(value - step * unit)) / (2 * step)
             for unit in jnp.eye(2)
         ]
-        expected = einx.rearrange("axis obs -> obs axis", jnp.stack(differences))
+        expected = einx.id("axis obs -> obs axis", jnp.stack(differences))
     else:
         step = 1e-6
         # (r(v + h) − r(v − h)) / 2h

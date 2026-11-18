@@ -273,7 +273,7 @@ class CoupledPrior:
         """Σ_θ on a ``(1, D_θ)`` control row, the shape vardax applies it to."""
         covariance = jnp.asarray(self.covariance, dtype=float)
         if covariance.ndim == 1:
-            return lx.DiagonalLinearOperator(einx.rearrange("p -> 1 p", covariance))
+            return lx.DiagonalLinearOperator(einx.id("p -> 1 p", covariance))
         psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
         return lx.FunctionLinearOperator(
             lambda row: einx.dot("row p, p q -> row q", row, covariance),
@@ -476,7 +476,7 @@ class CoupledProblem:
                     variance = einx.multiply(
                         "obs channel, obs -> obs channel", variance, inflation
                     )
-                mask = einx.rearrange("obs -> obs channel", mask, channel=n_channels)
+                mask = einx.id("obs -> obs channel", mask, channel=n_channels)
             else:
                 variance = instrument.observation_variance()
             if observation.shape != mask.shape:
@@ -841,9 +841,7 @@ def solve_coupled(
 
     def stacked_prediction(state: jax.Array) -> jax.Array:
         # h(θ) on a (1, D_θ) row
-        return einx.rearrange(
-            "obs -> 1 obs", problem.predict_stacked(unflatten(state[0]))
-        )
+        return einx.id("obs -> 1 obs", problem.predict_stacked(unflatten(state[0])))
 
     model = vdx.ThreeDVar(
         obs_op=vdx.CallableObs(fn=stacked_prediction, materialise=True),
@@ -902,7 +900,7 @@ def solve_coupled(
         residual = observation - predictions[instrument.name]
         mask = instrument.observation_mask()
         if residual.ndim == 2:
-            mask = einx.rearrange("obs -> obs channel", mask, channel=1)
+            mask = einx.id("obs -> obs channel", mask, channel=1)
         residuals[instrument.name] = jnp.where(mask > 0.0, residual, jnp.nan)
     return CoupledResult(
         map_estimate=map_estimate,

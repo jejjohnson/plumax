@@ -39,7 +39,7 @@ def _receptors(length=600.0, half_width=300.0):
     xs = jnp.arange(-2 * PIXEL, length + 1.0, PIXEL)
     ys = jnp.arange(-half_width, half_width + 1.0, PIXEL)
     gx, gy = jnp.meshgrid(xs, ys, indexing="ij")
-    return einx.rearrange("x y, x y -> (x y) (1 + 1)", gx, gy)
+    return einx.id("x y, x y -> (x y) (1 + 1)", gx, gy)
 
 
 def _source():
@@ -245,7 +245,7 @@ def test_fisher_uses_the_jacobian_of_the_stacked_prediction(full_fit):
         / (2 * step * scale)
         for unit, scale in zip(jnp.eye(theta.shape[0]), scales, strict=True)
     ]
-    expected = einx.rearrange("param obs -> obs param", jnp.stack(differences))
+    expected = einx.id("param obs -> obs param", jnp.stack(differences))
     for k in range(theta.shape[0]):
         column_scale = float(jnp.max(jnp.abs(expected[:, k])))
         np.testing.assert_allclose(

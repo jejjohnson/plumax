@@ -46,9 +46,9 @@ def _grid(n=101, spacing=PIXEL, origin=(0.0, 0.0)):
     offsets = (jnp.arange(n) - n // 2) * spacing
     x_axis = origin[0] + offsets
     y_axis = origin[1] + offsets
-    xs = einx.rearrange("col -> row col", x_axis, row=n)
-    ys = einx.rearrange("row -> row col", y_axis, col=n)
-    return einx.rearrange("row col, row col -> (row col) (1 + 1)", xs, ys)
+    xs = einx.id("col -> row col", x_axis, row=n)
+    ys = einx.id("row -> row col", y_axis, col=n)
+    return einx.id("row col, row col -> (row col) (1 + 1)", xs, ys)
 
 
 # ── closed-form oracles ──────────────────────────────────────────────────────
@@ -67,16 +67,16 @@ def test_column_matches_trapezoid_of_the_reflected_plume(
     params = get_dispersion_params(stability_class)
     sigma_y, _ = calculate_briggs_dispersion(downwind, params)
     # receptors along the wind (+x), across it at multiples of σ_y
-    xs = einx.rearrange("dist -> dist off", downwind, off=3)
+    xs = einx.id("dist -> dist off", downwind, off=3)
     ys = einx.multiply("dist, off -> dist off", sigma_y, crosswind_scale)
     levels = jnp.linspace(0.0, 5000.0, 2000)
-    x = einx.rearrange("dist off -> (dist off level)", xs, level=2000)
-    y = einx.rearrange("dist off -> (dist off level)", ys, level=2000)
-    z = einx.rearrange("level -> (dist off level)", levels, dist=3, off=3)
+    x = einx.id("dist off -> (dist off level)", xs, level=2000)
+    y = einx.id("dist off -> (dist off level)", ys, level=2000)
+    z = einx.id("level -> (dist off level)", levels, dist=3, off=3)
     concentration = plume_concentration_vmap(
         x, y, z, 0.0, 0.0, release_height, wind_speed, 0.0, emission_rate, params
     )
-    profiles = einx.rearrange(
+    profiles = einx.id(
         "(dist off level) -> dist off level", concentration, off=3, level=2000
     )
     # trapezoid weights on the uniform levels: h, with h / 2 at the two ends
@@ -85,7 +85,7 @@ def test_column_matches_trapezoid_of_the_reflected_plume(
     weights = weights.at[-1].set(0.5 * spacing)
     trapezoid = einx.dot("dist off level, level -> dist off", profiles, weights)
 
-    width = einx.rearrange("dist -> dist off", sigma_y, off=3)
+    width = einx.id("dist -> dist off", sigma_y, off=3)
     closed_form = unit_column(xs, ys, width) * emission_rate / wind_speed
     np.testing.assert_allclose(trapezoid, closed_form, rtol=1e-4)
 
@@ -97,7 +97,7 @@ def test_pixel_average_conserves_mass_at_every_distance():
     offsets = (jnp.arange(-200, 201)) * PIXEL
     for distance in (30.0, 60.0, 300.0, 3000.0):
         downwind = jnp.full_like(offsets, distance)
-        receptors = einx.rearrange("obs, obs -> obs (1 + 1)", downwind, offsets)
+        receptors = einx.id("obs, obs -> obs (1 + 1)", downwind, offsets)
         response = plume(receptors, geometry)
         mass = einx.sum("[obs]", response) * PIXEL
         np.testing.assert_allclose(mass, 1.0, rtol=1e-10)
@@ -123,7 +123,7 @@ def test_point_evaluation_conserves_mass_once_the_plume_is_a_pixel_wide():
     assert bool(jnp.all(widths >= PIXEL))
     for distance in distances:
         downwind = jnp.full_like(offsets, distance)
-        receptors = einx.rearrange("obs, obs -> obs (1 + 1)", downwind, offsets)
+        receptors = einx.id("obs, obs -> obs (1 + 1)", downwind, offsets)
         mass = einx.sum("[obs]", plume(receptors, geometry)) * PIXEL
         np.testing.assert_allclose(mass, 1.0, rtol=1e-3)
 

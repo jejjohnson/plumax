@@ -246,7 +246,7 @@ class SpatialControl:
         """
         ny, nx = np.shape(self.mask)
         rows, columns = np.nonzero(np.asarray(self.mask, dtype=bool))
-        per_cell = einx.rearrange(
+        per_cell = einx.id(
             "... (basis cell) -> ... basis cell", flat, basis=self.n_basis
         )
         field_shape = (*per_cell.shape[:-1], ny, nx)
@@ -270,7 +270,7 @@ class SpatialControl:
 
             return flux
 
-        basis = einx.rearrange(
+        basis = einx.id(
             "time basis -> basis time", jnp.asarray(self.time_basis, dtype=flat.dtype)
         )
 
@@ -903,7 +903,7 @@ class FourDVarProblem:
 
         def whitened_prediction(source: jax.Array) -> jax.Array:
             # 𝒢(S) / σ, flattened over (time, receptor)
-            return einx.rearrange("t o -> 1 (t o)", predict(source[0]) / sigma)
+            return einx.id("t o -> 1 (t o)", predict(source[0]) / sigma)
 
         return vdx.CallableObs(fn=whitened_prediction, jac="bwd", materialise=True)
 
@@ -943,7 +943,7 @@ class FourDVarProblem:
 
         def whitened_prediction(state: jax.Array) -> jax.Array:
             # 𝒢(q) / σ, flattened over (time, receptor)
-            return einx.rearrange("t o -> (t o)", predict(state) / sigma)
+            return einx.id("t o -> (t o)", predict(state) / sigma)
 
         observations = self.observations / sigma
         n_flat = observations.size
@@ -968,7 +968,7 @@ class FourDVarProblem:
             ),
         )
         batch = vdx.Batch1D(
-            input=einx.rearrange("t o -> 1 1 (t o)", observations),
+            input=einx.id("t o -> 1 1 (t o)", observations),
             mask=jnp.ones((1, 1, n_flat), dtype=dtype),
         )
         return model, batch
@@ -1049,7 +1049,7 @@ class FourDVarProblem:
             cov_solver=lx.AutoLinearSolver(well_posed=True),
         )
         batch = vdx.Batch1D(
-            input=einx.rearrange("t o -> 1 1 (t o)", observations),
+            input=einx.id("t o -> 1 1 (t o)", observations),
             mask=jnp.ones((1, 1, n_flat), dtype=dtype),
         )
         return model, batch
@@ -1695,7 +1695,7 @@ def _gauss_newton_laplace(
     def whitened_prediction(control: jax.Array) -> jax.Array:
         # 𝒢(S_b + L χ) / σ, flattened over (time, receptor)
         source = problem.source_from_whitened(control)
-        return einx.rearrange("t o -> (t o)", predict(source) / sigma)
+        return einx.id("t o -> (t o)", predict(source) / sigma)
 
     jacobian = jax.jacrev(whitened_prediction)(chi)  # J̃, (n_t·n_obs, n_state)
     identity = jnp.eye(chi.shape[0], dtype=chi.dtype)
