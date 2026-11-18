@@ -296,6 +296,24 @@ def test_simulate_puff_field_is_sum_of_contributions():
     assert jnp.all(total > 0)
 
 
+def test_no_puffs_evolve_and_add_no_concentration():
+    from plumax.gauss_puff.dispersion import calculate_pg_dispersion
+
+    state = evolve_puffs(
+        _constant_wind_schedule(),
+        jnp.zeros((0,)),
+        jnp.asarray(40.0),
+        source_location=(0.0, 0.0, 2.0),
+        puff_mass=0.05,
+    )
+    assert state.x.shape == (0,)
+    receptor = (jnp.array([10.0, 50.0]), jnp.zeros(2), jnp.full(2, 2.0))
+    total = simulate_puff_field(
+        receptor, state, PG_DISPERSION_PARAMS["C"], calculate_pg_dispersion
+    )
+    np.testing.assert_array_equal(total, jnp.zeros(2))
+
+
 # ── simulate_puff xarray wrapper ────────────────────────────────────────────
 
 
