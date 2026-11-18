@@ -87,12 +87,12 @@ class EmissionRateSamples(dict):
         self.prior_std = prior_std
 
     @property
-    def emission_rate(self) -> NDArray:
+    def emission_rate(self) -> float:
         """Posterior mean of Q [kg/s]."""
         return np.mean(self["emission_rate"])
 
     @property
-    def emission_std(self) -> NDArray:
+    def emission_std(self) -> float:
         """Posterior standard deviation of Q [kg/s]."""
         return np.std(self["emission_rate"])
 
