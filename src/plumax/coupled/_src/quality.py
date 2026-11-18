@@ -142,8 +142,8 @@ def apply_quality(
         [1.0, 100.0, 1.0]
     """
     policy = QualityPolicy() if policy is None else policy
-    if flags is None:
-        flags = instrument.flags
+    if flags is None and instrument.flags is not None:
+        flags = jnp.asarray(instrument.flags)
     if flags is None:
         flags = jnp.zeros(instrument.n_obs, dtype=int)
     rejected = policy.rejected(flags)
