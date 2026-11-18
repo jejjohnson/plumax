@@ -47,8 +47,9 @@ from jax.flatten_util import ravel_pytree
 from jaxtyping import Array, Float
 
 from plumax._src.controlled import AbstractControlledSource
-from plumax._src.errors import ControlBlockError, ParameterError, PayloadError
+from plumax._src.errors import ControlBlockError, PayloadError
 from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
+from plumax._src.tracing import require_positive
 from plumax._src.vardax import require_vardax
 from plumax.coupled._src.forward import (
     CoupledForward,
@@ -143,8 +144,7 @@ class CoupledPrior:
             for name, value in means.items()
         }
         flat_std, _ = ravel_pytree(stds)
-        if not bool(jnp.all(flat_std > 0.0)):
-            raise ValueError("CoupledPrior.from_std: standard deviations must be > 0.")
+        require_positive("std", flat_std, caller="CoupledPrior.from_std")
         return cls(mean=means, covariance=flat_std**2)
 
     @classmethod
@@ -209,11 +209,12 @@ class CoupledPrior:
                 # σ per element
                 broadcast_std = jnp.broadcast_to(entry, shape)
                 std = einx.id("... -> (...)", broadcast_std)
-                if not bool(jnp.all(std > 0.0)):
-                    raise ControlBlockError(
-                        f"CoupledPrior.from_blocks: the standard deviation of "
-                        f"`{name}` must be > 0."
-                    )
+                require_positive(
+                    f"std[{name}]",
+                    std,
+                    caller="CoupledPrior.from_blocks",
+                    error=ControlBlockError,
+                )
                 # Σ_b = diag(σ²)
                 blocks.append(jnp.square(std))
             elif entry.shape == (size, size):
@@ -617,10 +618,8 @@ class CoupledResult:
             >>> bool(jnp.allclose(rate.emission_rate, 0.35))
             True
         """
-        if speed <= 0.0:
-            raise ParameterError(f"with_wind: speed must be > 0, got {speed}")
-        if speed_std < 0.0:
-            raise ParameterError(f"with_wind: speed_std must be ≥ 0, got {speed_std}")
+        require_positive("speed", speed, caller="with_wind")
+        require_positive("speed_std", speed_std, caller="with_wind", allow_zero=True)
         if self.line_density is None or self.line_density_std is None:
             raise PayloadError(
                 "CoupledResult.with_wind: this result retrieved Q, not the line "

@@ -29,6 +29,7 @@ from jaxtyping import Array, Float
 from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS
 
+from plumax._src.tracing import require_positive
 from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_puff.dispersion import (
@@ -499,19 +500,14 @@ def _validate_inference_inputs(
         raise ValueError(
             f"{func_name}: `source_location` must contain exactly three values"
         )
-    if not (release_frequency > 0.0):
-        raise ValueError(
-            f"{func_name}: `release_frequency` must be > 0 (got {release_frequency!r})"
-        )
+    require_positive("release_frequency", release_frequency, caller=func_name)
     if not (t_end > t_start):
         raise ValueError(
             f"{func_name}: `t_end` must be > `t_start` "
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
-    if not (prior_mean > 0.0):
-        raise ValueError(f"{func_name}: `prior_mean` must be > 0 (got {prior_mean!r})")
-    if not (prior_std > 0.0):
-        raise ValueError(f"{func_name}: `prior_std` must be > 0 (got {prior_std!r})")
+    require_positive("prior_mean", prior_mean, caller=func_name)
+    require_positive("prior_std", prior_std, caller=func_name)
     return obs, coords, times
 
 
@@ -680,16 +676,8 @@ def infer_emission_timeseries(
         prior_mean,
         prior_std,
     )
-    if not (rw_step_std > 0.0):
-        raise ValueError(
-            "infer_emission_timeseries: `rw_step_std` must be > 0 "
-            f"(got {rw_step_std!r})"
-        )
-    if not (obs_noise_std > 0.0):
-        raise ValueError(
-            "infer_emission_timeseries: `obs_noise_std` must be > 0 "
-            f"(got {obs_noise_std!r})"
-        )
+    require_positive("rw_step_std", rw_step_std, caller="infer_emission_timeseries")
+    require_positive("obs_noise_std", obs_noise_std, caller="infer_emission_timeseries")
 
     schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)

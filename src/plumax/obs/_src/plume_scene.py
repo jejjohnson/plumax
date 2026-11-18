@@ -42,6 +42,7 @@ from plumax._src.errors import (
     ScreeningError,
     UnitsError,
 )
+from plumax._src.tracing import require_positive
 from plumax.coupled import Instrument, QualityFlag
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.time import TimeAxis
@@ -212,8 +213,7 @@ def load_emit_plume_complex(
             )
             scene.instrument.averaging_kernel  # Aₙ, shape (N_Ωy,)
     """
-    if margin_px < 0:
-        raise ParameterError(f"margin_px must be >= 0, got {margin_px}")
+    require_positive("margin_px", margin_px, allow_zero=True)
     if uncertainty_of not in ("truth", "score"):
         raise ParameterError(
             f"uncertainty_of must be 'truth' or 'score', got {uncertainty_of!r}"

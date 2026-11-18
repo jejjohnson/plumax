@@ -91,7 +91,7 @@ def test_inhomogeneous_rejects_bad_quadrature() -> None:
             quadrature_weights=np.ones(3),
         )
     # Non-positive weights.
-    with pytest.raises(ValueError, match="strictly positive"):
+    with pytest.raises(ValueError, match="`quadrature_weights` must be > 0"):
         fit_inhomogeneous_intensity(
             cov,
             quadrature_covariates=np.zeros((4, 2)),

@@ -18,6 +18,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 
 
 #: √3, the scale of the Matérn-3/2 kernel.
@@ -94,12 +95,9 @@ class CentrelinePrior(eqx.Module):
     jitter: float = 1e-8
 
     def __check_init__(self) -> None:
-        if self.length_scale <= 0.0:
-            raise ParameterError(f"length_scale must be > 0, got {self.length_scale}")
-        if self.amplitude <= 0.0:
-            raise ParameterError(f"amplitude must be > 0, got {self.amplitude}")
-        if self.jitter < 0.0:
-            raise ParameterError(f"jitter must be ≥ 0, got {self.jitter}")
+        require_positive("length_scale", self.length_scale)
+        require_positive("amplitude", self.amplitude)
+        require_positive("jitter", self.jitter, allow_zero=True)
         if self.kind not in _KINDS:
             raise ParameterError(
                 f"kind must be one of {list(_KINDS)}, got {self.kind!r}"

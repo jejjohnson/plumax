@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -66,12 +65,12 @@ def test_pg_eddy_diffusivity_positive_values():
 
 
 def test_pg_eddy_diffusivity_rejects_zero_wind_speed():
-    with pytest.raises(ValueError, match=r"wind_speed must be > 0"):
+    with pytest.raises(ValueError, match=r"`wind_speed` must be > 0"):
         pg_eddy_diffusivity(stability_class="C", wind_speed=0.0)
 
 
 def test_pg_eddy_diffusivity_rejects_zero_reference_distance():
-    with pytest.raises(ValueError, match=r"reference_distance must be > 0"):
+    with pytest.raises(ValueError, match=r"`reference_distance` must be > 0"):
         pg_eddy_diffusivity(stability_class="C", wind_speed=5.0, reference_distance=0.0)
 
 
@@ -294,7 +293,7 @@ def test_mo_jit_matches_eager():
 
 def test_mo_rejects_a_negative_pbl_height():
     grid = _z_grid()
-    with pytest.raises(eqx.EquinoxRuntimeError, match="pbl_height"):
+    with pytest.raises(ValueError, match="pbl_height"):
         mo_eddy_diffusivity(grid, _surface_layer(0.4, 0.0), -1.0, it=0, k_h=1.0)
 
 
@@ -392,7 +391,7 @@ def test_smagorinsky_gradient_matches_central_difference():
 
 def test_smagorinsky_rejects_a_non_positive_constant():
     grid = _smag_grid()
-    with pytest.raises(ValueError, match="c_s must be > 0"):
+    with pytest.raises(ValueError, match="`c_s` must be > 0"):
         smagorinsky_k_h(uniform_wind_field(grid), grid, c_s=0.0, t=0.0)
 
 

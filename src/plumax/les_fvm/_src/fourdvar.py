@@ -63,7 +63,7 @@ import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total
-from plumax._src.tracing import _is_traced
+from plumax._src.tracing import _is_traced, require_positive
 from plumax._src.vardax import require_argminax, require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import matern32_covariance
@@ -186,14 +186,12 @@ class SpatialControl:
         active = np.asarray(self.mask, dtype=bool)
         if not active.any():
             raise ValueError("SpatialControl: `mask` has no active cell.")
-        if not self.length_scale_m > 0.0:
-            raise ValueError("SpatialControl: `length_scale_m` must be > 0.")
+        require_positive("length_scale_m", self.length_scale_m, caller="SpatialControl")
         mean = np.asarray(self.prior_mean, dtype=float)[active]
         std = np.asarray(self.prior_std, dtype=float)[active]
         if not (np.all(np.isfinite(mean)) and np.all(np.isfinite(std))):
             raise ValueError("SpatialControl: priors must be finite on active cells.")
-        if np.any(std <= 0.0):
-            raise ValueError("SpatialControl: `prior_std` must be > 0 on active cells.")
+        require_positive("prior_std", std, caller="SpatialControl")
         if self.time_basis is not None:
             self._mean_coefficients()
 

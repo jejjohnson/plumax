@@ -24,6 +24,7 @@ import jax.numpy as jnp
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require_positive
 from plumax.les_fvm.grid import PlumeGrid3D, coord_arrays_from_grid
 
 
@@ -157,11 +158,7 @@ def make_gaussian_source(
         source_radius = 2.0 * max(plume_grid.dx, plume_grid.dy, plume_grid.dz)
     else:
         source_radius = float(source_radius)
-        if source_radius <= 0.0:
-            raise ValueError(
-                "make_gaussian_source: `source_radius` must be > 0 "
-                f"(got {source_radius!r})"
-            )
+        require_positive("source_radius", source_radius, caller="make_gaussian_source")
 
     X, Y, Z = coord_arrays_from_grid(plume_grid)
     # r² = (x − x_s)² + (y − y_s)² + (z − z_s)²

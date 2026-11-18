@@ -30,6 +30,7 @@ from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from plumax._src.tracing import require_positive
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -271,14 +272,8 @@ def simulate_plume(
     """
     import xarray as xr  # lazy — only this entry point requires xarray
 
-    if not (emission_rate > 0.0):
-        raise ValueError(
-            f"simulate_plume: `emission_rate` must be > 0 (got {emission_rate!r})"
-        )
-    if not (wind_speed > 0.0):
-        raise ValueError(
-            f"simulate_plume: `wind_speed` must be > 0 (got {wind_speed!r})"
-        )
+    require_positive("emission_rate", emission_rate, caller="simulate_plume")
+    require_positive("wind_speed", wind_speed, caller="simulate_plume")
     is_golder = isinstance(stability_class, GolderDispersion)
     if not is_golder and stability_class not in BRIGGS_DISPERSION_PARAMS:
         raise ValueError(
@@ -290,10 +285,12 @@ def simulate_plume(
             "simulate_plume: `source_location` must be (x, y, z); "
             f"got length {len(source_location)}"
         )
-    if source_location[2] < 0.0:
-        raise ValueError(
-            f"simulate_plume: source height must be ≥ 0 (got z={source_location[2]!r})"
-        )
+    require_positive(
+        "source_location[2]",
+        source_location[2],
+        caller="simulate_plume",
+        allow_zero=True,
+    )
     for name, domain in (
         ("domain_x", domain_x),
         ("domain_y", domain_y),

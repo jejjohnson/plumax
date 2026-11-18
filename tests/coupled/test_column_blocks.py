@@ -204,9 +204,9 @@ def test_prior_must_match_the_declarations():
 
 def test_with_wind_validation():
     result = _result()
-    with pytest.raises(ParameterError, match="speed must be > 0"):
+    with pytest.raises(ParameterError, match="`speed` must be > 0"):
         result.with_wind(speed=0.0, speed_std=1.0)
-    with pytest.raises(ParameterError, match="speed_std must be ≥ 0"):
+    with pytest.raises(ParameterError, match="`speed_std` must be ≥ 0"):
         result.with_wind(speed=3.5, speed_std=-1.0)
     rate_only = _result(line_density=None, line_density_std=None)
     with pytest.raises(PayloadError, match="retrieved Q"):

@@ -234,7 +234,7 @@ def test_simulate_puff_rejects_negative_scalar_emission_rate():
     from plumax.gauss_puff import simulate_puff
 
     time_array = np.linspace(0, 10, 5, dtype=np.float32)
-    with pytest.raises(ValueError, match=r"scalar `emission_rate` must be ≥ 0"):
+    with pytest.raises(ValueError, match=r"`emission_rate` must be ≥ 0"):
         simulate_puff(
             emission_rate=-0.01,
             source_location=(0.0, 0.0, 2.0),

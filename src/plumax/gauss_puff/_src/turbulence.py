@@ -51,6 +51,8 @@ import einx
 import numpy as np
 from jaxtyping import Float
 
+from plumax._src.tracing import require_positive
+
 
 @dataclass(frozen=True)
 class OUTurbulence:
@@ -78,16 +80,15 @@ class OUTurbulence:
     correlation_time: float = 60.0
 
     def __post_init__(self) -> None:
-        if not (self.sigma_fluctuations >= 0.0):
-            raise ValueError(
-                "OUTurbulence: `sigma_fluctuations` must be ≥ 0 "
-                f"(got {self.sigma_fluctuations!r})"
-            )
-        if not (self.correlation_time > 0.0):
-            raise ValueError(
-                "OUTurbulence: `correlation_time` must be > 0 "
-                f"(got {self.correlation_time!r})"
-            )
+        require_positive(
+            "sigma_fluctuations",
+            self.sigma_fluctuations,
+            caller="OUTurbulence",
+            allow_zero=True,
+        )
+        require_positive(
+            "correlation_time", self.correlation_time, caller="OUTurbulence"
+        )
 
     @property
     def stationary_std(self) -> float:

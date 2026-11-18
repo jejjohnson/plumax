@@ -21,6 +21,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float
 
 from plumax._src.errors import PlumaxError
+from plumax._src.tracing import require
 from plumax.met.field import MetField
 
 
@@ -325,7 +326,7 @@ class MoninObukhov(eqx.Module):
         sensible_heat_flux: float | Float[Array, "*#columns"],
     ) -> SurfaceLayer:
         z0 = jnp.asarray(z0, dtype=field.u.dtype)
-        z0 = eqx.error_if(z0, jnp.any(z0 <= 0.0), "z0 must be positive")
+        z0 = require(z0 > 0.0, "z0 must be positive", value=z0)
 
         # --- lowest level ---
         # z = Δz / 2 above the grid's surface

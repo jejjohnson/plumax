@@ -41,6 +41,7 @@ from jax.scipy.stats import norm as jax_norm
 from jax.typing import ArrayLike
 from numpyro.infer import MCMC, NUTS
 
+from plumax._src.tracing import require_positive
 from plumax.population._src.fitting_iw import (
     MarkPosterior,
     TMTPPPosterior,
@@ -97,12 +98,9 @@ def lognorm_cdf(x: ArrayLike, x50: float, s: float) -> np.ndarray:
         ValueError: If any of ``x``, ``x50``, ``s`` are non-positive.
     """
     rates = np.asarray(x)
-    if np.any(rates <= 0.0):
-        raise ValueError("lognorm_cdf: all entries of `x` must be > 0")
-    if not (x50 > 0.0):
-        raise ValueError(f"lognorm_cdf: `x50` must be > 0 (got {x50!r})")
-    if not (s > 0.0):
-        raise ValueError(f"lognorm_cdf: `s` must be > 0 (got {s!r})")
+    require_positive("x", rates, caller="lognorm_cdf")
+    require_positive("x50", x50, caller="lognorm_cdf")
+    require_positive("s", s, caller="lognorm_cdf")
     # P_d = 1 − ½ erfc((ln x − ln x₅₀) / (√2 s))
     return 1.0 - 0.5 * scipy.special.erfc(
         (np.log(rates) - np.log(x50)) / (np.sqrt(2.0) * s)
@@ -223,8 +221,7 @@ def run_mcmc(
         )
     if np.any(~np.isfinite(data_values)):
         raise ValueError("run_mcmc: `data_values` must contain only finite values")
-    if np.any(data_values <= 0.0):
-        raise ValueError("run_mcmc: `data_values` must be strictly positive")
+    require_positive("data_values", data_values, caller="run_mcmc")
     if np.any((data_values < x_min) | (data_values > x_max)):
         raise ValueError(
             "run_mcmc: all `data_values` must lie within the closed support "

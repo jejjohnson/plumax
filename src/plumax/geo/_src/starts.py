@@ -17,6 +17,7 @@ import numpy as np
 from jaxtyping import Bool, Float
 
 from plumax._src.errors import DomainError, ParameterError
+from plumax._src.tracing import require_positive
 from plumax.geo.plume_array import pixel_area, pixel_centers
 
 
@@ -142,8 +143,7 @@ def source_offset_grid(
         raise ParameterError(f"n must be a positive odd number, got {n}")
     if step < 1:
         raise ParameterError(f"step must be ≥ 1, got {step}")
-    if pixel_size <= 0.0:
-        raise ParameterError(f"pixel_size must be > 0, got {pixel_size}")
+    require_positive("pixel_size", pixel_size)
     half = (n - 1) // 2
     # step · g · i for i ∈ {−half, …, half}
     offsets = step * pixel_size * np.arange(-half, half + 1, dtype=float)

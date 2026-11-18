@@ -45,6 +45,7 @@ import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
 
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.geo.plume_array import (
     ColumnUnit,
@@ -636,8 +637,7 @@ class IMEEstimate(Operator):
         self.length_method = length_method
         self.pixel_area_m2 = pixel_area_m2
         self.return_uncertainty = return_uncertainty
-        if uncertainty_fraction < 0.0:
-            raise ValueError("uncertainty_fraction must be non-negative")
+        require_positive("uncertainty_fraction", uncertainty_fraction, allow_zero=True)
         self.uncertainty_fraction = uncertainty_fraction
 
     def _apply(
@@ -931,8 +931,7 @@ class PlumeShapeFilter(Operator):
         min_fiber_width: float = 1.0,
         max_fiber_width: float = 100.0,
     ) -> None:
-        if min_area_px < 0:
-            raise ValueError("min_area_px must be non-negative")
+        require_positive("min_area_px", min_area_px, allow_zero=True)
         if min_fiber_to_major_ratio < 0 or max_fiber_to_major_ratio <= 0:
             raise ValueError("fiber-to-major ratio bounds must be non-negative")
         if min_fiber_to_major_ratio > max_fiber_to_major_ratio:
@@ -1224,8 +1223,7 @@ class PlumeQNDFeatures(Operator):
     ) -> None:
         if degree < 1:
             raise ValueError("degree must be >= 1")
-        if eps <= 0:
-            raise ValueError("eps must be positive")
+        require_positive("eps", eps)
         if min_samples < 1:
             raise ValueError("min_samples must be >= 1")
         if not 0.0 < perc_threshold < 100.0:

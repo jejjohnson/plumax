@@ -25,7 +25,7 @@ from jax.typing import ArrayLike
 from jaxtyping import Float, Int
 from scipy import stats
 
-from plumax._src.tracing import _is_traced
+from plumax._src.tracing import require_positive
 from plumax.population._src._xtremax import require_xtremax
 
 
@@ -149,12 +149,8 @@ def fit_poisson_rate(
         ValueError: If ``area`` or ``duration`` is non-positive (skipped
             for traced values).
     """
-    if not _is_traced(area) and float(area) <= 0.0:
-        msg = f"area must be positive, got {area!r}"
-        raise ValueError(msg)
-    if not _is_traced(duration) and float(duration) <= 0.0:
-        msg = f"duration must be positive, got {duration!r}"
-        raise ValueError(msg)
+    require_positive("area", area)
+    require_positive("duration", duration)
 
     num_events = catalog.n_events
     exposure = float(area) * float(duration)
@@ -275,9 +271,7 @@ def fit_inhomogeneous_intensity(
             f"quadrature_covariates, got {weights.shape} vs ({quad.shape[0]},)"
         )
         raise ValueError(msg)
-    if np.any(weights <= 0.0):
-        msg = "quadrature_weights must be strictly positive"
-        raise ValueError(msg)
+    require_positive("quadrature_weights", weights)
 
     import jax
     import numpyro

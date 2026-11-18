@@ -39,6 +39,7 @@ from numpy.typing import NDArray
 from numpyro.infer import MCMC, NUTS, DiscreteHMCGibbs
 
 from plumax._src.scalar_emission import EmpiricalEmission, LognormalEmission
+from plumax._src.tracing import require_positive
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -332,10 +333,7 @@ def infer_emission_rate(
         On invalid stability class, non-positive wind speed, shape mismatches
         between ``observations`` and ``observation_coords``, or empty data.
     """
-    if not (wind_speed > 0.0):
-        raise ValueError(
-            f"infer_emission_rate: `wind_speed` must be > 0 (got {wind_speed!r})"
-        )
+    require_positive("wind_speed", wind_speed, caller="infer_emission_rate")
     if not infer_stability and stability_class not in BRIGGS_DISPERSION_PARAMS:
         raise ValueError(
             f"infer_emission_rate: `stability_class` must be one of "
@@ -356,23 +354,12 @@ def infer_emission_rate(
                 f"infer_emission_rate: `observation_coords` axis '{axis_name}' "
                 f"has shape {arr.shape} ≠ observations shape {obs.shape}"
             )
-    if not (prior_mean > 0.0):
-        raise ValueError(
-            f"infer_emission_rate: `prior_mean` must be > 0 (got {prior_mean!r})"
-        )
-    if not (prior_std > 0.0):
-        raise ValueError(
-            f"infer_emission_rate: `prior_std` must be > 0 (got {prior_std!r})"
-        )
-    if not (obs_noise_std > 0.0):
-        raise ValueError(
-            f"infer_emission_rate: `obs_noise_std` must be > 0 (got {obs_noise_std!r})"
-        )
-    if not (background_prior_std > 0.0):
-        raise ValueError(
-            "infer_emission_rate: `background_prior_std` must be > 0 "
-            f"(got {background_prior_std!r})"
-        )
+    require_positive("prior_mean", prior_mean, caller="infer_emission_rate")
+    require_positive("prior_std", prior_std, caller="infer_emission_rate")
+    require_positive("obs_noise_std", obs_noise_std, caller="infer_emission_rate")
+    require_positive(
+        "background_prior_std", background_prior_std, caller="infer_emission_rate"
+    )
 
     # θ = wind direction in radians
     direction_rad = np.deg2rad(wind_direction)
@@ -686,10 +673,7 @@ def infer_multi_source(
         On a non-positive wind speed, an unknown stability class, mismatched
         shapes, non-positive prior or noise scales, or an invalid slot layout.
     """
-    if not (wind_speed > 0.0):
-        raise ValueError(
-            f"infer_multi_source: `wind_speed` must be > 0 (got {wind_speed!r})"
-        )
+    require_positive("wind_speed", wind_speed, caller="infer_multi_source")
     if stability_class not in BRIGGS_DISPERSION_PARAMS:
         raise ValueError(
             f"infer_multi_source: `stability_class` must be one of "
@@ -716,10 +700,7 @@ def infer_multi_source(
         ("obs_noise_std", obs_noise_std),
         ("background_prior_std", background_prior_std),
     ):
-        if not (value > 0.0):
-            raise ValueError(
-                f"infer_multi_source: `{name}` must be > 0 (got {value!r})"
-            )
+        require_positive(name, value, caller="infer_multi_source")
     _check_multi_source_layout(k_max, candidate_locations, source_bounds, prior_active)
 
     # θ = wind direction in radians

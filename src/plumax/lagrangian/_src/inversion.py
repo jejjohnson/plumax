@@ -63,7 +63,7 @@ from plumax._src.scalar_emission import (
     lognormal_total,
     sample_lognormal_total,
 )
-from plumax._src.tracing import _is_traced
+from plumax._src.tracing import require_positive
 from plumax._src.vardax import require_vardax
 
 
@@ -164,11 +164,8 @@ def matern32_covariance(
     # Validate eagerly for concrete inputs; skip under jit/grad/vmap (the doc
     # advertises gradient-based tuning of variance / length_scale, where these
     # would be tracers and a Python ``<=`` test would raise).
-    if not _is_traced(variance, length_scale):
-        if variance <= 0.0:
-            raise ValueError("matern32_covariance: `variance` must be > 0.")
-        if length_scale <= 0.0:
-            raise ValueError("matern32_covariance: `length_scale` must be > 0.")
+    require_positive("variance", variance, caller="matern32_covariance")
+    require_positive("length_scale", length_scale, caller="matern32_covariance")
     coords = jnp.asarray(coordinates, dtype=float)
     if coords.shape[0] == 0:
         # einx rejects empty axes; no points have an empty covariance
@@ -493,8 +490,7 @@ def lognormal_inversion(
     # Eager positivity check; skipped under jit/vmap over `prior_mean` (where a
     # host-bool conversion would raise). The lognormal form q = q_a·exp(δ)
     # implicitly assumes q_a > 0; a non-positive concrete q_a is a usage error.
-    if not _is_traced(prior_mean) and bool(jnp.any(prior_emission_rate <= 0.0)):
-        raise ValueError("lognormal_inversion: `prior_mean` (q_a) must be > 0.")
+    require_positive("prior_mean", prior_emission_rate, caller="lognormal_inversion")
 
     # F̃ = F diag(q_a)
     log_jacobian = einx.multiply(

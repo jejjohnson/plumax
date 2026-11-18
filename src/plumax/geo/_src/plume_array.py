@@ -22,6 +22,7 @@ import numpy as np
 from jaxtyping import Bool, Float, Num, Shaped
 from scipy.spatial import ConvexHull, QhullError
 
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 
 
@@ -195,8 +196,7 @@ def wind_advection_cone(
         raise ValueError("wind vector must be non-zero")
     if not 0.0 <= half_angle_deg <= 180.0:
         raise ValueError("half_angle_deg must be in [0, 180]")
-    if max_distance <= 0.0:
-        raise ValueError("max_distance must be positive")
+    require_positive("max_distance", max_distance)
 
     easting, northing = pixel_centers(shape, transform)
     # Δx = x − x_source

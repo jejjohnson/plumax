@@ -30,13 +30,13 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import einx
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 from integrix import expect as integrix_expect
 from jaxtyping import Array, Bool, Float
 
+from plumax._src.tracing import require
 from plumax.population._src.importance import (
     EventEvidence,
     Measure,
@@ -242,10 +242,10 @@ def tmtpp_iw_model(
             else:
                 # cₑ = ∨ₖ cₑₖ
                 covered = einx.any("event [instrument]", coverage)
-                event_mask = eqx.error_if(
-                    event_mask,
-                    jnp.any(event_mask & ~covered),
+                event_mask = require(
+                    ~(event_mask & ~covered),
                     "tmtpp_iw_model: a detection has no covering instrument",
+                    value=event_mask,
                 )
                 # a padding row needs some instrument for a finite log P_d^∪
                 padded_coverage = einx.where(

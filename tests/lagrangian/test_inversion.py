@@ -212,7 +212,7 @@ def test_lognormal_inversion_rejects_nonpositive_prior_mean():
     r = observation_covariance(np.full(n_obs, 1.0))
     qa = np.full(n_grid, 1.0)
     qa[0] = 0.0
-    with pytest.raises(ValueError, match="q_a"):
+    with pytest.raises(ValueError, match="`prior_mean` must be > 0"):
         lognormal_inversion(
             f, np.zeros(n_obs), prior_mean=qa, prior_log_cov=b_log, obs_variance=r
         )

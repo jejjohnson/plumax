@@ -29,6 +29,7 @@ from jaxtyping import Bool, Float
 from scipy import ndimage, optimize, signal
 
 from plumax._src.errors import DomainError, ParameterError
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.geo.plume_array import pixel_area, squeeze_single_band
 
@@ -327,14 +328,12 @@ def fit_transect_gaussians(
         >>> bool(fits["converged"][0])
         True
     """
-    if min_width <= 0.0:
-        raise ParameterError(f"min_width must be > 0, got {min_width}")
+    require_positive("min_width", min_width)
     offset = np.asarray(profiles.offset, dtype=np.float64)
     spacing_sample = profiles.sample_spacing
     # m_max = 2 h
     bound = 2.0 * float(np.max(np.abs(offset))) if max_offset is None else max_offset
-    if bound <= 0.0:
-        raise ParameterError(f"max_offset must be > 0, got {max_offset}")
+    require_positive("max_offset", bound)
     lower = np.array([0.0, -bound, min_width])
     upper = np.array([np.inf, bound, np.inf])
     moments = transect_moments(profiles)
@@ -455,10 +454,8 @@ def smooth_centreline(
         raise ParameterError(
             f"polyorder must be in [0, window), got {polyorder} for window {window}"
         )
-    if n_iter < 0:
-        raise ParameterError(f"n_iter must be ≥ 0, got {n_iter}")
-    if threshold <= 0.0:
-        raise ParameterError(f"threshold must be > 0, got {threshold}")
+    require_positive("n_iter", n_iter, allow_zero=True)
+    require_positive("threshold", threshold)
     if rejected not in ("smoothed", "zero"):
         raise ParameterError(f"rejected must be 'smoothed' or 'zero', got {rejected!r}")
     dtype = np.result_type(np.asarray(centre).dtype, np.float32)
@@ -540,12 +537,8 @@ def fit_width_law(
         >>> round(reference_width, 6), round(exponent, 6)
         (100.0, 0.8)
     """
-    if reference_distance <= 0.0:
-        raise ParameterError(
-            f"reference_distance must be > 0, got {reference_distance}"
-        )
-    if initial_width < 0.0:
-        raise ParameterError(f"initial_width must be ≥ 0, got {initial_width}")
+    require_positive("reference_distance", reference_distance)
+    require_positive("initial_width", initial_width, allow_zero=True)
     distance = np.asarray(distance, dtype=np.float64)
     width = np.asarray(width, dtype=np.float64)
     kept = np.isfinite(width) & (width > initial_width) & (distance > 0.0)
@@ -692,11 +685,9 @@ def _check_sampling(
 ) -> None:
     if n_transects < 1:
         raise ParameterError(f"n_transects must be ≥ 1, got {n_transects}")
-    if spacing <= 0.0 or half_length <= 0.0 or spacing_sample <= 0.0:
-        raise ParameterError(
-            "spacing, half_length and sample_spacing must be > 0, got "
-            f"{spacing}, {half_length} and {spacing_sample}"
-        )
+    require_positive("spacing", spacing)
+    require_positive("half_length", half_length)
+    require_positive("sample_spacing", spacing_sample)
     if spacing < pixel_side * (1.0 - 1e-9):
         raise ParameterError(
             f"spacing {spacing} m is below one pixel ({pixel_side} m): closer "

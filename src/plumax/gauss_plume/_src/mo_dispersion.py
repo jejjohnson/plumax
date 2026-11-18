@@ -37,7 +37,7 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
-from plumax._src.errors import ParameterError
+from plumax._src.tracing import require, require_positive
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -91,7 +91,7 @@ def golder_class_boundaries(z0: float) -> Float[Array, " boundary"]:
         True
     """
     roughness = jnp.asarray(z0)
-    roughness = eqx.error_if(roughness, roughness <= 0.0, "z0 must be positive")
+    roughness = require(roughness > 0.0, "z0 must be positive", value=roughness)
     clamped = jnp.clip(roughness, *GOLDER_Z0_RANGE)
     log_z0 = jnp.log(clamped)
     scale = jnp.asarray(GOLDER_BOUNDARY_SCALE, dtype=log_z0.dtype)
@@ -276,8 +276,7 @@ class GolderDispersion(eqx.Module):
         self.interpolate = bool(interpolate)
 
     def __check_init__(self) -> None:
-        if not (self.z0 > 0.0):
-            raise ParameterError(f"z0 must be > 0, got {self.z0!r}")
+        require_positive("z0", self.z0)
 
     @classmethod
     def from_surface_layer(

@@ -47,6 +47,7 @@ from finitevolx import (
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require, require_positive
 from plumax.gauss_puff.dispersion import (
     calculate_pg_dispersion,
     get_pg_params,
@@ -196,15 +197,10 @@ def pg_eddy_diffusivity(
     ValueError
         If ``wind_speed`` or ``reference_distance`` is non-positive.
     """
-    if wind_speed <= 0.0:
-        raise ValueError(
-            f"pg_eddy_diffusivity: wind_speed must be > 0 (got {wind_speed!r})"
-        )
-    if reference_distance <= 0.0:
-        raise ValueError(
-            "pg_eddy_diffusivity: reference_distance must be > 0 "
-            f"(got {reference_distance!r})"
-        )
+    require_positive("wind_speed", wind_speed, caller="pg_eddy_diffusivity")
+    require_positive(
+        "reference_distance", reference_distance, caller="pg_eddy_diffusivity"
+    )
     params = get_pg_params(stability_class)
     distance = jnp.asarray(reference_distance, dtype=jnp.float32)
     _, crosswind_spread, vertical_spread = calculate_pg_dispersion(distance, params)
@@ -298,7 +294,7 @@ def mo_eddy_diffusivity(
     u_star = surface_layer.u_star[it]
     inverse_length = surface_layer.inverse_obukhov_length[it]
     depth = jnp.asarray(pbl_height, dtype=height.dtype)
-    depth = eqx.error_if(depth, jnp.any(depth < 0.0), "pbl_height must be ≥ 0")
+    depth = require(depth >= 0.0, "pbl_height must be ≥ 0", value=depth)
     if depth.ndim == 3:
         depth = depth[it]
     depth = jnp.broadcast_to(depth, u_star.shape)
@@ -378,8 +374,7 @@ def smagorinsky_k_h(
     References:
         Smagorinsky (1963), Mon. Wea. Rev. 91, 99–164.
     """
-    if c_s <= 0.0:
-        raise ValueError(f"smagorinsky_k_h: c_s must be > 0 (got {c_s!r})")
+    require_positive("c_s", c_s, caller="smagorinsky_k_h")
     spacing_x, spacing_y = grid.dx, grid.dy
     wind_east, wind_north, _ = wind(jnp.asarray(t, dtype=grid.x.dtype))
 

@@ -39,6 +39,7 @@ from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require_positive
 from plumax.gauss_puff.dispersion import (
     STABILITY_CLASSES,
     get_dispersion_scheme,
@@ -61,11 +62,9 @@ def release_interval_to_frequency(release_interval: float) -> float:
     ``f = 1 / Δt``. Both Δt and f are common ways to parametrise puff cadence;
     this pair of helpers makes the conversion explicit.
     """
-    if not (release_interval > 0.0):
-        raise ValueError(
-            f"release_interval_to_frequency: `release_interval` must be > 0 "
-            f"(got {release_interval!r})"
-        )
+    require_positive(
+        "release_interval", release_interval, caller="release_interval_to_frequency"
+    )
     return 1.0 / release_interval
 
 
@@ -74,11 +73,9 @@ def frequency_to_release_interval(release_frequency: float) -> float:
 
     ``Δt = 1 / f``.
     """
-    if not (release_frequency > 0.0):
-        raise ValueError(
-            f"frequency_to_release_interval: `release_frequency` must be > 0 "
-            f"(got {release_frequency!r})"
-        )
+    require_positive(
+        "release_frequency", release_frequency, caller="frequency_to_release_interval"
+    )
     return 1.0 / release_frequency
 
 
@@ -496,10 +493,12 @@ def simulate_puff(
             "simulate_puff: `source_location` must be (x, y, z); "
             f"got length {len(source_location)}"
         )
-    if source_location[2] < 0.0:
-        raise ValueError(
-            f"simulate_puff: source height must be ≥ 0 (got z={source_location[2]!r})"
-        )
+    require_positive(
+        "source_location[2]",
+        source_location[2],
+        caller="simulate_puff",
+        allow_zero=True,
+    )
     time_array = np.asarray(time_array, dtype=np.float32)
     wind_speed = np.asarray(wind_speed, dtype=np.float32)
     wind_direction = np.asarray(wind_direction, dtype=np.float32)
@@ -515,8 +514,7 @@ def simulate_puff(
             f"simulate_puff: `wind_direction` shape {wind_direction.shape} "
             f"must match `time_array` shape {time_array.shape}"
         )
-    if np.any(wind_speed < 0.0):
-        raise ValueError("simulate_puff: `wind_speed` entries must be ≥ 0")
+    require_positive("wind_speed", wind_speed, caller="simulate_puff", allow_zero=True)
 
     for name, domain in (
         ("domain_x", domain_x),
@@ -538,11 +536,7 @@ def simulate_puff(
             raise ValueError(
                 f"simulate_puff: `{name}` requires n_points ≥ 2 (got n={num_points!r})"
             )
-    if not (release_frequency > 0.0):
-        raise ValueError(
-            f"simulate_puff: `release_frequency` must be > 0 "
-            f"(got {release_frequency!r})"
-        )
+    require_positive("release_frequency", release_frequency, caller="simulate_puff")
 
     dispersion_params = scheme_params_dict[stability_class]
 
@@ -573,11 +567,9 @@ def simulate_puff(
 
     if np.ndim(emission_rate) == 0:
         q_scalar = float(emission_rate)
-        if q_scalar < 0.0:
-            raise ValueError(
-                "simulate_puff: scalar `emission_rate` must be ≥ 0 "
-                f"(got {emission_rate!r})"
-            )
+        require_positive(
+            "emission_rate", q_scalar, caller="simulate_puff", allow_zero=True
+        )
         # m_i = Q Δt_i
         puff_mass = jnp.asarray(q_scalar * durations, dtype=jnp.float32)
     else:
@@ -589,8 +581,9 @@ def simulate_puff(
                 f"[t_start, t_end) at release_frequency={release_frequency}, "
                 f"got {emission_array.shape}"
             )
-        if np.any(emission_array < 0.0):
-            raise ValueError("simulate_puff: `emission_rate` entries must be ≥ 0")
+        require_positive(
+            "emission_rate", emission_array, caller="simulate_puff", allow_zero=True
+        )
         # m_i = Q_i Δt_i
         puff_mass = jnp.asarray(
             emission_array * np.asarray(durations), dtype=jnp.float32

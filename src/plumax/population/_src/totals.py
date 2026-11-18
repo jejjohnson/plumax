@@ -25,6 +25,7 @@ import jax.numpy as jnp
 from integrix import expect as integrix_expect
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require_positive
 from plumax.population._src.fitting_iw import TMTPPPosterior
 from plumax.population._src.pod_union import (
     TOD_BINS,
@@ -295,10 +296,7 @@ def total_emission(
         raise ValueError(
             f"total_emission: need 0 < q_min < q_max < inf, got ({q_min}, {q_max})."
         )
-    if not event_duration > 0.0:
-        raise ValueError(
-            f"total_emission: event_duration must be > 0, got {event_duration}."
-        )
+    require_positive("event_duration", event_duration, caller="total_emission")
     windows = _merge_windows(horizon)
     parts = [
         _stratum_emission(

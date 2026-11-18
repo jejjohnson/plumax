@@ -42,6 +42,7 @@ import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission
+from plumax._src.tracing import require_positive
 from plumax._src.vardax import require_vardax
 from plumax.coupled.forward import CoupledForward
 from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
@@ -379,8 +380,8 @@ def default_prior(
     Returns:
         ``(prior_mean, prior_covariance)`` ready for :func:`fuse_observations`.
     """
-    if emission_prior_std <= 0.0 or bias_prior_std <= 0.0:
-        raise ValueError("default_prior: prior standard deviations must be > 0.")
+    require_positive("emission_prior_std", emission_prior_std, caller="default_prior")
+    require_positive("bias_prior_std", bias_prior_std, caller="default_prior")
     mean = jnp.concatenate([jnp.array([emission_prior_mean]), jnp.zeros(n_instruments)])
     variances = np.concatenate(
         [[emission_prior_std**2], np.full(n_instruments, bias_prior_std**2)]

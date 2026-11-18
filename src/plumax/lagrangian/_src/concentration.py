@@ -22,6 +22,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax._src.tracing import require_positive
 from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.particles import (
     ParticleState,
@@ -123,10 +124,13 @@ def simulate_lagrangian(
     """
     import xarray as xr
 
-    if not (emission_rate > 0.0):
-        raise ValueError("simulate_lagrangian: `emission_rate` must be > 0")
-    if source_location[2] < 0.0:
-        raise ValueError("simulate_lagrangian: source height must be ≥ 0")
+    require_positive("emission_rate", emission_rate, caller="simulate_lagrangian")
+    require_positive(
+        "source_location[2]",
+        source_location[2],
+        caller="simulate_lagrangian",
+        allow_zero=True,
+    )
 
     if wind is None:
         if wind_speed is None or wind_direction is None:

@@ -24,6 +24,7 @@ from jaxtyping import Array, ArrayLike, Bool, Float
 from radtrax import DegenerateInputError, ParameterError, ShapeError
 from radtrax.retrieval.absorption import AbsorptionWindow
 
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.vetting import VettingResult, null_masks, null_pvalue, vet_candidate
 
@@ -130,8 +131,13 @@ class PlumeVetting(Operator):
         degree: int = 2,
         box: int = 200,
     ) -> None:
-        if n_null < 0:
-            raise ParameterError(f"PlumeVetting: n_null must be >= 0, got {n_null}")
+        require_positive(
+            "n_null",
+            n_null,
+            caller="PlumeVetting",
+            allow_zero=True,
+            error=ParameterError,
+        )
         self.window = window
         self.table = table
         self.delta_grid = delta_grid
