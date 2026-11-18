@@ -38,7 +38,7 @@ declare ``fill_value=NaN``, and label images use ``0`` (see
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import jax.numpy as jnp
@@ -209,19 +209,18 @@ def _label_fields(
 
 def _instances_full(
     labels: np.ndarray,
-) -> list[tuple[int, np.ndarray, int]]:
-    """Return ``(label, full_mask, area)`` per non-zero label.
+) -> Iterator[tuple[int, np.ndarray, int]]:
+    """Yield ``(label, full_mask, area)`` per non-zero label.
 
     ``full_mask`` is the instance's boolean mask on the full ``labels`` grid
-    and ``area`` its pixel count.
+    and ``area`` its pixel count. One full-size mask exists at a time, so
+    memory stays O(H W) however many instances the raster holds.
     """
-    out: list[tuple[int, np.ndarray, int]] = []
     for lbl, compact, bbox in _iter_instances(labels):
         row_start, col_start, row_stop, col_stop = bbox
         full_mask = np.zeros(labels.shape, dtype=bool)
         full_mask[row_start:row_stop, col_start:col_stop] = compact
-        out.append((lbl, full_mask, int(compact.sum())))
-    return out
+        yield lbl, full_mask, int(compact.sum())
 
 
 def _frame(rows: list[dict[str, Any]], columns: list[str]) -> pd.DataFrame:
