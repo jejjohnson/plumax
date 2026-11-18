@@ -111,7 +111,8 @@ class EmpiricalEmission(eqx.Module):
     draws: Float[Array, " member"]
 
     def __init__(self, draws: ArrayLike) -> None:
-        self.draws = jnp.ravel(jnp.asarray(draws, dtype=float))
+        # Q⁽ᵉ⁾ = flatten(draws)
+        self.draws = einx.id("... -> (...)", jnp.asarray(draws, dtype=float))
 
     def sample(self, key: Array, n: int) -> Float[Array, " member"]:
         """n draws, resampled with replacement."""

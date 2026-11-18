@@ -88,14 +88,14 @@ def load_inventory(
     lon_edges = _edges(lon_centres)
 
     # --- sub-cell lattice ---
-    x = np.asarray(grid.x, dtype=float)
-    y = np.asarray(grid.y, dtype=float)
+    easting = np.asarray(grid.x, dtype=float)
+    northing = np.asarray(grid.y, dtype=float)
     # u_k = (k + 1/2) / s − 1/2, the sub-cell centres in cell units
     unit_offsets = (np.arange(supersample) + 0.5) / supersample - 0.5
     # x_{i,k} = x_i + u_k Δx
-    sub_x = einx.add("x, k -> (x k)", x, unit_offsets * grid.dx)
+    sub_x = einx.add("x, k -> (x k)", easting, unit_offsets * grid.dx)
     # y_{j,k} = y_j + u_k Δy
-    sub_y = einx.add("y, k -> (y k)", y, unit_offsets * grid.dy)
+    sub_y = einx.add("y, k -> (y k)", northing, unit_offsets * grid.dy)
     lattice_x, lattice_y = np.meshgrid(sub_x, sub_y)
     lat, lon = frame.to_latlon(lattice_x, lattice_y)
 
@@ -133,15 +133,15 @@ def _unwrap_longitudes(
     Raises:
         DomainError: If the unwrapped axis is not evenly spaced.
     """
-    n_lon = centres.size
-    if n_lon < 2:
+    num_lon = centres.size
+    if num_lon < 2:
         return centres, values
     # g_k = c_{k+1} − c_k, cyclically: the last gap closes through +360°
     closed = einx.id("n, one -> (n + one)", centres, centres[:1] + 360.0)
     gaps = np.diff(closed)
     # the raster starts after its widest gap
-    start = (int(np.argmax(gaps)) + 1) % n_lon
-    order = (np.arange(n_lon) + start) % n_lon
+    start = (int(np.argmax(gaps)) + 1) % num_lon
+    order = (np.arange(num_lon) + start) % num_lon
     rotated = centres[order]
     # c'_k = c'_0 + ((c'_k − c'_0) mod 360°), increasing
     unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
