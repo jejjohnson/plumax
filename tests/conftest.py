@@ -35,6 +35,7 @@ from jaxtyping import install_import_hook
 _TYPED_PACKAGES = (
     "plumax.coupled._src",
     "plumax.gauss_plume._src",
+    "plumax.gauss_puff._src",
     "plumax.geo._src",
     "plumax.lagrangian._src",
     "plumax.met._src",
@@ -43,7 +44,12 @@ _TYPED_PACKAGES = (
     "plumax.priors._src",
     "plumax.vetting._src",
 )
-_type_check_hook = install_import_hook(_TYPED_PACKAGES, "beartype.beartype")
+# beartype configured with PEP 484's numeric tower (int passes for float)
+
+
+_type_check_hook = install_import_hook(
+    _TYPED_PACKAGES, "tests._type_check.pep484_beartype"
+)
 
 
 @pytest.fixture(autouse=True, scope="module")
