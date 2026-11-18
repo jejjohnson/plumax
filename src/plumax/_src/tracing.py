@@ -14,4 +14,4 @@ def _is_traced(*values: object) -> bool:
     ``TracerBoolConversionError``. Validation still runs for concrete inputs, so
     ordinary callers keep the helpful error messages.
     """
-    return any(isinstance(v, jax.core.Tracer) for v in values)
+    return any(isinstance(value, jax.core.Tracer) for value in values)
