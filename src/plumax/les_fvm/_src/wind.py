@@ -62,11 +62,11 @@ class PrescribedWindField(eqx.Module):
         Float[Array, "Nz Ny Nx"],
     ]:
         """Return ``(u, v, w)`` on the full ghost-padded grid layout."""
-        u_int, v_int, w_int = self.interior_fn(t)
-        u = _embed_interior(u_int, self.plume_grid.shape)
-        v = _embed_interior(v_int, self.plume_grid.shape)
-        w = _embed_interior(w_int, self.plume_grid.shape)
-        return u, v, w
+        east_interior, north_interior, up_interior = self.interior_fn(t)
+        wind_east = _embed_interior(east_interior, self.plume_grid.shape)
+        wind_north = _embed_interior(north_interior, self.plume_grid.shape)
+        wind_up = _embed_interior(up_interior, self.plume_grid.shape)
+        return wind_east, wind_north, wind_up
 
 
 def _embed_interior(
@@ -113,14 +113,15 @@ def uniform_wind_field(
             raise ValueError(
                 f"uniform_wind_field: {name} must be finite (got {comp!r})."
             )
-    nz, ny, nx = plume_grid.interior_shape
-    u_arr = jnp.full((nz, ny, nx), u, dtype=plume_grid.x.dtype)
-    v_arr = jnp.full((nz, ny, nx), v, dtype=plume_grid.x.dtype)
-    w_arr = jnp.full((nz, ny, nx), w, dtype=plume_grid.x.dtype)
+    num_levels, num_rows, num_cols = plume_grid.interior_shape
+    shape = (num_levels, num_rows, num_cols)
+    east_field = jnp.full(shape, u, dtype=plume_grid.x.dtype)
+    north_field = jnp.full(shape, v, dtype=plume_grid.x.dtype)
+    up_field = jnp.full(shape, w, dtype=plume_grid.x.dtype)
 
-    def interior_fn(t):
-        del t
-        return u_arr, v_arr, w_arr
+    def interior_fn(time):
+        del time
+        return east_field, north_field, up_field
 
     return PrescribedWindField(plume_grid=plume_grid, interior_fn=interior_fn)
 
@@ -147,13 +148,13 @@ def wind_field_from_schedule(
     -------
     PrescribedWindField
     """
-    nz, ny, nx = plume_grid.interior_shape
-    ones = jnp.ones((nz, ny, nx), dtype=plume_grid.x.dtype)
-    w_arr = w * ones
+    num_levels, num_rows, num_cols = plume_grid.interior_shape
+    ones = jnp.ones((num_levels, num_rows, num_cols), dtype=plume_grid.x.dtype)
+    up_field = w * ones
 
-    def interior_fn(t):
-        u_t, v_t = schedule.wind_at(t)
-        return u_t * ones, v_t * ones, w_arr
+    def interior_fn(time):
+        east_at_time, north_at_time = schedule.wind_at(time)
+        return east_at_time * ones, north_at_time * ones, up_field
 
     return PrescribedWindField(plume_grid=plume_grid, interior_fn=interior_fn)
 
@@ -206,13 +207,13 @@ def wind_field_from_callable(
     half_dy = 0.5 * plume_grid.dy
     # Stagger the sampling coordinates: U-points sit half a cell east of
     # the T-point in x, V-points half a cell north in y.
-    X_u = X + half_dx
-    Y_v = Y + half_dy
+    east_x = X + half_dx
+    north_y = Y + half_dy
 
-    def interior_fn(t):
-        u = fn(t, X_u, Y, Z)[0]
-        v = fn(t, X, Y_v, Z)[1]
-        w = fn(t, X, Y, Z)[2]
-        return u, v, w
+    def interior_fn(time):
+        wind_east = fn(time, east_x, Y, Z)[0]
+        wind_north = fn(time, X, north_y, Z)[1]
+        wind_up = fn(time, X, Y, Z)[2]
+        return wind_east, wind_north, wind_up
 
     return PrescribedWindField(plume_grid=plume_grid, interior_fn=interior_fn)

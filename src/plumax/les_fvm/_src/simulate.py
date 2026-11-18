@@ -159,7 +159,7 @@ def simulate_eulerian_dispersion(
 
     plume_grid = make_grid(domain_x, domain_y, domain_z)
 
-    wf = _resolve_wind_field(
+    wind = _resolve_wind_field(
         plume_grid=plume_grid,
         wind_schedule=wind_schedule,
         uniform_wind=uniform_wind,
@@ -180,7 +180,7 @@ def simulate_eulerian_dispersion(
         uniform_wind=uniform_wind,
         pg_reference_distance=pg_reference_distance,
         t_start=t_start,
-        t_end=t_end,
+        end_time=t_end,
     )
     # Validate inputs independently of the solver: a negative / non-finite K is
     # unstable (or guard-defeating) on the adaptive path too, and a malformed
@@ -199,7 +199,7 @@ def simulate_eulerian_dispersion(
 
     rhs = EulerianDispersionRHS(
         plume_grid=plume_grid,
-        wind_field=wf,
+        wind_field=wind,
         eddy_diffusivity=eddy,
         source=source,
         horizontal_bc=horizontal_bc,
@@ -211,7 +211,7 @@ def simulate_eulerian_dispersion(
         plume_grid=plume_grid, initial_concentration=initial_concentration
     )
     save_times = _build_save_times(
-        t_start=t_start, t_end=t_end, save_interval=save_interval
+        t_start=t_start, end_time=t_end, save_interval=save_interval
     )
     # In-window WindSchedule knots — a piecewise-linear schedule attains its
     # speed extrema at knots, so feed them to the fixed-step stability guard so
@@ -219,13 +219,13 @@ def simulate_eulerian_dispersion(
     knot_times: tuple[float, ...] = ()
     if wind_schedule is not None:
         knots = np.asarray(wind_schedule.times, dtype=float)
-        knot_times = tuple(float(t) for t in knots if t_start <= t <= t_end)
+        knot_times = tuple(float(knot) for knot in knots if t_start <= knot <= t_end)
     solution = _solve(
         rhs=rhs,
         t_start=t_start,
-        t_end=t_end,
-        dt0=dt0,
-        y0=concentration0,
+        end_time=t_end,
+        initial_time_step=dt0,
+        initial_state=concentration0,
         save_times=save_times,
         solver_name=solver,
         rtol=rtol,
@@ -276,7 +276,7 @@ def _resolve_eddy_diffusivity(
     uniform_wind: tuple[float, float, float] | None,
     pg_reference_distance: float,
     t_start: float,
-    t_end: float,
+    end_time: float,
 ) -> EddyDiffusivity:
     wind_speed = None
     if uniform_wind is not None:
@@ -288,7 +288,7 @@ def _resolve_eddy_diffusivity(
         # take the mean of |V(t)| — this respects the simulation window
         # and knot spacing, so adding knots outside the run interval or
         # changing knot density does not move the calibration.
-        wind_speed = _mean_schedule_speed(wind_schedule, t_start, t_end)
+        wind_speed = _mean_schedule_speed(wind_schedule, t_start, end_time)
     if (
         isinstance(eddy_diffusivity, str)
         and eddy_diffusivity.lower() == "pg"
@@ -307,55 +307,59 @@ def _resolve_eddy_diffusivity(
     )
 
 
-def _mean_schedule_speed(schedule: WindSchedule, t_start: float, t_end: float) -> float:
-    """Time-mean wind speed of a piecewise-linear schedule over ``[t_start, t_end]``.
+def _mean_schedule_speed(
+    schedule: WindSchedule, t_start: float, end_time: float
+) -> float:
+    """Time-mean wind speed of a piecewise-linear schedule over a window.
 
     Integrates ``|V(t)|`` with np.interp on a dense uniform sample grid
     and returns the window mean.  100 samples is enough — the result is
     only used to calibrate a scalar K-theory diffusivity.
     """
-    if t_end <= t_start:
+    if end_time <= t_start:
         # Degenerate window — fall back to the instantaneous speed at t_start.
-        u_at = float(
+        east_at_start = float(
             np.interp(t_start, np.asarray(schedule.times), np.asarray(schedule.u_wind))
         )
-        v_at = float(
+        north_at_start = float(
             np.interp(t_start, np.asarray(schedule.times), np.asarray(schedule.v_wind))
         )
-        return float(np.hypot(u_at, v_at))
-    t_sample = np.linspace(t_start, t_end, 100)
+        # |V| = √(u² + v²)
+        return float(np.hypot(east_at_start, north_at_start))
+    t_sample = np.linspace(t_start, end_time, 100)
     u_sample = np.interp(
         t_sample, np.asarray(schedule.times), np.asarray(schedule.u_wind)
     )
     v_sample = np.interp(
         t_sample, np.asarray(schedule.times), np.asarray(schedule.v_wind)
     )
+    # ⟨|V|⟩ = mean √(u² + v²)
     return float(np.hypot(u_sample, v_sample).mean())
 
 
 def _build_save_times(
-    *, t_start: float, t_end: float, save_interval: float
+    *, t_start: float, end_time: float, save_interval: float
 ) -> Float[Array, " M"]:
-    """Return save-time knots clipped to ``[t_start, t_end]``.
+    """Return save-time knots clipped to ``[t_start, end_time]``.
 
-    ``jnp.arange(t_start, t_end + 0.5 * save_interval, save_interval)`` can
-    step past ``t_end`` when the interval does not evenly divide the run
+    ``jnp.arange(t_start, end_time + 0.5 * save_interval, save_interval)`` can
+    step past ``end_time`` when the interval does not evenly divide the run
     window (e.g. ``0..10`` with ``save_interval = 6`` gives ``[0, 6, 12]``).
     diffrax's ``SaveAt(ts=...)`` rejects save points outside the integration
     interval, so we clip explicitly and dedupe the trailing value.
     """
     if save_interval <= 0.0:
         raise ValueError(f"save_interval must be > 0 (got {save_interval!r})")
-    if t_end < t_start:
+    if end_time < t_start:
         raise ValueError(
-            f"t_end must be >= t_start (got t_start={t_start}, t_end={t_end})"
+            f"end_time must be >= t_start (got t_start={t_start}, end_time={end_time})"
         )
-    raw = np.arange(t_start, t_end + 0.5 * save_interval, save_interval)
-    raw = raw[raw <= t_end + 1e-9]  # guard against fp round-up
-    # Snap the last knot to exactly t_end when it falls short, so the final
+    raw = np.arange(t_start, end_time + 0.5 * save_interval, save_interval)
+    raw = raw[raw <= end_time + 1e-9]  # guard against fp round-up
+    # Snap the last knot to exactly end_time when it falls short, so the final
     # save point matches the user-requested simulation horizon.
-    if raw.size > 0 and raw[-1] < t_end - 1e-9:
-        raw = np.concatenate([raw, np.asarray([t_end])])
+    if raw.size > 0 and raw[-1] < end_time - 1e-9:
+        raw = np.concatenate([raw, np.asarray([end_time])])
     return jnp.asarray(raw, dtype=jnp.float32)
 
 
@@ -364,17 +368,17 @@ def _build_initial_concentration(
     plume_grid: PlumeGrid3D,
     initial_concentration: Float[Array, "nz ny nx"] | None,
 ) -> Float[Array, "Nz Ny Nx"]:
-    Nz, Ny, Nx = plume_grid.shape
+    num_levels, num_rows, num_cols = plume_grid.shape
     if initial_concentration is None:
-        return jnp.zeros((Nz, Ny, Nx), dtype=plume_grid.x.dtype)
-    c0 = jnp.asarray(initial_concentration, dtype=plume_grid.x.dtype)
+        return jnp.zeros((num_levels, num_rows, num_cols), dtype=plume_grid.x.dtype)
+    interior = jnp.asarray(initial_concentration, dtype=plume_grid.x.dtype)
     expected = plume_grid.interior_shape
-    if c0.shape != expected:
+    if interior.shape != expected:
         raise ValueError(
             f"simulate_eulerian_dispersion: initial_concentration shape "
-            f"{c0.shape!r} does not match interior shape {expected!r}"
+            f"{interior.shape!r} does not match interior shape {expected!r}"
         )
-    return jnp.pad(c0, ((1, 1), (1, 1), (1, 1)), mode="constant")
+    return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="constant")
 
 
 def stable_step_bound(
@@ -442,7 +446,7 @@ def stable_step_bound(
 
 
 def _max_wind_components(
-    wf: PrescribedWindField, sample_times: tuple[float, ...]
+    wind: PrescribedWindField, sample_times: tuple[float, ...]
 ) -> tuple[float, float, float]:
     """Component-wise max |u|, |v|, |w| over the interior at ``sample_times``.
 
@@ -451,17 +455,17 @@ def _max_wind_components(
     so reject it explicitly — the same treatment as the diffusivity check.
     """
     max_u = max_v = max_w = 0.0
-    for t in sample_times:
-        u, v, w = wf(jnp.asarray(t, dtype=jnp.float32))
-        for name, comp in (("u", u), ("v", v), ("w", w)):
+    for time in sample_times:
+        wind_east, wind_north, wind_up = wind(jnp.asarray(time, dtype=jnp.float32))
+        for name, comp in (("u", wind_east), ("v", wind_north), ("w", wind_up)):
             if not bool(jnp.all(jnp.isfinite(comp))):
                 raise ValueError(
                     f"wind field has a non-finite {name} component at "
-                    f"t={float(t):g}; the CFL guard cannot bound a NaN/inf wind."
+                    f"t={float(time):g}; the CFL guard cannot bound a NaN/inf wind."
                 )
-        max_u = max(max_u, float(jnp.max(jnp.abs(u))))
-        max_v = max(max_v, float(jnp.max(jnp.abs(v))))
-        max_w = max(max_w, float(jnp.max(jnp.abs(w))))
+        max_u = max(max_u, float(jnp.max(jnp.abs(wind_east))))
+        max_v = max(max_v, float(jnp.max(jnp.abs(wind_north))))
+        max_w = max(max_w, float(jnp.max(jnp.abs(wind_up))))
     return max_u, max_v, max_w
 
 
@@ -474,34 +478,39 @@ def _max_diffusivity(eddy: EddyDiffusivity) -> tuple[float, float]:
     NaN/inf ``K`` makes every ``dt0 > bound`` comparison false, silently
     disabling the guard while the tendency corrupts the solve. Reject both.
     """
-    k_h_arr = jnp.asarray(eddy.as_arrays()[0])
-    k_z_arr = jnp.asarray(eddy.as_arrays()[1])
-    if not bool(jnp.all(jnp.isfinite(k_h_arr)) & jnp.all(jnp.isfinite(k_z_arr))):
+    horizontal_diffusivity = jnp.asarray(eddy.as_arrays()[0])
+    vertical_diffusivity = jnp.asarray(eddy.as_arrays()[1])
+    if not bool(
+        jnp.all(jnp.isfinite(horizontal_diffusivity))
+        & jnp.all(jnp.isfinite(vertical_diffusivity))
+    ):
         raise ValueError("eddy diffusivity must be finite; got a NaN/inf K.")
-    k_min = min(float(jnp.min(k_h_arr)), float(jnp.min(k_z_arr)))
-    if k_min < 0.0:
+    min_diffusivity = min(
+        float(jnp.min(horizontal_diffusivity)), float(jnp.min(vertical_diffusivity))
+    )
+    if min_diffusivity < 0.0:
         raise ValueError(
             "eddy diffusivity must be non-negative; a negative K is "
-            f"anti-diffusion and is unconditionally unstable (min K = {k_min:g})."
+            f"anti-diffusion and is unconditionally unstable (min K = {min_diffusivity:g})."
         )
-    return float(jnp.max(k_h_arr)), float(jnp.max(k_z_arr))
+    return float(jnp.max(horizontal_diffusivity)), float(jnp.max(vertical_diffusivity))
 
 
 def _check_fixed_step_stability(
     *,
     plume_grid: PlumeGrid3D,
-    wf: PrescribedWindField,
+    wind: PrescribedWindField,
     eddy: EddyDiffusivity,
-    dt0: float,
+    initial_time_step: float,
     t_start: float,
-    t_end: float,
+    end_time: float,
     solver_name: str,
     extra_sample_times: tuple[float, ...] = (),
     max_wind_speed: float | None = None,
 ) -> None:
-    """Raise if ``dt0`` exceeds the stable step for a fixed-step solver.
+    """Raise if ``initial_time_step`` exceeds the stable step for a fixed-step solver.
 
-    The field is always sampled on a dense time grid over ``[t_start, t_end]``
+    The field is always sampled on a dense time grid over ``[t_start, end_time]``
     unioned with ``extra_sample_times`` (e.g. the in-window ``WindSchedule``
     knots, where a piecewise-linear schedule attains its extrema) — both to
     estimate the peak speed that drives the advective CFL term and to reject a
@@ -510,20 +519,20 @@ def _check_fixed_step_stability(
     callable whose peak sits between samples — while the sampling still runs so
     the finiteness check is never bypassed.
     """
-    base = tuple(float(t) for t in np.linspace(t_start, t_end, 33))
+    base = tuple(float(time) for time in np.linspace(t_start, end_time, 33))
     # Union (dedup) the dense grid with the supplied extra times.
     sample_times = tuple(
-        dict.fromkeys(base + tuple(float(t) for t in extra_sample_times))
+        dict.fromkeys(base + tuple(float(time) for time in extra_sample_times))
     )
     # Always sample: this validates finiteness (raises on a NaN/inf wind) even
     # when an override supplies the maxima.
-    sampled_u, sampled_v, sampled_w = _max_wind_components(wf, sample_times)
+    sampled_u, sampled_v, sampled_w = _max_wind_components(wind, sample_times)
     if max_wind_speed is not None:
         peak = float(max_wind_speed)
         max_u = max_v = max_w = peak
     else:
         max_u, max_v, max_w = sampled_u, sampled_v, sampled_w
-    k_h, k_z = _max_diffusivity(eddy)
+    horizontal_diffusivity, vertical_diffusivity = _max_diffusivity(eddy)
     bound = stable_step_bound(
         dx=plume_grid.dx,
         dy=plume_grid.dy,
@@ -531,12 +540,12 @@ def _check_fixed_step_stability(
         max_u=max_u,
         max_v=max_v,
         max_w=max_w,
-        k_h=k_h,
-        k_z=k_z,
+        k_h=horizontal_diffusivity,
+        k_z=vertical_diffusivity,
     )
-    if dt0 > bound:
+    if initial_time_step > bound:
         raise ValueError(
-            f"simulate_eulerian_dispersion: dt0={dt0:g} s exceeds the stable "
+            f"simulate_eulerian_dispersion: dt0={initial_time_step:g} s exceeds the stable "
             f"step ~{bound:g} s for fixed-step solver {solver_name!r} "
             f"(advective CFL / explicit-diffusion limit on this grid+wind+K). "
             f"Reduce dt0, soften K / coarsen the grid, or use an adaptive "
@@ -562,9 +571,9 @@ def _pick_solver(name: SolverName):
 def _solve_jit(
     rhs: EulerianDispersionRHS,
     t_start: float,
-    t_end: float,
-    dt0: float,
-    y0: Float[Array, "Nz Ny Nx"],
+    end_time: float,
+    initial_time_step: float,
+    initial_state: Float[Array, "Nz Ny Nx"],
     save_times: Float[Array, " M"],
     solver,
     stepsize_controller,
@@ -575,9 +584,9 @@ def _solve_jit(
         term,
         solver,
         t0=t_start,
-        t1=t_end,
-        dt0=dt0,
-        y0=y0,
+        t1=end_time,
+        dt0=initial_time_step,
+        y0=initial_state,
         saveat=diffrax.SaveAt(ts=save_times),
         stepsize_controller=stepsize_controller,
         max_steps=max_steps,
@@ -588,9 +597,9 @@ def _solve(
     *,
     rhs: EulerianDispersionRHS,
     t_start: float,
-    t_end: float,
-    dt0: float,
-    y0: Float[Array, "Nz Ny Nx"],
+    end_time: float,
+    initial_time_step: float,
+    initial_state: Float[Array, "Nz Ny Nx"],
     save_times: Float[Array, " M"],
     solver_name: SolverName,
     rtol: float,
@@ -603,16 +612,16 @@ def _solve(
     if adaptive:
         stepsize_controller = diffrax.PIDController(rtol=rtol, atol=atol)
     else:
-        # Fixed-step solvers integrate at exactly dt0 with no error control,
+        # Fixed-step solvers integrate at exactly the initial step with no error control,
         # so guard the CFL / explicit-diffusion stability limit up front —
-        # otherwise an over-large dt0 silently blows up mid-solve.
+        # otherwise an over-large step silently blows up mid-solve.
         _check_fixed_step_stability(
             plume_grid=rhs.plume_grid,
-            wf=rhs.wind_field,
+            wind=rhs.wind_field,
             eddy=rhs.eddy_diffusivity,
-            dt0=dt0,
+            initial_time_step=initial_time_step,
             t_start=t_start,
-            t_end=t_end,
+            end_time=end_time,
             solver_name=solver_name,
             extra_sample_times=extra_sample_times,
             max_wind_speed=max_wind_speed,
@@ -621,9 +630,9 @@ def _solve(
     return _solve_jit(
         rhs=rhs,
         t_start=float(t_start),
-        t_end=float(t_end),
-        dt0=float(dt0),
-        y0=y0,
+        end_time=float(end_time),
+        initial_time_step=float(initial_time_step),
+        initial_state=initial_state,
         save_times=save_times,
         solver=solver,
         stepsize_controller=stepsize_controller,
@@ -641,21 +650,26 @@ def _to_dataset(
     """Package solver output as an xarray ``Dataset`` on the interior grid."""
     # concentration_history has shape (n_saves, Nz, Ny, Nx) — drop ghost rings.
     interior = concentration_history[:, 1:-1, 1:-1, 1:-1]
-    x_np, y_np, z_np = coord_to_numpy(plume_grid)
-    ds = xr.Dataset(
+    x_coords, y_coords, z_coords = coord_to_numpy(plume_grid)
+    dataset = xr.Dataset(
         {"concentration": (["time", "z", "y", "x"], interior)},
         coords={
             "time": (["time"], times),
-            "z": (["z"], z_np),
-            "y": (["y"], y_np),
-            "x": (["x"], x_np),
+            "z": (["z"], z_coords),
+            "y": (["y"], y_coords),
+            "x": (["x"], x_coords),
         },
         attrs=attrs,
     )
-    ds["concentration"].attrs = {"long_name": "Methane concentration", "units": "kg/m³"}
-    ds["column_concentration"] = ds["concentration"].sum(dim="z") * plume_grid.dz
-    ds["column_concentration"].attrs = {
+    dataset["concentration"].attrs = {
+        "long_name": "Methane concentration",
+        "units": "kg/m³",
+    }
+    dataset["column_concentration"] = (
+        dataset["concentration"].sum(dim="z") * plume_grid.dz
+    )
+    dataset["column_concentration"].attrs = {
         "long_name": "Column-integrated methane",
         "units": "kg/m²",
     }
-    return ds
+    return dataset

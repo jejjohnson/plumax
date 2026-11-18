@@ -73,34 +73,37 @@ class EulerianDispersionRHS(eqx.Module):
         # centred gradient sees the boundary value. Outflow / periodic /
         # Neumann ghosts are identical, so the two fills differ only at
         # Dirichlet faces.
-        c_diff = apply_boundary_conditions(
+        diffusion_concentration = apply_boundary_conditions(
             concentration,
             horizontal_bc=self.horizontal_bc,
             vertical_bc=self.vertical_bc,
             plume_grid=self.plume_grid,
         )
-        c_adv = apply_boundary_conditions(
+        advection_concentration = apply_boundary_conditions(
             concentration,
             horizontal_bc=self.horizontal_bc.advection_variant(),
             vertical_bc=self.vertical_bc.advection_variant(),
             plume_grid=self.plume_grid,
         )
-        u, v, w = self.wind_field(t)
+        wind_east, wind_north, wind_up = self.wind_field(t)
         # Wrap the normal wind / field-diffusivity halos on periodic axes so
         # the paired seam faces stay conservative under a spatially-varying
         # wind or K_h (see periodic_axes / the tendency `periodic=` argument).
         periodic = periodic_axes(self.horizontal_bc)
         adv = advection_tendency(
-            c_adv,
-            u,
-            v,
-            w,
+            advection_concentration,
+            wind_east,
+            wind_north,
+            wind_up,
             self.plume_grid,
             method=self.advection_scheme,
             periodic=periodic,
         )
         diff = diffusion_tendency(
-            c_diff, self.eddy_diffusivity, self.plume_grid, periodic=periodic
+            diffusion_concentration,
+            self.eddy_diffusivity,
+            self.plume_grid,
+            periodic=periodic,
         )
         src = self.source(t)
         # Keep ghost-cell entries of the tendency zero (finitevolX `interior`

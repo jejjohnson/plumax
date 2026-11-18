@@ -119,14 +119,14 @@ class HorizontalBC(eqx.Module):
         carry the wrong state.  Outflow / periodic / Neumann faces are
         unchanged, so this is a no-op unless a Dirichlet face is present.
         """
-        bc_set = self.bc_set
+        boundary_set = self.bc_set
         return HorizontalBC(
             bc_set=BoundaryConditionSet(
-                south=_to_cell_dirichlet(bc_set.south),
-                north=_to_cell_dirichlet(bc_set.north),
-                west=_to_cell_dirichlet(bc_set.west),
-                east=_to_cell_dirichlet(bc_set.east),
-                mask=bc_set.mask,
+                south=_to_cell_dirichlet(boundary_set.south),
+                north=_to_cell_dirichlet(boundary_set.north),
+                west=_to_cell_dirichlet(boundary_set.west),
+                east=_to_cell_dirichlet(boundary_set.east),
+                mask=boundary_set.mask,
             )
         )
 
@@ -172,7 +172,7 @@ class VerticalBC(eqx.Module):
             face="bottom",
             kind=self.bottom_kind,
             value=self.bottom_value,
-            dz=dz,
+            spacing_z=dz,
             dirichlet_cell=self.dirichlet_cell,
         )
         out = _apply_vertical_face(
@@ -180,7 +180,7 @@ class VerticalBC(eqx.Module):
             face="top",
             kind=self.top_kind,
             value=self.top_value,
-            dz=dz,
+            spacing_z=dz,
             dirichlet_cell=self.dirichlet_cell,
         )
         return out
@@ -206,7 +206,7 @@ def _apply_vertical_face(
     face: Literal["bottom", "top"],
     kind: VerticalBCKind,
     value: float,
-    dz: float,
+    spacing_z: float,
     dirichlet_cell: bool = False,
 ) -> Float[Array, "Nz Ny Nx"]:
     """Update one vertical ghost slice using the requested BC flavour.
@@ -239,7 +239,8 @@ def _apply_vertical_face(
         # Ghost value so that the finite-difference coordinate gradient
         # ``∂C/∂z`` (along +z) across the face equals ``value``. The
         # outward_sign flip keeps that meaning identical on both faces.
-        ghost = interior_slice + outward_sign * value * dz
+        # g = C_int + s ∂C/∂z Δz
+        ghost = interior_slice + outward_sign * value * spacing_z
     elif kind == "outflow":
         ghost = interior_slice
     elif kind == "periodic":
@@ -285,14 +286,14 @@ def scale_dirichlet_faces(
             return Dirichlet1D(face=atom.face, value=factor * atom.value)
         return atom
 
-    bc_set = horizontal_bc.bc_set
+    boundary_set = horizontal_bc.bc_set
     west, east, south, north = (
-        scaled(getattr(bc_set, face), scale[index])
+        scaled(getattr(boundary_set, face), scale[index])
         for index, face in enumerate(LATERAL_FACES)
     )
     return HorizontalBC(
         bc_set=BoundaryConditionSet(
-            south=south, north=north, west=west, east=east, mask=bc_set.mask
+            south=south, north=north, west=west, east=east, mask=boundary_set.mask
         )
     )
 
@@ -313,11 +314,11 @@ def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
         wrapping the axis' halos would corrupt the non-periodic face's
         wall coefficient; require periodic on both faces or neither.
     """
-    bc_set = horizontal_bc.bc_set
-    west_p = isinstance(bc_set.west, Periodic1D)
-    east_p = isinstance(bc_set.east, Periodic1D)
-    south_p = isinstance(bc_set.south, Periodic1D)
-    north_p = isinstance(bc_set.north, Periodic1D)
+    boundary_set = horizontal_bc.bc_set
+    west_p = isinstance(boundary_set.west, Periodic1D)
+    east_p = isinstance(boundary_set.east, Periodic1D)
+    south_p = isinstance(boundary_set.south, Periodic1D)
+    north_p = isinstance(boundary_set.north, Periodic1D)
     if west_p != east_p:
         raise ValueError(
             "periodic BC on only one x-face (west/east); periodicity couples "
@@ -356,13 +357,15 @@ def build_default_concentration_bc(
     -------
     tuple[HorizontalBC, VerticalBC]
     """
-    w_bc, e_bc = _split_horizontal_spec(bc_x, faces=("west", "east"))
-    s_bc, n_bc = _split_horizontal_spec(bc_y, faces=("south", "north"))
+    west_bc, east_bc = _split_horizontal_spec(bc_x, faces=("west", "east"))
+    south_bc, north_bc = _split_horizontal_spec(bc_y, faces=("south", "north"))
 
-    bc_set = BoundaryConditionSet(south=s_bc, north=n_bc, west=w_bc, east=e_bc)
+    boundary_set = BoundaryConditionSet(
+        south=south_bc, north=north_bc, west=west_bc, east=east_bc
+    )
     bot_kind, bot_val, top_kind, top_val = _split_vertical_spec(bc_z)
     return (
-        HorizontalBC(bc_set=bc_set),
+        HorizontalBC(bc_set=boundary_set),
         VerticalBC(
             bottom_kind=bot_kind,
             bottom_value=bot_val,

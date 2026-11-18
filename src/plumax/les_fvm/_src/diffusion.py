@@ -88,13 +88,13 @@ class EddyDiffusivity(eqx.Module):
 
 
 def _broadcast_or_scalar(
-    k: Float[ArrayLike, ""] | Float[Array, "nz ny nx"],
+    diffusivity: Float[ArrayLike, ""] | Float[Array, "nz ny nx"],
 ) -> Float[ArrayLike, ""] | Float[Array, "Nz Ny Nx"]:
     """Pass scalars through, pad interior fields to the full ghosted layout."""
-    k_arr = jnp.asarray(k)
-    if k_arr.ndim == 0:
-        return k_arr
-    return jnp.pad(k_arr, ((1, 1), (1, 1), (1, 1)), mode="edge")
+    diffusivity_array = jnp.asarray(diffusivity)
+    if diffusivity_array.ndim == 0:
+        return diffusivity_array
+    return jnp.pad(diffusivity_array, ((1, 1), (1, 1), (1, 1)), mode="edge")
 
 
 @eqx.filter_jit
@@ -134,18 +134,30 @@ def diffusion_tendency(
     :func:`~plumax.les_fvm.boundary.apply_boundary_conditions`.  This is what
     makes horizontal diffusion honor ``bc_x`` / ``bc_y``.
     """
-    k_h, k_z = eddy_diffusivity.as_arrays()
+    horizontal_diffusivity, vertical_diffusivity = eddy_diffusivity.as_arrays()
     x_periodic, y_periodic = periodic
-    if jnp.ndim(k_h) > 0:
+    if jnp.ndim(horizontal_diffusivity) > 0:
         # Field K_h: wrap the coefficient ghost on periodic axes so a periodic
         # seam uses one shared face diffusivity (scalar K_h needs nothing).
         if x_periodic:
-            k_h = k_h.at[:, :, 0].set(k_h[:, :, -2]).at[:, :, -1].set(k_h[:, :, 1])
+            wrapped = horizontal_diffusivity.at[:, :, 0].set(
+                horizontal_diffusivity[:, :, -2]
+            )
+            horizontal_diffusivity = wrapped.at[:, :, -1].set(
+                horizontal_diffusivity[:, :, 1]
+            )
         if y_periodic:
-            k_h = k_h.at[:, 0, :].set(k_h[:, -2, :]).at[:, -1, :].set(k_h[:, 1, :])
+            wrapped = horizontal_diffusivity.at[:, 0, :].set(
+                horizontal_diffusivity[:, -2, :]
+            )
+            horizontal_diffusivity = wrapped.at[:, -1, :].set(
+                horizontal_diffusivity[:, 1, :]
+            )
     horizontal_op = Diffusion3D(grid=plume_grid.grid)
-    horizontal = horizontal_op(concentration, k_h, wall="open")
-    vertical = vertical_diffusion_tendency(concentration, k_z, plume_grid.dz)
+    horizontal = horizontal_op(concentration, horizontal_diffusivity, wall="open")
+    vertical = vertical_diffusion_tendency(
+        concentration, vertical_diffusivity, plume_grid.dz
+    )
     return horizontal + vertical
 
 
@@ -195,11 +207,16 @@ def pg_eddy_diffusivity(
         )
     params = get_pg_params(stability_class)
     distance = jnp.asarray(reference_distance, dtype=jnp.float32)
-    _, sigma_y, sigma_z = calculate_pg_dispersion(distance, params)
-    t_ref = reference_distance / wind_speed
-    k_h = float(sigma_y**2 / (2.0 * t_ref))
-    k_z = float(sigma_z**2 / (2.0 * t_ref))
-    return EddyDiffusivity(horizontal=k_h, vertical=k_z)
+    _, crosswind_spread, vertical_spread = calculate_pg_dispersion(distance, params)
+    # t = x_ref / u
+    reference_time = reference_distance / wind_speed
+    # K_h = σ_y² / (2 t)
+    horizontal_diffusivity = float(crosswind_spread**2 / (2.0 * reference_time))
+    # K_z = σ_z² / (2 t)
+    vertical_diffusivity = float(vertical_spread**2 / (2.0 * reference_time))
+    return EddyDiffusivity(
+        horizontal=horizontal_diffusivity, vertical=vertical_diffusivity
+    )
 
 
 def mo_eddy_diffusivity(
@@ -287,7 +304,7 @@ def mo_eddy_diffusivity(
     depth = jnp.broadcast_to(depth, u_star.shape)
 
     # ζ = z / L
-    zeta = einx.multiply("level, y x -> level y x", height, inverse_length)
+    stability = einx.multiply("level, y x -> level y x", height, inverse_length)
     # z / z_i, infinite for a collapsed layer so that K_z = 0 there
     relative_height = einx.divide("level, y x -> level y x", height, depth)
     # (1 − min(z/z_i, 1))²
@@ -295,7 +312,7 @@ def mo_eddy_diffusivity(
     # κ u* z
     surface_scale = KARMAN * einx.multiply("level, y x -> level y x", height, u_star)
     # K_z = κ u* z (1 − min(z/z_i, 1))² / φ_h(ζ)
-    vertical = surface_scale * depth_shape / phi_h(zeta)
+    vertical = surface_scale * depth_shape / phi_h(stability)
     return EddyDiffusivity(horizontal=k_h, vertical=vertical)
 
 
@@ -363,29 +380,31 @@ def smagorinsky_k_h(
     """
     if c_s <= 0.0:
         raise ValueError(f"smagorinsky_k_h: c_s must be > 0 (got {c_s!r})")
-    dx, dy = grid.dx, grid.dy
-    u, v, _ = wind(jnp.asarray(t, dtype=grid.x.dtype))
+    spacing_x, spacing_y = grid.dx, grid.dy
+    wind_east, wind_north, _ = wind(jnp.asarray(t, dtype=grid.x.dtype))
 
     def squared_deformation(
         u_level: Float[Array, "Ny Nx"], v_level: Float[Array, "Ny Nx"]
     ) -> Float[Array, "ny nx"]:
         # D_T = ∂u/∂x − ∂v/∂y at T-points
-        tension = tensor_strain(u_level, v_level, dx, dy)[1:-1, 1:-1]
+        tension = tensor_strain(u_level, v_level, spacing_x, spacing_y)[1:-1, 1:-1]
         # D_S = ∂v/∂x + ∂u/∂y at corners
-        shear = shear_strain(u_level, v_level, dx, dy)
+        shear = shear_strain(u_level, v_level, spacing_x, spacing_y)
         # ⟨D_S²⟩ at T-points
         shear_squared = avg_xy_bwd(shear**2)
         # |D|² = D_T² + ⟨D_S²⟩
         return tension**2 + shear_squared
 
-    deformation_squared = jax.vmap(squared_deformation)(u[1:-1], v[1:-1])
+    deformation_squared = jax.vmap(squared_deformation)(
+        wind_east[1:-1], wind_north[1:-1]
+    )
     # |D| with a zero gradient at rest: √ has an infinite slope at 0, so take it of
     # 1 there (the double-where trick), keeping uniform-wind adjoints finite
     is_at_rest = deformation_squared == 0.0
     safe_squared = jnp.where(is_at_rest, 1.0, deformation_squared)
     deformation = jnp.where(is_at_rest, 0.0, jnp.sqrt(safe_squared))
     # K_h = (c_s Δ)² |D|, with Δ² = Δx Δy
-    return c_s**2 * dx * dy * deformation
+    return c_s**2 * spacing_x * spacing_y * deformation
 
 
 def make_eddy_diffusivity(
@@ -429,8 +448,8 @@ def make_eddy_diffusivity(
                 f"got length {len(spec)}"
             )
         return EddyDiffusivity(horizontal=float(spec[0]), vertical=float(spec[1]))
-    k = float(spec)
-    return EddyDiffusivity(horizontal=k, vertical=k)
+    diffusivity = float(spec)
+    return EddyDiffusivity(horizontal=diffusivity, vertical=diffusivity)
 
 
 __all__ = [
