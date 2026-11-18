@@ -45,6 +45,7 @@ import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
 
+from plumax._src.constants import P_STANDARD, T_STANDARD
 from plumax._src.extras import require_extra
 from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
@@ -818,8 +819,9 @@ class ColumnToMass(Operator):
     """Convert column enhancement units (ppm m / mol m^-2 / kg m^-2).
 
     Thin wrapper over :func:`convert_column_units`. The ppm m conversion
-    assumes a standard molar volume (298.15 K, 1 atm); see that
-    function's docstring for the exact relation and caveats. Nodata
+    uses the ideal-gas air density at the layer's pressure and temperature,
+    the ISA sea-level 101 325 Pa and 288.15 K unless the scene's are given;
+    see that function's docstring for the exact relation. Nodata
     pixels (non-finite or equal to the fill value) are not converted:
     they hold ``NaN`` and the output declares ``fill_value=NaN``
     (a converted column is a new quantity, so the input's fill -- e.g.
@@ -829,6 +831,8 @@ class ColumnToMass(Operator):
         gas: ``"CH4"`` (default) or ``"CO2"``.
         units_in: Units of the input carrier.
         units_out: Desired output units.
+        pressure_pa: Layer pressure p [Pa] for the ppm m conversion.
+        temperature_k: Layer temperature T [K] for the ppm m conversion.
 
     Examples:
         >>> kg_m2 = ColumnToMass(
@@ -842,10 +846,14 @@ class ColumnToMass(Operator):
         gas: str = "CH4",
         units_in: ColumnUnit = "ppm_m",
         units_out: ColumnUnit = "kg_m2",
+        pressure_pa: float = P_STANDARD,
+        temperature_k: float = T_STANDARD,
     ) -> None:
         self.gas = gas
         self.units_in = units_in
         self.units_out = units_out
+        self.pressure_pa = pressure_pa
+        self.temperature_k = temperature_k
 
     def _apply(self, column: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         out = convert_column_units(
@@ -853,6 +861,8 @@ class ColumnToMass(Operator):
             gas=self.gas,
             units_in=self.units_in,
             units_out=self.units_out,
+            pressure_pa=self.pressure_pa,
+            temperature_k=self.temperature_k,
         )
         if np.ndim(out) < 2:
             return wrap_like(column, out)

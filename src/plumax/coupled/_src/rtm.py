@@ -60,6 +60,7 @@ from radtrax.slab import (
     forward_nonlinear_normalized,
 )
 
+from plumax._src.constants import AVOGADRO, M_CH4
 from plumax._src.tracing import require_positive
 from plumax.coupled.forward import PlumeSource, column_response
 
@@ -75,9 +76,10 @@ if TYPE_CHECKING:
     from plumax.coupled.instrument import Instrument
 
 
-# Methane molar mass and Avogadro's number for the mass→molecule conversion.
-CH4_MOLAR_MASS_KG_PER_MOL: float = 0.0160425  # [kg/mol]
-AVOGADRO_PER_MOL: float = 6.02214076e23  # [molecules/mol]
+# Methane molar mass and Avogadro's number for the mass→molecule conversion,
+# kept under their rtm names (both are plumax._src.constants values).
+CH4_MOLAR_MASS_KG_PER_MOL: float = M_CH4  # [kg/mol]
+AVOGADRO_PER_MOL: float = AVOGADRO  # [molecules/mol]
 CM2_PER_M2: float = 1e4  # [cm²/m²]
 
 

@@ -22,7 +22,9 @@ import numpy as np
 from jaxtyping import Bool, Float, Num, Shaped
 from scipy.spatial import ConvexHull, QhullError
 
+from plumax._src.constants import M_CH4, M_CO2, P_STANDARD, T_STANDARD
 from plumax._src.tracing import require_positive
+from plumax._src.units import ppm_m_to_column_moles
 from plumax.errors import MissingExtraError
 
 
@@ -57,12 +59,12 @@ ColumnUnit = Literal["ppm_m", "mol_m2", "kg_m2"]
 
 # Molar masses (kg/mol) for supported trace gases.
 MOLAR_MASS_KG_PER_MOL = {
-    "CH4": 0.01604,
-    "CO2": 0.04401,
+    "CH4": M_CH4,
+    "CO2": M_CO2,
 }
-# Standard molar volume of an ideal gas at 298.15 K, 1 atm (m^3/mol).
-# Used only by ``convert_column_units`` to translate ppm m (mixing ratio
-# integrated along path) into mol/m^2 for typical near-surface conditions.
+# Deprecated: the molar volume of an ideal gas at 298.15 K and 1 atm (m^3/mol).
+# ``convert_column_units`` no longer uses it (it converts at the scene's
+# pressure and temperature); kept for one release, then removed.
 STANDARD_MOLAR_VOLUME_M3_PER_MOL = 0.024465
 
 
@@ -225,37 +227,52 @@ def convert_column_units(
     gas: str = "CH4",
     units_in: ColumnUnit = "ppm_m",
     units_out: ColumnUnit = "kg_m2",
+    pressure_pa: float = P_STANDARD,
+    temperature_k: float = T_STANDARD,
 ) -> Float[np.ndarray, "*dims"]:
     r"""Convert column enhancement among ppm m, mol/m^2, and kg/m^2.
 
-    The conversions are
+    A ppm m enhancement is a mixing ratio integrated along the path, so its
+    amount of gas depends on the air number density there, :math:`p / (k_B T)`:
 
     .. math::
 
-        \Omega_{\mathrm{mol/m^2}} \;=\; \frac{X \cdot 10^{-6}}{V_m}, \qquad
+        \Omega_{\mathrm{mol/m^2}} \;=\; \frac{X \cdot 10^{-6}\, p}{k_B T N_A},
+        \qquad
         \Omega_{\mathrm{kg/m^2}}  \;=\; M_{\mathrm{gas}}
                                         \cdot \Omega_{\mathrm{mol/m^2}}
 
-    where ``X`` is the column-integrated volume mixing ratio in ppm m,
-    :math:`V_m = 0.024465` m^3/mol is the standard molar volume of an
-    ideal gas at 298.15 K and 1 atm, and :math:`M_{\mathrm{gas}}` is the
-    molar mass (CH4: 0.01604 kg/mol; CO2: 0.04401 kg/mol).
+    where ``X`` is the enhancement in ppm m, :math:`p` and :math:`T` the
+    pressure and temperature of the layer, :math:`k_B` the Boltzmann constant,
+    :math:`N_A` Avogadro's number and :math:`M_{\mathrm{gas}}` the molar mass
+    (CH4: 0.0160425 kg/mol; CO2: 0.04401 kg/mol). It is the same relation as
+    :func:`plumax.obs.ppm_m_to_column_mass`, and both default to the ISA
+    sea-level 101 325 Pa and 288.15 K; pass the scene's values when known.
 
-    The ppm m branch therefore assumes near-surface conditions. Pass
-    ``mol_m2`` or ``kg_m2`` inputs when retrieval-specific pressure and
-    temperature corrections have already been applied upstream (e.g. by
-    a matched-filter retrieval per Thompson 2015 / Foote 2020).
+    Args:
+        values: The column enhancement, in ``units_in``.
+        gas: ``"CH4"`` or ``"CO2"``.
+        units_in: Units of ``values``.
+        units_out: Units of the result.
+        pressure_pa: Layer pressure p [Pa], used by the ppm m conversions.
+        temperature_k: Layer temperature T [K], used by the ppm m conversions.
+
+    Returns:
+        The enhancement in ``units_out``.
     """
     gas_key = gas.upper()
     if gas_key not in MOLAR_MASS_KG_PER_MOL:
         supported = ", ".join(sorted(MOLAR_MASS_KG_PER_MOL))
         raise ValueError(f"unsupported gas {gas!r}; expected one of {supported}")
     molar_mass = MOLAR_MASS_KG_PER_MOL[gas_key]
+    # mol m⁻² per ppm m at (p, T)
+    moles_per_ppm_m = float(
+        ppm_m_to_column_moles(1.0, pressure_pa=pressure_pa, temperature_k=temperature_k)
+    )
 
     arr = np.asarray(values, dtype=float)
     if units_in == "ppm_m":
-        # 1e-6 converts ppm to a fraction; molar volume assumes standard air.
-        mol_m2 = arr * 1e-6 / STANDARD_MOLAR_VOLUME_M3_PER_MOL
+        mol_m2 = arr * moles_per_ppm_m
     elif units_in == "mol_m2":
         mol_m2 = arr
     elif units_in == "kg_m2":
@@ -264,7 +281,7 @@ def convert_column_units(
         raise ValueError("units_in must be 'ppm_m', 'mol_m2', or 'kg_m2'")
 
     if units_out == "ppm_m":
-        return mol_m2 * STANDARD_MOLAR_VOLUME_M3_PER_MOL * 1e6
+        return mol_m2 / moles_per_ppm_m
     if units_out == "mol_m2":
         return mol_m2
     if units_out == "kg_m2":

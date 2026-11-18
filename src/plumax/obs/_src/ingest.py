@@ -41,26 +41,23 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Array, Float, Shaped
 
+from plumax._src.constants import (
+    AVOGADRO,
+    BOLTZMANN as BOLTZMANN,
+    M_CH4,
+    P_STANDARD,
+    T_STANDARD,
+)
 from plumax._src.errors import (
     MissingVariableError,
     ScreeningError,
 )
 from plumax._src.extras import require_extra
+from plumax._src.units import ppm_m_to_column_mass
 from plumax.coupled import Instrument
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.time import TimeAxis
 
-
-#: Molar mass of CH₄, M [kg mol⁻¹].
-M_CH4 = 0.0160425
-#: Avogadro's number N_A [mol⁻¹].
-AVOGADRO = 6.02214076e23
-#: Boltzmann constant k_B [J K⁻¹].
-BOLTZMANN = 1.380649e-23
-#: Standard surface pressure [Pa] for products that report none.
-P_STANDARD = 101_325.0
-#: Near-surface temperature [K] for the ppm·m conversion when none is given.
-T_STANDARD = 288.15
 
 #: (lon_min, lat_min, lon_max, lat_max) [degrees].
 BBox = tuple[float, float, float, float]
@@ -132,48 +129,6 @@ def ppb_to_column_mass(
     per_molecule = 1.0e-9 / AVOGADRO
     # ΔΩ = Δχ · 10⁻⁹ · N_dry · M / N_A
     return np.asarray(delta_ppb * per_molecule * dry_air_molecules * M_CH4)
-
-
-def ppm_m_to_column_mass(
-    enhancement_ppm_m: Float[np.ndarray, "*#pixel"] | float,
-    *,
-    pressure_pa: float,
-    temperature_k: float,
-) -> Float[np.ndarray, " ..."]:
-    """Column-mass enhancement of a path-integrated enhancement.
-
-    ΔΩ = E · 10⁻⁶ · (p / (k_B T)) · M / N_A.
-
-    Args:
-        enhancement_ppm_m: Path-integrated enhancement E [ppm m].
-        pressure_pa: Layer pressure p [Pa].
-        temperature_k: Layer temperature T [K].
-
-    Returns:
-        ΔΩ [kg m⁻²].
-
-    Examples:
-        1000 ppm·m at 1013.25 hPa and 288.15 K: 42.3 mol m⁻³ · 1 mm · M:
-
-        >>> import numpy as np
-        >>> mass = ppm_m_to_column_mass(
-        ...     1000.0, pressure_pa=101_325.0, temperature_k=288.15
-        ... )
-        >>> bool(np.isclose(mass, 42.29e-3 * 0.0160425, rtol=1e-3))
-        True
-
-        Thinner air at altitude carries less mass for the same E:
-
-        >>> high = ppm_m_to_column_mass(
-        ...     1000.0, pressure_pa=70_000.0, temperature_k=288.15
-        ... )
-        >>> bool(high < mass)
-        True
-    """
-    # n = p / (k_B T)  [molecules m⁻³]
-    number_density = pressure_pa / (BOLTZMANN * temperature_k)
-    # ΔΩ = E · 10⁻⁶ · n · M / N_A
-    return np.asarray(enhancement_ppm_m * 1.0e-6 * number_density * M_CH4 / AVOGADRO)
 
 
 def load_tropomi_l2(
