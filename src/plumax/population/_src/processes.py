@@ -387,9 +387,12 @@ def padded_event_buffer(
         ([1.0, 3.0, 5.0], [True, True, False])
     """
     start, stop = (float(edge) for edge in window)
-    flat_times = np.asarray(times, dtype=float)
-    if flat_times.size:
-        flat_times = einx.id("... -> (...)", flat_times)
+    given_times = np.asarray(times, dtype=float)
+    if given_times.size:
+        flat_times = einx.id("... -> (...)", given_times)
+    else:
+        # einx rejects a zero-size axis; no times of any shape is an empty 1-D list
+        flat_times = np.zeros((0,), dtype=float)
     host_times = np.sort(flat_times)
     if host_times.size and (host_times[0] < start or host_times[-1] > stop):
         raise ValueError(
