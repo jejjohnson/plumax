@@ -158,6 +158,13 @@ def test_retention_scales_marks_to_pod_units():
     np.testing.assert_allclose(float(retention(0.0, None, jnp.asarray(1.0))), 0.5)
 
 
+def test_padded_event_buffer_takes_empty_times_of_any_shape():
+    for empty in ([], np.zeros((0, 1)), np.zeros((1, 0))):
+        event_times, mask = padded_event_buffer(empty, (0.0, 5.0), max_events=2)
+        assert event_times.tolist() == [5.0, 5.0]
+        assert mask.tolist() == [False, False]
+
+
 def test_padded_event_buffer_invariant():
     event_times, mask = padded_event_buffer([7.0, 5.5], (5.0, 8.0), max_events=4)
     np.testing.assert_allclose(event_times, [0.5, 2.0, 3.0, 3.0])
