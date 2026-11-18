@@ -99,7 +99,7 @@ def cross_plume_transects(
 ) -> TransectProfiles:
     """Profiles across the plume by spline interpolation of the image.
 
-    v_kj = 𝓘[ΔΩ](p_kj) with p_kj = s₀ + d_k e_∥ + c_j e_⊥, d_k = k Δ_d and
+    v_kj = 𝓘_ΔΩ(p_kj) with p_kj = s₀ + d_k e_∥ + c_j e_⊥, d_k = k Δ_d and
     c_j = (j − (S − 1)/2) δ.
 
     Algorithm:
@@ -189,7 +189,7 @@ def cross_plume_transects(
     nodata = ~np.isfinite(image)
     filled = np.where(nodata, 0.0, image)
     coordinates = np.stack([rows, cols])
-    # v_kj = 𝓘[ΔΩ](p_kj)
+    # v_kj = 𝓘_ΔΩ(p_kj)
     values = ndimage.map_coordinates(filled, coordinates, order=order, mode="nearest")
     # a sample is outside when its nearest pixel is
     n_row, n_col = image.shape
@@ -298,8 +298,8 @@ def fit_transect_gaussians(
 
     Returns:
         ``line_density`` [kg m⁻¹], ``centre`` [m], ``width`` [m] and
-        ``converged``, one per transect; NaN where a transect has fewer than
-        three finite samples.
+        ``converged``, one per transect; NaN and not converged where a
+        transect has fewer than three finite samples or none above zero.
 
     Raises:
         ParameterError: If ``min_width`` or ``max_offset`` is not positive.
@@ -339,11 +339,13 @@ def fit_transect_gaussians(
         finite = np.isfinite(row)
         if int(finite.sum()) < 3:
             continue
+        # no positive sample: nothing to fit, a failed fit
+        if not bool(np.any(row[finite] > 0.0)):
+            continue
         positions = offset[finite]
         # v_kj / s_k with s_k = max_j |v_kj|, so the solver's tolerances see
         # residuals of order one
-        peak = float(np.max(np.abs(row[finite])))
-        scale = peak if peak > 0.0 else 1.0
+        scale = float(np.max(np.abs(row[finite])))
         samples = row[finite] / scale
         start = _gaussian_start(
             float(moments["line_density"][k]) / scale,

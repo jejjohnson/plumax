@@ -353,6 +353,18 @@ def test_rejected_centres_take_the_smoothed_line_not_zero():
     assert spiire_error > error
 
 
+def test_transects_without_signal_are_failed_fits():
+    offset = PIXEL * np.arange(-10.0, 11.0)
+    signal = np.exp(-0.5 * (offset / 120.0) ** 2)
+    values = np.stack([signal, np.zeros_like(offset), -signal])
+    profiles = TransectProfiles(PIXEL * np.arange(1.0, 4.0), offset, values)
+    fits = fit_transect_gaussians(profiles, min_width=PIXEL)
+    assert fits["converged"].tolist() == [True, False, False]
+    for key in ("line_density", "centre", "width"):
+        assert np.isfinite(fits[key][0])
+        assert np.isnan(fits[key][1:]).all()
+
+
 def test_failed_fits_are_interpolated():
     centre = np.linspace(0.0, 300.0, 40)
     converged = np.ones(40, dtype=bool)
