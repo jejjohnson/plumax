@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,10 +43,11 @@ if TYPE_CHECKING:
 
 def _cell_indices(coord: jax.Array, edges: jax.Array) -> tuple[jax.Array, jax.Array]:
     """Return ``(index, in_range)`` for ``coord`` against bin ``edges``."""
-    n = edges.shape[0] - 1
-    idx = jnp.searchsorted(edges, coord, side="right") - 1
-    in_range = (idx >= 0) & (idx < n)
-    return jnp.clip(idx, 0, n - 1), in_range
+    num_cells = edges.shape[0] - 1
+    # i = max{ j : e_j ≤ c }
+    cell_index = jnp.searchsorted(edges, coord, side="right") - 1
+    in_range = (cell_index >= 0) & (cell_index < num_cells)
+    return jnp.clip(cell_index, 0, num_cells - 1), in_range
 
 
 def bin_positions(
@@ -55,16 +57,18 @@ def bin_positions(
     z_edges: jax.Array,
 ) -> jax.Array:
     """Histogram particle ``positions`` ``(n, 3)`` onto a 3-D grid (counts)."""
-    nx = x_edges.shape[0] - 1
-    ny = y_edges.shape[0] - 1
-    nz = z_edges.shape[0] - 1
-    ix, gx = _cell_indices(positions[:, 0], x_edges)
-    iy, gy = _cell_indices(positions[:, 1], y_edges)
-    iz, gz = _cell_indices(positions[:, 2], z_edges)
-    inside = gx & gy & gz
-    flat = (ix * ny + iy) * nz + iz
-    counts = jnp.zeros(nx * ny * nz).at[flat].add(inside.astype(float))
-    return counts.reshape(nx, ny, nz)
+    num_cols = x_edges.shape[0] - 1
+    num_rows = y_edges.shape[0] - 1
+    num_levels = z_edges.shape[0] - 1
+    col_index, col_inside = _cell_indices(positions[:, 0], x_edges)
+    row_index, row_inside = _cell_indices(positions[:, 1], y_edges)
+    level_index, level_inside = _cell_indices(positions[:, 2], z_edges)
+    inside = col_inside & row_inside & level_inside
+    # s = (i_x n_y + i_y) n_z + i_z
+    flat = (col_index * num_rows + row_index) * num_levels + level_index
+    counts = jnp.zeros(num_cols * num_rows * num_levels)
+    counts = counts.at[flat].add(inside.astype(float))
+    return counts.reshape(num_cols, num_rows, num_levels)
 
 
 def simulate_lagrangian(
@@ -139,9 +143,11 @@ def simulate_lagrangian(
     x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
     y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
     z_edges = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]) + 1)
-    x_c = 0.5 * (x_edges[:-1] + x_edges[1:])
-    y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
-    z_c = 0.5 * (z_edges[:-1] + z_edges[1:])
+    # c_i = (e_i + e_{i+1}) / 2
+    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
+    z_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
+    # V_cell = Δx Δy Δz
     cell_volume = float(
         (x_edges[1] - x_edges[0])
         * (y_edges[1] - y_edges[0])
@@ -152,29 +158,41 @@ def simulate_lagrangian(
     key, vkey = jax.random.split(key)
 
     src = jnp.asarray(source_location, dtype=float)
-    sigma0, _ = turbulence.at(src[2])
-    vel0 = jax.random.normal(vkey, (n_particles, 3)) * sigma0
+    initial_std, _ = turbulence.at(src[2])
+    vel0 = jax.random.normal(vkey, (n_particles, 3)) * initial_std
     pos0 = jnp.broadcast_to(src, (n_particles, 3))
     state = ParticleState(position=pos0, velocity=vel0)
 
-    xe = jnp.asarray(x_edges)
-    ye = jnp.asarray(y_edges)
-    ze = jnp.asarray(z_edges)
+    x_edges_jax = jnp.asarray(x_edges)
+    y_edges_jax = jnp.asarray(y_edges)
+    z_edges_jax = jnp.asarray(z_edges)
     residence = _accumulate_residence(
-        state, wind, turbulence, t_end, dt, key, pbl_height, xe, ye, ze
+        state,
+        wind,
+        turbulence,
+        t_end,
+        dt,
+        key,
+        pbl_height,
+        x_edges_jax,
+        y_edges_jax,
+        z_edges_jax,
     )
 
+    # C = Q τ / (N V_cell)
     conc = emission_rate * np.asarray(residence) / (n_particles * cell_volume)
+    # C ← C + C_bg
     conc = conc + background_conc
-    dz = float(z_edges[1] - z_edges[0])
-    column = conc.sum(axis=2) * dz
+    spacing_z = float(z_edges[1] - z_edges[0])
+    # C_col(x, y) = Δz Σ_z C(x, y, z)
+    column = einx.sum("x y [z]", conc) * spacing_z
 
-    ds = xr.Dataset(
+    dataset = xr.Dataset(
         data_vars={
             "concentration": (["x", "y", "z"], conc),
             "column_concentration": (["x", "y"], column),
         },
-        coords={"x": x_c, "y": y_c, "z": z_c},
+        coords={"x": x_centers, "y": y_centers, "z": z_centers},
         attrs={
             "title": "Lagrangian particle dispersion (steady field, JAX)",
             "model": "markov-1-langevin",
@@ -186,20 +204,23 @@ def simulate_lagrangian(
             "background_concentration": background_conc,
         },
     )
-    ds["concentration"].attrs = {"long_name": "Mass concentration", "units": "kg/m^3"}
-    ds["column_concentration"].attrs = {
+    dataset["concentration"].attrs = {
+        "long_name": "Mass concentration",
+        "units": "kg/m^3",
+    }
+    dataset["column_concentration"].attrs = {
         "long_name": "Column-integrated concentration",
         "units": "kg/m^2",
     }
-    return ds
+    return dataset
 
 
 def _accumulate_residence(
     state: ParticleState,
     wind: Callable[[jax.Array], jax.Array] | GriddedWind,
     turbulence: TurbulenceModel,
-    t_end: float,
-    dt: float,
+    end_time: float,
+    time_step: float,
     key: jax.Array,
     pbl_height: float | None,
     x_edges: jax.Array,
@@ -209,34 +230,40 @@ def _accumulate_residence(
     """Integrate the ensemble and accumulate per-cell residence time [s]."""
     from plumax.lagrangian.particles import langevin_step
 
-    n_steps = n_steps_for_horizon(t_end, dt)
-    keys = jax.random.split(key, n_steps)
-    # Step start times and per-step durations. When ``t_end`` is not an exact
-    # multiple of ``dt`` the final step is shortened to the remainder so the
-    # ensemble is advanced — and residence is accrued — over exactly ``t_end``,
-    # not ``n_steps * dt`` (which would bias the field high).
-    times = dt * jnp.arange(n_steps)
-    dts = step_durations(t_end, dt, n_steps)
-    nx = x_edges.shape[0] - 1
-    ny = y_edges.shape[0] - 1
-    nz = z_edges.shape[0] - 1
+    num_steps = n_steps_for_horizon(end_time, time_step)
+    keys = jax.random.split(key, num_steps)
+    # Step start times and per-step durations. When ``end_time`` is not an exact
+    # multiple of ``time_step`` the final step is shortened to the remainder so
+    # the ensemble is advanced — and residence is accrued — over exactly
+    # ``end_time``, not ``num_steps * time_step`` (which would bias the field
+    # high).
+    # t_k = k Δt
+    times = time_step * jnp.arange(num_steps)
+    durations = step_durations(end_time, time_step, num_steps)
+    num_cols = x_edges.shape[0] - 1
+    num_rows = y_edges.shape[0] - 1
+    num_levels = z_edges.shape[0] - 1
 
     def body(carry, inputs):
-        st, hist = carry
-        t, k, dt_i = inputs
-        st = langevin_step(
-            st,
-            mean_wind(wind, st.position, t),
+        particles, histogram = carry
+        time, step_key, duration = inputs
+        particles = langevin_step(
+            particles,
+            mean_wind(wind, particles.position, time),
             turbulence,
-            dt_i,
-            k,
+            duration,
+            step_key,
             pbl_height=pbl_height,
         )
-        hist = hist + bin_positions(st.position, x_edges, y_edges, z_edges) * dt_i
-        return (st, hist), None
+        counts = bin_positions(particles.position, x_edges, y_edges, z_edges)
+        # H ← H + counts · Δt_k
+        histogram = histogram + counts * duration
+        return (particles, histogram), None
 
-    hist0 = jnp.zeros((nx, ny, nz))
-    (_, residence), _ = jax.lax.scan(body, (state, hist0), (times, keys, dts))
+    initial_histogram = jnp.zeros((num_cols, num_rows, num_levels))
+    (_, residence), _ = jax.lax.scan(
+        body, (state, initial_histogram), (times, keys, durations)
+    )
     return residence
 
 

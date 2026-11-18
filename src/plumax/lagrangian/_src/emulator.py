@@ -165,7 +165,7 @@ class FootprintSimulator:
                 jnp.asarray(y_edges),
                 durations,
                 wind_starts,
-                n_particles=self.n_particles,
+                num_particles=self.n_particles,
                 pbl_height=self.pbl_height,
                 mix_height=self.pbl_fraction * self.pbl_height,
             )
@@ -289,15 +289,15 @@ def footprint_dataset(
     """
     if n_cases < 1:
         raise ParameterError(f"n_cases must be ≥ 1, got {n_cases}")
-    pt = _require_pipekit_train("footprint_dataset")
-    source = pt.SimulationDataset(
+    pipekit_train = _require_pipekit_train("footprint_dataset")
+    source = pipekit_train.SimulationDataset(
         forward_model=simulator,
         prior=MetContextPrior(met_sampler),
         n_samples=n_cases,
         seed=seed,
         split=split,
     )
-    return pt.CachedDataset(source, cache_dir=cache_dir, in_memory=True)
+    return pipekit_train.CachedDataset(source, cache_dir=cache_dir, in_memory=True)
 
 
 def _stack_dataset(
@@ -547,20 +547,20 @@ def train_footprint_emulator(
     Raises:
         ImportError: Without the ``emulate`` extra.
     """
-    pt = _require_pipekit_train("train_footprint_emulator")
+    pipekit_train = _require_pipekit_train("train_footprint_emulator")
     from pipekit_train.adapters.equinox import EquinoxModelOp
 
     model = EmulatedFootprint(emulator, jnp.asarray(receptors))
     callbacks = ()
     if val_dataset is not None:
-        callbacks = (pt.EarlyStopping(metric="mse", patience=patience),)
+        callbacks = (pipekit_train.EarlyStopping(metric="mse", patience=patience),)
     # the loss is in the footprint's units, so Adam's ε must sit below s²
     epsilon = 1e-8 * float(emulator.footprint_scale) ** 2
-    loop = pt.TrainingLoop(
+    loop = pipekit_train.TrainingLoop(
         model_op=EquinoxModelOp(model),
         dataset=dataset,
         val_dataset=val_dataset,
-        loss=pt.MSE(),
+        loss=pipekit_train.MSE(),
         optimizer_config={"name": "adam", "lr": learning_rate, "eps": epsilon},
         max_steps=max_steps,
         batch_size=batch_size,
@@ -639,13 +639,15 @@ def assert_emulator_calibrated(
     )
     source = jnp.ones(emulated.shape[-1], dtype=emulated.dtype)
 
-    def emulated_map(q: Float[Array, " cell"]) -> Float[Array, "case obs"]:
+    def emulated_map(emission_rate: Float[Array, " cell"]) -> Float[Array, "case obs"]:
         # F_emu,ᵢ q for every case i
-        return einx.dot("case obs cell, cell -> case obs", emulated, q)
+        return einx.dot("case obs cell, cell -> case obs", emulated, emission_rate)
 
-    def reference_map(q: Float[Array, " cell"]) -> Float[Array, "case obs"]:
+    def reference_map(emission_rate: Float[Array, " cell"]) -> Float[Array, "case obs"]:
         # Fᵢ q for every case i
-        return einx.dot("case obs cell, cell -> case obs", reference_footprints, q)
+        return einx.dot(
+            "case obs cell, cell -> case obs", reference_footprints, emission_rate
+        )
 
     vdx.assert_adjoint_calibrated(
         emulated_map,

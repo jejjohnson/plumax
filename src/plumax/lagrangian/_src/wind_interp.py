@@ -140,19 +140,19 @@ class GriddedWind(eqx.Module):
         half_dy = 0.5 * _spacing(self.y)
 
         def at_particle(point: Float[Array, " 3"]) -> Float[Array, " 3"]:
-            px, py, pz = point[0], point[1], point[2]
-            z_bracket = _axis_bracket(self.z, pz)
+            point_x, point_y, point_z = point[0], point[1], point[2]
+            z_bracket = _axis_bracket(self.z, point_z)
             # T-point brackets serve w, and v in x and u in y
-            x_bracket = _axis_bracket(self.x, px)
-            y_bracket = _axis_bracket(self.y, py)
+            x_bracket = _axis_bracket(self.x, point_x)
+            y_bracket = _axis_bracket(self.y, point_y)
             # U-point x = x_i + Δx/2, so p_x on the U axis is p_x − Δx/2 on x_i
-            xu_bracket = _axis_bracket(self.x, px - half_dx)
+            xu_bracket = _axis_bracket(self.x, point_x - half_dx)
             # V-point y = y_j + Δy/2
-            yv_bracket = _axis_bracket(self.y, py - half_dy)
-            u = _sample(self.u, time_bracket, z_bracket, y_bracket, xu_bracket)
-            v = _sample(self.v, time_bracket, z_bracket, yv_bracket, x_bracket)
-            w = _sample(self.w, time_bracket, z_bracket, y_bracket, x_bracket)
-            return jnp.stack([u, v, w])
+            yv_bracket = _axis_bracket(self.y, point_y - half_dy)
+            wind_east = _sample(self.u, time_bracket, z_bracket, y_bracket, xu_bracket)
+            wind_north = _sample(self.v, time_bracket, z_bracket, yv_bracket, x_bracket)
+            wind_up = _sample(self.w, time_bracket, z_bracket, y_bracket, x_bracket)
+            return jnp.stack([wind_east, wind_north, wind_up])
 
         return jax.vmap(at_particle)(position)
 
@@ -164,22 +164,23 @@ def _spacing(axis: Float[Array, " n"]) -> Float[Array, ""]:
 
 def _axis_bracket(axis: Float[Array, " n"], coordinate: Float[Array, ""]) -> Bracket:
     """Bracketing indices and weight on a uniform axis, held beyond its ends."""
-    n = axis.shape[0]
-    # s = (p − a_0) / Δ, held inside [0, n − 1]
+    num_points = axis.shape[0]
+    # s = (p − a_0) / Δ
     fractional = (coordinate - axis[0]) / _spacing(axis)
-    fractional = jnp.clip(fractional, 0.0, n - 1.0)
-    lower = jnp.clip(jnp.floor(fractional).astype(int), 0, n - 2)
+    # s ← clip(s, 0, n − 1)
+    fractional = jnp.clip(fractional, 0.0, num_points - 1.0)
+    lower = jnp.clip(jnp.floor(fractional).astype(int), 0, num_points - 2)
     weight = fractional - lower
     return jnp.stack([lower, lower + 1]), weight
 
 
-def _time_bracket(times: Float[Array, " time"], t: Float[Array, ""]) -> Bracket:
+def _time_bracket(times: Float[Array, " time"], time: Float[Array, ""]) -> Bracket:
     """Bracketing indices and weight in time, held beyond the first and last."""
-    n = times.shape[0]
-    if n == 1:
+    num_times = times.shape[0]
+    if num_times == 1:
         return jnp.zeros(2, dtype=int), jnp.zeros((), dtype=times.dtype)
-    held = jnp.clip(t, times[0], times[-1])
-    upper = jnp.clip(jnp.searchsorted(times, held, side="right"), 1, n - 1)
+    held = jnp.clip(time, times[0], times[-1])
+    upper = jnp.clip(jnp.searchsorted(times, held, side="right"), 1, num_times - 1)
     lower = upper - 1
     # λ = (t − t_lo) / (t_hi − t_lo)
     weight = (held - times[lower]) / (times[upper] - times[lower])
@@ -236,12 +237,15 @@ def gridded_wind_from_prescribed(
         The gridded wind on ``wind_field.plume_grid``.
     """
     times = jnp.asarray(times)
-    samples = [wind_field(t) for t in times]
+    samples = [wind_field(time) for time in times]
     # interior points: drop the one-cell ghost ring the solver pads with
-    u, v, w = (
-        jnp.stack([sample[c][1:-1, 1:-1, 1:-1] for sample in samples]) for c in range(3)
+    wind_east, wind_north, wind_up = (
+        jnp.stack([sample[component][1:-1, 1:-1, 1:-1] for sample in samples])
+        for component in range(3)
     )
-    return GriddedWind.from_grid(wind_field.plume_grid, times, u, v, w)
+    return GriddedWind.from_grid(
+        wind_field.plume_grid, times, wind_east, wind_north, wind_up
+    )
 
 
 def mean_wind(
