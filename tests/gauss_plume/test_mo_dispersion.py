@@ -78,6 +78,12 @@ def test_lookup_switches_class_exactly_at_each_boundary(z0):
         assert int(golder_stability_class(more_stable, z0)) == k + 1
 
 
+def test_lookup_of_no_lengths_is_empty():
+    classes = golder_stability_class(jnp.zeros((0,)), 0.1)
+    assert classes.shape == (0,)
+    assert classes.dtype == golder_stability_class(jnp.zeros((1,)), 0.1).dtype
+
+
 @settings(max_examples=200, deadline=None)
 @given(
     obukhov_length=st.one_of(
