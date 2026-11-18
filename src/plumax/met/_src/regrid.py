@@ -83,14 +83,14 @@ def stagger_points(
         >>> points["t"].east.shape
         (4, 4, 2)
     """
-    x = np.asarray(grid.x, dtype=float)
-    y = np.asarray(grid.y, dtype=float)
+    grid_x = np.asarray(grid.x, dtype=float)
+    grid_y = np.asarray(grid.y, dtype=float)
     offsets = {"t": (0.0, 0.0), "u": (0.5 * grid.dx, 0.0), "v": (0.0, 0.5 * grid.dy)}
     stagger: dict[str, StaggerPoints] = {}
     for name, (offset_x, offset_y) in offsets.items():
-        point_x, point_y = np.meshgrid(x + offset_x, y + offset_y)
-        i, j = to_index(point_x, point_y)
-        if not (np.all(np.isfinite(i)) and np.all(np.isfinite(j))):
+        point_x, point_y = np.meshgrid(grid_x + offset_x, grid_y + offset_y)
+        index_x, index_y = to_index(point_x, point_y)
+        if not (np.all(np.isfinite(index_x)) and np.all(np.isfinite(index_y))):
             raise DomainError(
                 f"{loader}: some analysis {name.upper()}-points fall outside the "
                 "source domain; shrink the grid or move the frame origin (the "
@@ -98,7 +98,7 @@ def stagger_points(
             )
         lat, lon = frame.to_latlon(point_x, point_y)
         east, north = frame.east_north_axes(lat, lon)
-        stagger[name] = StaggerPoints(i=i, j=j, east=east, north=north)
+        stagger[name] = StaggerPoints(i=index_x, j=index_y, east=east, north=north)
     return stagger
 
 
@@ -134,20 +134,20 @@ def bilinear_at(
         >>> sample[0].tolist()
         [[2.25, 8.0]]
     """
-    n_rows, n_cols = field.shape[-2:]
-    i_low = np.clip(np.floor(i).astype(int), 0, n_cols - 2)
-    j_low = np.clip(np.floor(j).astype(int), 0, n_rows - 2)
-    i_high = i_low + 1
-    j_high = j_low + 1
+    num_rows, num_cols = field.shape[-2:]
+    col_low = np.clip(np.floor(i).astype(int), 0, num_cols - 2)
+    row_low = np.clip(np.floor(j).astype(int), 0, num_rows - 2)
+    col_high = col_low + 1
+    row_high = row_low + 1
     # a = i − ⌊i⌋
-    frac_x = i - i_low
+    frac_x = i - col_low
     # b = j − ⌊j⌋
-    frac_y = j - j_low
+    frac_y = j - row_low
     gather = "... [src_y src_x], y x, y x -> ... y x"
-    corner_00 = einx.get_at(gather, field, j_low, i_low)
-    corner_01 = einx.get_at(gather, field, j_low, i_high)
-    corner_10 = einx.get_at(gather, field, j_high, i_low)
-    corner_11 = einx.get_at(gather, field, j_high, i_high)
+    corner_00 = einx.get_at(gather, field, row_low, col_low)
+    corner_01 = einx.get_at(gather, field, row_low, col_high)
+    corner_10 = einx.get_at(gather, field, row_high, col_low)
+    corner_11 = einx.get_at(gather, field, row_high, col_high)
     # (1−a)(1−b) f₀₀
     term_00 = (1.0 - frac_x) * (1.0 - frac_y) * corner_00
     # a (1−b) f₀₁
@@ -201,7 +201,7 @@ def frame_wind(
     _, east_y_at_v = einx.id("y x c -> c y x", at_v.east)
     _, north_y_at_v = einx.id("y x c -> c y x", at_v.north)
     # u = u_e ê_x + v_n n̂_x
-    u = u_east_at_u * east_x_at_u + v_north_at_u * north_x_at_u
+    wind_x = u_east_at_u * east_x_at_u + v_north_at_u * north_x_at_u
     # v = u_e ê_y + v_n n̂_y
-    v = u_east_at_v * east_y_at_v + v_north_at_v * north_y_at_v
-    return u, v
+    wind_y = u_east_at_v * east_y_at_v + v_north_at_v * north_y_at_v
+    return wind_x, wind_y
