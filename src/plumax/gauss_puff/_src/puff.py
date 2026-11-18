@@ -31,6 +31,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+import einx
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
@@ -116,9 +117,13 @@ def make_release_times(
             f"make_release_times: `t_end` must be > `t_start` "
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
-    dt = frequency_to_release_interval(release_frequency)
-    n = int(np.ceil((t_end - t_start) / dt))
-    return jnp.asarray(t_start + np.arange(n) * dt, dtype=jnp.float32)
+    release_interval = frequency_to_release_interval(release_frequency)
+    # N = ⌈(t_end − t_start) / Δt⌉
+    num_puffs = int(np.ceil((t_end - t_start) / release_interval))
+    # t_i = t_start + i Δt
+    return jnp.asarray(
+        t_start + np.arange(num_puffs) * release_interval, dtype=jnp.float32
+    )
 
 
 def release_durations(
@@ -216,17 +221,25 @@ def puff_concentration(
         Mass concentration [kg/m³], same shape as the broadcast of the input
         coordinates.
     """
-    dx = x - puff_x
-    dy = y - puff_y
-    dz_direct = z - puff_z
-    dz_reflected = z + puff_z
+    # Δx = x − x_p
+    offset_x = x - puff_x
+    # Δy = y − y_p
+    offset_y = y - puff_y
+    # Δz₋ = z − z_p
+    offset_z_direct = z - puff_z
+    # Δz₊ = z + z_p
+    offset_z_reflected = z + puff_z
 
     normalization = jnp.power(2.0 * jnp.pi, 1.5) * sigma_x * sigma_y * sigma_z
 
-    exp_x = jnp.exp(-0.5 * jnp.square(dx / sigma_x))
-    exp_y = jnp.exp(-0.5 * jnp.square(dy / sigma_y))
-    exp_z_direct = jnp.exp(-0.5 * jnp.square(dz_direct / sigma_z))
-    exp_z_reflected = jnp.exp(-0.5 * jnp.square(dz_reflected / sigma_z))
+    # exp(−Δx² / 2σ_x²)
+    exp_x = jnp.exp(-0.5 * jnp.square(offset_x / sigma_x))
+    # exp(−Δy² / 2σ_y²)
+    exp_y = jnp.exp(-0.5 * jnp.square(offset_y / sigma_y))
+    # exp(−Δz₋² / 2σ_z²)
+    exp_z_direct = jnp.exp(-0.5 * jnp.square(offset_z_direct / sigma_z))
+    # exp(−Δz₊² / 2σ_z²)
+    exp_z_reflected = jnp.exp(-0.5 * jnp.square(offset_z_reflected / sigma_z))
 
     return (
         (puff_mass / normalization) * exp_x * exp_y * (exp_z_direct + exp_z_reflected)
@@ -289,41 +302,55 @@ def evolve_puffs(
     """
     src_x, src_y, src_z = source_location
 
-    save_at = jnp.concatenate(
-        [release_times, jnp.atleast_1d(jnp.asarray(current_time))]
-    )
+    current_time_array = jnp.asarray(current_time)
+    if release_times.shape[0] == 0:
+        # einx rejects a zero-size axis; with no releases only t is saved
+        save_at = einx.id(" -> 1", current_time_array)
+    else:
+        save_at = einx.id("N, -> (N + 1)", release_times, current_time_array)
     sort_idx = jnp.argsort(save_at)
     save_at_sorted = save_at[sort_idx]
 
-    I_u_s, I_v_s, S_s = cumulative_wind_integrals(schedule, save_at_sorted)
+    east_sorted, north_sorted, travel_sorted = cumulative_wind_integrals(
+        schedule, save_at_sorted
+    )
 
     unsort_idx = jnp.argsort(sort_idx)
-    I_u = I_u_s[unsort_idx]
-    I_v = I_v_s[unsort_idx]
-    S = S_s[unsort_idx]
+    east_integral = east_sorted[unsort_idx]
+    north_integral = north_sorted[unsort_idx]
+    travel_integral = travel_sorted[unsort_idx]
 
-    I_u_rel, I_v_rel, S_rel = I_u[:-1], I_v[:-1], S[:-1]
-    I_u_now, I_v_now, S_now = I_u[-1], I_v[-1], S[-1]
+    east_release = east_integral[:-1]
+    north_release = north_integral[:-1]
+    travel_release = travel_integral[:-1]
+    east_now = east_integral[-1]
+    north_now = north_integral[-1]
+    travel_now = travel_integral[-1]
 
     active = release_times <= current_time
-    x = src_x + jnp.where(active, I_u_now - I_u_rel, 0.0)
-    y = src_y + jnp.where(active, I_v_now - I_v_rel, 0.0)
+    # x_i = x_src + I_u(t) − I_u(t_i)
+    position_x = src_x + jnp.where(active, east_now - east_release, 0.0)
+    # y_i = y_src + I_v(t) − I_v(t_i)
+    position_y = src_y + jnp.where(active, north_now - north_release, 0.0)
     if position_disturbance is not None:
-        dx_puff, dy_puff = position_disturbance
-        x = x + jnp.where(active, dx_puff, 0.0)
-        y = y + jnp.where(active, dy_puff, 0.0)
-    z = jnp.full_like(release_times, src_z)
-    s = jnp.where(active, S_now - S_rel, 0.0)
+        offset_x, offset_y = position_disturbance
+        # x_i = x_i + Δx_i
+        position_x = position_x + jnp.where(active, offset_x, 0.0)
+        # y_i = y_i + Δy_i
+        position_y = position_y + jnp.where(active, offset_y, 0.0)
+    position_z = jnp.full_like(release_times, src_z)
+    # s_i = S(t) − S(t_i)
+    travel = jnp.where(active, travel_now - travel_release, 0.0)
 
     mass_arr = jnp.broadcast_to(jnp.asarray(puff_mass), release_times.shape)
     mass = jnp.where(active, mass_arr, 0.0)
 
     return PuffState(
         release_times=release_times,
-        x=x,
-        y=y,
-        z=z,
-        travel_distance=s,
+        x=position_x,
+        y=position_y,
+        z=position_z,
+        travel_distance=travel,
         mass=mass,
     )
 
@@ -357,25 +384,29 @@ def simulate_puff_field(
     concentration : Float[Array, "P"]
         Total concentration [kg/m³] at each receptor.
     """
-    x_r, y_r, z_r = receptor_coords
+    receptor_x, receptor_y, receptor_z = receptor_coords
 
-    sigma_x, sigma_y, sigma_z = dispersion_fn(
+    spread_x, crosswind_spread, vertical_spread = dispersion_fn(
         puff_state.travel_distance, dispersion_params
     )
 
     per_puff = puff_concentration_vmap(
-        x_r,
-        y_r,
-        z_r,
+        receptor_x,
+        receptor_y,
+        receptor_z,
         puff_state.x,
         puff_state.y,
         puff_state.z,
-        sigma_x,
-        sigma_y,
-        sigma_z,
+        spread_x,
+        crosswind_spread,
+        vertical_spread,
         puff_state.mass,
-    )  # (N_puffs, P)
-    return jnp.sum(per_puff, axis=0)
+    )
+    if per_puff.shape[0] == 0:
+        # einx rejects a zero-size axis; no puffs add no concentration
+        return jnp.zeros(per_puff.shape[1:], dtype=per_puff.dtype)
+    # C(r) = Σ_i C_i(r)
+    return einx.sum("[puff] P", per_puff)
 
 
 # ── Xarray wrapper ───────────────────────────────────────────────────────────
@@ -497,15 +528,15 @@ def simulate_puff(
                 f"simulate_puff: `{name}` must be (start, stop, n_points); "
                 f"got length {len(domain)}"
             )
-        start, stop, n = domain
+        start, stop, num_points = domain
         if not (start < stop):
             raise ValueError(
                 f"simulate_puff: `{name}` requires start < stop "
                 f"(got start={start!r}, stop={stop!r})"
             )
-        if int(n) < 2:
+        if int(num_points) < 2:
             raise ValueError(
-                f"simulate_puff: `{name}` requires n_points ≥ 2 (got n={n!r})"
+                f"simulate_puff: `{name}` requires n_points ≥ 2 (got n={num_points!r})"
             )
     if not (release_frequency > 0.0):
         raise ValueError(
@@ -518,19 +549,22 @@ def simulate_puff(
     x_grid = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
     y_grid = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
     z_grid = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]))
-    n_x, n_y, n_z = len(x_grid), len(y_grid), len(z_grid)
-    n_t = len(time_array)
+    num_x, num_y, num_levels = len(x_grid), len(y_grid), len(z_grid)
+    num_times = len(time_array)
 
-    X, Y, Z = np.meshgrid(x_grid, y_grid, z_grid, indexing="ij")
-    x_flat = jnp.asarray(X.ravel(), dtype=jnp.float32)
-    y_flat = jnp.asarray(Y.ravel(), dtype=jnp.float32)
-    z_flat = jnp.asarray(Z.ravel(), dtype=jnp.float32)
+    mesh_x, mesh_y, mesh_z = np.meshgrid(x_grid, y_grid, z_grid, indexing="ij")
+    mesh_x_flat = einx.id("x y z -> (x y z)", mesh_x)
+    mesh_y_flat = einx.id("x y z -> (x y z)", mesh_y)
+    mesh_z_flat = einx.id("x y z -> (x y z)", mesh_z)
+    x_flat = jnp.asarray(mesh_x_flat, dtype=jnp.float32)
+    y_flat = jnp.asarray(mesh_y_flat, dtype=jnp.float32)
+    z_flat = jnp.asarray(mesh_z_flat, dtype=jnp.float32)
 
-    dt_release = frequency_to_release_interval(release_frequency)
+    release_interval = frequency_to_release_interval(release_frequency)
     release_times = make_release_times(
         float(time_array[0]), float(time_array[-1]), release_frequency
     )
-    n_puffs = int(release_times.shape[0])
+    num_puffs = int(release_times.shape[0])
     # Per-puff emission-interval durations: full Δt for interior puffs, the
     # remainder for the final (possibly partial) interval. Weighting mass by
     # these durations conserves the total emitted mass Q·(t_end − t_start) even
@@ -544,39 +578,43 @@ def simulate_puff(
                 "simulate_puff: scalar `emission_rate` must be ≥ 0 "
                 f"(got {emission_rate!r})"
             )
+        # m_i = Q Δt_i
         puff_mass = jnp.asarray(q_scalar * durations, dtype=jnp.float32)
     else:
-        Q = np.asarray(emission_rate, dtype=np.float32)
-        if Q.shape != (n_puffs,):
+        emission_array = np.asarray(emission_rate, dtype=np.float32)
+        if emission_array.shape != (num_puffs,):
             raise ValueError(
                 f"simulate_puff: array `emission_rate` must have shape "
-                f"({n_puffs},) matching the number of releases in "
+                f"({num_puffs},) matching the number of releases in "
                 f"[t_start, t_end) at release_frequency={release_frequency}, "
-                f"got {Q.shape}"
+                f"got {emission_array.shape}"
             )
-        if np.any(Q < 0.0):
+        if np.any(emission_array < 0.0):
             raise ValueError("simulate_puff: `emission_rate` entries must be ≥ 0")
-        puff_mass = jnp.asarray(Q * np.asarray(durations), dtype=jnp.float32)
+        # m_i = Q_i Δt_i
+        puff_mass = jnp.asarray(
+            emission_array * np.asarray(durations), dtype=jnp.float32
+        )
 
     schedule = WindSchedule.from_speed_direction(time_array, wind_speed, wind_direction)
 
     if turbulence is not None:
         from plumax.gauss_puff.turbulence import sample_ou_offsets
 
-        dx_np, dy_np = sample_ou_offsets(
+        offset_x_np, offset_y_np = sample_ou_offsets(
             turbulence,
             np.asarray(release_times),
             seed=turbulence_seed,
         )
         position_disturbance = (
-            jnp.asarray(dx_np, dtype=jnp.float32),
-            jnp.asarray(dy_np, dtype=jnp.float32),
+            jnp.asarray(offset_x_np, dtype=jnp.float32),
+            jnp.asarray(offset_y_np, dtype=jnp.float32),
         )
     else:
         position_disturbance = None
 
-    concentration = np.zeros((n_t, n_x, n_y, n_z), dtype=np.float32)
-    for i_t, t_current in enumerate(time_array):
+    concentration = np.zeros((num_times, num_x, num_y, num_levels), dtype=np.float32)
+    for time_index, t_current in enumerate(time_array):
         puff_state = evolve_puffs(
             schedule,
             release_times,
@@ -591,8 +629,12 @@ def simulate_puff(
             dispersion_params,
             dispersion_fn,
         )
-        concentration[i_t] = np.asarray(field_flat).reshape((n_x, n_y, n_z))
+        field_np = np.asarray(field_flat)
+        concentration[time_index] = einx.id(
+            "(x y z) -> x y z", field_np, x=num_x, y=num_y
+        )
 
+    # C = C + C_bg
     concentration = concentration + background_conc
 
     # Trapezoidal vertical integration over the (endpoint-inclusive) z grid;
@@ -600,7 +642,7 @@ def simulate_puff(
     # the background) by one grid interval. See gauss_plume.simulate_plume.
     column = np.trapezoid(concentration, x=z_grid, axis=3)
 
-    ds = xr.Dataset(
+    dataset = xr.Dataset(
         data_vars={
             "concentration": (["time", "x", "y", "z"], concentration),
             "column_concentration": (["time", "x", "y"], column),
@@ -621,8 +663,8 @@ def simulate_puff(
             "stability_class": stability_class,
             "dispersion_scheme": scheme,
             "release_frequency": release_frequency,
-            "release_interval": dt_release,
-            "n_puffs": n_puffs,
+            "release_interval": release_interval,
+            "n_puffs": num_puffs,
             "background_concentration": background_conc,
             "ou_sigma_fluctuations": (
                 float(turbulence.sigma_fluctuations) if turbulence else 0.0
@@ -632,14 +674,17 @@ def simulate_puff(
             ),
         },
     )
-    ds["concentration"].attrs = {"long_name": "Mass concentration", "units": "kg/m^3"}
-    ds["column_concentration"].attrs = {
+    dataset["concentration"].attrs = {
+        "long_name": "Mass concentration",
+        "units": "kg/m^3",
+    }
+    dataset["column_concentration"].attrs = {
         "long_name": "Column-integrated concentration",
         "units": "kg/m^2",
     }
-    ds["wind_speed"].attrs = {"long_name": "Wind speed", "units": "m/s"}
-    ds["wind_direction"].attrs = {
+    dataset["wind_speed"].attrs = {"long_name": "Wind speed", "units": "m/s"}
+    dataset["wind_direction"].attrs = {
         "long_name": "Wind direction",
         "units": "degrees from North (meteorological)",
     }
-    return ds
+    return dataset

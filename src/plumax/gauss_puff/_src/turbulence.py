@@ -47,6 +47,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import einx
 import numpy as np
 from jaxtyping import Float
 
@@ -124,9 +125,10 @@ def sample_ou_offsets(
         Per-puff position offsets [m], to be added to the advected puff
         centres in :func:`~plumax.gauss_puff.puff.evolve_puffs`.
     """
-    rel = np.asarray(release_times, dtype=np.float64).reshape(-1)
-    if rel.size == 0:
+    release_array = np.asarray(release_times, dtype=np.float64)
+    if release_array.size == 0:
         return np.empty((0,), dtype=np.float64), np.empty((0,), dtype=np.float64)
+    rel = einx.id("... -> (...)", release_array)
     if np.any(np.diff(rel) < 0.0):
         raise ValueError(
             "sample_ou_offsets: `release_times` must be monotone non-decreasing."
@@ -134,36 +136,42 @@ def sample_ou_offsets(
 
     rng = seed if isinstance(seed, np.random.Generator) else np.random.default_rng(seed)
 
-    sigma_f = float(turbulence.sigma_fluctuations)
-    tau_c = float(turbulence.correlation_time)
-    sigma_inf = turbulence.stationary_std  # per-component stationary std
+    fluctuation_amplitude = float(turbulence.sigma_fluctuations)
+    correlation_time = float(turbulence.correlation_time)
+    stationary_std = turbulence.stationary_std
 
-    n = rel.size
-    dx = np.empty(n, dtype=np.float64)
-    dy = np.empty(n, dtype=np.float64)
+    num_releases = rel.size
+    offset_x = np.empty(num_releases, dtype=np.float64)
+    offset_y = np.empty(num_releases, dtype=np.float64)
 
     # Initial puff drawn from the stationary distribution so the trajectory
     # is already mixed — no need to run burn-in before the first release.
-    z0 = rng.standard_normal(2) * sigma_inf
-    dx[0] = z0[0]
-    dy[0] = z0[1]
+    # p₀ = σ_∞ ξ,   ξ ~ 𝒩(0, I)
+    initial_draw = rng.standard_normal(2) * stationary_std
+    offset_x[0] = initial_draw[0]
+    offset_y[0] = initial_draw[1]
 
     # σ_f = 0 → deterministic OU, stays at the initial draw (which will
     # itself be exactly zero since σ_inf = 0). Shortcut to avoid spurious
     # zero-variance noise draws.
-    if sigma_f == 0.0:
-        dx[:] = 0.0
-        dy[:] = 0.0
-        return dx, dy
+    if fluctuation_amplitude == 0.0:
+        offset_x[:] = 0.0
+        offset_y[:] = 0.0
+        return offset_x, offset_y
 
-    for i in range(1, n):
-        dt = rel[i] - rel[i - 1]
-        decay = np.exp(-dt / tau_c)
+    for index in range(1, num_releases):
+        # Δτ = τ_i − τ_{i−1}
+        time_step = rel[index] - rel[index - 1]
+        # a = exp(−Δτ / τ_c)
+        decay = np.exp(-time_step / correlation_time)
         # Conditional variance of p(t+Δt) | p(t) under the exact OU transition.
-        step_var = sigma_inf**2 * (1.0 - decay**2)
+        # v = σ_∞² (1 − a²)
+        step_var = stationary_std**2 * (1.0 - decay**2)
+        # s = √max(v, 0)
         step_std = np.sqrt(max(step_var, 0.0))
-        eps = rng.standard_normal(2)
-        dx[i] = decay * dx[i - 1] + step_std * eps[0]
-        dy[i] = decay * dy[i - 1] + step_std * eps[1]
+        noise = rng.standard_normal(2)
+        # p_i = a p_{i−1} + s ξ
+        offset_x[index] = decay * offset_x[index - 1] + step_std * noise[0]
+        offset_y[index] = decay * offset_y[index - 1] + step_std * noise[1]
 
-    return dx, dy
+    return offset_x, offset_y
