@@ -390,7 +390,11 @@ def gaussian_puff_rw_model(
     # ln Q_i = ln Q₀ + Σ_{j ≤ i} δ_j
     cumulative_increments = jnp.cumsum(increments)
     later = first + cumulative_increments
-    log_q = einx.id(", step -> (1 + step)", first, later)
+    if num_puffs == 1:
+        # einx rejects a zero-size axis; one puff is ln Q₀ alone
+        log_q = einx.id(" -> 1", first)
+    else:
+        log_q = einx.id(", step -> (1 + step)", first, later)
     emission_series = numpyro.deterministic("emission_rate", jnp.exp(log_q))
 
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
