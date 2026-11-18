@@ -38,7 +38,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from plumax.lagrangian.inversion import _is_traced
+from plumax._src.tracing import _is_traced
 
 
 @dataclass(frozen=True)

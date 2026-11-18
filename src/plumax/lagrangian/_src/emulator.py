@@ -43,7 +43,7 @@ import pipekit_ops
 from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 
 from plumax._src.errors import ParameterError
-from plumax._vardax import require_vardax
+from plumax._src.vardax import require_vardax
 from plumax.lagrangian.footprint import (
     _backward_steps,
     _flux_sensitivity,

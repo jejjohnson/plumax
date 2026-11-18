@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from scipy import stats
 
-from plumax.lagrangian.inversion import _is_traced
+from plumax._src.tracing import _is_traced
 from plumax.population._src._xtremax import require_xtremax
 
 
