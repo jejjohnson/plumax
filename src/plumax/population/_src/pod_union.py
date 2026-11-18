@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import einx
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
@@ -145,25 +146,25 @@ def _require_bin(pods: Sequence[InstrumentPOD], tod_bin: ArrayLike | None) -> No
 
 def _logits(
     pods: Sequence[InstrumentPOD],
-    q: Float[Array, "*q"],
+    emission_rate: Float[Array, "*emission_rate"],
     calibration: Calibration | None,
     tod_bin: ArrayLike | None = None,
 ) -> Float[Array, "... instrument"]:
     per_instrument = []
     for pod in pods:
         values = calibration[pod.name] if calibration else {}
-        q50 = jnp.asarray(values.get("q50", pod.q50), dtype=q.dtype)
-        slope = jnp.asarray(values.get("slope", pod.slope), dtype=q.dtype)
+        q50 = jnp.asarray(values.get("q50", pod.q50), dtype=emission_rate.dtype)
+        slope = jnp.asarray(values.get("slope", pod.slope), dtype=emission_rate.dtype)
         if pod.tod_bins is not None:
             # log Q₅₀(b) = log Q₅₀ + δ_b
-            shift = jnp.asarray(pod.tod_bins, dtype=q.dtype)[tod_bin]
+            shift = jnp.asarray(pod.tod_bins, dtype=emission_rate.dtype)[tod_bin]
             q50 = q50 * jnp.exp(shift)
         if pod.model == "log_logistic":
             # η_k = k log(Q / Q₅₀)
-            logit = slope * (jnp.log(q) - jnp.log(q50))
+            logit = slope * (jnp.log(emission_rate) - jnp.log(q50))
         else:
             # η_k = k (Q − Q₅₀)
-            logit = slope * (q - q50)
+            logit = slope * (emission_rate - q50)
         per_instrument.append(logit)
     # one rate over many bins: only the binned instruments carry the bins' shape
     return jnp.stack(jnp.broadcast_arrays(*per_instrument), axis=-1)
@@ -257,7 +258,12 @@ def pod_union(
     rates = jnp.asarray(q, dtype=float)
     logits = _logits(pods, rates, None, tod_bin)
     # a = Σ_k c_k log(1 + e^η_k)
-    miss_scale = jnp.sum(jnp.where(mask, jax.nn.softplus(logits), 0.0), axis=-1)
+    covered_terms = jnp.where(mask, jax.nn.softplus(logits), 0.0)
+    if covered_terms.size == 0:
+        # einx rejects a zero-size axis; a sum over no terms is 0
+        miss_scale = jnp.zeros(covered_terms.shape[:-1], dtype=covered_terms.dtype)
+    else:
+        miss_scale = einx.sum("... [instrument]", covered_terms)
     # P^∪ = 1 − e^{−a}
     return -jnp.expm1(-miss_scale)
 
@@ -301,8 +307,8 @@ def log_pod_union(
     mask = _resolve_coverage(pods, coverage)
     _require_bin(pods, tod_bin)
 
-    def log_pod(q: Array) -> Array:
-        rates = jnp.asarray(q, dtype=float)
+    def log_pod(emission_rate: Array) -> Array:
+        rates = jnp.asarray(emission_rate, dtype=float)
         return _log_union(_logits(pods, rates, calibration, tod_bin), mask)
 
     return log_pod

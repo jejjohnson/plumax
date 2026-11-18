@@ -46,6 +46,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import einx
 import jax.numpy as jnp
 import numpy as np
 
@@ -166,21 +167,28 @@ def _scalar_q_summary(posterior: object) -> tuple[jax.Array, jax.Array]:
     rate_attr = getattr(posterior, "emission_rate", None)
     std_attr = getattr(posterior, "emission_std", None)
     if rate_attr is not None and std_attr is not None:
-        rate = jnp.asarray(rate_attr).reshape(-1)
-        std = jnp.asarray(std_attr).reshape(-1)
+        rate = einx.id("... -> (...)", jnp.asarray(rate_attr))
+        std = einx.id("... -> (...)", jnp.asarray(std_attr))
         return rate[0], std[0]
 
     mean_attr = getattr(posterior, "mean", None)
     if mean_attr is not None:
-        mean = jnp.asarray(mean_attr).reshape(-1)
+        mean_array = jnp.asarray(mean_attr)
+        # einx rejects a zero-size axis; an empty mean still totals 0
+        if mean_array.size == 0:
+            mean = jnp.zeros((0,), dtype=mean_array.dtype)
+        else:
+            mean = einx.id("... -> (...)", mean_array)
         q_total = jnp.sum(mean)
         log_cov = getattr(posterior, "log_covariance", None)
         if log_cov is not None:
+            log_covariance = jnp.asarray(log_cov)
+            emission_rate = mean
             # Delta method: Cov[q_i, q_j] ≈ q_i q_j (exp(Σ_log[i, j]) − 1).
-            sigma_log = jnp.asarray(log_cov)
-            q = mean
-            cov_q = jnp.outer(q, q) * jnp.expm1(sigma_log)
-            var_total = jnp.sum(cov_q)
+            emission_covariance = jnp.outer(emission_rate, emission_rate) * jnp.expm1(
+                log_covariance
+            )
+            var_total = jnp.sum(emission_covariance)
             return q_total, jnp.sqrt(jnp.clip(var_total, 0.0, None))
         cov = getattr(posterior, "covariance", None)
         if cov is not None:
@@ -280,27 +288,27 @@ class EmissionCatalog:
     @property
     def emission_rate(self) -> np.ndarray:
         """Per-event posterior-mean emission rates ``(n_events,)`` [kg/s]."""
-        return np.asarray([e.emission_rate for e in self.events], dtype=float)
+        return np.asarray([event.emission_rate for event in self.events], dtype=float)
 
     @property
     def emission_std(self) -> np.ndarray:
         """Per-event posterior standard deviations ``(n_events,)`` [kg/s]."""
-        return np.asarray([e.emission_std for e in self.events], dtype=float)
+        return np.asarray([event.emission_std for event in self.events], dtype=float)
 
     @property
     def x(self) -> np.ndarray:
         """Per-event source east-west locations ``(n_events,)`` [m]."""
-        return np.asarray([e.x for e in self.events], dtype=float)
+        return np.asarray([event.x for event in self.events], dtype=float)
 
     @property
     def y(self) -> np.ndarray:
         """Per-event source north-south locations ``(n_events,)`` [m]."""
-        return np.asarray([e.y for e in self.events], dtype=float)
+        return np.asarray([event.y for event in self.events], dtype=float)
 
     @property
     def time(self) -> np.ndarray:
         """Per-event detection times ``(n_events,)`` [s]."""
-        return np.asarray([e.time for e in self.events], dtype=float)
+        return np.asarray([event.time for event in self.events], dtype=float)
 
     def log_moments(self) -> tuple[np.ndarray, np.ndarray]:
         r"""Per-event lognormal sufficient statistic ``(log_mean, log_std)``.
@@ -326,13 +334,17 @@ class EmissionCatalog:
         Returns:
             A tuple ``(log_mean, log_std)`` of arrays, each ``(n_events,)``.
         """
-        m = self.emission_rate
-        s = self.emission_std
-        if np.any(m <= 0.0):
+        rate = self.emission_rate
+        std = self.emission_std
+        if np.any(rate <= 0.0):
             msg = "log_moments requires strictly positive emission_rate for every event"
             raise ValueError(msg)
-        cv2 = (s / m) ** 2
-        log_var = np.log1p(cv2)
+        # c² = (s / m)²
+        squared_cv = (std / rate) ** 2
+        # σ_log² = ln(1 + c²)
+        log_var = np.log1p(squared_cv)
+        # σ_log = √σ_log²
         log_std = np.sqrt(log_var)
-        log_mean = np.log(m) - 0.5 * log_var
+        # μ_log = ln(m) − ½ σ_log²
+        log_mean = np.log(rate) - 0.5 * log_var
         return log_mean, log_std

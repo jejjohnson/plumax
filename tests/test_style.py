@@ -102,7 +102,6 @@ PENDING: dict[str, int] = {
     "geo": 12,
     "les_fvm": 17,
     "obs": 10,
-    "population": 17,
 }
 
 

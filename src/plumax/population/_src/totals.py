@@ -82,7 +82,7 @@ def _merge_windows(
     # a lone (t₀, t₁) of numbers, or a sequence of them
     windows = list(horizon) if isinstance(horizon[0], Sequence) else [horizon]
     merged: list[tuple[float, float]] = []
-    for start, stop in sorted((float(a), float(b)) for a, b in windows):
+    for start, stop in sorted((float(first), float(last)) for first, last in windows):
         if not stop > start:
             raise ValueError(
                 f"total_emission: a window needs t₁ > t₀, got ({start}, {stop})."
@@ -101,15 +101,15 @@ def _stratum_emission(
     event_duration: float,
     log_pod: Callable[[Array], Array] | None,
     pods: Sequence[InstrumentPOD] | None,
-    q_min: float,
-    q_max: float,
-    n_nodes: int,
+    min_rate: float,
+    max_rate: float,
+    num_nodes: int,
     nodes_per_day: int,
     tod_origin: float,
 ) -> tuple[Float[Array, " member"], Float[Array, " member"]]:
     def member(draw: dict[str, Array]) -> tuple[Array, Array]:
         kernel = posterior.kernel(draw)
-        theta = posterior.theta(draw)
+        params = posterior.theta(draw)
 
         # --- ground process ---
         # Λ = Σ_w ∫_w λ(t) dt
@@ -123,19 +123,25 @@ def _stratum_emission(
 
         # --- marks ---
         # E_f[Q] = ∫ q f(q | θ) dq, a partial moment on [q_min, q_max]
-        mean_rate = posterior.mark.truncated_mean(q_min, q_max, **theta)
+        mean_rate = posterior.mark.truncated_mean(min_rate, max_rate, **params)
         calibration = None if pods is None else calibration_from_draw(pods, draw)
 
         def missing_rate_of(curve: Callable[[Array], Array]) -> Array:
-            def log_integrand(q: Array) -> Array:
+            def log_integrand(emission_rate: Array) -> Array:
                 # log P_d is near 0 where detection is certain, so 1 − P_d needs expm1
-                log_miss = jnp.log(-jnp.expm1(curve(q)))
+                log_miss = jnp.log(-jnp.expm1(curve(emission_rate)))
                 # log q + log f(q | θ) + log(1 − P_d(q))
-                return jnp.log(q) + posterior.mark.log_prob(q, **theta) + log_miss
+                return (
+                    jnp.log(emission_rate)
+                    + posterior.mark.log_prob(emission_rate, **params)
+                    + log_miss
+                )
 
             # E_f[Q (1 − P_d(Q))], in log space: a heavy tail underflows in linear Q
             return jnp.exp(
-                integrix_expect.log_simpson(log_integrand, q_min, q_max, n=n_nodes)
+                integrix_expect.log_simpson(
+                    log_integrand, min_rate, max_rate, n=num_nodes
+                )
             )
 
         # M_total = Λ E_f[Q] D
@@ -301,9 +307,9 @@ def total_emission(
             event_duration=event_duration,
             log_pod=log_pod,
             pods=pods,
-            q_min=q_min,
-            q_max=q_max,
-            n_nodes=n_nodes,
+            min_rate=q_min,
+            max_rate=q_max,
+            num_nodes=n_nodes,
             nodes_per_day=nodes_per_day,
             tod_origin=tod_origin,
         )

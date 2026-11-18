@@ -71,23 +71,25 @@ class Mark(Protocol):
 
 
 def _lognormal_log_prob(
-    q: Float[Array, "*q"], mu: Float[Array, "*mu"], sigma: Float[Array, "*sigma"]
+    emission_rate: Float[Array, "*emission_rate"],
+    log_mean: Float[Array, "*log_mean"],
+    log_std: Float[Array, "*log_std"],
 ) -> Float[Array, "*out"]:
     # log LN(q; μ, σ²) = log N(log q; μ, σ²) − log q, −∞ for q ≤ 0
-    positive = q > 0.0
-    log_q = jnp.log(jnp.where(positive, q, 1.0))
-    density = norm.logpdf(log_q, mu, sigma) - log_q
+    positive = emission_rate > 0.0
+    log_q = jnp.log(jnp.where(positive, emission_rate, 1.0))
+    density = norm.logpdf(log_q, log_mean, log_std) - log_q
     return jnp.where(positive, density, -jnp.inf)
 
 
 def _log_lognormal_partial_mean(
     lower: Float[Array, "*lower"],
     upper: Float[Array, "*upper"],
-    mu: Float[Array, "*mu"],
-    sigma: Float[Array, "*sigma"],
+    log_mean: Float[Array, "*log_mean"],
+    log_std: Float[Array, "*log_std"],
 ) -> Float[Array, "*out"]:
     # log ∫ₐᵇ q LN(q) dq = μ + σ²/2 + log[Φ(z_b) − Φ(z_a)], z = (log q − μ − σ²)/σ
-    shift = mu + sigma**2
+    shift = log_mean + log_std**2
     empty = upper <= lower
     open_upper = jnp.isinf(upper)
     open_lower = lower <= 0.0
@@ -95,8 +97,8 @@ def _log_lognormal_partial_mean(
     # reverse-mode gradient meets ∞ · 0; the limits are selected below
     safe_upper = jnp.where(open_upper | empty, 1.0, upper)
     safe_lower = jnp.where(open_lower | empty, 0.5, lower)
-    upper_z = (jnp.log(safe_upper) - shift) / sigma
-    lower_z = (jnp.log(safe_lower) - shift) / sigma
+    upper_z = (jnp.log(safe_upper) - shift) / log_std
+    lower_z = (jnp.log(safe_lower) - shift) / log_std
     # log Φ and log(1 − Φ) at each end, with the limits at open ends
     log_cdf_upper = jnp.where(open_upper, 0.0, norm.logcdf(upper_z))
     log_cdf_lower = jnp.where(open_lower, -jnp.inf, norm.logcdf(lower_z))
@@ -114,7 +116,7 @@ def _log_lognormal_partial_mean(
     from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(cdf_ratio))
     from_survival = log_survival_lower + jnp.log1p(-jnp.exp(survival_ratio))
     log_mass = jnp.where(right_of_centre, from_survival, from_cdf)
-    return jnp.where(empty, -jnp.inf, mu + 0.5 * sigma**2 + log_mass)
+    return jnp.where(empty, -jnp.inf, log_mean + 0.5 * log_std**2 + log_mass)
 
 
 def _log_normal_interval(
@@ -160,22 +162,22 @@ def _normal_quantile_from_log(log_p: Float[Array, "*p"]) -> Float[Array, "*p"]:
 def _lognormal_partial_mean(
     lower: Float[Array, "*lower"],
     upper: Float[Array, "*upper"],
-    mu: Float[Array, "*mu"],
-    sigma: Float[Array, "*sigma"],
+    log_mean: Float[Array, "*log_mean"],
+    log_std: Float[Array, "*log_std"],
 ) -> Float[Array, "*out"]:
     # ∫ₐᵇ q LN(q) dq = exp(μ + σ²/2) [Φ(z_b) − Φ(z_a)]
-    return jnp.exp(_log_lognormal_partial_mean(lower, upper, mu, sigma))
+    return jnp.exp(_log_lognormal_partial_mean(lower, upper, log_mean, log_std))
 
 
 #: |y| below which expm1(y)/y is evaluated by its Taylor series.
 _SERIES_THRESHOLD = 1e-4
 
 
-def _expm1_over_x(y: Float[Array, "*y"]) -> Float[Array, "*y"]:
+def _expm1_over_x(exponent: Float[Array, "*exponent"]) -> Float[Array, "*exponent"]:
     # E(y) = (eʸ − 1)/y, smooth through y = 0 (E = 1 + y/2 + y²/6 + y³/24 + …)
-    small = jnp.abs(y) < _SERIES_THRESHOLD
-    safe = jnp.where(small, 1.0, y)
-    series = 1.0 + y / 2.0 + y**2 / 6.0 + y**3 / 24.0
+    small = jnp.abs(exponent) < _SERIES_THRESHOLD
+    safe = jnp.where(small, 1.0, exponent)
+    series = 1.0 + exponent / 2.0 + exponent**2 / 6.0 + exponent**3 / 24.0
     return jnp.where(small, series, jnp.expm1(safe) / safe)
 
 
@@ -183,7 +185,7 @@ def _pareto_partial_mean(
     lower: Float[Array, "*lower"],
     upper: Float[Array, "*upper"],
     scale: Float[Array, "*scale"],
-    alpha: Float[Array, "*alpha"],
+    tail_index: Float[Array, "*tail_index"],
 ) -> Float[Array, "*out"]:
     # ∫ q · α sᵅ q^(−α−1) dq over [a', b], a' = max(a, s), ε = α − 1, r = log(b/a'):
     #   α sᵅ a'^(−ε) (1 − e^(−ε r))/ε = α sᵅ a'^(−ε) r E(−ε r), E(y) = (eʸ − 1)/y,
@@ -191,12 +193,14 @@ def _pareto_partial_mean(
     #   ε = 0 and stays differentiable through it; +∞ for b = ∞ and ε ≤ 0
     lower = jnp.maximum(lower, scale)
     upper = jnp.maximum(upper, lower)
-    excess = alpha - 1.0
+    excess = tail_index - 1.0
     open_upper = jnp.isinf(upper)
     log_lower = jnp.log(lower)
     log_ratio = jnp.log(jnp.where(open_upper, lower, upper)) - log_lower
     # log(α sᵅ a'^(−ε)), combined before exponentiating
-    log_coefficient = jnp.log(alpha) + alpha * jnp.log(scale) - excess * log_lower
+    log_coefficient = (
+        jnp.log(tail_index) + tail_index * jnp.log(scale) - excess * log_lower
+    )
     finite = log_ratio * _expm1_over_x(-excess * log_ratio)
     # b = ∞: 1/ε for ε > 0, ∞ otherwise
     safe_excess = jnp.where(excess > 0.0, excess, 1.0)
@@ -205,9 +209,9 @@ def _pareto_partial_mean(
     return jnp.exp(log_coefficient) * bracket
 
 
-def _bounds(q_min: ArrayLike, q_max: ArrayLike) -> tuple[Array, Array]:
-    lower = jnp.asarray(q_min, dtype=float)
-    upper = jnp.asarray(q_max, dtype=float)
+def _bounds(min_rate: ArrayLike, max_rate: ArrayLike) -> tuple[Array, Array]:
+    lower = jnp.asarray(min_rate, dtype=float)
+    upper = jnp.asarray(max_rate, dtype=float)
     lower, upper = jnp.broadcast_arrays(lower, upper)
     return lower, upper
 
@@ -236,36 +240,40 @@ class PowerLawMark(eqx.Module):
     alpha_bounds: tuple[float, float] = (1.1, 4.5)
 
     def log_prob(self, q: ArrayLike, *, alpha: ArrayLike) -> Float[Array, "*q"]:
-        q = jnp.asarray(q, dtype=float)
-        alpha = jnp.asarray(alpha, dtype=float)
-        inside = q >= self.q_min
-        ratio = jnp.where(inside, q, self.q_min) / self.q_min
+        emission_rate = jnp.asarray(q, dtype=float)
+        exponent = jnp.asarray(alpha, dtype=float)
+        inside = emission_rate >= self.q_min
+        ratio = jnp.where(inside, emission_rate, self.q_min) / self.q_min
         # log f = log(α − 1) − log q_min − α log(q/q_min)
-        density = jnp.log(alpha - 1.0) - jnp.log(self.q_min) - alpha * jnp.log(ratio)
+        density = (
+            jnp.log(exponent - 1.0) - jnp.log(self.q_min) - exponent * jnp.log(ratio)
+        )
         return jnp.where(inside, density, -jnp.inf)
 
     def sample(
         self, key: Array, n: int, *, alpha: ArrayLike
     ) -> Float[Array, " member"]:
-        alpha = jnp.asarray(alpha, dtype=float)
+        exponent = jnp.asarray(alpha, dtype=float)
         uniform = jax.random.uniform(key, (n,), minval=jnp.finfo(float).tiny)
         # inverse CDF: q = q_min u^(−1/(α − 1))
-        return self.q_min * uniform ** (-1.0 / (alpha - 1.0))
+        return self.q_min * uniform ** (-1.0 / (exponent - 1.0))
 
     def truncated_mean(
         self, q_min: ArrayLike, q_max: ArrayLike, *, alpha: ArrayLike
     ) -> Float[Array, "*q"]:
         lower, upper = _bounds(q_min, q_max)
-        alpha = jnp.asarray(alpha, dtype=float)
+        exponent = jnp.asarray(alpha, dtype=float)
         # a Pareto with index α − 1 and scale q_min
-        return _pareto_partial_mean(lower, upper, jnp.asarray(self.q_min), alpha - 1.0)
+        return _pareto_partial_mean(
+            lower, upper, jnp.asarray(self.q_min), exponent - 1.0
+        )
 
     def log_survival(self, q: ArrayLike, *, alpha: ArrayLike) -> Float[Array, "*q"]:
         """log P(Q > q) = (α − 1) log(q_min/q) above q_min, 0 below."""
-        q = jnp.asarray(q, dtype=float)
-        alpha = jnp.asarray(alpha, dtype=float)
-        ratio = jnp.maximum(q, self.q_min) / self.q_min
-        return -(alpha - 1.0) * jnp.log(ratio)
+        emission_rate = jnp.asarray(q, dtype=float)
+        exponent = jnp.asarray(alpha, dtype=float)
+        ratio = jnp.maximum(emission_rate, self.q_min) / self.q_min
+        return -(exponent - 1.0) * jnp.log(ratio)
 
     def numpyro_prior(self, name: str) -> dict[str, Any]:
         import numpyro
@@ -298,8 +306,8 @@ class LognormalMark(eqx.Module):
     def log_prob(
         self, q: ArrayLike, *, mu: ArrayLike, sigma: ArrayLike
     ) -> Float[Array, "*q"]:
-        q = jnp.asarray(q, dtype=float)
-        return _lognormal_log_prob(q, jnp.asarray(mu), jnp.asarray(sigma))
+        emission_rate = jnp.asarray(q, dtype=float)
+        return _lognormal_log_prob(emission_rate, jnp.asarray(mu), jnp.asarray(sigma))
 
     def sample(
         self, key: Array, n: int, *, mu: ArrayLike, sigma: ArrayLike
@@ -320,9 +328,9 @@ class LognormalMark(eqx.Module):
         self, q: ArrayLike, *, mu: ArrayLike, sigma: ArrayLike
     ) -> Float[Array, "*q"]:
         """log P(Q > q) = log Φ(−(log q − μ)/σ), 0 for q ≤ 0."""
-        q = jnp.asarray(q, dtype=float)
-        positive = q > 0.0
-        log_q = jnp.log(jnp.where(positive, q, 1.0))
+        emission_rate = jnp.asarray(q, dtype=float)
+        positive = emission_rate > 0.0
+        log_q = jnp.log(jnp.where(positive, emission_rate, 1.0))
         standardised = (log_q - jnp.asarray(mu)) / jnp.asarray(sigma)
         return jnp.where(positive, norm.logcdf(-standardised), 0.0)
 
@@ -339,16 +347,16 @@ class LognormalMark(eqx.Module):
 
 
 def _splice_log_weights(
-    mu: Float[Array, ""],
-    sigma: Float[Array, ""],
-    alpha: Float[Array, ""],
+    log_mean: Float[Array, ""],
+    log_std: Float[Array, ""],
+    tail_index: Float[Array, ""],
     q_break: Float[Array, ""],
 ) -> tuple[Float[Array, ""], Float[Array, ""], Float[Array, ""]]:
     # log F_LN(Q_b), the body's normaliser below the break
-    log_body_mass = norm.logcdf((jnp.log(q_break) - mu) / sigma)
+    log_body_mass = norm.logcdf((jnp.log(q_break) - log_mean) / log_std)
     # densities at the break of the normalised body and of the Pareto tail
-    log_body_at_break = _lognormal_log_prob(q_break, mu, sigma) - log_body_mass
-    log_tail_at_break = jnp.log(alpha) - jnp.log(q_break)
+    log_body_at_break = _lognormal_log_prob(q_break, log_mean, log_std) - log_body_mass
+    log_tail_at_break = jnp.log(tail_index) - jnp.log(q_break)
     # continuity w b(Q_b) = (1 − w) t(Q_b) ⇒ w = t / (t + b), 1 − w = b / (t + b)
     log_total = jnp.logaddexp(log_body_at_break, log_tail_at_break)
     log_body_weight = log_tail_at_break - log_total
@@ -400,24 +408,28 @@ class LognormalParetoMark(eqx.Module):
         alpha: ArrayLike,
         q_break: ArrayLike,
     ) -> Float[Array, "*q"]:
-        q = jnp.asarray(q, dtype=float)
-        mu, sigma, alpha, q_break = (
+        emission_rate = jnp.asarray(q, dtype=float)
+        log_mean, log_std, tail_index, q_break = (
             jnp.asarray(value, dtype=float) for value in (mu, sigma, alpha, q_break)
         )
         log_body_weight, log_tail_weight, log_body_mass = _splice_log_weights(
-            mu, sigma, alpha, q_break
+            log_mean, log_std, tail_index, q_break
         )
         # log w + log LN(q) − log F_LN(Q_b)
-        body = log_body_weight + _lognormal_log_prob(q, mu, sigma) - log_body_mass
+        body = (
+            log_body_weight
+            + _lognormal_log_prob(emission_rate, log_mean, log_std)
+            - log_body_mass
+        )
         # log(1 − w) + log α + α log Q_b − (α + 1) log q
-        safe_q = jnp.where(q >= q_break, q, q_break)
+        safe_rate = jnp.where(emission_rate >= q_break, emission_rate, q_break)
         tail = (
             log_tail_weight
-            + jnp.log(alpha)
-            + alpha * jnp.log(q_break)
-            - (alpha + 1.0) * jnp.log(safe_q)
+            + jnp.log(tail_index)
+            + tail_index * jnp.log(q_break)
+            - (tail_index + 1.0) * jnp.log(safe_rate)
         )
-        return jnp.where(q < q_break, body, tail)
+        return jnp.where(emission_rate < q_break, body, tail)
 
     def sample(
         self,
@@ -429,21 +441,23 @@ class LognormalParetoMark(eqx.Module):
         alpha: ArrayLike,
         q_break: ArrayLike,
     ) -> Float[Array, " member"]:
-        mu, sigma, alpha, q_break = (
+        log_mean, log_std, tail_index, q_break = (
             jnp.asarray(value, dtype=float) for value in (mu, sigma, alpha, q_break)
         )
         piece_key, body_key, tail_key = jax.random.split(key, 3)
-        log_body_weight, _, _ = _splice_log_weights(mu, sigma, alpha, q_break)
+        log_body_weight, _, _ = _splice_log_weights(
+            log_mean, log_std, tail_index, q_break
+        )
         in_body = jax.random.uniform(piece_key, (n,)) < jnp.exp(log_body_weight)
         # body: inverse CDF of the lognormal truncated to (0, Q_b)
         # in log space: Φ(z_b) underflows when Q_b sits far below the body
-        log_break_cdf = norm.logcdf((jnp.log(q_break) - mu) / sigma)
+        log_break_cdf = norm.logcdf((jnp.log(q_break) - log_mean) / log_std)
         body_uniform = jax.random.uniform(body_key, (n,), minval=jnp.finfo(float).tiny)
         log_level = jnp.log(body_uniform) + log_break_cdf
-        body = jnp.exp(mu + sigma * _normal_quantile_from_log(log_level))
+        body = jnp.exp(log_mean + log_std * _normal_quantile_from_log(log_level))
         # tail: inverse CDF of the Pareto, q = Q_b u^(−1/α)
         tail_uniform = jax.random.uniform(tail_key, (n,), minval=jnp.finfo(float).tiny)
-        tail = q_break * tail_uniform ** (-1.0 / alpha)
+        tail = q_break * tail_uniform ** (-1.0 / tail_index)
         return jnp.where(in_body, body, tail)
 
     def truncated_mean(
@@ -457,20 +471,22 @@ class LognormalParetoMark(eqx.Module):
         q_break: ArrayLike,
     ) -> Float[Array, "*q"]:
         lower, upper = _bounds(q_min, q_max)
-        mu, sigma, alpha, q_break = (
+        log_mean, log_std, tail_index, q_break = (
             jnp.asarray(value, dtype=float) for value in (mu, sigma, alpha, q_break)
         )
         log_body_weight, log_tail_weight, log_body_mass = _splice_log_weights(
-            mu, sigma, alpha, q_break
+            log_mean, log_std, tail_index, q_break
         )
         # body part on [a, min(b, Q_b)], renormalised by F_LN(Q_b) in log
         # space: far below the lognormal's centre both factors leave float64
         body_upper = jnp.minimum(upper, q_break)
         body_lower = jnp.minimum(lower, body_upper)
-        log_body = _log_lognormal_partial_mean(body_lower, body_upper, mu, sigma)
+        log_body = _log_lognormal_partial_mean(
+            body_lower, body_upper, log_mean, log_std
+        )
         body = jnp.exp(log_body_weight - log_body_mass + log_body)
         # tail part on [max(a, Q_b), b]
-        tail = _pareto_partial_mean(lower, upper, q_break, alpha)
+        tail = _pareto_partial_mean(lower, upper, q_break, tail_index)
         return body + jnp.exp(log_tail_weight) * tail
 
     def log_survival(
@@ -486,22 +502,24 @@ class LognormalParetoMark(eqx.Module):
 
         P(Q > q) = (1 − w) + w [Φ(z_b) − Φ(z)]/Φ(z_b) below Q_b.
         """
-        q = jnp.asarray(q, dtype=float)
-        mu, sigma, alpha, q_break = (
+        emission_rate = jnp.asarray(q, dtype=float)
+        log_mean, log_std, tail_index, q_break = (
             jnp.asarray(value, dtype=float) for value in (mu, sigma, alpha, q_break)
         )
         log_body_weight, log_tail_weight, log_body_mass = _splice_log_weights(
-            mu, sigma, alpha, q_break
+            log_mean, log_std, tail_index, q_break
         )
-        above = q >= q_break
-        positive = q > 0.0
+        above = emission_rate >= q_break
+        positive = emission_rate > 0.0
         # tail: log(1 − w) + α log(Q_b/q)
-        safe_tail_q = jnp.where(above, q, q_break)
-        tail = log_tail_weight + alpha * (jnp.log(q_break) - jnp.log(safe_tail_q))
+        safe_tail_rate = jnp.where(above, emission_rate, q_break)
+        tail = log_tail_weight + tail_index * (
+            jnp.log(q_break) - jnp.log(safe_tail_rate)
+        )
         # body: log[(1 − w) + w (Φ(z_b) − Φ(z))/Φ(z_b)]
-        safe_body_q = jnp.where(above | ~positive, 0.5 * q_break, q)
-        lower_z = (jnp.log(safe_body_q) - mu) / sigma
-        upper_z = (jnp.log(q_break) - mu) / sigma
+        safe_body_rate = jnp.where(above | ~positive, 0.5 * q_break, emission_rate)
+        lower_z = (jnp.log(safe_body_rate) - log_mean) / log_std
+        upper_z = (jnp.log(q_break) - log_mean) / log_std
         log_body_above = _log_normal_interval(lower_z, upper_z) - log_body_mass
         body = jnp.logaddexp(log_tail_weight, log_body_weight + log_body_above)
         return jnp.where(above, tail, jnp.where(positive, body, 0.0))
@@ -563,14 +581,16 @@ class MixtureLognormalMark(eqx.Module):
         locs: ArrayLike,
         scales: ArrayLike,
     ) -> Float[Array, "*q"]:
-        q = jnp.asarray(q, dtype=float)
+        emission_rate = jnp.asarray(q, dtype=float)
         weights, locs, scales = (
             jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
         )
         # log LN(q; μₖ, σₖ²) for every component
-        component = _lognormal_log_prob(einx.id("... -> ... 1", q), locs, scales)
+        component = _lognormal_log_prob(
+            einx.id("... -> ... 1", emission_rate), locs, scales
+        )
         # log Σₖ wₖ LNₖ(q)
-        return einx.logsumexp("... [k]", component + jnp.log(weights))
+        return einx.logsumexp("... [component]", component + jnp.log(weights))
 
     def sample(
         self,
@@ -610,7 +630,7 @@ class MixtureLognormalMark(eqx.Module):
             locs,
             scales,
         )
-        return einx.dot("... k, k -> ...", per_component, weights)
+        return einx.dot("... component, component -> ...", per_component, weights)
 
     def log_survival(
         self,
@@ -621,14 +641,15 @@ class MixtureLognormalMark(eqx.Module):
         scales: ArrayLike,
     ) -> Float[Array, "*q"]:
         """log P(Q > q) = log Σₖ wₖ Φ(−(log q − μₖ)/σₖ)."""
-        q = jnp.asarray(q, dtype=float)
+        emission_rate = jnp.asarray(q, dtype=float)
         weights, locs, scales = (
             jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
         )
-        positive = q > 0.0
-        log_q = einx.id("... -> ... 1", jnp.log(jnp.where(positive, q, 1.0)))
+        positive = emission_rate > 0.0
+        safe_log_rate = jnp.log(jnp.where(positive, emission_rate, 1.0))
+        log_q = einx.id("... -> ... 1", safe_log_rate)
         component = norm.logcdf(-(log_q - locs) / scales)
-        mixture = einx.logsumexp("... [k]", component + jnp.log(weights))
+        mixture = einx.logsumexp("... [component]", component + jnp.log(weights))
         return jnp.where(positive, mixture, 0.0)
 
     def numpyro_prior(self, name: str) -> dict[str, Any]:

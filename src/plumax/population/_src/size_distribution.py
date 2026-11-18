@@ -83,12 +83,12 @@ class SizeDistributionPosterior:
         """
         out: dict[str, dict[str, float]] = {}
         for name, samples in (("mu", self.mu_samples), ("sigma", self.sigma_samples)):
-            lo, hi = np.quantile(samples, [0.025, 0.975])
+            lower, upper = np.quantile(samples, [0.025, 0.975])
             out[name] = {
                 "mean": float(np.mean(samples)),
                 "std": float(np.std(samples)),
-                "q2.5": float(lo),
-                "q97.5": float(hi),
+                "q2.5": float(lower),
+                "q97.5": float(upper),
             }
         return out
 
@@ -104,8 +104,10 @@ class SizeDistributionPosterior:
         Returns:
             The density values, same shape as ``q``.
         """
-        q = np.asarray(q, dtype=float)
-        return stats.lognorm.pdf(q, s=self.sigma_mean, scale=np.exp(self.mu_mean))
+        emission_rate = np.asarray(q, dtype=float)
+        return stats.lognorm.pdf(
+            emission_rate, s=self.sigma_mean, scale=np.exp(self.mu_mean)
+        )
 
     def quantile(self, p: float | np.ndarray) -> float | np.ndarray:
         """Posterior-mean fitted-distribution quantile(s) of ``Q``.
@@ -208,10 +210,11 @@ def fit_lognormal_size_distribution(
     log_std_j = jax.numpy.asarray(log_std)
 
     def model(obs_mean: Any, obs_std: Any) -> None:
-        mu = numpyro.sample("mu", dist.Normal(0.0, mu_prior_scale))
-        sigma = numpyro.sample("sigma", dist.HalfNormal(sigma_prior_scale))
-        eff_std = jax.numpy.sqrt(sigma**2 + obs_std**2)
-        numpyro.sample("obs", dist.Normal(mu, eff_std), obs=obs_mean)
+        population_mean = numpyro.sample("mu", dist.Normal(0.0, mu_prior_scale))
+        population_std = numpyro.sample("sigma", dist.HalfNormal(sigma_prior_scale))
+        # σ_eff² = σ² + σ_obs,i²
+        eff_std = jax.numpy.sqrt(population_std**2 + obs_std**2)
+        numpyro.sample("obs", dist.Normal(population_mean, eff_std), obs=obs_mean)
 
     kernel = NUTS(model)
     mcmc = MCMC(
