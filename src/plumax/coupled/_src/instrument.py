@@ -32,8 +32,7 @@ lives with the inference, not the fixed instrument geometry.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -42,8 +41,7 @@ from jax.typing import ArrayLike
 from plumax._src.tracing import _is_traced
 
 
-@dataclass(frozen=True)
-class Instrument:
+class Instrument(eqx.Module):
     """Fixed observation geometry + error budget for one satellite instrument.
 
     Attributes:
@@ -68,43 +66,47 @@ class Instrument:
             variance, shape ``(n_obs,)``. ``None`` is no inflation.
     """
 
-    name: str
+    # static: it keys dicts of predictions and is never traced
+    name: str = eqx.field(static=True)
     receptors: ArrayLike
     averaging_kernel: ArrayLike | None = None
     retrieval_variance: ArrayLike = 1.0
     representation_variance: ArrayLike = 0.0
     alignment_variance: ArrayLike = 0.0
-    observation_time: float = 0.0
+    # static: the Eulerian backend matches it to save times on the host
+    observation_time: float = eqx.field(default=0.0, static=True)
     flags: ArrayLike | None = None
     mask: ArrayLike | None = None
     variance_inflation: ArrayLike | None = None
 
-    def __post_init__(self) -> None:
-        rec = np.asarray(self.receptors, dtype=float)
-        if rec.ndim != 2 or rec.shape[1] != 2:
+    def __check_init__(self) -> None:
+        # np.shape, not np.asarray: it also reads the shape of a tracer, so an
+        # instrument can be built inside a traced function
+        receptors_shape = np.shape(self.receptors)
+        if len(receptors_shape) != 2 or receptors_shape[1] != 2:
             raise ValueError(
                 f"Instrument {self.name!r}: `receptors` must be (n_obs, 2); "
-                f"got shape {rec.shape}."
+                f"got shape {receptors_shape}."
             )
         if self.averaging_kernel is not None:
-            ak = np.asarray(self.averaging_kernel, dtype=float)
-            if ak.shape != (rec.shape[0],):
+            kernel_shape = np.shape(self.averaging_kernel)
+            if kernel_shape != (receptors_shape[0],):
                 raise ValueError(
                     f"Instrument {self.name!r}: `averaging_kernel` must have shape "
-                    f"({rec.shape[0]},); got {ak.shape}."
+                    f"({receptors_shape[0]},); got {kernel_shape}."
                 )
         for label in ("flags", "mask", "variance_inflation"):
             value = getattr(self, label)
-            if value is not None and np.shape(value) != (rec.shape[0],):
+            if value is not None and np.shape(value) != (receptors_shape[0],):
                 raise ValueError(
                     f"Instrument {self.name!r}: `{label}` must have shape "
-                    f"({rec.shape[0]},); got {np.shape(value)}."
+                    f"({receptors_shape[0]},); got {np.shape(value)}."
                 )
 
     @property
     def n_obs(self) -> int:
         """Number of receptor pixels."""
-        return int(np.asarray(self.receptors).shape[0])
+        return int(np.shape(self.receptors)[0])
 
     @property
     def ak(self) -> jax.Array:
