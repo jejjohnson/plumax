@@ -35,6 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float, PRNGKeyArray
 
+from plumax._src.domain import cell_centres, edge_axis
 from plumax.lagrangian._src.concentration import _cell_indices
 from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.particles import (
@@ -76,9 +77,7 @@ def _surface_edges(
     domain_y: tuple[float, float, int],
 ) -> tuple[np.ndarray, np.ndarray]:
     """Cell edges along x and y of the surface grid."""
-    x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
-    y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
-    return x_edges, y_edges
+    return edge_axis(domain_x), edge_axis(domain_y)
 
 
 def _backward_steps(
@@ -242,9 +241,8 @@ def compute_footprint(
         docstring).
     """
     x_edges, y_edges = _surface_edges(domain_x, domain_y)
-    # c_i = (e_i + e_{i+1}) / 2
-    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
-    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
+    x_centers = cell_centres(x_edges)
+    y_centers = cell_centres(y_edges)
     mix_height = pbl_fraction * pbl_height
     durations, wind_starts = _backward_steps(t_back, dt, receptor_time)
     residence = _surface_residence(

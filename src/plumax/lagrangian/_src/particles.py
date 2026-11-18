@@ -38,6 +38,7 @@ import numpy as np
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from plumax._src.wind import wind_components
 from plumax.lagrangian._src.wind_interp import mean_wind
 
 
@@ -285,12 +286,7 @@ def wind_from_speed_direction(
     ``direction_deg = 270`` is a wind from the west (flowing east), matching the
     convention used by :func:`plumax.gauss_plume.simulate_plume`.
     """
-    # θ = direction in radians
-    angle = jnp.deg2rad(direction_deg)
-    # u = −s sin θ
-    wind_east = -speed * jnp.sin(angle)
-    # v = −s cos θ
-    wind_north = -speed * jnp.cos(angle)
+    wind_east, wind_north = wind_components(speed, direction_deg)
     return uniform_wind(float(wind_east), float(wind_north), w)
 
 

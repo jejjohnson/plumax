@@ -39,9 +39,11 @@ from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
+from plumax._src.dataset import label_concentrations
+from plumax._src.domain import check_domain, check_source, flat_mesh, node_axis
 from plumax._src.tracing import require_positive
+from plumax.gauss_plume._src.dispersion import check_stability
 from plumax.gauss_puff.dispersion import (
-    STABILITY_CLASSES,
     get_dispersion_scheme,
 )
 from plumax.gauss_puff.wind import WindSchedule, cumulative_wind_integrals
@@ -483,22 +485,8 @@ def simulate_puff(
 
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
 
-    if stability_class not in scheme_params_dict:
-        raise ValueError(
-            f"simulate_puff: `stability_class` must be one of "
-            f"{STABILITY_CLASSES} (got {stability_class!r})"
-        )
-    if len(source_location) != 3:
-        raise ValueError(
-            "simulate_puff: `source_location` must be (x, y, z); "
-            f"got length {len(source_location)}"
-        )
-    require_positive(
-        "source_location[2]",
-        source_location[2],
-        caller="simulate_puff",
-        allow_zero=True,
-    )
+    check_stability(stability_class, caller="simulate_puff", table=scheme_params_dict)
+    check_source(source_location, caller="simulate_puff")
     time_array = np.asarray(time_array, dtype=np.float32)
     wind_speed = np.asarray(wind_speed, dtype=np.float32)
     wind_direction = np.asarray(wind_direction, dtype=np.float32)
@@ -516,40 +504,20 @@ def simulate_puff(
         )
     require_positive("wind_speed", wind_speed, caller="simulate_puff", allow_zero=True)
 
-    for name, domain in (
-        ("domain_x", domain_x),
-        ("domain_y", domain_y),
-        ("domain_z", domain_z),
-    ):
-        if len(domain) != 3:
-            raise ValueError(
-                f"simulate_puff: `{name}` must be (start, stop, n_points); "
-                f"got length {len(domain)}"
-            )
-        start, stop, num_points = domain
-        if not (start < stop):
-            raise ValueError(
-                f"simulate_puff: `{name}` requires start < stop "
-                f"(got start={start!r}, stop={stop!r})"
-            )
-        if int(num_points) < 2:
-            raise ValueError(
-                f"simulate_puff: `{name}` requires n_points ≥ 2 (got n={num_points!r})"
-            )
+    check_domain("domain_x", domain_x, caller="simulate_puff")
+    check_domain("domain_y", domain_y, caller="simulate_puff")
+    check_domain("domain_z", domain_z, caller="simulate_puff")
     require_positive("release_frequency", release_frequency, caller="simulate_puff")
 
     dispersion_params = scheme_params_dict[stability_class]
 
-    x_grid = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
-    y_grid = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
-    z_grid = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]))
+    x_grid = node_axis(domain_x)
+    y_grid = node_axis(domain_y)
+    z_grid = node_axis(domain_z)
     num_x, num_y, num_levels = len(x_grid), len(y_grid), len(z_grid)
     num_times = len(time_array)
 
-    mesh_x, mesh_y, mesh_z = np.meshgrid(x_grid, y_grid, z_grid, indexing="ij")
-    mesh_x_flat = einx.id("x y z -> (x y z)", mesh_x)
-    mesh_y_flat = einx.id("x y z -> (x y z)", mesh_y)
-    mesh_z_flat = einx.id("x y z -> (x y z)", mesh_z)
+    mesh_x_flat, mesh_y_flat, mesh_z_flat = flat_mesh(x_grid, y_grid, z_grid)
     x_flat = jnp.asarray(mesh_x_flat, dtype=jnp.float32)
     y_flat = jnp.asarray(mesh_y_flat, dtype=jnp.float32)
     z_flat = jnp.asarray(mesh_z_flat, dtype=jnp.float32)
@@ -667,14 +635,7 @@ def simulate_puff(
             ),
         },
     )
-    dataset["concentration"].attrs = {
-        "long_name": "Mass concentration",
-        "units": "kg/m^3",
-    }
-    dataset["column_concentration"].attrs = {
-        "long_name": "Column-integrated concentration",
-        "units": "kg/m^2",
-    }
+    label_concentrations(dataset)
     dataset["wind_speed"].attrs = {"long_name": "Wind speed", "units": "m/s"}
     dataset["wind_direction"].attrs = {
         "long_name": "Wind direction",

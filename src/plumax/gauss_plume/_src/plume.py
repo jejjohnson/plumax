@@ -30,10 +30,17 @@ from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from plumax._src.dataset import label_concentrations
+from plumax._src.domain import (
+    check_domain,
+    check_source,
+    flat_mesh,
+    node_axis,
+)
 from plumax._src.tracing import require_positive
+from plumax._src.wind import wind_components
+from plumax.gauss_plume._src.dispersion import check_stability
 from plumax.gauss_plume.dispersion import (
-    BRIGGS_DISPERSION_PARAMS,
-    STABILITY_CLASSES,
     calculate_briggs_dispersion,
     get_dispersion_params,
 )
@@ -275,42 +282,12 @@ def simulate_plume(
     require_positive("emission_rate", emission_rate, caller="simulate_plume")
     require_positive("wind_speed", wind_speed, caller="simulate_plume")
     is_golder = isinstance(stability_class, GolderDispersion)
-    if not is_golder and stability_class not in BRIGGS_DISPERSION_PARAMS:
-        raise ValueError(
-            f"simulate_plume: `stability_class` must be one of "
-            f"{STABILITY_CLASSES} (got {stability_class!r})"
-        )
-    if len(source_location) != 3:
-        raise ValueError(
-            "simulate_plume: `source_location` must be (x, y, z); "
-            f"got length {len(source_location)}"
-        )
-    require_positive(
-        "source_location[2]",
-        source_location[2],
-        caller="simulate_plume",
-        allow_zero=True,
-    )
-    for name, domain in (
-        ("domain_x", domain_x),
-        ("domain_y", domain_y),
-        ("domain_z", domain_z),
-    ):
-        if len(domain) != 3:
-            raise ValueError(
-                f"simulate_plume: `{name}` must be (start, stop, n_points); "
-                f"got length {len(domain)}"
-            )
-        start, stop, num_points = domain
-        if not (start < stop):
-            raise ValueError(
-                f"simulate_plume: `{name}` requires start < stop "
-                f"(got start={start!r}, stop={stop!r})"
-            )
-        if int(num_points) < 2:
-            raise ValueError(
-                f"simulate_plume: `{name}` requires n_points ≥ 2 (got n={num_points!r})"
-            )
+    if not is_golder:
+        check_stability(stability_class, caller="simulate_plume")
+    check_source(source_location, caller="simulate_plume")
+    check_domain("domain_x", domain_x, caller="simulate_plume")
+    check_domain("domain_y", domain_y, caller="simulate_plume")
+    check_domain("domain_z", domain_z, caller="simulate_plume")
 
     if isinstance(stability_class, GolderDispersion):
         dispersion_params = stability_class
@@ -319,26 +296,16 @@ def simulate_plume(
         dispersion_params = get_dispersion_params(stability_class)
         stability_attr = stability_class
 
-    easting = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]))
-    northing = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]))
-    height = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]))
+    easting = node_axis(domain_x)
+    northing = node_axis(domain_y)
+    height = node_axis(domain_z)
     num_x, num_y = len(easting), len(northing)
 
-    # θ = wind direction in radians
-    direction_rad = np.deg2rad(wind_direction)
-    # u = −U sin θ
-    wind_u = -wind_speed * np.sin(direction_rad)
-    # v = −U cos θ
-    wind_v = -wind_speed * np.cos(direction_rad)
+    wind_u, wind_v = wind_components(wind_speed, wind_direction, xp=np)
 
     src_x, src_y, src_z = source_location
 
-    easting_grid, northing_grid, height_grid = np.meshgrid(
-        easting, northing, height, indexing="ij"
-    )
-    easting_flat = einx.id("x y z -> (x y z)", easting_grid)
-    northing_flat = einx.id("x y z -> (x y z)", northing_grid)
-    height_flat = einx.id("x y z -> (x y z)", height_grid)
+    easting_flat, northing_flat, height_flat = flat_mesh(easting, northing, height)
     conc_flat = plume_concentration(
         jnp.asarray(easting_flat),
         jnp.asarray(northing_flat),
@@ -385,12 +352,5 @@ def simulate_plume(
             "background_concentration": background_conc,
         },
     )
-    dataset["concentration"].attrs = {
-        "long_name": "Mass concentration",
-        "units": "kg/m^3",
-    }
-    dataset["column_concentration"].attrs = {
-        "long_name": "Column-integrated concentration",
-        "units": "kg/m^2",
-    }
+    label_concentrations(dataset)
     return dataset

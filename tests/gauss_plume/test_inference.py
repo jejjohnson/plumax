@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 from numpyro.infer import Predictive
 
-from plumax.gauss_plume._src.inference import _lognormal_from_moments
+from plumax._src.scalar_emission import LognormalEmission
 from plumax.gauss_plume.dispersion import BRIGGS_DISPERSION_PARAMS
 from plumax.gauss_plume.inference import gaussian_plume_model, infer_emission_rate
 from plumax.gauss_plume.plume import plume_concentration
@@ -29,7 +29,8 @@ def test_model_importable():
 )
 def test_lognormal_from_moments_analytical(mean, std):
     """μ_log, σ_log chosen so the LogNormal has exactly the requested moments."""
-    mu_log, sigma_log = _lognormal_from_moments(mean, std)
+    emission = LognormalEmission.from_moments(mean, std)
+    mu_log, sigma_log = emission.loc, emission.scale
     # Analytical moments of LogNormal(μ, σ):
     #   E[X]   = exp(μ + σ²/2)
     #   Var[X] = (exp(σ²) - 1) · exp(2μ + σ²)

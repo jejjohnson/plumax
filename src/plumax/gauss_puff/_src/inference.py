@@ -13,8 +13,8 @@ wind schedule. This module provides:
   ``Q_i`` under a random-walk prior, for state-estimation workflows.
 
 The log-space prior parameters are derived from real-scale ``(mean, std)``
-via :func:`plumax.gauss_plume.inference._lognormal_from_moments`,
-reused here to keep the plume and puff inference helpers aligned.
+via :meth:`plumax._src.scalar_emission.LognormalEmission.from_moments`,
+shared with the plume inference helpers.
 """
 
 from __future__ import annotations
@@ -30,11 +30,11 @@ from numpy.typing import NDArray
 
 from plumax._src.checks import check_observations
 from plumax._src.nuts import run_nuts
+from plumax._src.scalar_emission import LognormalEmission
 from plumax._src.tracing import require_positive
-from plumax.gauss_plume._src.inference import _lognormal_from_moments
+from plumax.gauss_plume._src.dispersion import check_stability
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_puff.dispersion import (
-    STABILITY_CLASSES,
     get_dispersion_scheme,
 )
 from plumax.gauss_puff.puff import (
@@ -279,17 +279,17 @@ def gaussian_puff_model(
         release_interval,
     )
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
-    if stability_class not in scheme_params_dict:
-        raise ValueError(
-            f"gaussian_puff_model: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    check_stability(
+        stability_class, caller="gaussian_puff_model", table=scheme_params_dict
+    )
     dispersion_params = scheme_params_dict[stability_class]
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(log_mean, log_std))
+    emission_rate = numpyro.sample(
+        "emission_rate", dist.LogNormal(emission.loc, emission.scale)
+    )
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     # The forward model is evaluated whenever its inputs are present —
@@ -361,11 +361,9 @@ def gaussian_puff_rw_model(
     ``noise`` override (default ``GaussianNoise(obs_noise_std)``).
     """
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
-    if stability_class not in scheme_params_dict:
-        raise ValueError(
-            f"gaussian_puff_rw_model: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    check_stability(
+        stability_class, caller="gaussian_puff_rw_model", table=scheme_params_dict
+    )
     dispersion_params = scheme_params_dict[stability_class]
 
     num_puffs = release_times.shape[0]
@@ -375,7 +373,7 @@ def gaussian_puff_rw_model(
             "got n_puffs=0. Check that t_end − t_start ≥ 1/release_frequency."
         )
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
 
@@ -386,7 +384,7 @@ def gaussian_puff_rw_model(
     # Build ln Q_i by cumulative sum of scaled innovations, first anchored
     # to the LogNormal prior location.
     # ln Q₀ = μ_log + σ_log ε₀
-    first = log_mean + log_std * innovations[0]
+    first = emission.loc + emission.scale * innovations[0]
     # δ_i = σ_rw ε_i
     increments = rw_step_std * innovations[1:]
     # ln Q_i = ln Q₀ + Σ_{j ≤ i} δ_j

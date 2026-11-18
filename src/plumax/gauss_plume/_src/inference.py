@@ -41,6 +41,8 @@ from plumax._src.checks import check_observations
 from plumax._src.nuts import run_nuts
 from plumax._src.scalar_emission import EmpiricalEmission, LognormalEmission
 from plumax._src.tracing import require_positive
+from plumax._src.wind import wind_components
+from plumax.gauss_plume._src.dispersion import check_stability, stacked_params
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -49,25 +51,6 @@ from plumax.gauss_plume.dispersion import (
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_plume.multi_source import MaskedSources, MultiSourcePosterior
 from plumax.gauss_plume.plume import plume_concentration
-
-
-def _lognormal_from_moments(mean: float, std: float) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Convert real-scale (mean, std) into the log-scale (μ, σ) of a LogNormal.
-
-    Standard method-of-moments inversion: for ``X ~ LogNormal(μ, σ)`` with
-    ``E[X] = mean`` and ``Var[X] = std**2``,
-
-        σ² = ln(1 + (std / mean)²),   μ = ln(mean) − σ²/2.
-    """
-    # CV² = (std / mean)²
-    squared_cv = (std / mean) ** 2
-    # σ² = ln(1 + CV²)
-    log_variance = jnp.log1p(squared_cv)
-    # σ = √σ²
-    log_std = jnp.sqrt(log_variance)
-    # μ = ln(mean) − σ²/2
-    log_mean = jnp.log(mean) - 0.5 * log_variance
-    return log_mean, log_std
 
 
 class EmissionRateSamples(dict):
@@ -135,7 +118,8 @@ def gaussian_plume_model(
 
     where ``(μ_log, σ_log)`` are the log-space parameters derived from the
     requested real-scale ``(prior_emission_rate_mean, prior_emission_rate_std)``
-    via the method-of-moments inversion in :func:`_lognormal_from_moments`.
+    via the method-of-moments inversion in
+    :meth:`~plumax._src.scalar_emission.LognormalEmission.from_moments`.
 
     Likelihood:
         obs ~ noise(f_plume(emission_rate, ...) + background)
@@ -209,19 +193,19 @@ def gaussian_plume_model(
             "observations=None for prior-predictive mode."
         )
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(log_mean, log_std))
+    emission_rate = numpyro.sample(
+        "emission_rate", dist.LogNormal(emission.loc, emission.scale)
+    )
 
     if infer_stability:
         stability_probs = jnp.ones(len(STABILITY_CLASSES)) / len(STABILITY_CLASSES)
         stability_idx = numpyro.sample(
             "stability_idx", dist.Categorical(probs=stability_probs)
         )
-        all_params = jnp.stack(
-            [BRIGGS_DISPERSION_PARAMS[name] for name in STABILITY_CLASSES]
-        )
+        all_params = stacked_params(BRIGGS_DISPERSION_PARAMS)
         dispersion_params = all_params[stability_idx]
     else:
         dispersion_params = get_dispersion_params(stability_class)
@@ -335,11 +319,8 @@ def infer_emission_rate(
         between ``observations`` and ``observation_coords``, or empty data.
     """
     require_positive("wind_speed", wind_speed, caller="infer_emission_rate")
-    if not infer_stability and stability_class not in BRIGGS_DISPERSION_PARAMS:
-        raise ValueError(
-            f"infer_emission_rate: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    if not infer_stability:
+        check_stability(stability_class, caller="infer_emission_rate")
     obs, coords = check_observations(
         "infer_emission_rate", observations, observation_coords
     )
@@ -350,12 +331,8 @@ def infer_emission_rate(
         "background_prior_std", background_prior_std, caller="infer_emission_rate"
     )
 
-    # θ = wind direction in radians
-    direction_rad = np.deg2rad(wind_direction)
-    # u = −U sin θ
-    wind_u = float(-wind_speed * np.sin(direction_rad))
-    # v = −U cos θ
-    wind_v = float(-wind_speed * np.cos(direction_rad))
+    wind_east, wind_north = wind_components(wind_speed, wind_direction, xp=np)
+    wind_u, wind_v = float(wind_east), float(wind_north)
 
     obs_jax = jnp.asarray(obs)
     coords_jax = tuple(jnp.asarray(coord) for coord in coords)
@@ -452,11 +429,12 @@ def _masked_source_prior(
     else:
         active = numpyro.deterministic("active", jnp.ones(k_max))
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
     emission_rate = numpyro.sample(
-        "emission_rate", dist.LogNormal(log_mean, log_std).expand([k_max]).to_event(1)
+        "emission_rate",
+        dist.LogNormal(emission.loc, emission.scale).expand([k_max]).to_event(1),
     )
 
     if candidate_locations is not None:
@@ -659,11 +637,7 @@ def infer_multi_source(
         shapes, non-positive prior or noise scales, or an invalid slot layout.
     """
     require_positive("wind_speed", wind_speed, caller="infer_multi_source")
-    if stability_class not in BRIGGS_DISPERSION_PARAMS:
-        raise ValueError(
-            f"infer_multi_source: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    check_stability(stability_class, caller="infer_multi_source")
     obs, coords = check_observations(
         "infer_multi_source", observations, observation_coords
     )
@@ -676,12 +650,8 @@ def infer_multi_source(
         require_positive(name, value, caller="infer_multi_source")
     _check_multi_source_layout(k_max, candidate_locations, source_bounds, prior_active)
 
-    # θ = wind direction in radians
-    direction_rad = np.deg2rad(wind_direction)
-    # u = −U sin θ
-    wind_u = float(-wind_speed * np.sin(direction_rad))
-    # v = −U cos θ
-    wind_v = float(-wind_speed * np.cos(direction_rad))
+    wind_east, wind_north = wind_components(wind_speed, wind_direction, xp=np)
+    wind_u, wind_v = float(wind_east), float(wind_north)
 
     return _run_masked_k(
         multi_source_plume_model,
