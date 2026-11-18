@@ -61,8 +61,8 @@ from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import IndexMap, bilinear_at, frame_wind, stagger_points
 from plumax.met._src.time import TimeAxis
+from plumax.met._src.wrf import _interpolate_vertical
 from plumax.met.field import MetField
-from plumax.met.wrf import _interpolate_vertical
 
 
 #: Standard gravity g [m s⁻²], as xrops's hypsometric integration uses.
