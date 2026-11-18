@@ -99,7 +99,6 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
 
 #: package -> sites still to rewrite; each issue under #311 deletes its entry
 PENDING: dict[str, int] = {
-    "coupled": 27,
     "geo": 12,
     "lagrangian": 13,
     "les_fvm": 17,
