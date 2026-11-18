@@ -49,7 +49,7 @@ from jaxtyping import Array, Float
 from plumax._src.controlled import AbstractControlledSource
 from plumax._src.errors import ControlBlockError, ParameterError, PayloadError
 from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
-from plumax._vardax import require_vardax
+from plumax._src.vardax import require_vardax
 from plumax.coupled._src.forward import (
     CoupledForward,
     _scale_response,

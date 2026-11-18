@@ -63,9 +63,10 @@ import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total
-from plumax._vardax import require_argminax, require_vardax
+from plumax._src.tracing import _is_traced
+from plumax._src.vardax import require_argminax, require_vardax
 from plumax.gauss_plume.observation import ColumnObservation
-from plumax.lagrangian.inversion import _is_traced, matern32_covariance
+from plumax.lagrangian.inversion import matern32_covariance
 from plumax.les_fvm.boundary import (
     LATERAL_FACES,
     build_default_concentration_bc,

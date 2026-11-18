@@ -41,7 +41,7 @@ import numpy as np
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission
-from plumax._vardax import require_vardax
+from plumax._src.vardax import require_vardax
 from plumax.coupled.forward import CoupledForward
 from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
 

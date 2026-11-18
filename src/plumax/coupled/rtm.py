@@ -57,8 +57,8 @@ from radtrax.slab import (
     forward_nonlinear_normalized,
 )
 
+from plumax._src.tracing import _is_traced
 from plumax.coupled.forward import PlumeSource, column_response
-from plumax.lagrangian.inversion import _is_traced
 
 
 if TYPE_CHECKING:

@@ -33,7 +33,7 @@ import numpy as np
 from jaxtyping import Array, Bool, Float, Int
 
 from plumax._src.errors import ParameterError
-from plumax._vardax import require_vardax
+from plumax._src.vardax import require_vardax
 
 
 if TYPE_CHECKING:
