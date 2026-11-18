@@ -109,8 +109,10 @@ def null_masks(
                 f"null_masks: exclude must be (C, {height}, {width}), got "
                 f"{exclude.shape}"
             )
-        # M_banned = M ∪ ⋃_c M_c
-        banned |= einx.any("[C] H W", exclude)
+        # einx rejects a zero-size axis; no masks ban nothing more
+        if exclude.shape[0] > 0:
+            # M_banned = M ∪ ⋃_c M_c
+            banned |= einx.any("[C] H W", exclude)
     size = int(mask.sum())
     if size == 0:
         raise DegenerateInputError("null_masks: the mask is empty")

@@ -303,7 +303,11 @@ def evolve_puffs(
     src_x, src_y, src_z = source_location
 
     current_time_array = jnp.asarray(current_time)
-    save_at = einx.id("N, -> (N + 1)", release_times, current_time_array)
+    if release_times.shape[0] == 0:
+        # einx rejects a zero-size axis; with no releases only t is saved
+        save_at = einx.id(" -> 1", current_time_array)
+    else:
+        save_at = einx.id("N, -> (N + 1)", release_times, current_time_array)
     sort_idx = jnp.argsort(save_at)
     save_at_sorted = save_at[sort_idx]
 
@@ -398,6 +402,9 @@ def simulate_puff_field(
         vertical_spread,
         puff_state.mass,
     )
+    if per_puff.shape[0] == 0:
+        # einx rejects a zero-size axis; no puffs add no concentration
+        return jnp.zeros(per_puff.shape[1:], dtype=per_puff.dtype)
     # C(r) = Σ_i C_i(r)
     return einx.sum("[puff] P", per_puff)
 
