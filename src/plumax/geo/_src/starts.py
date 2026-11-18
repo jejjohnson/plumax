@@ -17,6 +17,7 @@ import numpy as np
 from jaxtyping import Bool, Float
 
 from plumax._src.errors import DomainError, ParameterError
+from plumax._src.geometry import direction_from_centroid
 from plumax._src.tracing import require_positive
 from plumax.geo.plume_array import pixel_area, pixel_centers
 
@@ -81,26 +82,21 @@ def plume_direction(
     if total <= 0.0:
         raise DomainError("plume_direction: the weights sum to zero on the mask.")
 
-    # --- centroid ---
+    # --- direction ---
     # sₙ = (xₙ, yₙ), the pixel centres
     easting, northing = pixel_centers(mask.shape, transform)
-    # s̄ = ∑ₙ ωₙ sₙ / ∑ₙ ωₙ
-    centroid_x = float(einx.dot("row col, row col ->", weight, easting)) / total
-    centroid_y = float(einx.dot("row col, row col ->", weight, northing)) / total
-
-    # --- direction ---
-    # s̄ − s₀
-    offset_x = centroid_x - source[0]
-    offset_y = centroid_y - source[1]
     # g = √|det A|, the pixel side
     pixel_side = math.sqrt(pixel_area(transform))
-    if math.hypot(offset_x, offset_y) < pixel_side:
-        raise DomainError(
+    return direction_from_centroid(
+        einx.id("row col, row col -> row col (1 + 1)", easting, northing),
+        weight,
+        source,
+        pixel_side,
+        undefined_message=(
             "plume_direction: the centroid of the mask is within one pixel of the "
             "source, so the direction is undefined."
-        )
-    # φ₀ = atan2(s̄₂ − s₀₂, s̄₁ − s₀₁)
-    return math.atan2(offset_y, offset_x)
+        ),
+    )
 
 
 def source_offset_grid(

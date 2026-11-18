@@ -17,12 +17,13 @@ the gradient path. Nothing here is differentiable.
 
 from __future__ import annotations
 
-import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import ArrayLike, Bool, Float, PRNGKeyArray
 from radtrax import DegenerateInputError, ParameterError, ShapeError
+
+from plumax.vetting._src.morphology import union_masks
 
 
 __all__ = ["null_masks", "null_pvalue"]
@@ -103,16 +104,8 @@ def null_masks(
     height, width = mask.shape
     banned = mask.copy()
     if exclude is not None:
-        exclude = np.asarray(exclude, dtype=bool)
-        if exclude.ndim != 3 or exclude.shape[1:] != mask.shape:
-            raise ShapeError(
-                f"null_masks: exclude must be (C, {height}, {width}), got "
-                f"{exclude.shape}"
-            )
-        # einx rejects a zero-size axis; no masks ban nothing more
-        if exclude.shape[0] > 0:
-            # M_banned = M ∪ ⋃_c M_c
-            banned |= einx.any("[C] H W", exclude)
+        # M_banned = M ∪ ⋃_c M_c
+        banned |= union_masks(np.asarray(exclude, dtype=bool), mask.shape, "null_masks")
     size = int(mask.sum())
     if size == 0:
         raise DegenerateInputError("null_masks: the mask is empty")

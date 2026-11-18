@@ -27,6 +27,13 @@ from radtrax.retrieval.absorption import AbsorptionWindow
 from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.vetting import VettingResult, null_masks, null_pvalue, vet_candidate
+from plumax.vetting._src.vet import (
+    DEFAULT_BOX,
+    DEFAULT_DEGREE,
+    DEFAULT_K,
+    DEFAULT_KEEP,
+    _check_vet_inputs,
+)
 
 
 try:
@@ -126,10 +133,10 @@ class PlumeVetting(Operator):
         *,
         n_null: int = 100,
         key: Array | None = None,
-        k: int = 40,
-        keep: float = 0.5,
-        degree: int = 2,
-        box: int = 200,
+        k: int = DEFAULT_K,
+        keep: float = DEFAULT_KEEP,
+        degree: int = DEFAULT_DEGREE,
+        box: int = DEFAULT_BOX,
     ) -> None:
         require_positive(
             "n_null",
@@ -188,11 +195,12 @@ class PlumeVetting(Operator):
         fit_bands = self.window.fit_bands(wavelength_nm)
         num_fit_bands = int(fit_bands.sum())
         table = jnp.asarray(self.table)
-        if table.ndim != 2 or table.shape[1] != num_fit_bands:
-            raise ShapeError(
-                f"PlumeVetting: table must be (D, {num_fit_bands}), one column per "
-                f"fitting band of the cube's wavelengths, got {table.shape}"
-            )
+        _check_vet_inputs(
+            table,
+            num_fit_bands,
+            "PlumeVetting",
+            "fitting band of the cube's wavelengths",
+        )
 
         def vet(mask: np.ndarray) -> VettingResult:
             return vet_candidate(
