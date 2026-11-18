@@ -202,6 +202,8 @@ A small rotation $\delta\varphi$ moves the ridge by $d \delta\varphi$ at distanc
 
 The cost has several minima in the source position, which is why stage 1 starts from a grid rather than one point.
 
+On a synthetic 3 km plume whose centreline is a sine of 200 m amplitude and 3 km wavelength, the straight stage turns the direction by 0.27 rad towards the brighter first bend and underestimates $q$ by 9 %. Starting its knots from zero, the bent stage recovers them to 4 m without noise. At a peak signal-to-noise ratio of 10 the knot error is 32 m, which is what the knots' own posterior standard deviations predict (31 m), and $q$ is within 1 % of the truth. The error grows downwind as the plume widens and fades, so the posterior standard deviation of each knot, not a fixed tolerance, says how well the bend is known.
+
 (image-fit-prior)=
 ### Centreline prior
 

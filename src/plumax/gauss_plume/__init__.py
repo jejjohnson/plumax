@@ -5,6 +5,7 @@ Submodules:
   - plume         — coordinate rotation + JIT forward model + xarray wrapper
   - plume_rise    — Briggs plume rise Δh(x) and the effective release height
   - column        — closed-form column plume with a power-law width, and its backend
+  - centreline_prior — Gaussian-process prior on the column plume's centreline
   - inference     — NumPyro Bayesian inference for Q (and optional stability)
   - observation   — column + averaging-kernel observation shared by every tier
   - likelihoods   — Gaussian, Student-t and heteroscedastic observation noise
@@ -21,6 +22,7 @@ import importlib
 from typing import TYPE_CHECKING
 
 from plumax.gauss_plume import (
+    centreline_prior,
     column,
     dispersion,
     likelihoods,
@@ -30,10 +32,12 @@ from plumax.gauss_plume import (
     plume,
     plume_rise,
 )
+from plumax.gauss_plume.centreline_prior import CentrelinePrior
 from plumax.gauss_plume.column import (
     ColumnPlume,
     ColumnPlumeSource,
     PlumeGeometry,
+    centreline_offset,
     plume_frame,
     power_law_width,
     unit_column,
@@ -110,6 +114,7 @@ __all__ = [
     "MIN_WIND_SPEED",
     "STABILITY_CLASSES",
     "BriggsPlumeRise",
+    "CentrelinePrior",
     "ColumnObservation",
     "ColumnPlume",
     "ColumnPlumeSource",
@@ -125,6 +130,8 @@ __all__ = [
     "StudentTNoise",
     "briggs_plume_rise",
     "calculate_briggs_dispersion",
+    "centreline_offset",
+    "centreline_prior",
     "column",
     "dispersion",
     "effective_height",

@@ -4,12 +4,12 @@ The control θ stacks whichever blocks the prior names. The transport backend
 says which it can fit: an ``AbstractControlledSource`` declares its own
 blocks and its emission blocks (the Tier I ``PlumeSource``: ``location`` and
 ``wind``, scaled by ``emission_rate`` or ``log_emission_rate``; the column
-plume: ``location``, ``direction``, ``log_reference_width`` and
-``width_exponent``, scaled by the line density ``line_density`` or
-``log_line_density``), and any other backend fits only ``emission_rate`` or
-``log_emission_rate``. Every backend also fits the background column
-(``background``) and one bias per instrument (``biases``). Conditioned on
-everything else, the cost is
+plume: ``location``, ``direction``, ``log_reference_width``,
+``width_exponent`` and, for a bent plume, ``centreline``, scaled by the line
+density ``line_density`` or ``log_line_density``), and any other backend
+fits only ``emission_rate`` or ``log_emission_rate``. Every backend also fits
+the background column (``background``) and one bias per instrument
+(``biases``). Conditioned on everything else, the cost is
 
     𝒥(θ) = ½ ‖θ − μ_θ‖²_{Σ_θ⁻¹} + ½ Σ_i ‖m_i ⊙ (y_i − h_i(θ))‖²_{Σ_ε,i⁻¹},
 
@@ -145,6 +145,92 @@ class CoupledPrior:
         if not bool(jnp.all(flat_std > 0.0)):
             raise ValueError("CoupledPrior.from_std: standard deviations must be > 0.")
         return cls(mean=means, covariance=flat_std**2)
+
+    @classmethod
+    def from_blocks(
+        cls,
+        mean: Mapping[str, Float[Array, "*shape"] | float],
+        covariance: Mapping[str, Float[Array, "*block"] | float],
+    ) -> CoupledPrior:
+        """A block-diagonal prior, Σ_θ = blockdiag(Σ₁, …, Σ_B).
+
+        A block's entry is a standard deviation σ (a scalar, or one per
+        element of the block), giving Σ_b = diag(σ²), or a dense ``(n, n)``
+        covariance for a block of n elements, such as a
+        ``gauss_plume.CentrelinePrior`` matrix. With only standard deviations
+        the prior is diagonal and equals :meth:`from_std`.
+
+        Algorithm:
+            1. Order the blocks as :attr:`layout` does (by name).
+            2. Turn each standard deviation into a diagonal block.
+            3. Place the blocks on the diagonal of Σ_θ.
+
+        Args:
+            mean: Prior mean μ_θ of each block.
+            covariance: For each block, a standard deviation (scalar or one
+                per element) or a dense covariance block.
+
+        Returns:
+            The prior.
+
+        Raises:
+            ControlBlockError: If the keys differ, a dense block does not
+                match its mean, or a standard deviation is not positive.
+
+        Examples:
+            A scalar block and a dense block of two:
+
+            >>> import jax.numpy as jnp
+            >>> prior = CoupledPrior.from_blocks(
+            ...     mean={"background": 0.0, "centreline": jnp.zeros(2)},
+            ...     covariance={
+            ...         "background": 1e-4,
+            ...         "centreline": jnp.array([[4.0, 1.0], [1.0, 9.0]]),
+            ...     },
+            ... )
+            >>> prior.covariance.shape
+            (3, 3)
+            >>> bool(jnp.allclose(prior.covariance[0, 0], 1e-8))
+            True
+        """
+        if set(mean) != set(covariance):
+            raise ControlBlockError(
+                "CoupledPrior.from_blocks: `mean` and `covariance` keys differ: "
+                f"{sorted(mean)} against {sorted(covariance)}."
+            )
+        means = {name: jnp.asarray(value, dtype=float) for name, value in mean.items()}
+        blocks, dense = [], False
+        for name in sorted(means):
+            shape = means[name].shape
+            size = int(np.prod(shape, dtype=int))
+            entry = jnp.asarray(covariance[name], dtype=float)
+            if _broadcasts(entry.shape, shape):
+                # σ per element
+                std = jnp.ravel(jnp.broadcast_to(entry, shape))
+                if not bool(jnp.all(std > 0.0)):
+                    raise ControlBlockError(
+                        f"CoupledPrior.from_blocks: the standard deviation of "
+                        f"`{name}` must be > 0."
+                    )
+                # Σ_b = diag(σ²)
+                blocks.append(jnp.square(std))
+            elif entry.shape == (size, size):
+                # Σ_b dense
+                blocks.append(entry)
+                dense = True
+            else:
+                raise ControlBlockError(
+                    f"CoupledPrior.from_blocks: `{name}` has mean shape {shape}, so "
+                    f"its covariance must be a standard deviation broadcastable to "
+                    f"{shape} or a ({size}, {size}) matrix; got {entry.shape}."
+                )
+        if not dense:
+            # Σ_θ = diag(σ²)
+            return cls(mean=means, covariance=jnp.concatenate(blocks))
+        matrices = [jnp.diag(block) if block.ndim == 1 else block for block in blocks]
+        # Σ_θ = blockdiag(Σ₁, …, Σ_B)
+        full = jax.scipy.linalg.block_diag(*matrices)
+        return cls(mean=means, covariance=full)
 
     @property
     def size(self) -> int:
@@ -660,6 +746,13 @@ def _emission_block(blocks: Mapping[str, jax.Array]) -> str:
         if name in blocks:
             return name
     return "emission_rate"
+
+
+def _broadcasts(shape: tuple[int, ...], target: tuple[int, ...]) -> bool:
+    try:
+        return np.broadcast_shapes(shape, target) == target
+    except ValueError:
+        return False
 
 
 def _require_scalar(value: jax.Array, method: str) -> None:
