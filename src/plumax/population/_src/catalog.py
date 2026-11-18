@@ -173,7 +173,12 @@ def _scalar_q_summary(posterior: object) -> tuple[jax.Array, jax.Array]:
 
     mean_attr = getattr(posterior, "mean", None)
     if mean_attr is not None:
-        mean = einx.id("... -> (...)", jnp.asarray(mean_attr))
+        mean_array = jnp.asarray(mean_attr)
+        # einx rejects a zero-size axis; an empty mean still totals 0
+        if mean_array.size == 0:
+            mean = jnp.zeros((0,), dtype=mean_array.dtype)
+        else:
+            mean = einx.id("... -> (...)", mean_array)
         q_total = jnp.sum(mean)
         log_cov = getattr(posterior, "log_covariance", None)
         if log_cov is not None:
