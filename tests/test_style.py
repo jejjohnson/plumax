@@ -98,9 +98,7 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
 }
 
 #: package -> sites still to rewrite; each issue under #311 deletes its entry
-PENDING: dict[str, int] = {
-    "obs": 10,
-}
+PENDING: dict[str, int] = {}
 
 
 def _kind(node: ast.AST) -> list[str]:
