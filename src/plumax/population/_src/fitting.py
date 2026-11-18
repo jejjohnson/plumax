@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -39,8 +38,8 @@ import scipy.special
 from jax.scipy.special import erfc
 from jax.scipy.stats import norm as jax_norm
 from jax.typing import ArrayLike
-from numpyro.infer import MCMC, NUTS
 
+from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require_positive
 from plumax.population._src.fitting_iw import (
     MarkPosterior,
@@ -228,21 +227,17 @@ def run_mcmc(
             f"[x_min, x_max] = [{x_min}, {x_max}]"
         )
 
-    kernel = NUTS(pod_powerlaw_model)
-    mcmc = MCMC(
-        kernel,
+    samples = run_nuts(
+        pod_powerlaw_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress_bar=False,
+        print_summary=print_summary,
+        x_obs=data_values,
+        x_min=x_min,
+        x_max=x_max,
     )
-
-    rng_key = jax.random.PRNGKey(seed)
-    mcmc.run(rng_key, x_obs=data_values, x_min=x_min, x_max=x_max)
-    if print_summary:
-        mcmc.print_summary()
-
-    samples = mcmc.get_samples()
     return pd.DataFrame(
         {
             "x0": np.asarray(samples["x0"]),

@@ -14,7 +14,8 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
-from plumax._src.errors import DomainError, MissingExtraError
+from plumax._src.errors import DomainError
+from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 
@@ -69,13 +70,12 @@ def load_inventory(
         DomainError: If a lattice point falls outside the inventory raster,
             or the raster's longitudes are unevenly spaced.
     """
-    try:
-        import xrproducts
-    except ImportError as err:
-        raise MissingExtraError(
-            "load_inventory reads through xrproducts; install it with "
-            "`pip install 'plumax[io]'`"
-        ) from err
+    xrproducts = require_extra(
+        "xrproducts",
+        extra="io",
+        caller="load_inventory",
+        purpose="reads through xrproducts",
+    )
 
     # --- read ---
     dataset = xrproducts.open_ch4_inventory(path, variable=variable, units=units)

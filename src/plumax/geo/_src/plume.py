@@ -45,6 +45,7 @@ import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
 
+from plumax._src.extras import require_extra
 from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.geo.plume_array import (
@@ -1152,13 +1153,12 @@ def _dbscan_clump_count(
     DBSCAN cluster into multiple "clumps" whenever its members are within
     ``eps`` but not 4-adjacent.
     """
-    try:
-        from sklearn.cluster import DBSCAN
-    except ModuleNotFoundError as err:  # pragma: no cover - scikit-learn is in [geo]
-        raise MissingExtraError(
-            "PlumeQNDFeatures counts clumps with scikit-learn's DBSCAN: "
-            "pip install 'plumax[geo]'"
-        ) from err
+    DBSCAN = require_extra(
+        "sklearn.cluster",
+        extra="geo",
+        caller="PlumeQNDFeatures",
+        purpose="counts clumps with scikit-learn's DBSCAN",
+    ).DBSCAN
 
     in_mask = values[mask]
     in_mask = in_mask[np.isfinite(in_mask)]

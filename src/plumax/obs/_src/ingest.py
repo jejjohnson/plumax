@@ -42,10 +42,10 @@ import xarray as xr
 from jaxtyping import Array, Float, Shaped
 
 from plumax._src.errors import (
-    MissingExtraError,
     MissingVariableError,
     ScreeningError,
 )
+from plumax._src.extras import require_extra
 from plumax.coupled import Instrument
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.time import TimeAxis
@@ -85,15 +85,19 @@ class ColumnObservation(eqx.Module):
 
 
 def _readers():
-    try:
-        import xrops.atm.gas.ch4
-        import xrproducts
-    except ImportError as err:
-        raise MissingExtraError(
-            "the L2 loaders read through xrproducts / xrops; install them with "
-            "`pip install 'plumax[io]'`"
-        ) from err
-    return xrproducts, xrops.atm.gas.ch4.dry_air_column
+    xrops_ch4 = require_extra(
+        "xrops.atm.gas.ch4",
+        extra="io",
+        caller="the L2 loaders",
+        purpose="read through xrproducts / xrops",
+    )
+    xrproducts = require_extra(
+        "xrproducts",
+        extra="io",
+        caller="the L2 loaders",
+        purpose="read through xrproducts / xrops",
+    )
+    return xrproducts, xrops_ch4.dry_air_column
 
 
 def ppb_to_column_mass(

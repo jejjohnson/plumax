@@ -16,7 +16,8 @@ import einx
 import numpy as np
 from jaxtyping import Float, Int
 
-from plumax._src.errors import DomainError, MissingExtraError
+from plumax._src.errors import DomainError
+from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 
 
@@ -127,13 +128,12 @@ class LocalFrame:
 
     @cached_property
     def _transformers(self) -> tuple[Any, Any, float, float]:
-        try:
-            import pyproj
-        except ImportError as err:
-            raise MissingExtraError(
-                "LocalFrame transforms through pyproj; install it with "
-                "`pip install 'plumax[io]'`"
-            ) from err
+        pyproj = require_extra(
+            "pyproj",
+            extra="io",
+            caller="LocalFrame",
+            purpose="transforms through pyproj",
+        )
         forward = pyproj.Transformer.from_crs(4326, self.epsg, always_xy=True)
         inverse = pyproj.Transformer.from_crs(self.epsg, 4326, always_xy=True)
         # (E₀, N₀) = UTM(φ₀, λ₀)

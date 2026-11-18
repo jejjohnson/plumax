@@ -43,6 +43,7 @@ import pipekit_ops
 from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 
 from plumax._src.errors import ParameterError
+from plumax._src.extras import require_extra
 from plumax._src.vardax import require_vardax
 from plumax.lagrangian._src.footprint import (
     _backward_steps,
@@ -58,15 +59,13 @@ if TYPE_CHECKING:
 
 
 def _require_pipekit_train(caller: str) -> ModuleType:
-    """Import pipekit-train, or raise an ``ImportError`` naming the extra."""
-    try:
-        import pipekit_train
-    except ImportError as exc:
-        raise ImportError(
-            f"{caller} trains the emulator with pipekit-train; install it with "
-            "`pip install 'plumax[emulate]'`."
-        ) from exc
-    return pipekit_train
+    """Import pipekit-train, or raise a ``MissingExtraError`` naming the extra."""
+    return require_extra(
+        "pipekit_train",
+        extra="emulate",
+        caller=caller,
+        purpose="trains the emulator with pipekit-train",
+    )
 
 
 class FootprintSimulator:

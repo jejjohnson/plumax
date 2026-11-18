@@ -53,10 +53,10 @@ from jaxtyping import Float, Int
 
 from plumax._src.errors import (
     GridMismatchError,
-    MissingExtraError,
     MissingVariableError,
     TimeAxisError,
 )
+from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import IndexMap, bilinear_at, frame_wind, stagger_points
@@ -244,14 +244,13 @@ def load_era5(
 
 
 def _require_hypsometric_height():
-    try:
-        import xrops.atm
-    except ImportError as err:
-        raise MissingExtraError(
-            "load_era5 integrates heights through xrops; install it with "
-            "`pip install 'plumax[io]'`"
-        ) from err
-    return xrops.atm.hypsometric_height
+    xrops_atm = require_extra(
+        "xrops.atm",
+        extra="io",
+        caller="load_era5",
+        purpose="integrates heights through xrops",
+    )
+    return xrops_atm.hypsometric_height
 
 
 def _normalise(dataset: xr.Dataset) -> xr.Dataset:

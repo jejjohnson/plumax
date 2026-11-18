@@ -59,10 +59,10 @@ import xarray as xr
 from jaxtyping import Float
 
 from plumax._src.errors import (
-    MissingExtraError,
     MissingVariableError,
     TimeAxisError,
 )
+from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import bilinear_at, frame_wind, stagger_points
@@ -223,13 +223,10 @@ def load_wrf(
 
 def _require_open_wrfout():
     """``xrops.atm.open_wrfout``, or an error naming the ``io`` extra."""
-    try:
-        import xrops.atm
-    except ImportError as err:
-        raise MissingExtraError(
-            "load_wrf reads through xrops; install it with `pip install 'plumax[io]'`"
-        ) from err
-    return xrops.atm.open_wrfout
+    xrops_atm = require_extra(
+        "xrops.atm", extra="io", caller="load_wrf", purpose="reads through xrops"
+    )
+    return xrops_atm.open_wrfout
 
 
 def _earth_relative_wind(

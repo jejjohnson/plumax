@@ -27,8 +27,9 @@ import numpyro
 import numpyro.distributions as dist
 from jaxtyping import Array, Float
 from numpy.typing import NDArray
-from numpyro.infer import MCMC, NUTS
 
+from plumax._src.checks import check_observations
+from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require_positive
 from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
@@ -442,21 +443,7 @@ def _validate_inference_inputs(
 
     Returns the coerced ``(obs, coords, times)`` NumPy views on success.
     """
-    obs = np.asarray(observations)
-    if obs.size == 0:
-        raise ValueError(f"{func_name}: `observations` must contain ≥ 1 point")
-    if len(observation_coords) != 3:
-        raise ValueError(
-            f"{func_name}: `observation_coords` must be (x, y, z); "
-            f"got length {len(observation_coords)}"
-        )
-    coords = tuple(np.asarray(coord) for coord in observation_coords)
-    for axis_name, arr in zip("xyz", coords, strict=False):
-        if arr.shape != obs.shape:
-            raise ValueError(
-                f"{func_name}: `observation_coords` axis '{axis_name}' "
-                f"has shape {arr.shape} ≠ observations shape {obs.shape}"
-            )
+    obs, coords = check_observations(func_name, observations, observation_coords)
     times = np.asarray(observation_times)
     if times.shape != obs.shape:
         raise ValueError(
@@ -597,15 +584,14 @@ def infer_emission_rate(
     coords_jax = tuple(jnp.asarray(coord) for coord in coords)
     times_jax = jnp.asarray(times)
 
-    mcmc = MCMC(
-        NUTS(gaussian_puff_model),
+    draws = run_nuts(
+        gaussian_puff_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
+        print_summary=print_summary,
         observations=obs_jax,
         receptor_coords=coords_jax,
         observation_times=times_jax,
@@ -621,9 +607,7 @@ def infer_emission_rate(
         obs_noise_std=obs_noise_std,
         noise=noise,
     )
-    if print_summary:
-        mcmc.print_summary()
-    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}
+    return {site: np.asarray(value) for site, value in draws.items()}
 
 
 def infer_emission_timeseries(
@@ -684,15 +668,14 @@ def infer_emission_timeseries(
     release_interval = frequency_to_release_interval(release_frequency)
     puff_durations = release_durations(release_times, t_end)
 
-    mcmc = MCMC(
-        NUTS(gaussian_puff_rw_model),
+    draws = run_nuts(
+        gaussian_puff_rw_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
+        print_summary=print_summary,
         observations=jnp.asarray(obs),
         receptor_coords=tuple(jnp.asarray(coord) for coord in coords),
         observation_times=jnp.asarray(times),
@@ -709,6 +692,4 @@ def infer_emission_timeseries(
         obs_noise_std=obs_noise_std,
         noise=noise,
     )
-    if print_summary:
-        mcmc.print_summary()
-    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}
+    return {site: np.asarray(value) for site, value in draws.items()}
