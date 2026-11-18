@@ -59,13 +59,16 @@ def _bin_surface(
     below: jax.Array,
 ) -> jax.Array:
     """Histogram in-layer particles onto the 2-D surface grid (weighted counts)."""
-    nx = x_edges.shape[0] - 1
-    ny = y_edges.shape[0] - 1
-    ix, gx = _cell_indices(positions[:, 0], x_edges)
-    iy, gy = _cell_indices(positions[:, 1], y_edges)
-    weight = (gx & gy & below).astype(float)
-    flat = ix * ny + iy
-    return jnp.zeros(nx * ny).at[flat].add(weight).reshape(nx, ny)
+    num_cols = x_edges.shape[0] - 1
+    num_rows = y_edges.shape[0] - 1
+    col_index, col_inside = _cell_indices(positions[:, 0], x_edges)
+    row_index, row_inside = _cell_indices(positions[:, 1], y_edges)
+    weight = (col_inside & row_inside & below).astype(float)
+    # s = i_x n_y + i_y
+    flat = col_index * num_rows + row_index
+    return (
+        jnp.zeros(num_cols * num_rows).at[flat].add(weight).reshape(num_cols, num_rows)
+    )
 
 
 def _surface_edges(
@@ -79,14 +82,14 @@ def _surface_edges(
 
 
 def _backward_steps(
-    t_back: float, dt: float, receptor_time: float
+    t_back: float, time_step: float, receptor_time: float
 ) -> tuple[Float[Array, " time"], Float[Array, " time"]]:
     """Per-step durations of a backward run and the wind time of each step.
 
     Per-step durations sum to exactly ``t_back``: the final forward step is
-    shortened to the remainder when ``t_back`` is not a multiple of ``dt``, so
+    shortened to the remainder when ``t_back`` is not a multiple of ``time_step``, so
     the footprint integrates over the requested horizon rather than
-    ``n_steps * dt`` (which would over-count surface residence).
+    ``num_steps * time_step`` (which would over-count surface residence).
 
     Backward integration undoes the forward intervals in reverse order, so the
     first backward step consumes the (possibly partial) *final* forward
@@ -95,8 +98,9 @@ def _backward_steps(
     (step-start, matching ``integrate_particles``) makes the backward run the
     exact discrete reverse of the forward one for any horizon.
     """
-    n_steps = n_steps_for_horizon(t_back, dt)
-    durations = step_durations(t_back, dt, n_steps)[::-1]
+    num_steps = n_steps_for_horizon(t_back, time_step)
+    durations = step_durations(t_back, time_step, num_steps)[::-1]
+    # τ_j = T − Σ_{i ≤ j} Δt_i
     wind_starts = receptor_time - jnp.cumsum(durations)
     return durations, wind_starts
 
@@ -111,7 +115,7 @@ def _surface_residence(
     durations: Float[Array, " time"],
     wind_starts: Float[Array, " time"],
     *,
-    n_particles: int,
+    num_particles: int,
     pbl_height: float,
     mix_height: float,
 ) -> Float[Array, "nx ny"]:
@@ -132,7 +136,7 @@ def _surface_residence(
         y_edges: Cell edges of the surface grid along y [m].
         durations: Backward step durations Δt [s].
         wind_starts: Time [s] at which each backward step samples the wind.
-        n_particles: Ensemble size.
+        num_particles: Ensemble size.
         pbl_height: Boundary-layer height h [m], the reflecting lid.
         mix_height: Surface-layer depth f_pbl·h [m].
 
@@ -140,37 +144,41 @@ def _surface_residence(
         The residence time per surface cell [s], summed over the particles.
     """
     key, velocity_key = jax.random.split(key)
-    sigma0, _ = turbulence.at(receptor[2])
-    vel0 = jax.random.normal(velocity_key, (n_particles, 3)) * sigma0
-    pos0 = jnp.broadcast_to(receptor, (n_particles, 3))
+    initial_std, _ = turbulence.at(receptor[2])
+    vel0 = jax.random.normal(velocity_key, (num_particles, 3)) * initial_std
+    pos0 = jnp.broadcast_to(receptor, (num_particles, 3))
     state = ParticleState(position=pos0, velocity=vel0)
     step_keys = jax.random.split(key, durations.shape[0])
-    nx, ny = x_edges.shape[0] - 1, y_edges.shape[0] - 1
+    num_cols = x_edges.shape[0] - 1
+    num_rows = y_edges.shape[0] - 1
 
     def body(carry, inputs):
-        st, hist = carry
-        t_start, k, dt_i = inputs
-        st = langevin_step(
-            st,
-            -mean_wind(wind, st.position, t_start),
+        particles, histogram = carry
+        start_time, step_key, duration = inputs
+        particles = langevin_step(
+            particles,
+            -mean_wind(wind, particles.position, start_time),
             turbulence,
-            dt_i,
-            k,
+            duration,
+            step_key,
             pbl_height=pbl_height,
         )
-        below = st.position[:, 2] < mix_height
-        hist = hist + _bin_surface(st.position, x_edges, y_edges, below) * dt_i
-        return (st, hist), None
+        below = particles.position[:, 2] < mix_height
+        counts = _bin_surface(particles.position, x_edges, y_edges, below)
+        # H ← H + counts · Δt_k
+        histogram = histogram + counts * duration
+        return (particles, histogram), None
 
+    initial_histogram = jnp.zeros((num_cols, num_rows))
     (_, residence), _ = jax.lax.scan(
-        body, (state, jnp.zeros((nx, ny))), (wind_starts, step_keys, durations)
+        body, (state, initial_histogram), (wind_starts, step_keys, durations)
     )
     return residence
 
 
 def _flux_sensitivity(
     residence: Float[Array, "... nx ny"],
-    n_particles: int,
+    num_particles: int,
     air_density: float,
     mix_height: float,
 ) -> np.ndarray:
@@ -181,7 +189,8 @@ def _flux_sensitivity(
     pairs with a surface flux in kg m⁻² s⁻¹. It runs on the host so a compiled
     caller divides exactly as :func:`compute_footprint` does.
     """
-    return np.asarray(residence) / (n_particles * air_density * mix_height)
+    # F = H / (N ρ_air f_pbl·h)
+    return np.asarray(residence) / (num_particles * air_density * mix_height)
 
 
 def compute_footprint(
@@ -233,8 +242,9 @@ def compute_footprint(
         docstring).
     """
     x_edges, y_edges = _surface_edges(domain_x, domain_y)
-    x_c = 0.5 * (x_edges[:-1] + x_edges[1:])
-    y_c = 0.5 * (y_edges[:-1] + y_edges[1:])
+    # c_i = (e_i + e_{i+1}) / 2
+    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
+    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
     mix_height = pbl_fraction * pbl_height
     durations, wind_starts = _backward_steps(t_back, dt, receptor_time)
     residence = _surface_residence(
@@ -246,12 +256,12 @@ def compute_footprint(
         jnp.asarray(y_edges),
         durations,
         wind_starts,
-        n_particles=n_particles,
+        num_particles=n_particles,
         pbl_height=pbl_height,
         mix_height=mix_height,
     )
     footprint = _flux_sensitivity(residence, n_particles, air_density, mix_height)
-    return footprint, x_c, y_c
+    return footprint, x_centers, y_centers
 
 
 __all__ = ["compute_footprint"]

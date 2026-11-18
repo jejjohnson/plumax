@@ -148,16 +148,16 @@ def transport_covariance(
         >>> bool((transport_covariance(same, jnp.ones(2))[1] == 0.0).all())
         True
     """
-    n_members = footprints.shape[0]
+    num_members = footprints.shape[0]
     # F̄ = F_0 + mean_e(F_e − F_0): identical members give F̄ = F_0 exactly
     offsets = footprints - footprints[0]
     mean_footprint = footprints[0] + einx.mean("member obs cell -> obs cell", offsets)
     # r_e = F_e q_a
     response = einx.dot("member obs cell, cell -> member obs", footprints, prior_mean)
-    if n_members == 1:
+    if num_members == 1:
         # gaussx divides by E − 1, so a lone member is an explicit zero
-        n_obs = response.shape[1]
-        return mean_footprint, jnp.zeros((n_obs, n_obs), dtype=response.dtype)
+        obs_size = response.shape[1]
+        return mean_footprint, jnp.zeros((obs_size, obs_size), dtype=response.dtype)
     # R_transport = Σ_e (r_e − r̄)(r_e − r̄)ᵀ / (E − 1), as a low-rank operator
     operator = gaussx.ensemble_covariance(response, bessel=True)
     covariance = operator.as_matrix()
@@ -199,27 +199,38 @@ def ensemble_inversion(
         raise ValueError(
             "ensemble_inversion: `footprints` must be 3-D (member, obs, cell)."
         )
-    y = jnp.asarray(observation, dtype=float)
-    qa = jnp.asarray(prior_mean, dtype=float)
-    b = jnp.asarray(prior_cov, dtype=float)
-    r = jnp.asarray(obs_variance, dtype=float)
-    _check_inversion_shapes(member_footprints[0], y, qa, b, r)
+    obs = jnp.asarray(observation, dtype=float)
+    prior_emission_rate = jnp.asarray(prior_mean, dtype=float)
+    prior_covariance = jnp.asarray(prior_cov, dtype=float)
+    obs_noise_variance = jnp.asarray(obs_variance, dtype=float)
+    _check_inversion_shapes(
+        member_footprints[0],
+        obs,
+        prior_emission_rate,
+        prior_covariance,
+        obs_noise_variance,
+    )
 
-    mean_footprint, transport = transport_covariance(member_footprints, qa)
+    mean_footprint, transport = transport_covariance(
+        member_footprints, prior_emission_rate
+    )
     # R_total = R + R_transport
-    total_covariance = jnp.diag(r) + transport
+    total_covariance = jnp.diag(obs_noise_variance) + transport
     # y − F̄ q_a
-    innovation = y - einx.dot("obs cell, cell -> obs", mean_footprint, qa)
+    innovation = obs - einx.dot(
+        "obs cell, cell -> obs", mean_footprint, prior_emission_rate
+    )
     increment, posterior_cov = _blue_update(
         mean_footprint,
         innovation,
-        b,
+        prior_covariance,
         total_covariance,
         caller="ensemble_inversion",
     )
+    # q* = q_a + δ*
     return GaussianPosterior(
-        mean=qa + increment,
+        mean=prior_emission_rate + increment,
         covariance=posterior_cov,
-        prior_mean=qa,
-        prior_covariance=b,
+        prior_mean=prior_emission_rate,
+        prior_covariance=prior_covariance,
     )

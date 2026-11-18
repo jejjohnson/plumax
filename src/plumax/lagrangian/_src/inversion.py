@@ -170,11 +170,21 @@ def matern32_covariance(
         if length_scale <= 0.0:
             raise ValueError("matern32_covariance: `length_scale` must be > 0.")
     coords = jnp.asarray(coordinates, dtype=float)
+    if coords.shape[0] == 0:
+        # einx rejects empty axes; no points have an empty covariance
+        dtype = jnp.result_type(coords, variance, length_scale)
+        return jnp.zeros((0, 0), dtype=dtype)
     if coords.ndim == 1:
-        coords = coords[:, None]
-    diff = coords[:, None, :] - coords[None, :, :]
-    r = jnp.sqrt(jnp.sum(diff**2, axis=-1) + 1e-300)
-    scaled = jnp.sqrt(3.0) * r / length_scale
+        coords = einx.id("point -> point 1", coords)
+    # Δ_ij = x_i − x_j
+    diff = einx.subtract(
+        "first coord, second coord -> first second coord", coords, coords
+    )
+    # r_ij = ‖x_i − x_j‖
+    distance = jnp.sqrt(einx.sum("first second [coord]", diff**2) + 1e-300)
+    # s = √3 r / ℓ
+    scaled = jnp.sqrt(3.0) * distance / length_scale
+    # k = σ² (1 + s) exp(−s)
     return variance * (1.0 + scaled) * jnp.exp(-scaled)
 
 
@@ -225,8 +235,11 @@ def footprint_operator(footprint: jax.Array) -> vardax.CallableObs:
         ImportError: Without the ``assim`` extra.
     """
     vdx = require_vardax("footprint_operator")
-    f = jnp.asarray(footprint, dtype=float)
-    return vdx.CallableObs(fn=lambda q: einx.dot("t n, m n -> t m", q, f))
+    footprint_matrix = jnp.asarray(footprint, dtype=float)
+    # 𝒢(q) = F q
+    return vdx.CallableObs(
+        fn=lambda source: einx.dot("t n, m n -> t m", source, footprint_matrix)
+    )
 
 
 def _blue_update(
@@ -251,8 +264,8 @@ def _blue_update(
         ``(n_grid, n_grid)``.
     """
     vdx = require_vardax(caller)
-    n_grid = prior_cov.shape[0]
-    n_obs = obs_var.shape[0]
+    num_grid = prior_cov.shape[0]
+    obs_size = obs_var.shape[0]
     psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
     if obs_var.ndim == 2:
         obs_cov = lx.MatrixLinearOperator(obs_var, psd)
@@ -260,34 +273,43 @@ def _blue_update(
         obs_cov = lx.DiagonalLinearOperator(obs_var)
 
     def row_operator(
-        op: lx.AbstractLinearOperator, n: int
+        operator: lx.AbstractLinearOperator, size: int
     ) -> lx.FunctionLinearOperator:
-        # vardax applies covariances to (1, n) rows
+        # vardax applies covariances to (1, size) rows
+        def apply_to_row(row):
+            # y = M x, kept as a (1, size) row
+            product = operator.mv(row[0])
+            return einx.id("dim -> 1 dim", product)
+
         return lx.FunctionLinearOperator(
-            lambda x: op.mv(x[0])[None],
-            jax.ShapeDtypeStruct((1, n), prior_cov.dtype),
+            apply_to_row,
+            jax.ShapeDtypeStruct((1, size), prior_cov.dtype),
             psd,
         )
 
-    oi = vdx.OptimalInterpolation(
+    analysis = vdx.OptimalInterpolation(
         obs_op=footprint_operator(jacobian),
-        prior_mean=jnp.zeros((1, n_grid), dtype=prior_cov.dtype),
-        prior_cov_op=row_operator(lx.MatrixLinearOperator(prior_cov, psd), n_grid),
-        obs_cov_op=row_operator(obs_cov, n_obs),
+        prior_mean=jnp.zeros((1, num_grid), dtype=prior_cov.dtype),
+        prior_cov_op=row_operator(lx.MatrixLinearOperator(prior_cov, psd), num_grid),
+        obs_cov_op=row_operator(obs_cov, obs_size),
         solver=lx.Cholesky(),
     )
     batch = vdx.Batch1D(
-        input=innovation[None, None],
-        mask=jnp.ones((1, 1, n_obs), dtype=innovation.dtype),
+        input=einx.id("obs -> 1 1 obs", innovation),
+        mask=jnp.ones((1, 1, obs_size), dtype=innovation.dtype),
     )
     # P* = (B⁻¹ + Jᵀ R⁻¹ J)⁻¹, named explicitly: since vardax 0.2 the
     # observation-form default is B − B Jᵀ (J B Jᵀ + R)⁻¹ J B, which cancels
     # badly when the observations are much more precise than the prior
-    posterior = oi.posterior(batch, vdx.LaplaceCovariance(solver=lx.Cholesky()))
-    # P*: one lazy mat-vec per basis vector, (n_grid, n_grid)
-    covariance = jax.vmap(lambda e: posterior.cov.mv(e[None])[0])(
-        jnp.eye(n_grid, dtype=prior_cov.dtype)
-    )
+    posterior = analysis.posterior(batch, vdx.LaplaceCovariance(solver=lx.Cholesky()))
+
+    def column(basis_vector):
+        # P* e_i: one lazy mat-vec per basis vector
+        row = einx.id("param -> 1 param", basis_vector)
+        product = posterior.cov.mv(row)
+        return einx.id("1 param -> param", product)
+
+    covariance = jax.vmap(column)(jnp.eye(num_grid, dtype=prior_cov.dtype))
     return posterior.mean[0], gx.symmetrize(covariance)
 
 
@@ -325,22 +347,34 @@ def linear_gaussian_inversion(
             'plumax[assim]'``): the update is a ``vardax.OptimalInterpolation``
             analysis over :func:`footprint_operator`.
     """
-    f = jnp.asarray(footprint, dtype=float)
-    y = jnp.asarray(observation, dtype=float)
-    qa = jnp.asarray(prior_mean, dtype=float)
-    b = jnp.asarray(prior_cov, dtype=float)
-    r = jnp.asarray(obs_variance, dtype=float)
-    _check_inversion_shapes(f, y, qa, b, r)
-
-    innovation = y - f @ qa
-    increment, posterior_cov = _blue_update(
-        f, innovation, b, r, caller="linear_gaussian_inversion"
+    footprint_matrix = jnp.asarray(footprint, dtype=float)
+    obs = jnp.asarray(observation, dtype=float)
+    prior_emission_rate = jnp.asarray(prior_mean, dtype=float)
+    prior_covariance = jnp.asarray(prior_cov, dtype=float)
+    obs_noise_variance = jnp.asarray(obs_variance, dtype=float)
+    _check_inversion_shapes(
+        footprint_matrix,
+        obs,
+        prior_emission_rate,
+        prior_covariance,
+        obs_noise_variance,
     )
+
+    # d = y − F q_a
+    innovation = obs - footprint_matrix @ prior_emission_rate
+    increment, posterior_cov = _blue_update(
+        footprint_matrix,
+        innovation,
+        prior_covariance,
+        obs_noise_variance,
+        caller="linear_gaussian_inversion",
+    )
+    # q* = q_a + δ*
     return GaussianPosterior(
-        mean=qa + increment,
+        mean=prior_emission_rate + increment,
         covariance=posterior_cov,
-        prior_mean=qa,
-        prior_covariance=b,
+        prior_mean=prior_emission_rate,
+        prior_covariance=prior_covariance,
     )
 
 
@@ -444,30 +478,45 @@ def lognormal_inversion(
         ImportError: Without the ``assim`` extra: the log-space update is a
             ``vardax.OptimalInterpolation`` analysis over ``δ ↦ F̃ δ``.
     """
-    f = jnp.asarray(footprint, dtype=float)
-    y = jnp.asarray(observation, dtype=float)
-    qa = jnp.asarray(prior_mean, dtype=float)
-    b_log = jnp.asarray(prior_log_cov, dtype=float)
-    r = jnp.asarray(obs_variance, dtype=float)
-    _check_inversion_shapes(f, y, qa, b_log, r)
+    footprint_matrix = jnp.asarray(footprint, dtype=float)
+    obs = jnp.asarray(observation, dtype=float)
+    prior_emission_rate = jnp.asarray(prior_mean, dtype=float)
+    prior_log_covariance = jnp.asarray(prior_log_cov, dtype=float)
+    obs_noise_variance = jnp.asarray(obs_variance, dtype=float)
+    _check_inversion_shapes(
+        footprint_matrix,
+        obs,
+        prior_emission_rate,
+        prior_log_covariance,
+        obs_noise_variance,
+    )
     # Eager positivity check; skipped under jit/vmap over `prior_mean` (where a
     # host-bool conversion would raise). The lognormal form q = q_a·exp(δ)
     # implicitly assumes q_a > 0; a non-positive concrete q_a is a usage error.
-    if not _is_traced(prior_mean) and bool(jnp.any(qa <= 0.0)):
+    if not _is_traced(prior_mean) and bool(jnp.any(prior_emission_rate <= 0.0)):
         raise ValueError("lognormal_inversion: `prior_mean` (q_a) must be > 0.")
 
-    jac_tilde = f * qa[None, :]  # F̃ = F diag(q_a), (n_obs, n_grid)
-    innovation = y - f @ qa
-    log_increment, log_cov = _blue_update(
-        jac_tilde, innovation, b_log, r, caller="lognormal_inversion"
+    # F̃ = F diag(q_a)
+    log_jacobian = einx.multiply(
+        "obs grid, grid -> obs grid", footprint_matrix, prior_emission_rate
     )
-    mean = qa * jnp.exp(log_increment)
+    # d = y − F q_a
+    innovation = obs - footprint_matrix @ prior_emission_rate
+    log_increment, log_cov = _blue_update(
+        log_jacobian,
+        innovation,
+        prior_log_covariance,
+        obs_noise_variance,
+        caller="lognormal_inversion",
+    )
+    # q* = q_a exp(δ*)
+    mean = prior_emission_rate * jnp.exp(log_increment)
     return LognormalPosterior(
         mean=mean,
         log_increment=log_increment,
         log_covariance=log_cov,
-        prior_mean=qa,
-        prior_log_covariance=b_log,
+        prior_mean=prior_emission_rate,
+        prior_log_covariance=prior_log_covariance,
     )
 
 
@@ -480,25 +529,25 @@ def _check_inversion_shapes(
 ) -> None:
     if footprint.ndim != 2:
         raise ValueError("inversion: `footprint` must be 2-D (n_obs, n_grid).")
-    n_obs, n_grid = footprint.shape
-    if observation.shape != (n_obs,):
+    obs_size, num_grid = footprint.shape
+    if observation.shape != (obs_size,):
         raise ValueError(
-            f"inversion: `observation` must have shape ({n_obs},), "
+            f"inversion: `observation` must have shape ({obs_size},), "
             f"got {observation.shape}."
         )
-    if prior_mean.shape != (n_grid,):
+    if prior_mean.shape != (num_grid,):
         raise ValueError(
-            f"inversion: `prior_mean` must have shape ({n_grid},), "
+            f"inversion: `prior_mean` must have shape ({num_grid},), "
             f"got {prior_mean.shape}."
         )
-    if prior_cov.shape != (n_grid, n_grid):
+    if prior_cov.shape != (num_grid, num_grid):
         raise ValueError(
-            f"inversion: prior covariance must have shape ({n_grid}, {n_grid}), "
+            f"inversion: prior covariance must have shape ({num_grid}, {num_grid}), "
             f"got {prior_cov.shape}."
         )
-    if obs_variance.shape != (n_obs,):
+    if obs_variance.shape != (obs_size,):
         raise ValueError(
-            f"inversion: `obs_variance` must have shape ({n_obs},), "
+            f"inversion: `obs_variance` must have shape ({obs_size},), "
             f"got {obs_variance.shape}."
         )
 

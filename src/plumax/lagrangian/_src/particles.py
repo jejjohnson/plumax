@@ -31,6 +31,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
+import einx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -82,9 +83,10 @@ jax.tree_util.register_dataclass(
 )
 
 
-def _sigma_w_sq(turbulence: TurbulenceModel, z: jax.Array) -> jax.Array:
-    sigma, _ = turbulence.at(z)
-    return sigma[..., 2] ** 2
+def _sigma_w_sq(turbulence: TurbulenceModel, height: jax.Array) -> jax.Array:
+    std, _ = turbulence.at(height)
+    # σ_w²
+    return std[..., 2] ** 2
 
 
 def langevin_step(
@@ -111,37 +113,45 @@ def langevin_step(
         The advanced :class:`ParticleState`.
     """
     pos, vel = state.position, state.velocity
-    z = pos[:, 2]
+    height = pos[:, 2]
 
-    sigma, tau = turbulence.at(z)  # each (n, 3)
-    sigma = jnp.maximum(sigma, 1e-12)
+    std, timescale = turbulence.at(height)
+    # σ ← max(σ, ε)
+    std = jnp.maximum(std, 1e-12)
 
-    decay = jnp.exp(-dt / tau)  # (n, 3)
-    ou_std = sigma * jnp.sqrt(jnp.clip(1.0 - decay**2, 0.0, None))
+    # e^{−Δt/τ}
+    decay = jnp.exp(-dt / timescale)
+    # σ √(1 − e^{−2Δt/τ})
+    ou_noise_std = std * jnp.sqrt(jnp.clip(1.0 - decay**2, 0.0, None))
     noise = jax.random.normal(key, vel.shape)
-    vel_ou = decay * vel + ou_std * noise
+    # v ← e^{−Δt/τ} v + σ √(1 − e^{−2Δt/τ}) ξ
+    vel_ou = decay * vel + ou_noise_std * noise
 
     # Well-mixed vertical drift correction: ½(1 + v_w²/σ_w²) ∂σ_w²/∂z · dt.
-    dsigw2_dz = jax.vmap(jax.grad(lambda zz: _sigma_w_sq(turbulence, zz)))(z)
-    vw = vel_ou[:, 2]
-    drift_w = 0.5 * (1.0 + vw**2 / sigma[:, 2] ** 2) * dsigw2_dz * dt
+    dvar_dz = jax.vmap(jax.grad(lambda level: _sigma_w_sq(turbulence, level)))(height)
+    vel_up = vel_ou[:, 2]
+    # a_w dt = ½ (1 + v_w² / σ_w²) ∂σ_w²/∂z dt
+    drift_w = 0.5 * (1.0 + vel_up**2 / std[:, 2] ** 2) * dvar_dz * dt
     vel_new = vel_ou.at[:, 2].add(drift_w)
 
+    # x ← x + (u + v) Δt
     pos_new = pos + (wind + vel_new) * dt
 
     # Ground reflection at z = 0.
-    zc = pos_new[:, 2]
-    vc = vel_new[:, 2]
-    below = zc < 0.0
-    zc = jnp.where(below, -zc, zc)
-    vc = jnp.where(below, -vc, vc)
+    height_new = pos_new[:, 2]
+    vel_up_new = vel_new[:, 2]
+    below = height_new < 0.0
+    # z ← −z, v_w ← −v_w
+    height_new = jnp.where(below, -height_new, height_new)
+    vel_up_new = jnp.where(below, -vel_up_new, vel_up_new)
     # PBL-top reflection at z = h.
     if pbl_height is not None:
-        above = zc > pbl_height
-        zc = jnp.where(above, 2.0 * pbl_height - zc, zc)
-        vc = jnp.where(above, -vc, vc)
-    pos_new = pos_new.at[:, 2].set(zc)
-    vel_new = vel_new.at[:, 2].set(vc)
+        above = height_new > pbl_height
+        # z ← 2h − z, v_w ← −v_w
+        height_new = jnp.where(above, 2.0 * pbl_height - height_new, height_new)
+        vel_up_new = jnp.where(above, -vel_up_new, vel_up_new)
+    pos_new = pos_new.at[:, 2].set(height_new)
+    vel_new = vel_new.at[:, 2].set(vel_up_new)
 
     return ParticleState(position=pos_new, velocity=vel_new)
 
@@ -177,9 +187,10 @@ def step_durations(horizon: float, dt: float, n_steps: int) -> jax.Array:
     """
     if n_steps == 0:
         return jnp.zeros((0,))
-    dts = np.full(n_steps, dt, dtype=float)
-    dts[-1] = horizon - dt * (n_steps - 1)
-    return jnp.asarray(dts)
+    durations = np.full(n_steps, dt, dtype=float)
+    # Δt_K = T − (K − 1) Δt
+    durations[-1] = horizon - dt * (n_steps - 1)
+    return jnp.asarray(durations)
 
 
 def integrate_particles(
@@ -214,32 +225,42 @@ def integrate_particles(
         ``(final_state, trajectory)`` where ``trajectory`` is ``None`` unless
         ``save_trajectory`` is set.
     """
-    n_steps = n_steps_for_horizon(t1 - t0, dt)
-    keys = jax.random.split(key, n_steps)
+    num_steps = n_steps_for_horizon(t1 - t0, dt)
+    keys = jax.random.split(key, num_steps)
     # Step start times and per-step durations. When ``t1 - t0`` is not an exact
     # multiple of ``dt`` the final step is shortened to the remainder so the
-    # ensemble is advanced to exactly ``t1`` (not ``t0 + n_steps * dt``).
-    times = t0 + dt * jnp.arange(n_steps)
-    dts = step_durations(t1 - t0, dt, n_steps)
+    # ensemble is advanced to exactly ``t1`` (not ``t0 + num_steps * dt``).
+    # t_k = t_0 + k Δt
+    times = t0 + dt * jnp.arange(num_steps)
+    durations = step_durations(t1 - t0, dt, num_steps)
 
     def body(
         carry: ParticleState, inputs: tuple[jax.Array, jax.Array, jax.Array]
     ) -> tuple[ParticleState, jax.Array]:
-        t, k, dt_i = inputs
-        nxt = langevin_step(
+        time, step_key, duration = inputs
+        advanced = langevin_step(
             carry,
-            mean_wind(wind, carry.position, t),
+            mean_wind(wind, carry.position, time),
             turbulence,
-            dt_i,
-            k,
+            duration,
+            step_key,
             pbl_height=pbl_height,
         )
-        return nxt, nxt.position
+        return advanced, advanced.position
 
-    final, positions = jax.lax.scan(body, state, (times, keys, dts))
+    final, positions = jax.lax.scan(body, state, (times, keys, durations))
     if not save_trajectory:
         return final, None
-    trajectory = jnp.concatenate([state.position[None], positions], axis=0)
+    if num_steps == 0:
+        # einx.id rejects the empty step axis; the trajectory is just x_0
+        trajectory = einx.id("particle coord -> 1 particle coord", state.position)
+        return final, trajectory
+    # x_{0:K+1} = [x_0, x_1, …, x_K]
+    trajectory = einx.id(
+        "particle coord, step particle coord -> (1 + step) particle coord",
+        state.position,
+        positions,
+    )
     return final, trajectory
 
 
@@ -249,8 +270,8 @@ def uniform_wind(
     """Return a constant mean-wind field ``t -> (u, v, w)``."""
     vec = jnp.array([u, v, w])
 
-    def field(t: Float[ArrayLike, ""]) -> jax.Array:
-        del t
+    def field(time: Float[ArrayLike, ""]) -> jax.Array:
+        del time
         return vec
 
     return field
@@ -264,10 +285,13 @@ def wind_from_speed_direction(
     ``direction_deg = 270`` is a wind from the west (flowing east), matching the
     convention used by :func:`plumax.gauss_plume.simulate_plume`.
     """
-    theta = jnp.deg2rad(direction_deg)
-    u = -speed * jnp.sin(theta)
-    v = -speed * jnp.cos(theta)
-    return uniform_wind(float(u), float(v), w)
+    # θ = direction in radians
+    angle = jnp.deg2rad(direction_deg)
+    # u = −s sin θ
+    wind_east = -speed * jnp.sin(angle)
+    # v = −s cos θ
+    wind_north = -speed * jnp.cos(angle)
+    return uniform_wind(float(wind_east), float(wind_north), w)
 
 
 __all__ = [
