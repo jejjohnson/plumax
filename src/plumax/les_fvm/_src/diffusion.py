@@ -338,9 +338,11 @@ def smagorinsky_k_h(
            cancel.
         3. K_h = (c_s Δ)² |D| on interior T-points.
 
-    The wind's ghost ring is an edge pad, so its normal gradient across the
-    domain edge reads zero and the outermost interior cells are biased low;
-    cells one further in are exact for a linear wind.
+    The wind's ghost ring is an edge pad, so a wind gradient normal to a wall
+    reads zero across it, and the outermost interior cells along that wall are
+    biased low (|D| = S/√2 for a linear shear S). Cells one further in are
+    exact for a linear wind, and so are the outermost cells for a gradient
+    along the wall.
 
     Args:
         wind: The wind field.
@@ -383,8 +385,13 @@ def smagorinsky_k_h(
     ) -> Float[Array, "ny nx"]:
         # D_T = ∂u/∂x − ∂v/∂y at T-points
         tension = tensor_strain(u_level, v_level, spacing_x, spacing_y)[1:-1, 1:-1]
-        # D_S = ∂v/∂x + ∂u/∂y at corners
-        shear = shear_strain(u_level, v_level, spacing_x, spacing_y)
+        # D_S = ∂v/∂x + ∂u/∂y at corners. ``shear_strain`` zeroes its ghost
+        # ring, but corner row 0 and column 0 sit on the south and west walls,
+        # between the wind's ghost and first interior cells; pad one cell on
+        # those sides so they are computed from the wind's ghost ring too
+        padded_u = jnp.pad(u_level, ((1, 0), (1, 0)), mode="edge")
+        padded_v = jnp.pad(v_level, ((1, 0), (1, 0)), mode="edge")
+        shear = shear_strain(padded_u, padded_v, spacing_x, spacing_y)[1:, 1:]
         # ⟨D_S²⟩ at T-points
         shear_squared = avg_xy_bwd(shear**2)
         # |D|² = D_T² + ⟨D_S²⟩
