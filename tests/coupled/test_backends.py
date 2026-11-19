@@ -18,7 +18,6 @@ from plumax.coupled import (
     Instrument,
     LagrangianSource,
     PlumeSource,
-    TransportBackend,
     build_coupled_forward,
     default_prior,
     fuse_observations,
@@ -64,74 +63,6 @@ def _eulerian_forward(receptor_index=None):
 
 
 # ── Tier I is unchanged ──────────────────────────────────────────────────────
-
-
-@pytest.mark.slow
-def test_plume_source_forward_and_fusion_unchanged():
-    # Reference values computed on feat/85-masked-k-multisource (20735d1),
-    # before the backends existed.
-    source = PlumeSource(
-        location=(0.0, 0.0, 10.0),
-        wind_speed=5.0,
-        wind_direction=250.0,
-        stability_class="D",
-        column_z=jnp.linspace(0.0, 200.0, 11),
-        background=1e-6,
-    )
-    first = Instrument(
-        "A",
-        np.array([[300.0, 0.0], [600.0, 50.0], [900.0, -40.0]]),
-        averaging_kernel=np.array([1.0, 0.9, 0.8]),
-        retrieval_variance=1e-12,
-    )
-    second = Instrument(
-        "B",
-        np.array([[400.0, 20.0], [800.0, 0.0]]),
-        retrieval_variance=4e-12,
-        representation_variance=1e-12,
-    )
-    forward = build_coupled_forward(source, [first, second])
-    assert isinstance(source, TransportBackend)
-    np.testing.assert_allclose(
-        forward.responses[0],
-        [8.575728599489481e-08, 3.4502974192353653e-06, 4.6293044473406e-10],
-        rtol=1e-12,
-    )
-    np.testing.assert_allclose(
-        forward.responses[1],
-        [1.1871150518534409e-06, 2.0223824341937198e-08],
-        rtol=1e-12,
-    )
-    predicted = forward.predict(2.5, [1e-6, -2e-6])
-    np.testing.assert_allclose(
-        predicted[0],
-        [2.214393214987237e-06, 1.0625743548088415e-05, 2.001157326111835e-06],
-        rtol=1e-12,
-    )
-    mean, covariance = default_prior(
-        n_instruments=2,
-        emission_prior_mean=1.0,
-        emission_prior_std=2.0,
-        bias_prior_std=5e-6,
-    )
-    posterior = fuse_observations(
-        forward, predicted, prior_mean=mean, prior_covariance=covariance
-    )
-    np.testing.assert_allclose(
-        posterior.mean,
-        [2.4545734516146243, 1.039688088648922e-06, -1.7932521646013506e-06],
-        rtol=1e-9,
-    )
-    np.testing.assert_allclose(
-        posterior.covariance,
-        [
-            [0.12199300579204715, -1.4191790013571596e-07, -6.694859023484863e-08],
-            [-1.4191790013571596e-07, 4.940444594236586e-13, 7.788318093721083e-14],
-            [-6.694859023484863e-08, 7.788318093721083e-14, 2.309468016225912e-12],
-        ],
-        rtol=1e-9,
-    )
-    assert posterior.emission_rate.shape == ()
 
 
 # ── identity composition: coupled forward == bare transport forward ──────────

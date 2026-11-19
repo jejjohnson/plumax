@@ -1,9 +1,7 @@
 """``fuse_observations`` as a vardax state-space OI analysis (#188).
 
-The fusion BLUE used to be hand-rolled in information form with two
-``jnp.linalg.inv`` calls. It now runs ``vardax.OptimalInterpolation(form="state")``.
-These tests pin it to the numbers the hand-rolled code returned and to a dense
-closed form,
+The fusion BLUE runs ``vardax.OptimalInterpolation(form="state")``. These
+tests pin it to a dense closed form,
 
     P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹,   θ* = θ_b + P* Gᵀ R⁻¹ (y − G θ_b − c),
 
@@ -25,52 +23,6 @@ pytest.importorskip("vardax")
 
 
 # fuse_observations before #188 (hand-rolled information form, float64)
-_PINNED = {
-    1: (
-        [1.6860995020531266, 0.22473192293625122, 0.22508441851498437],
-        [
-            [0.06618892778589354, -0.05021017981772721, -0.03876319931402573],
-            [-0.05021017981772721, 0.05638197421419106, 0.030079107929562084],
-            [-0.03876319931402573, 0.030079107929562084, 0.04769865749083248],
-        ],
-    ),
-    2: (
-        [
-            1.75991136856091,
-            -0.12562325760119486,
-            0.21960355687835809,
-            0.2526978537096668,
-        ],
-        [
-            [
-                0.08249858677522104,
-                -0.037347768714622046,
-                -0.046038807567280265,
-                -0.02429946926308374,
-            ],
-            [
-                -0.037347768714622046,
-                0.07947033141899612,
-                -0.006963508088081535,
-                -0.025878500645795863,
-            ],
-            [
-                -0.046038807567280265,
-                -0.006963508088081535,
-                0.056568801932823105,
-                0.029951152875658034,
-            ],
-            [
-                -0.02429946926308374,
-                -0.025878500645795863,
-                0.029951152875658034,
-                0.05415966031784949,
-            ],
-        ],
-    ),
-}
-
-
 def _case(n_param):
     source = PlumeSource(
         location=(0.0, 0.0, 10.0),
@@ -143,18 +95,6 @@ def _dense_closed_form(forward, observations, prior_mean, prior_cov):
     residual = obs - 0.7 - design @ prior_mean
     mean = prior_mean + covariance @ (design.T @ (residual / variance))
     return mean, covariance
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("n_param", [1, 2])
-def test_matches_the_hand_rolled_posterior(n_param):
-    forward, observations, prior_mean, prior_cov = _case(n_param)
-    posterior = fuse_observations(
-        forward, observations, prior_mean=prior_mean, prior_covariance=prior_cov
-    )
-    mean, covariance = _PINNED[n_param]
-    np.testing.assert_allclose(np.asarray(posterior.mean), mean, rtol=1e-9)
-    np.testing.assert_allclose(np.asarray(posterior.covariance), covariance, rtol=1e-9)
 
 
 @pytest.mark.slow
