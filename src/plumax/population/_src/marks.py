@@ -335,15 +335,22 @@ class LognormalMark(eqx.Module):
         return jnp.where(positive, norm.logcdf(-standardised), 0.0)
 
     def numpyro_prior(self, name: str) -> dict[str, Any]:
-        import numpyro
-        import numpyro.distributions as dist
+        mu, sigma = _lognormal_prior(name, self.mu_prior_scale, self.sigma_prior_scale)
+        return {"mu": mu, "sigma": sigma}
 
-        return {
-            "mu": numpyro.sample(f"{name}.mu", dist.Normal(0.0, self.mu_prior_scale)),
-            "sigma": numpyro.sample(
-                f"{name}.sigma", dist.HalfNormal(self.sigma_prior_scale)
-            ),
-        }
+
+def _lognormal_prior(name: str, mu_scale: float, sigma_scale: float) -> tuple[Any, Any]:
+    """Sample μ ~ Normal(0, s_μ) and σ ~ HalfNormal(s_σ) at ``{name}.mu`` and ``{name}.sigma``.
+
+    An empty ``name`` gives the bare sites ``mu`` and ``sigma``.
+    """
+    import numpyro
+    import numpyro.distributions as dist
+
+    prefix = f"{name}." if name else ""
+    mu = numpyro.sample(f"{prefix}mu", dist.Normal(0.0, mu_scale))
+    sigma = numpyro.sample(f"{prefix}sigma", dist.HalfNormal(sigma_scale))
+    return mu, sigma
 
 
 def _splice_log_weights(
@@ -530,11 +537,10 @@ class LognormalParetoMark(eqx.Module):
 
         low, high = self.alpha_bounds
         log_loc = jnp.log(self.q_break_loc)
+        mu, sigma = _lognormal_prior(name, self.mu_prior_scale, self.sigma_prior_scale)
         return {
-            "mu": numpyro.sample(f"{name}.mu", dist.Normal(0.0, self.mu_prior_scale)),
-            "sigma": numpyro.sample(
-                f"{name}.sigma", dist.HalfNormal(self.sigma_prior_scale)
-            ),
+            "mu": mu,
+            "sigma": sigma,
             "alpha": numpyro.sample(f"{name}.alpha", dist.Uniform(low, high)),
             "q_break": numpyro.sample(
                 f"{name}.q_break", dist.LogNormal(log_loc, self.q_break_log_scale)

@@ -206,13 +206,16 @@ def fit_lognormal_size_distribution(
     import numpyro
     import numpyro.distributions as dist
 
+    from plumax.population._src.marks import _lognormal_prior
+
     log_mean, log_std = catalog.log_moments()
     log_mean_j = jax.numpy.asarray(log_mean)
     log_std_j = jax.numpy.asarray(log_std)
 
     def model(obs_mean: Any, obs_std: Any) -> None:
-        population_mean = numpyro.sample("mu", dist.Normal(0.0, mu_prior_scale))
-        population_std = numpyro.sample("sigma", dist.HalfNormal(sigma_prior_scale))
+        population_mean, population_std = _lognormal_prior(
+            "", mu_prior_scale, sigma_prior_scale
+        )
         # σ_eff² = σ² + σ_obs,i²
         eff_std = jax.numpy.sqrt(population_std**2 + obs_std**2)
         numpyro.sample("obs", dist.Normal(population_mean, eff_std), obs=obs_mean)

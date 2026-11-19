@@ -36,12 +36,16 @@ curve never pulls it in.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from jax.scipy.special import erf as _jax_erf
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
+from plumax.population._src._priors import PriorTable, PriorTableMixin
 from plumax.population._src.pod_union import (
     TOD_BINS,
     InstrumentPOD,
@@ -234,7 +238,7 @@ def cos_zenith(theta_deg: jnp.ndarray) -> jnp.ndarray:
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class LogisticPOD(eqx.Module):
+class LogisticPOD(PriorTableMixin, eqx.Module):
     """Single-covariate logistic POD: the classic S-curve.
 
     Physical Motivation:
@@ -258,6 +262,10 @@ class LogisticPOD(eqx.Module):
             Typical: GHGSat ≈ 100, TROPOMI ≈ 3000, MethaneSAT ≈ 200.
         k: Steepness of the sigmoid [hr kg⁻¹].
             Typical: 0.005–0.05.
+
+    Priors (sample_priors):
+        Q₅₀ ~ LogNormal(ln(500), 1.0)   [kg hr⁻¹]
+        k   ~ HalfNormal(0.02)           [hr kg⁻¹]
     """
 
     Q_50: Float[ArrayLike, ""]
@@ -272,23 +280,12 @@ class LogisticPOD(eqx.Module):
         Returns:
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
-        return 1.0 / (1.0 + jnp.exp(-self.k * (Q - self.Q_50)))
+        return jax.nn.sigmoid(self.k * (Q - self.Q_50))
 
-    @classmethod
-    def sample_priors(cls) -> LogisticPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                Q₅₀ ~ LogNormal(ln(500), 1.0)   [kg hr⁻¹]
-                k   ~ HalfNormal(0.02)           [hr kg⁻¹]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            Q_50=numpyro.sample("Q_50", dist.LogNormal(jnp.log(500.0), 1.0)),
-            k=numpyro.sample("k", dist.HalfNormal(0.02)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "Q_50": ("Q_50", lambda dist: dist.LogNormal(jnp.log(500.0), 1.0)),
+        "k": ("k", lambda dist: dist.HalfNormal(0.02)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -296,7 +293,7 @@ class LogisticPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class LogLogisticPOD(eqx.Module):
+class LogLogisticPOD(PriorTableMixin, eqx.Module):
     """Logistic POD on log-flux: the lognormal CDF approximation.
 
     Physical Motivation:
@@ -316,6 +313,10 @@ class LogLogisticPOD(eqx.Module):
         beta_0: Intercept [logit units]. Controls the detection threshold.
         beta_1: Slope w.r.t. ln(Q) [logit per ln(kg hr⁻¹)].
             Positive → higher flux → more detectable.
+
+    Priors (sample_priors):
+        β₀ ~ Normal(−8.0, 3.0)    [logit]
+        β₁ ~ HalfNormal(2.0)      [logit per ln(kg hr⁻¹)]
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -331,23 +332,12 @@ class LogLogisticPOD(eqx.Module):
             Probability of detection [0, 1]. Shape ``(N,)``.
         """
         logit = self.beta_0 + self.beta_1 * log_flux(Q)
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> LogLogisticPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀ ~ Normal(−8.0, 3.0)    [logit]
-                β₁ ~ HalfNormal(2.0)      [logit per ln(kg hr⁻¹)]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-8.0, 3.0)),
-            beta_1=numpyro.sample("beta_1", dist.HalfNormal(2.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-8.0, 3.0)),
+        "beta_1": ("beta_1", lambda dist: dist.HalfNormal(2.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -355,7 +345,7 @@ class LogLogisticPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class ConcentrationProxyPOD(eqx.Module):
+class ConcentrationProxyPOD(PriorTableMixin, eqx.Module):
     """GLM on the log-concentration proxy ln(Q/(U·p)).
 
     Physical Motivation:
@@ -374,6 +364,10 @@ class ConcentrationProxyPOD(eqx.Module):
         beta_0: Intercept [logit units].
         beta_1: Sensitivity to log-concentration proxy
             [logit per dimensionless unit].
+
+    Priors (sample_priors):
+        β₀ ~ Normal(−3.0, 2.0)   [logit]
+        β₁ ~ HalfNormal(2.0)     [logit per unit]
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -398,23 +392,12 @@ class ConcentrationProxyPOD(eqx.Module):
         log_proxy = log_concentration_proxy(Q, U, p)
         # logit = β₀ + β₁ x
         logit = self.beta_0 + self.beta_1 * log_proxy
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> ConcentrationProxyPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀ ~ Normal(−3.0, 2.0)   [logit]
-                β₁ ~ HalfNormal(2.0)     [logit per unit]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-3.0, 2.0)),
-            beta_1=numpyro.sample("beta_1", dist.HalfNormal(2.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-3.0, 2.0)),
+        "beta_1": ("beta_1", lambda dist: dist.HalfNormal(2.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -422,7 +405,7 @@ class ConcentrationProxyPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class AdditiveMultiCovariatePOD(eqx.Module):
+class AdditiveMultiCovariatePOD(PriorTableMixin, eqx.Module):
     """Additive GLM with separate coefficients for each covariate.
 
     Physical Motivation:
@@ -451,6 +434,15 @@ class AdditiveMultiCovariatePOD(eqx.Module):
         beta_p: Log-pixel coefficient [logit per ln(m)].
         beta_A: Albedo coefficient [logit per unit albedo].
         beta_theta: Cosine-zenith coefficient [logit per unit cos(θ)].
+
+    Priors (sample_priors):
+        Sign-constrained where physics dictates:
+        β₀  ~ Normal(−5.0, 3.0)
+        β_Q ~ HalfNormal(2.0)       (positive: more flux → detected)
+        β_U ~ Normal(−1.0, 1.0)     (negative: dilution)
+        β_p ~ Normal(−0.5, 0.5)     (negative: fill-factor)
+        β_A ~ HalfNormal(1.5)       (positive: brighter → better)
+        β_θ ~ HalfNormal(1.0)       (positive: higher sun → better)
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -488,31 +480,16 @@ class AdditiveMultiCovariatePOD(eqx.Module):
             + self.beta_A * albedo
             + self.beta_theta * cos_theta
         )
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> AdditiveMultiCovariatePOD:
-        """Sample NumPyro priors.
-
-        Priors (sign-constrained where physics dictates):
-                β₀  ~ Normal(−5.0, 3.0)
-                β_Q ~ HalfNormal(2.0)       (positive: more flux → detected)
-                β_U ~ Normal(−1.0, 1.0)     (negative: dilution)
-                β_p ~ Normal(−0.5, 0.5)     (negative: fill-factor)
-                β_A ~ HalfNormal(1.5)       (positive: brighter → better)
-                β_θ ~ HalfNormal(1.0)       (positive: higher sun → better)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-5.0, 3.0)),
-            beta_Q=numpyro.sample("beta_Q", dist.HalfNormal(2.0)),
-            beta_U=numpyro.sample("beta_U", dist.Normal(-1.0, 1.0)),
-            beta_p=numpyro.sample("beta_p", dist.Normal(-0.5, 0.5)),
-            beta_A=numpyro.sample("beta_A", dist.HalfNormal(1.5)),
-            beta_theta=numpyro.sample("beta_theta", dist.HalfNormal(1.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-5.0, 3.0)),
+        "beta_Q": ("beta_Q", lambda dist: dist.HalfNormal(2.0)),
+        "beta_U": ("beta_U", lambda dist: dist.Normal(-1.0, 1.0)),
+        "beta_p": ("beta_p", lambda dist: dist.Normal(-0.5, 0.5)),
+        "beta_A": ("beta_A", lambda dist: dist.HalfNormal(1.5)),
+        "beta_theta": ("beta_theta", lambda dist: dist.HalfNormal(1.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -520,7 +497,7 @@ class AdditiveMultiCovariatePOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class VaryingCoefficientPOD(eqx.Module):
+class VaryingCoefficientPOD(PriorTableMixin, eqx.Module):
     """Varying coefficient GLM: sensitivity β₁ depends on environment.
 
     Physical Motivation:
@@ -551,6 +528,12 @@ class VaryingCoefficientPOD(eqx.Module):
             Typical: [0.5, 2.0].
         gamma_cos_theta: Illumination enhancement [logit per log-unit per unit cos(θ)].
             Typical: [0.3, 1.5].
+
+    Priors (sample_priors):
+        β₀  ~ Normal(−3.5, 2.0)
+        γ_b ~ HalfNormal(1.5)
+        γ_A ~ HalfNormal(1.0)
+        γ_θ ~ Normal(0.5, 0.5)
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -587,27 +570,14 @@ class VaryingCoefficientPOD(eqx.Module):
         )
         # logit = β₀ + β₁ x
         logit = self.beta_0 + slope * log_proxy
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> VaryingCoefficientPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀  ~ Normal(−3.5, 2.0)
-                γ_b ~ HalfNormal(1.5)
-                γ_A ~ HalfNormal(1.0)
-                γ_θ ~ Normal(0.5, 0.5)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-3.5, 2.0)),
-            gamma_base=numpyro.sample("gamma_base", dist.HalfNormal(1.5)),
-            gamma_albedo=numpyro.sample("gamma_albedo", dist.HalfNormal(1.0)),
-            gamma_cos_theta=numpyro.sample("gamma_cos_theta", dist.Normal(0.5, 0.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-3.5, 2.0)),
+        "gamma_base": ("gamma_base", lambda dist: dist.HalfNormal(1.5)),
+        "gamma_albedo": ("gamma_albedo", lambda dist: dist.HalfNormal(1.0)),
+        "gamma_cos_theta": ("gamma_cos_theta", lambda dist: dist.Normal(0.5, 0.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -615,7 +585,7 @@ class VaryingCoefficientPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class SNRBasedPOD(eqx.Module):
+class SNRBasedPOD(PriorTableMixin, eqx.Module):
     """GLM on log-SNR: radiometric first-principles detection model.
 
     Physical Motivation:
@@ -641,6 +611,10 @@ class SNRBasedPOD(eqx.Module):
     Attributes:
         beta_0: Intercept [logit]. Encodes the detection threshold in SNR space.
         beta_1: SNR sensitivity [logit per ln(SNR)].
+
+    Priors (sample_priors):
+        β₀ ~ Normal(−2.0, 2.0)   [logit]
+        β₁ ~ HalfNormal(2.0)     [logit per ln(SNR)]
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -669,23 +643,12 @@ class SNRBasedPOD(eqx.Module):
         log_snr = snr_proxy(Q, U, p, albedo, sigma_noise)
         # logit = β₀ + β₁ x
         logit = self.beta_0 + self.beta_1 * log_snr
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> SNRBasedPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀ ~ Normal(−2.0, 2.0)   [logit]
-                β₁ ~ HalfNormal(2.0)     [logit per ln(SNR)]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-2.0, 2.0)),
-            beta_1=numpyro.sample("beta_1", dist.HalfNormal(2.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-2.0, 2.0)),
+        "beta_1": ("beta_1", lambda dist: dist.HalfNormal(2.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -693,7 +656,7 @@ class SNRBasedPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class SpectralAwarePOD(eqx.Module):
+class SpectralAwarePOD(PriorTableMixin, eqx.Module):
     """GLM with spectral band count and resolution as covariates.
 
     Physical Motivation:
@@ -718,6 +681,13 @@ class SpectralAwarePOD(eqx.Module):
         beta_n_bands: Spectral channel count effect [logit per ln(count)].
         beta_spectral_res: Spectral resolution effect [logit per ln(nm)].
         beta_albedo: Albedo effect [logit per unit albedo].
+
+    Priors (sample_priors):
+        β₀   ~ Normal(−5.0, 3.0)
+        β_x  ~ HalfNormal(2.0)
+        β_n  ~ HalfNormal(1.0)       (more bands → better)
+        β_Δλ ~ Normal(−0.5, 0.5)     (finer resolution → better, negative)
+        β_A  ~ HalfNormal(1.0)
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -757,31 +727,15 @@ class SpectralAwarePOD(eqx.Module):
             + self.beta_spectral_res * jnp.log(jnp.clip(spectral_res_nm, min=0.01))
             + self.beta_albedo * albedo
         )
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> SpectralAwarePOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀   ~ Normal(−5.0, 3.0)
-                β_x  ~ HalfNormal(2.0)
-                β_n  ~ HalfNormal(1.0)       (more bands → better)
-                β_Δλ ~ Normal(−0.5, 0.5)     (finer resolution → better, negative)
-                β_A  ~ HalfNormal(1.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-5.0, 3.0)),
-            beta_proxy=numpyro.sample("beta_proxy", dist.HalfNormal(2.0)),
-            beta_n_bands=numpyro.sample("beta_n_bands", dist.HalfNormal(1.0)),
-            beta_spectral_res=numpyro.sample(
-                "beta_spectral_res", dist.Normal(-0.5, 0.5)
-            ),
-            beta_albedo=numpyro.sample("beta_albedo", dist.HalfNormal(1.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-5.0, 3.0)),
+        "beta_proxy": ("beta_proxy", lambda dist: dist.HalfNormal(2.0)),
+        "beta_n_bands": ("beta_n_bands", lambda dist: dist.HalfNormal(1.0)),
+        "beta_spectral_res": ("beta_spectral_res", lambda dist: dist.Normal(-0.5, 0.5)),
+        "beta_albedo": ("beta_albedo", lambda dist: dist.HalfNormal(1.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -789,7 +743,7 @@ class SpectralAwarePOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class FullVaryingCoefficientPOD(eqx.Module):
+class FullVaryingCoefficientPOD(PriorTableMixin, eqx.Module):
     """Full varying-coefficient GLM with spectral and radiometric controls.
 
     Physical Motivation:
@@ -816,6 +770,14 @@ class FullVaryingCoefficientPOD(eqx.Module):
         gamma_albedo: Albedo slope modifier [logit per log-unit per albedo].
         gamma_cos_theta: Illumination slope modifier [logit per log-unit per cos(θ)].
         gamma_n_bands: Spectral slope modifier [logit per log-unit per ln(bands)].
+
+    Priors (sample_priors):
+        β₀_base  ~ Normal(−3.5, 2.0)
+        β₀_noise ~ Normal(−0.5, 0.5)    (more noise → lower baseline)
+        γ_base   ~ HalfNormal(1.5)
+        γ_A      ~ HalfNormal(1.0)
+        γ_θ      ~ Normal(0.5, 0.5)
+        γ_n      ~ HalfNormal(0.5)
     """
 
     beta_0_base: Float[ArrayLike, ""]
@@ -864,31 +826,16 @@ class FullVaryingCoefficientPOD(eqx.Module):
         )
         # logit = β₀ + β₁ x
         logit = intercept + slope * log_proxy
-        return 1.0 / (1.0 + jnp.exp(-logit))
+        return jax.nn.sigmoid(logit)
 
-    @classmethod
-    def sample_priors(cls) -> FullVaryingCoefficientPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀_base  ~ Normal(−3.5, 2.0)
-                β₀_noise ~ Normal(−0.5, 0.5)    (more noise → lower baseline)
-                γ_base   ~ HalfNormal(1.5)
-                γ_A      ~ HalfNormal(1.0)
-                γ_θ      ~ Normal(0.5, 0.5)
-                γ_n      ~ HalfNormal(0.5)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0_base=numpyro.sample("beta_0_base", dist.Normal(-3.5, 2.0)),
-            beta_0_noise=numpyro.sample("beta_0_noise", dist.Normal(-0.5, 0.5)),
-            gamma_base=numpyro.sample("gamma_base", dist.HalfNormal(1.5)),
-            gamma_albedo=numpyro.sample("gamma_albedo", dist.HalfNormal(1.0)),
-            gamma_cos_theta=numpyro.sample("gamma_cos_theta", dist.Normal(0.5, 0.5)),
-            gamma_n_bands=numpyro.sample("gamma_n_bands", dist.HalfNormal(0.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0_base": ("beta_0_base", lambda dist: dist.Normal(-3.5, 2.0)),
+        "beta_0_noise": ("beta_0_noise", lambda dist: dist.Normal(-0.5, 0.5)),
+        "gamma_base": ("gamma_base", lambda dist: dist.HalfNormal(1.5)),
+        "gamma_albedo": ("gamma_albedo", lambda dist: dist.HalfNormal(1.0)),
+        "gamma_cos_theta": ("gamma_cos_theta", lambda dist: dist.Normal(0.5, 0.5)),
+        "gamma_n_bands": ("gamma_n_bands", lambda dist: dist.HalfNormal(0.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -896,7 +843,7 @@ class FullVaryingCoefficientPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class ProbitPOD(eqx.Module):
+class ProbitPOD(PriorTableMixin, eqx.Module):
     """Probit GLM on the concentration proxy.
 
     Physical Motivation:
@@ -918,6 +865,10 @@ class ProbitPOD(eqx.Module):
     Attributes:
         beta_0: Intercept [probit units].
         beta_1: Slope [probit per log-proxy unit].
+
+    Priors (sample_priors):
+        β₀ ~ Normal(−2.0, 2.0)   [probit]
+        β₁ ~ HalfNormal(1.5)     [probit per unit]
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -945,21 +896,10 @@ class ProbitPOD(eqx.Module):
         # Φ(z) via the error function: Φ(z) = 0.5 · (1 + erf(z / √2))
         return 0.5 * (1.0 + _jax_erf(probit_score / jnp.sqrt(2.0)))
 
-    @classmethod
-    def sample_priors(cls) -> ProbitPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀ ~ Normal(−2.0, 2.0)   [probit]
-                β₁ ~ HalfNormal(1.5)     [probit per unit]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-2.0, 2.0)),
-            beta_1=numpyro.sample("beta_1", dist.HalfNormal(1.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-2.0, 2.0)),
+        "beta_1": ("beta_1", lambda dist: dist.HalfNormal(1.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -967,7 +907,7 @@ class ProbitPOD(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class CloglogPOD(eqx.Module):
+class CloglogPOD(PriorTableMixin, eqx.Module):
     """Complementary log-log GLM for asymmetric detection tails.
 
     Physical Motivation:
@@ -989,6 +929,10 @@ class CloglogPOD(eqx.Module):
     Attributes:
         beta_0: Intercept [cloglog units].
         beta_1: Slope [cloglog per log-proxy unit].
+
+    Priors (sample_priors):
+        β₀ ~ Normal(−3.0, 2.0)   [cloglog]
+        β₁ ~ HalfNormal(1.5)     [cloglog per unit]
     """
 
     beta_0: Float[ArrayLike, ""]
@@ -1016,21 +960,10 @@ class CloglogPOD(eqx.Module):
         # P_d = 1 − exp(−e^η)
         return 1.0 - jnp.exp(-jnp.exp(linear_predictor))
 
-    @classmethod
-    def sample_priors(cls) -> CloglogPOD:
-        """Sample NumPyro priors.
-
-        Priors:
-                β₀ ~ Normal(−3.0, 2.0)   [cloglog]
-                β₁ ~ HalfNormal(1.5)     [cloglog per unit]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            beta_0=numpyro.sample("beta_0", dist.Normal(-3.0, 2.0)),
-            beta_1=numpyro.sample("beta_1", dist.HalfNormal(1.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "beta_0": ("beta_0", lambda dist: dist.Normal(-3.0, 2.0)),
+        "beta_1": ("beta_1", lambda dist: dist.HalfNormal(1.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════

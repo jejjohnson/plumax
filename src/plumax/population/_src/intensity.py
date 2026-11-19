@@ -22,10 +22,15 @@ intensity never pulls it in.
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from jax.typing import ArrayLike
 from jaxtyping import Float
+
+from plumax.population._src._priors import PriorTable, PriorTableMixin
 
 
 __all__ = [
@@ -46,12 +51,37 @@ __all__ = [
 ]
 
 
+def _hour_of_day(t: jnp.ndarray) -> jnp.ndarray:
+    """h = (t mod 1) · 24 [hours]."""
+    return (t % 1.0) * 24.0
+
+
+def _diurnal_phase(phase_hours: ArrayLike) -> ArrayLike:
+    """φ_d = 2π · (φ_h / 24) [rad]."""
+    return 2.0 * jnp.pi * (phase_hours / 24.0)
+
+
+def _seasonal_phase(t: jnp.ndarray, peak_day: ArrayLike) -> jnp.ndarray:
+    """ω_s (t − t_peak) with ω_s = 2π / 365.25 [rad]."""
+    return 2.0 * jnp.pi / 365.25 * (t - peak_day)
+
+
+def _shift_gate(
+    t: jnp.ndarray, start: ArrayLike, end: ArrayLike, steepness: float = 50.0
+) -> jnp.ndarray:
+    """σ(s (h − h_start)) − σ(s (h − h_end)) at the hour of day h of ``t``."""
+    hour = _hour_of_day(t)
+    return jax.nn.sigmoid(steepness * (hour - start)) - jax.nn.sigmoid(
+        steepness * (hour - end)
+    )
+
+
 # ═════════════════════════════════════════════════════════════════════════════
 # 1. CONSTANT (Homogeneous Poisson)
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class ConstantIntensity(eqx.Module):
+class ConstantIntensity(PriorTableMixin, eqx.Module):
     """Constant intensity for passive, continuously leaking infrastructure.
 
     Physical Motivation:
@@ -68,6 +98,9 @@ class ConstantIntensity(eqx.Module):
 
     Attributes:
         lambda_0: Constant emission rate [events day⁻¹]. Typical: 0.1–10.0.
+
+    Priors (sample_priors):
+        λ₀ ~ HalfNormal(3.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -105,21 +138,9 @@ class ConstantIntensity(eqx.Module):
         """
         return jnp.asarray(self.lambda_0)
 
-    @classmethod
-    def sample_priors(cls) -> ConstantIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀ ~ HalfNormal(3.0)
-
-        Returns:
-            A ``ConstantIntensity`` with sampled ``lambda_0``.
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        lambda_0 = numpyro.sample("lambda_0", dist.HalfNormal(3.0))
-        return cls(lambda_0=lambda_0)
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(3.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -127,7 +148,7 @@ class ConstantIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class DiurnalSinusoidalIntensity(eqx.Module):
+class DiurnalSinusoidalIntensity(PriorTableMixin, eqx.Module):
     """Diurnal sinusoidal intensity for thermally driven infrastructure.
 
     Physical Motivation:
@@ -151,6 +172,11 @@ class DiurnalSinusoidalIntensity(eqx.Module):
         lambda_0: Baseline mean rate [events day⁻¹]. Must satisfy λ₀ > A. Typical: 2–8.
         amplitude: Diurnal half-amplitude [events day⁻¹]. Typical: 1–4.
         phase_hours: Hour-of-day of peak intensity [hours]. Typical: 14.0 (2 PM).
+
+    Priors (sample_priors):
+        λ₀  ~ HalfNormal(5.0)
+        A   ~ HalfNormal(3.0)
+        φ_h ~ Normal(14.0, 2.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -167,7 +193,7 @@ class DiurnalSinusoidalIntensity(eqx.Module):
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
         # φ = 2π (φ_h / 24)
-        phase = 2.0 * jnp.pi * (self.phase_hours / 24.0)
+        phase = _diurnal_phase(self.phase_hours)
         # λ = λ₀ + A sin(2π t − φ)
         raw = self.lambda_0 + self.amplitude * jnp.sin(2.0 * jnp.pi * t - phase)
         return jnp.clip(raw, min=0.0)
@@ -182,23 +208,11 @@ class DiurnalSinusoidalIntensity(eqx.Module):
         """
         return jnp.asarray(self.lambda_0 + jnp.abs(self.amplitude))
 
-    @classmethod
-    def sample_priors(cls) -> DiurnalSinusoidalIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀  ~ HalfNormal(5.0)
-                A   ~ HalfNormal(3.0)
-                φ_h ~ Normal(14.0, 2.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(5.0)),
-            amplitude=numpyro.sample("amplitude", dist.HalfNormal(3.0)),
-            phase_hours=numpyro.sample("phase_hours", dist.Normal(14.0, 2.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(5.0)),
+        "amplitude": ("amplitude", lambda dist: dist.HalfNormal(3.0)),
+        "phase_hours": ("phase_hours", lambda dist: dist.Normal(14.0, 2.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -206,7 +220,7 @@ class DiurnalSinusoidalIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class SeasonalSinusoidalIntensity(eqx.Module):
+class SeasonalSinusoidalIntensity(PriorTableMixin, eqx.Module):
     """Annual sinusoidal intensity for biogenic / climate-driven sources.
 
     Physical Motivation:
@@ -226,6 +240,11 @@ class SeasonalSinusoidalIntensity(eqx.Module):
         lambda_0: Annual mean rate [events day⁻¹]. Typical: 0.5–3.0.
         amplitude: Seasonal half-amplitude [events day⁻¹]. Typical: 0.3–2.0.
         peak_day: Day-of-year of emission peak [days from Jan 1]. Typical: 196 (Jul 15).
+
+    Priors (sample_priors):
+        λ₀      ~ HalfNormal(2.0)
+        A       ~ HalfNormal(1.5)
+        t_peak  ~ Normal(196.0, 30.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -241,8 +260,9 @@ class SeasonalSinusoidalIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        ω = 2.0 * jnp.pi / 365.25
-        raw = self.lambda_0 + self.amplitude * jnp.sin(ω * (t - self.peak_day))
+        raw = self.lambda_0 + self.amplitude * jnp.sin(
+            _seasonal_phase(t, self.peak_day)
+        )
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:
@@ -255,23 +275,11 @@ class SeasonalSinusoidalIntensity(eqx.Module):
         """
         return jnp.asarray(self.lambda_0 + jnp.abs(self.amplitude))
 
-    @classmethod
-    def sample_priors(cls) -> SeasonalSinusoidalIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀      ~ HalfNormal(2.0)
-                A       ~ HalfNormal(1.5)
-                t_peak  ~ Normal(196.0, 30.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(2.0)),
-            amplitude=numpyro.sample("amplitude", dist.HalfNormal(1.5)),
-            peak_day=numpyro.sample("peak_day", dist.Normal(196.0, 30.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(2.0)),
+        "amplitude": ("amplitude", lambda dist: dist.HalfNormal(1.5)),
+        "peak_day": ("peak_day", lambda dist: dist.Normal(196.0, 30.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -279,7 +287,7 @@ class SeasonalSinusoidalIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class DiurnalSeasonalIntensity(eqx.Module):
+class DiurnalSeasonalIntensity(PriorTableMixin, eqx.Module):
     """Additive diurnal + seasonal intensity for thermally active biogenic sources.
 
     Physical Motivation:
@@ -302,6 +310,13 @@ class DiurnalSeasonalIntensity(eqx.Module):
         amp_seasonal: Seasonal half-amplitude [events day⁻¹].
         phase_hours: Hour of diurnal peak [hours]. Default: 14.0.
         peak_day: Day of seasonal peak [days from Jan 1]. Default: 196.0.
+
+    Priors (sample_priors):
+        λ₀   ~ HalfNormal(3.0)
+        A_d  ~ HalfNormal(2.0)
+        A_s  ~ HalfNormal(1.5)
+        φ_h  ~ Normal(14.0, 2.0)
+        t_pk ~ Normal(196.0, 30.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -319,12 +334,11 @@ class DiurnalSeasonalIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        φ_d = 2.0 * jnp.pi * (self.phase_hours / 24.0)
-        ω_s = 2.0 * jnp.pi / 365.25
+        φ_d = _diurnal_phase(self.phase_hours)
         raw = (
             self.lambda_0
             + self.amp_diurnal * jnp.sin(2.0 * jnp.pi * t - φ_d)
-            + self.amp_seasonal * jnp.sin(ω_s * (t - self.peak_day))
+            + self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
         )
         return jnp.clip(raw, min=0.0)
 
@@ -340,27 +354,13 @@ class DiurnalSeasonalIntensity(eqx.Module):
             self.lambda_0 + jnp.abs(self.amp_diurnal) + jnp.abs(self.amp_seasonal)
         )
 
-    @classmethod
-    def sample_priors(cls) -> DiurnalSeasonalIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀   ~ HalfNormal(3.0)
-                A_d  ~ HalfNormal(2.0)
-                A_s  ~ HalfNormal(1.5)
-                φ_h  ~ Normal(14.0, 2.0)
-                t_pk ~ Normal(196.0, 30.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(3.0)),
-            amp_diurnal=numpyro.sample("amp_diurnal", dist.HalfNormal(2.0)),
-            amp_seasonal=numpyro.sample("amp_seasonal", dist.HalfNormal(1.5)),
-            phase_hours=numpyro.sample("phase_hours", dist.Normal(14.0, 2.0)),
-            peak_day=numpyro.sample("peak_day", dist.Normal(196.0, 30.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(3.0)),
+        "amp_diurnal": ("amp_diurnal", lambda dist: dist.HalfNormal(2.0)),
+        "amp_seasonal": ("amp_seasonal", lambda dist: dist.HalfNormal(1.5)),
+        "phase_hours": ("phase_hours", lambda dist: dist.Normal(14.0, 2.0)),
+        "peak_day": ("peak_day", lambda dist: dist.Normal(196.0, 30.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -368,7 +368,7 @@ class DiurnalSeasonalIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class SeasonallyModulatedDiurnalIntensity(eqx.Module):
+class SeasonallyModulatedDiurnalIntensity(PriorTableMixin, eqx.Module):
     """Diurnal intensity whose amplitude is seasonally modulated.
 
     Physical Motivation:
@@ -388,6 +388,13 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
         amp_winter: Diurnal half-amplitude at seasonal trough [events day⁻¹].
         phase_hours: Hour of diurnal peak [hours]. Default: 14.0.
         peak_day: Day of seasonal maximum [days from Jan 1]. Default: 196.0.
+
+    Priors (sample_priors):
+        λ₀      ~ HalfNormal(4.0)
+        A_sum   ~ HalfNormal(3.0)
+        A_win   ~ HalfNormal(1.0)
+        φ_h     ~ Normal(14.0, 2.0)
+        t_peak  ~ Normal(196.0, 30.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -405,12 +412,13 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        φ_d = 2.0 * jnp.pi * (self.phase_hours / 24.0)
-        ω_s = 2.0 * jnp.pi / 365.25
+        φ_d = _diurnal_phase(self.phase_hours)
         amp_mean = (self.amp_summer + self.amp_winter) / 2.0
         amp_diff = (self.amp_summer - self.amp_winter) / 2.0
         # A(t) = A_mean + A_diff sin(ω_s (t − t_peak))
-        seasonal_amplitude = amp_mean + amp_diff * jnp.sin(ω_s * (t - self.peak_day))
+        seasonal_amplitude = amp_mean + amp_diff * jnp.sin(
+            _seasonal_phase(t, self.peak_day)
+        )
         # λ = λ₀ + A(t) sin(2π t − φ_d)
         raw = self.lambda_0 + seasonal_amplitude * jnp.sin(2.0 * jnp.pi * t - φ_d)
         return jnp.clip(raw, min=0.0)
@@ -428,27 +436,13 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
             + jnp.maximum(jnp.abs(self.amp_summer), jnp.abs(self.amp_winter))
         )
 
-    @classmethod
-    def sample_priors(cls) -> SeasonallyModulatedDiurnalIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀      ~ HalfNormal(4.0)
-                A_sum   ~ HalfNormal(3.0)
-                A_win   ~ HalfNormal(1.0)
-                φ_h     ~ Normal(14.0, 2.0)
-                t_peak  ~ Normal(196.0, 30.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(4.0)),
-            amp_summer=numpyro.sample("amp_summer", dist.HalfNormal(3.0)),
-            amp_winter=numpyro.sample("amp_winter", dist.HalfNormal(1.0)),
-            phase_hours=numpyro.sample("phase_hours", dist.Normal(14.0, 2.0)),
-            peak_day=numpyro.sample("peak_day", dist.Normal(196.0, 30.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(4.0)),
+        "amp_summer": ("amp_summer", lambda dist: dist.HalfNormal(3.0)),
+        "amp_winter": ("amp_winter", lambda dist: dist.HalfNormal(1.0)),
+        "phase_hours": ("phase_hours", lambda dist: dist.Normal(14.0, 2.0)),
+        "peak_day": ("peak_day", lambda dist: dist.Normal(196.0, 30.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -456,7 +450,7 @@ class SeasonallyModulatedDiurnalIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class OperationalScheduleIntensity(eqx.Module):
+class OperationalScheduleIntensity(PriorTableMixin, eqx.Module):
     """Step-function intensity for facilities with fixed shift schedules.
 
     Physical Motivation:
@@ -480,6 +474,12 @@ class OperationalScheduleIntensity(eqx.Module):
         lambda_idle: Intensity during shutdown [events day⁻¹]. Typical: 0.1–1.0.
         start_hour: Start of active window [hours 0–24]. Default: 6.0.
         end_hour: End of active window [hours 0–24]. Default: 18.0.
+
+    Priors (sample_priors):
+        λ_active ~ HalfNormal(8.0)
+        λ_idle   ~ HalfNormal(1.0)
+        h_start  ~ Normal(6.0, 1.0)
+        h_end    ~ Normal(18.0, 1.0)
     """
 
     lambda_active: Float[ArrayLike, ""]
@@ -496,13 +496,8 @@ class OperationalScheduleIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹]. Shape ``(N,)``.
         """
-        # h = (t mod 1) · 24
-        hour_of_day = (t % 1.0) * 24.0
-        steepness = 50.0
         # duty = σ(h − h_start) − σ(h − h_end)
-        duty = 1.0 / (
-            1.0 + jnp.exp(-steepness * (hour_of_day - self.start_hour))
-        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.end_hour)))
+        duty = _shift_gate(t, self.start_hour, self.end_hour)
         return self.lambda_idle + (self.lambda_active - self.lambda_idle) * duty
 
     def max_intensity(self) -> jnp.ndarray:
@@ -517,25 +512,12 @@ class OperationalScheduleIntensity(eqx.Module):
             self.lambda_idle + jnp.abs(self.lambda_active - self.lambda_idle)
         )
 
-    @classmethod
-    def sample_priors(cls) -> OperationalScheduleIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ_active ~ HalfNormal(8.0)
-                λ_idle   ~ HalfNormal(1.0)
-                h_start  ~ Normal(6.0, 1.0)
-                h_end    ~ Normal(18.0, 1.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_active=numpyro.sample("lambda_active", dist.HalfNormal(8.0)),
-            lambda_idle=numpyro.sample("lambda_idle", dist.HalfNormal(1.0)),
-            start_hour=numpyro.sample("start_hour", dist.Normal(6.0, 1.0)),
-            end_hour=numpyro.sample("end_hour", dist.Normal(18.0, 1.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_active": ("lambda_active", lambda dist: dist.HalfNormal(8.0)),
+        "lambda_idle": ("lambda_idle", lambda dist: dist.HalfNormal(1.0)),
+        "start_hour": ("start_hour", lambda dist: dist.Normal(6.0, 1.0)),
+        "end_hour": ("end_hour", lambda dist: dist.Normal(18.0, 1.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -543,7 +525,7 @@ class OperationalScheduleIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class WeibullRenewalIntensity(eqx.Module):
+class WeibullRenewalIntensity(PriorTableMixin, eqx.Module):
     """Weibull hazard function for pressure-driven, recharging sources.
 
     Physical Motivation:
@@ -569,6 +551,10 @@ class WeibullRenewalIntensity(eqx.Module):
 
     Note:
         ``__call__`` takes ``t_since_last`` (Δt), not absolute time.
+
+    Priors (sample_priors):
+        η ~ HalfNormal(0.5)     [days]
+        k ~ LogNormal(1.0, 0.5) [dimensionless]
     """
 
     scale: Float[ArrayLike, ""]
@@ -588,21 +574,10 @@ class WeibullRenewalIntensity(eqx.Module):
         # h(Δt) = (k / η) (Δt / η)^(k − 1)
         return (shape / scale) * (Δt / scale) ** (shape - 1.0)
 
-    @classmethod
-    def sample_priors(cls) -> WeibullRenewalIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                η ~ HalfNormal(0.5)     [days]
-                k ~ LogNormal(1.0, 0.5) [dimensionless]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            scale=numpyro.sample("weibull_scale", dist.HalfNormal(0.5)),
-            shape=numpyro.sample("weibull_shape", dist.LogNormal(1.0, 0.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "scale": ("weibull_scale", lambda dist: dist.HalfNormal(0.5)),
+        "shape": ("weibull_shape", lambda dist: dist.LogNormal(1.0, 0.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -610,7 +585,7 @@ class WeibullRenewalIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class PeriodicBatchIntensity(eqx.Module):
+class PeriodicBatchIntensity(PriorTableMixin, eqx.Module):
     """Periodic narrow-pulse intensity for scheduled batch venting.
 
     Physical Motivation:
@@ -632,6 +607,12 @@ class PeriodicBatchIntensity(eqx.Module):
         lambda_peak: Peak rate during a batch vent [events day⁻¹]. Typical: 10–50.
         period_days: Time between successive batches [days]. Typical: 0.2–2.0.
         duty_fraction: Pulse width as fraction of period [dimensionless]. Default: 0.05.
+
+    Priors (sample_priors):
+        λ_bg  ~ HalfNormal(1.0)
+        λ_pk  ~ HalfNormal(20.0)
+        P     ~ LogNormal(ln(0.5), 0.5)   [days]
+        f     ~ Beta(2, 20)               [dimensionless]
     """
 
     lambda_background: Float[ArrayLike, ""]
@@ -665,27 +646,12 @@ class PeriodicBatchIntensity(eqx.Module):
         """
         return jnp.asarray(jnp.maximum(self.lambda_background, self.lambda_peak))
 
-    @classmethod
-    def sample_priors(cls) -> PeriodicBatchIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ_bg  ~ HalfNormal(1.0)
-                λ_pk  ~ HalfNormal(20.0)
-                P     ~ LogNormal(ln(0.5), 0.5)   [days]
-                f     ~ Beta(2, 20)               [dimensionless]
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_background=numpyro.sample("lambda_bg", dist.HalfNormal(1.0)),
-            lambda_peak=numpyro.sample("lambda_peak", dist.HalfNormal(20.0)),
-            period_days=numpyro.sample(
-                "period_days", dist.LogNormal(jnp.log(0.5), 0.5)
-            ),
-            duty_fraction=numpyro.sample("duty_fraction", dist.Beta(2.0, 20.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_background": ("lambda_bg", lambda dist: dist.HalfNormal(1.0)),
+        "lambda_peak": ("lambda_peak", lambda dist: dist.HalfNormal(20.0)),
+        "period_days": ("period_days", lambda dist: dist.LogNormal(jnp.log(0.5), 0.5)),
+        "duty_fraction": ("duty_fraction", lambda dist: dist.Beta(2.0, 20.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -693,7 +659,7 @@ class PeriodicBatchIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class CoalMineVentilationIntensity(eqx.Module):
+class CoalMineVentilationIntensity(PriorTableMixin, eqx.Module):
     """Multi-scale operational intensity for underground coal mines.
 
     Physical Motivation:
@@ -718,6 +684,11 @@ class CoalMineVentilationIntensity(eqx.Module):
         shift_start: Shift start [hours]. Default: 6.0.
         shift_end: Shift end [hours]. Default: 22.0.
         maintenance_day: Day of 7-day week for maintenance [0=Mon, 6=Sun]. Default: 6.0.
+
+    Priors (sample_priors):
+        λ_ext   ~ HalfNormal(10.0)
+        λ_maint ~ HalfNormal(1.5)
+        λ_idle  ~ HalfNormal(3.0)
     """
 
     lambda_extraction: Float[ArrayLike, ""]
@@ -736,15 +707,10 @@ class CoalMineVentilationIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹]. Shape ``(N,)``.
         """
-        # h = (t mod 1) · 24
-        hour_of_day = (t % 1.0) * 24.0
         # d = t mod 7
         day_of_week = t % 7.0
-        steepness = 50.0
         # shift = σ(h − h_start) − σ(h − h_end)
-        shift = 1.0 / (
-            1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_start))
-        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_end)))
+        shift = _shift_gate(t, self.shift_start, self.shift_end)
         # m = exp(−½ ((d − d_maint) / 0.3)²)
         maint = jnp.exp(-0.5 * ((day_of_week - self.maintenance_day) / 0.3) ** 2)
         return maint * self.lambda_maintenance + (1.0 - maint) * (
@@ -765,27 +731,11 @@ class CoalMineVentilationIntensity(eqx.Module):
             + 2.0 * jnp.abs(self.lambda_idle)
         )
 
-    @classmethod
-    def sample_priors(cls) -> CoalMineVentilationIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ_ext   ~ HalfNormal(10.0)
-                λ_maint ~ HalfNormal(1.5)
-                λ_idle  ~ HalfNormal(3.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_extraction=numpyro.sample(
-                "lambda_extraction", dist.HalfNormal(10.0)
-            ),
-            lambda_maintenance=numpyro.sample(
-                "lambda_maintenance", dist.HalfNormal(1.5)
-            ),
-            lambda_idle=numpyro.sample("lambda_idle", dist.HalfNormal(3.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_extraction": ("lambda_extraction", lambda dist: dist.HalfNormal(10.0)),
+        "lambda_maintenance": ("lambda_maintenance", lambda dist: dist.HalfNormal(1.5)),
+        "lambda_idle": ("lambda_idle", lambda dist: dist.HalfNormal(3.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -793,7 +743,7 @@ class CoalMineVentilationIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class LandfillIntensity(eqx.Module):
+class LandfillIntensity(PriorTableMixin, eqx.Module):
     """Multi-component intensity for municipal solid waste landfills.
 
     Physical Motivation:
@@ -820,6 +770,15 @@ class LandfillIntensity(eqx.Module):
         baro_period_days: Synoptic weather period [days]. Default: 5.0.
         peak_day: Seasonal peak [days from Jan 1]. Default: 196.0.
         phase_hours: Diurnal peak hour [hours]. Default: 15.0.
+
+    Priors (sample_priors):
+        λ₀      ~ HalfNormal(4.0)
+        A_s     ~ HalfNormal(2.0)
+        A_d     ~ HalfNormal(1.5)
+        A_b     ~ HalfNormal(1.0)
+        P_baro  ~ LogNormal(ln5, 0.3)
+        t_peak  ~ Normal(196, 20)
+        φ_h     ~ Normal(15, 1.5)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -839,13 +798,12 @@ class LandfillIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        ω_s = 2.0 * jnp.pi / 365.25
         ω_d = 2.0 * jnp.pi
         ω_b = 2.0 * jnp.pi / self.baro_period_days
-        φ_d = 2.0 * jnp.pi * (self.phase_hours / 24.0)
+        φ_d = _diurnal_phase(self.phase_hours)
         raw = (
             self.lambda_0
-            + self.amp_seasonal * jnp.sin(ω_s * (t - self.peak_day))
+            + self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
             + self.amp_diurnal * jnp.sin(ω_d * t - φ_d)
             + self.amp_barometric * jnp.sin(ω_b * t)
         )
@@ -866,33 +824,18 @@ class LandfillIntensity(eqx.Module):
             + jnp.abs(self.amp_barometric)
         )
 
-    @classmethod
-    def sample_priors(cls) -> LandfillIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀      ~ HalfNormal(4.0)
-                A_s     ~ HalfNormal(2.0)
-                A_d     ~ HalfNormal(1.5)
-                A_b     ~ HalfNormal(1.0)
-                P_baro  ~ LogNormal(ln5, 0.3)
-                t_peak  ~ Normal(196, 20)
-                φ_h     ~ Normal(15, 1.5)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(4.0)),
-            amp_seasonal=numpyro.sample("amp_seasonal", dist.HalfNormal(2.0)),
-            amp_diurnal=numpyro.sample("amp_diurnal", dist.HalfNormal(1.5)),
-            amp_barometric=numpyro.sample("amp_barometric", dist.HalfNormal(1.0)),
-            baro_period_days=numpyro.sample(
-                "baro_period_days", dist.LogNormal(jnp.log(5.0), 0.3)
-            ),
-            peak_day=numpyro.sample("peak_day", dist.Normal(196.0, 20.0)),
-            phase_hours=numpyro.sample("phase_hours", dist.Normal(15.0, 1.5)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(4.0)),
+        "amp_seasonal": ("amp_seasonal", lambda dist: dist.HalfNormal(2.0)),
+        "amp_diurnal": ("amp_diurnal", lambda dist: dist.HalfNormal(1.5)),
+        "amp_barometric": ("amp_barometric", lambda dist: dist.HalfNormal(1.0)),
+        "baro_period_days": (
+            "baro_period_days",
+            lambda dist: dist.LogNormal(jnp.log(5.0), 0.3),
+        ),
+        "peak_day": ("peak_day", lambda dist: dist.Normal(196.0, 20.0)),
+        "phase_hours": ("phase_hours", lambda dist: dist.Normal(15.0, 1.5)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -900,7 +843,7 @@ class LandfillIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class OffshorePlatformIntensity(eqx.Module):
+class OffshorePlatformIntensity(PriorTableMixin, eqx.Module):
     """Combined tidal and operational intensity for offshore oil & gas platforms.
 
     Physical Motivation:
@@ -922,6 +865,11 @@ class OffshorePlatformIntensity(eqx.Module):
         tidal_period_days: Dominant tidal period [days]. Default: 0.5175 (M2 ≈ 12.42 hr).
         shift_start: Day crew start [hours]. Default: 7.0.
         shift_end: Day crew end [hours]. Default: 19.0.
+
+    Priors (sample_priors):
+        λ₀     ~ HalfNormal(5.0)
+        A_tide ~ HalfNormal(1.5)
+        A_ops  ~ HalfNormal(2.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -940,13 +888,8 @@ class OffshorePlatformIntensity(eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        # h = (t mod 1) · 24
-        hour_of_day = (t % 1.0) * 24.0
-        steepness = 50.0
         # crew = σ(h − h_on) − σ(h − h_off)
-        crew = 1.0 / (
-            1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_start))
-        ) - 1.0 / (1.0 + jnp.exp(-steepness * (hour_of_day - self.shift_end)))
+        crew = _shift_gate(t, self.shift_start, self.shift_end)
         raw = (
             self.lambda_0
             + self.amp_tidal * jnp.sin(2.0 * jnp.pi / self.tidal_period_days * t)
@@ -966,23 +909,11 @@ class OffshorePlatformIntensity(eqx.Module):
             self.lambda_0 + jnp.abs(self.amp_tidal) + jnp.abs(self.amp_operational)
         )
 
-    @classmethod
-    def sample_priors(cls) -> OffshorePlatformIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀     ~ HalfNormal(5.0)
-                A_tide ~ HalfNormal(1.5)
-                A_ops  ~ HalfNormal(2.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(5.0)),
-            amp_tidal=numpyro.sample("amp_tidal", dist.HalfNormal(1.5)),
-            amp_operational=numpyro.sample("amp_operational", dist.HalfNormal(2.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(5.0)),
+        "amp_tidal": ("amp_tidal", lambda dist: dist.HalfNormal(1.5)),
+        "amp_operational": ("amp_operational", lambda dist: dist.HalfNormal(2.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -990,7 +921,7 @@ class OffshorePlatformIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class WetlandPermafrostIntensity(eqx.Module):
+class WetlandPermafrostIntensity(PriorTableMixin, eqx.Module):
     """Sigmoid-gated seasonal intensity for high-latitude wetland/permafrost.
 
     Physical Motivation:
@@ -1015,6 +946,13 @@ class WetlandPermafrostIntensity(eqx.Module):
         thaw_onset_day: Day-of-year of thaw onset [days]. Default: 120 (≈ May 1).
         freeze_onset_day: Day-of-year of freeze onset [days]. Default: 280 (≈ Oct 7).
         transition_width: Sigmoid transition width [days]. Default: 15.0.
+
+    Priors (sample_priors):
+        λ_peak   ~ HalfNormal(5.0)
+        λ_frozen ~ HalfNormal(0.2)
+        t_thaw   ~ Normal(120, 15)
+        t_freeze ~ Normal(280, 15)
+        w        ~ HalfNormal(15.0)
     """
 
     lambda_peak: Float[ArrayLike, ""]
@@ -1036,11 +974,9 @@ class WetlandPermafrostIntensity(eqx.Module):
         day_of_year = t % 365.25
         width = self.transition_width
         # G_thaw = σ((t_yr − t_thaw) / w)
-        g_thaw = 1.0 / (1.0 + jnp.exp(-(day_of_year - self.thaw_onset_day) / width))
+        g_thaw = jax.nn.sigmoid((day_of_year - self.thaw_onset_day) / width)
         # G_freeze = 1 − σ((t_yr − t_freeze) / w)
-        g_freeze = 1.0 - 1.0 / (
-            1.0 + jnp.exp(-(day_of_year - self.freeze_onset_day) / width)
-        )
+        g_freeze = 1.0 - jax.nn.sigmoid((day_of_year - self.freeze_onset_day) / width)
         return (
             self.lambda_frozen
             + (self.lambda_peak - self.lambda_frozen) * g_thaw * g_freeze
@@ -1056,29 +992,13 @@ class WetlandPermafrostIntensity(eqx.Module):
         """
         return jnp.asarray(jnp.maximum(self.lambda_frozen, self.lambda_peak))
 
-    @classmethod
-    def sample_priors(cls) -> WetlandPermafrostIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ_peak   ~ HalfNormal(5.0)
-                λ_frozen ~ HalfNormal(0.2)
-                t_thaw   ~ Normal(120, 15)
-                t_freeze ~ Normal(280, 15)
-                w        ~ HalfNormal(15.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_peak=numpyro.sample("lambda_peak", dist.HalfNormal(5.0)),
-            lambda_frozen=numpyro.sample("lambda_frozen", dist.HalfNormal(0.2)),
-            thaw_onset_day=numpyro.sample("thaw_onset_day", dist.Normal(120.0, 15.0)),
-            freeze_onset_day=numpyro.sample(
-                "freeze_onset_day", dist.Normal(280.0, 15.0)
-            ),
-            transition_width=numpyro.sample("transition_width", dist.HalfNormal(15.0)),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_peak": ("lambda_peak", lambda dist: dist.HalfNormal(5.0)),
+        "lambda_frozen": ("lambda_frozen", lambda dist: dist.HalfNormal(0.2)),
+        "thaw_onset_day": ("thaw_onset_day", lambda dist: dist.Normal(120.0, 15.0)),
+        "freeze_onset_day": ("freeze_onset_day", lambda dist: dist.Normal(280.0, 15.0)),
+        "transition_width": ("transition_width", lambda dist: dist.HalfNormal(15.0)),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -1086,7 +1006,7 @@ class WetlandPermafrostIntensity(eqx.Module):
 # ═════════════════════════════════════════════════════════════════════════════
 
 
-class LivestockFeedlotIntensity(eqx.Module):
+class LivestockFeedlotIntensity(PriorTableMixin, eqx.Module):
     """Bimodal diurnal + seasonal intensity for concentrated livestock operations.
 
     Physical Motivation:
@@ -1113,6 +1033,14 @@ class LivestockFeedlotIntensity(eqx.Module):
         evening_feed_hour: PM feed time [hours]. Default: 17.0.
         feed_response_width: Gaussian width of feeding pulse [hours]. Default: 2.0.
         peak_day: Seasonal peak [days from Jan 1]. Default: 196.0.
+
+    Priors (sample_priors):
+        λ₀   ~ HalfNormal(3.0)
+        A_f  ~ HalfNormal(2.0)
+        A_s  ~ HalfNormal(1.0)
+        h_am ~ Normal(7.0, 1.0)
+        h_pm ~ Normal(17.0, 1.0)
+        w    ~ HalfNormal(2.0)
     """
 
     lambda_0: Float[ArrayLike, ""]
@@ -1133,7 +1061,7 @@ class LivestockFeedlotIntensity(eqx.Module):
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
         # h = (t mod 1) · 24
-        hour_of_day = (t % 1.0) * 24.0
+        hour_of_day = _hour_of_day(t)
         width = self.feed_response_width
         # G_am = exp(−(h − h_am)² / (2w²))
         morning_gate = jnp.exp(
@@ -1143,9 +1071,7 @@ class LivestockFeedlotIntensity(eqx.Module):
         evening_gate = jnp.exp(
             -0.5 * ((hour_of_day - self.evening_feed_hour) / width) ** 2
         )
-        seasonal = self.amp_seasonal * jnp.sin(
-            2.0 * jnp.pi / 365.25 * (t - self.peak_day)
-        )
+        seasonal = self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
         raw = (
             self.lambda_0 + self.amp_feeding * (morning_gate + evening_gate) + seasonal
         )
@@ -1163,35 +1089,17 @@ class LivestockFeedlotIntensity(eqx.Module):
             self.lambda_0 + 2.0 * jnp.abs(self.amp_feeding) + jnp.abs(self.amp_seasonal)
         )
 
-    @classmethod
-    def sample_priors(cls) -> LivestockFeedlotIntensity:
-        """Sample NumPyro priors.
-
-        Priors:
-                λ₀   ~ HalfNormal(3.0)
-                A_f  ~ HalfNormal(2.0)
-                A_s  ~ HalfNormal(1.0)
-                h_am ~ Normal(7.0, 1.0)
-                h_pm ~ Normal(17.0, 1.0)
-                w    ~ HalfNormal(2.0)
-        """
-        import numpyro
-        import numpyro.distributions as dist
-
-        return cls(
-            lambda_0=numpyro.sample("lambda_0", dist.HalfNormal(3.0)),
-            amp_feeding=numpyro.sample("amp_feeding", dist.HalfNormal(2.0)),
-            amp_seasonal=numpyro.sample("amp_seasonal", dist.HalfNormal(1.0)),
-            morning_feed_hour=numpyro.sample(
-                "morning_feed_hour", dist.Normal(7.0, 1.0)
-            ),
-            evening_feed_hour=numpyro.sample(
-                "evening_feed_hour", dist.Normal(17.0, 1.0)
-            ),
-            feed_response_width=numpyro.sample(
-                "feed_response_width", dist.HalfNormal(2.0)
-            ),
-        )
+    _PRIORS: ClassVar[PriorTable] = {
+        "lambda_0": ("lambda_0", lambda dist: dist.HalfNormal(3.0)),
+        "amp_feeding": ("amp_feeding", lambda dist: dist.HalfNormal(2.0)),
+        "amp_seasonal": ("amp_seasonal", lambda dist: dist.HalfNormal(1.0)),
+        "morning_feed_hour": ("morning_feed_hour", lambda dist: dist.Normal(7.0, 1.0)),
+        "evening_feed_hour": ("evening_feed_hour", lambda dist: dist.Normal(17.0, 1.0)),
+        "feed_response_width": (
+            "feed_response_width",
+            lambda dist: dist.HalfNormal(2.0),
+        ),
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════

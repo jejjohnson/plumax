@@ -24,7 +24,6 @@ The POD is a fixed callable ``log_pod``, or the union of calibrated instruments
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -38,12 +37,13 @@ from jaxtyping import Array, Bool, Float
 
 from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require
+from plumax.population._src._xtremax import require_xtremax
 from plumax.population._src.importance import (
     EventEvidence,
     Measure,
     Regime,
     catalog_evidence,
-    warn_on_collapse,
+    weight_diagnostics,
 )
 from plumax.population._src.marks import MARKS, Mark
 from plumax.population._src.pod_union import (
@@ -220,9 +220,6 @@ def tmtpp_iw_model(
     params = mark.numpyro_prior("mark")
     kernel = INTENSITY_REGISTRY[intensity].sample_priors()
     process = make_process(kernel, window)
-    # Σᵢ log λ(tᵢ) over the real events
-    log_rates = process.log_intensity_fn(event_times)
-    ground = jnp.sum(jnp.where(mask, log_rates, 0.0))
 
     # --- detection ---
     binned = pods is not None and is_tod_binned(pods)
@@ -311,8 +308,12 @@ def tmtpp_iw_model(
         thinned = _covered_compensator(
             kernel, mark, params, pods, calibration, intervals, support, n_nodes
         )
+    # Σᵢ log λ(tᵢ) − Λ(T) p̄ over the real events, the thinned Poisson log-likelihood
+    ground = require_xtremax("tmtpp_iw_model").primitives.ipp_log_prob(
+        event_times, mask, process.log_intensity_fn, thinned
+    )
     # Σᵢ [log λ(tᵢ) + mᵢ] − Λ(T) p̄
-    numpyro.factor("tmtpp", ground + marks - thinned)
+    numpyro.factor("tmtpp", ground + marks)
 
 
 def _check_coverage_arguments(
@@ -367,11 +368,7 @@ def _covered_compensator(
     support: tuple[float, float],
     num_nodes: int,
 ) -> Float[Array, ""]:
-    from plumax.population._src.processes import (
-        NODES_PER_DAY,
-        LogIntensity,
-        _quadrature_points,
-    )
+    from plumax.population._src.processes import expected_events
 
     thinned = jnp.zeros(())
     for start, stop, covering in intervals:
@@ -379,16 +376,14 @@ def _covered_compensator(
         if not covering.any():
             continue
         # Λ_w = ∫_w λ(t) dt
-        expected_events = LogIntensity(
-            kernel, n_integration_points=_quadrature_points(stop - start, NODES_PER_DAY)
-        ).integrate(start, stop)
+        window_events = expected_events(kernel, start, stop)
         log_pod = log_pod_union(
             pods, coverage=jnp.asarray(covering), calibration=calibration
         )
         # log p̄_w
         log_rate = log_thinned_rate(mark, params, log_pod, support, n_nodes=num_nodes)
         # Σ_w Λ_w p̄_w
-        thinned = thinned + expected_events * jnp.exp(log_rate)
+        thinned = thinned + window_events * jnp.exp(log_rate)
     return thinned
 
 
@@ -524,12 +519,17 @@ class TMTPPPosterior:
         Returns:
             θ by parameter name, as the mark's methods take it.
         """
-        prefix = "mark."
-        return {
-            name[len(prefix) :]: value
-            for name, value in draw.items()
-            if name.startswith(prefix) and not name.startswith(f"{prefix}raw_")
-        }
+        return _mark_theta(draw)
+
+
+def _mark_theta(draws: dict[str, Any]) -> dict[str, Any]:
+    # the "mark." sites without their prefix, leaving out the raw_ reparameterisation sites
+    prefix = "mark."
+    return {
+        name[len(prefix) :]: value
+        for name, value in draws.items()
+        if name.startswith(prefix) and not name.startswith(f"{prefix}raw_")
+    }
 
 
 def fit_size_distribution_iw(
@@ -592,12 +592,7 @@ def fit_size_distribution_iw(
         log_pod=log_pod,
         support=support,
     )
-    prefix = "mark."
-    samples = {
-        name[len(prefix) :]: np.asarray(value)
-        for name, value in draws.items()
-        if name.startswith(prefix) and not name.startswith(f"{prefix}raw_")
-    }
+    samples = {name: np.asarray(value) for name, value in _mark_theta(draws).items()}
     # θ̂ = (1 / S) Σₛ θ⁽ˢ⁾
     params = {
         name: jnp.asarray(einx.mean("[draw] ...", value))
@@ -606,15 +601,7 @@ def fit_size_distribution_iw(
     log_weights = np.asarray(
         evidence.log_terms(_log_integrand(family, params, log_pod))
     )
-    ess = np.asarray(integrix_expect.effective_sample_size(jnp.asarray(log_weights)))
-    pareto_k = np.full(ess.shape, math.nan)
-    if regime is Regime.FULL:
-        # one k̂ per event, batched over the events
-        _, tail_shape = integrix_expect.pareto_smoothed_log_weights(
-            jnp.asarray(log_weights)
-        )
-        pareto_k = np.asarray(tail_shape)
-    warn_on_collapse(ess, log_weights.shape[-1], pareto_k)
+    ess, pareto_k = weight_diagnostics(log_weights, regime)
     return MarkPosterior(
         mark=mark, regime=regime, samples=samples, ess=ess, pareto_k=pareto_k
     )

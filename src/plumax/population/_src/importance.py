@@ -44,7 +44,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 from integrix import expect as integrix_expect
-from jaxtyping import Array, Float
+from jaxtyping import Array, ArrayLike, Float
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
@@ -306,21 +306,49 @@ def ess_report(
     """
     evidence = catalog_evidence(catalog, regime=regime, measure=measure)
     log_w = np.asarray(evidence.log_terms(log_integrand))
-    ess = np.asarray(integrix_expect.effective_sample_size(jnp.asarray(log_w)))
-    if warn:
-        pareto_k = None
-        if Regime(regime) is Regime.FULL:
-            # one k̂ per event, batched over the events
-            _, tail_shape = integrix_expect.pareto_smoothed_log_weights(
-                jnp.asarray(log_w)
-            )
-            pareto_k = np.asarray(tail_shape)
-        warn_on_collapse(ess, log_w.shape[-1], pareto_k)
+    ess, _ = weight_diagnostics(log_w, regime, warn=warn, pareto=warn)
     return ess
 
 
+def weight_diagnostics(
+    log_w: ArrayLike,
+    regime: Regime | str,
+    *,
+    warn: bool = True,
+    pareto: bool = True,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Per-event ESS and Pareto k̂ of importance weights, with a collapse warning.
+
+    Args:
+        log_w: Log-weights, shape ``(event, draw)``.
+        regime: How the events enter; k̂ is only computed in the FULL regime.
+        warn: Emit the collapse warning (:func:`warn_on_collapse`).
+        pareto: Compute k̂ in the FULL regime. A caller that only wants the
+            ESS passes ``pareto=warn``, so PSIS runs only to feed the warning.
+
+    Returns:
+        ``(ess, pareto_k)`` per event; ``pareto_k`` is NaN outside the FULL
+        regime and when ``pareto`` is false.
+    """
+    log_w = jnp.asarray(log_w)
+    ess = np.asarray(integrix_expect.effective_sample_size(log_w))
+    pareto_k = np.full(ess.shape, math.nan)
+    if pareto and Regime(regime) is Regime.FULL:
+        # one k̂ per event, batched over the events
+        _, tail_shape = integrix_expect.pareto_smoothed_log_weights(log_w)
+        pareto_k = np.asarray(tail_shape)
+    if warn:
+        # the warning points at the caller of the public function
+        warn_on_collapse(ess, log_w.shape[-1], pareto_k, stacklevel=4)
+    return ess, pareto_k
+
+
 def warn_on_collapse(
-    ess: np.ndarray, n_draws: int, pareto_k: np.ndarray | None = None
+    ess: np.ndarray,
+    n_draws: int,
+    pareto_k: np.ndarray | None = None,
+    *,
+    stacklevel: int = 3,
 ) -> None:
     """Warn when an event's ESS < 0.1 S or its Pareto k̂ > 0.7."""
     low = np.flatnonzero(ess < ESS_WARNING_FRACTION * n_draws)
@@ -334,5 +362,5 @@ def warn_on_collapse(
             f"{PARETO_K_WARNING:g} for events {heavy.tolist()}; the per-event "
             "posteriors sit far from the population mark distribution there.",
             RuntimeWarning,
-            stacklevel=3,
+            stacklevel=stacklevel,
         )
