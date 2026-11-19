@@ -128,6 +128,7 @@ def test_initial_changes_the_start_not_the_prior():
     assert moved.n_steps != default.n_steps
 
 
+@pytest.mark.slow
 def test_initial_validation():
     problem = _problem(NOISE, 0, (0.0, 0.0), 60.0, length=300.0)
     with pytest.raises(ControlBlockError, match="does not hold"):
@@ -139,6 +140,7 @@ def test_initial_validation():
 # ── solve_coupled_multistart ────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_starts_validation():
     problem = _problem(NOISE, 0, (0.0, 0.0), 60.0, length=300.0)
     with pytest.raises(ControlBlockError, match="empty"):

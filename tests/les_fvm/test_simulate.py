@@ -52,6 +52,7 @@ def test_simulate_zero_emission_yields_zero_concentration():
     np.testing.assert_allclose(ds["concentration"].values, 0.0, atol=1e-10)
 
 
+@pytest.mark.slow
 def test_simulate_positive_emission_produces_downwind_plume():
     ds = simulate_eulerian_dispersion(**_common_kwargs())
     c = ds["concentration"].values  # (time, z, y, x)
@@ -64,6 +65,7 @@ def test_simulate_positive_emission_produces_downwind_plume():
     assert max_downwind > 0.0
 
 
+@pytest.mark.slow
 def test_simulate_mass_grows_with_time_under_constant_emission():
     # Total mass under a constant emission rate ``q`` should grow roughly as
     # ``q * t`` minus outflow.  With an open downstream BC and a weak
@@ -280,6 +282,7 @@ def test_simulate_rejects_mismatched_initial_concentration():
         )
 
 
+@pytest.mark.slow
 def test_simulate_accepts_explicit_wind_field():
     # Passing a pre-built PrescribedWindField should skip both the uniform
     # and schedule branches and work identically to uniform_wind=(5, 0, 0).
@@ -342,6 +345,7 @@ def test_fixed_step_solver_rejects_unstable_dt0():
         simulate_eulerian_dispersion(**_common_kwargs(solver="heun", dt0=1000.0))
 
 
+@pytest.mark.slow
 def test_fixed_step_solver_runs_within_stability_bound():
     # A bound-compliant dt0 on a fixed-step solver integrates normally.
     ds = simulate_eulerian_dispersion(**_common_kwargs(solver="heun", dt0=0.5))
@@ -349,6 +353,7 @@ def test_fixed_step_solver_runs_within_stability_bound():
     assert float(ds["concentration"].max()) > 0.0
 
 
+@pytest.mark.slow
 def test_adaptive_solver_skips_stability_guard():
     # The guard only applies to fixed-step solvers; an adaptive solver with a
     # large dt0 (used only as the initial step) is not rejected.
@@ -499,6 +504,7 @@ def test_stability_guard_includes_schedule_knots():
         )
 
 
+@pytest.mark.slow
 def test_simulate_with_time_varying_wind_schedule():
     schedule = WindSchedule.from_speed_direction(
         times=jnp.linspace(0.0, 30.0, 7),

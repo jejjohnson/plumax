@@ -113,6 +113,7 @@ def test_fixed_point_satisfies_both_similarity_equations(heat):
     assert np.all(np.sign(inv_l) == -np.sign(heat))  # heating → unstable
 
 
+@pytest.mark.slow
 def test_convective_velocity_scale():
     heat = 200.0
     layer = MoninObukhov()(WIND, z0=Z0, sensible_heat_flux=heat)
@@ -177,6 +178,7 @@ def test_bulk_richardson_matches_direct_profile():
     np.testing.assert_allclose(h, expected, rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_buoyancy_uses_actual_temperature_off_reference_pressure():
     """At p ≠ p_ref the θ/T factor must cancel: 1/L and w* carry T, not θ."""
     p, t, heat = 85_000.0, 290.0, 150.0
@@ -197,6 +199,7 @@ def test_buoyancy_uses_actual_temperature_off_reference_pressure():
     np.testing.assert_allclose(layer.w_star, expected_w, rtol=1e-12)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("heat", [0.0, 100.0, -20.0])
 def test_calm_columns_stay_finite(heat):
     calm = make_field(

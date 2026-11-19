@@ -22,6 +22,7 @@ def _turb():
     return HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0)
 
 
+@pytest.mark.slow
 def test_total_residence_tracks_horizon_for_partial_step():
     # With all particles confined to the domain, the total residence time
     # Σ conc · V_cell / Q equals the integration horizon. A non-divisible
@@ -62,6 +63,7 @@ def test_bin_positions_counts():
     assert hist[0, 0, 0] == 2
 
 
+@pytest.mark.slow
 def test_simulate_returns_dataset_with_positive_plume():
     ds = simulate_lagrangian(
         emission_rate=1.0,
@@ -80,6 +82,7 @@ def test_simulate_returns_dataset_with_positive_plume():
     assert float(ds["concentration"].max()) > 0.0
 
 
+@pytest.mark.slow
 def test_plume_transported_downwind():
     ds = simulate_lagrangian(
         emission_rate=1.0,
@@ -101,6 +104,7 @@ def test_plume_transported_downwind():
     assert x_centroid > 20.0
 
 
+@pytest.mark.slow
 def test_concentration_scales_linearly_with_emission():
     common = dict(
         source_location=(0.0, 0.0, 20.0),

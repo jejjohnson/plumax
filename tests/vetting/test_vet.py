@@ -140,6 +140,7 @@ def test_the_no_gas_residual_is_the_fit_at_zero() -> None:
     assert float(r.residual_ss_no_gas) > 10 * float(r.fit.residual_ss)
 
 
+@pytest.mark.slow
 def test_n_pairs_is_static() -> None:
     """``n_pairs`` is a Python int and not a leaf of the result's pytree."""
     cube, mf, mask = _scene(0.1)

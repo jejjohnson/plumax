@@ -41,6 +41,7 @@ def _logistic(q_50: float, k: float):
     return lambda q: jax.nn.log_sigmoid(k * (q - q_50))
 
 
+@pytest.mark.slow
 def test_no_pod_is_the_closed_form_and_misses_nothing():
     posterior = _posterior([2.0, 3.0], [1.0, 0.5], [0.5, 0.8])
     total = total_emission(
@@ -56,6 +57,7 @@ def test_no_pod_is_the_closed_form_and_misses_nothing():
     np.testing.assert_allclose(total.detected_kg, total.samples_kg, rtol=1e-15)
 
 
+@pytest.mark.slow
 def test_perfect_pod_no_missing_mass():
     posterior = _posterior([2.0, 3.0], [1.0, 0.5], [0.5, 0.8])
     # log P_d ≡ 0, as a curve rather than the certain-detection shortcut
@@ -70,6 +72,7 @@ def test_perfect_pod_no_missing_mass():
     np.testing.assert_allclose(total.detected_kg, total.samples_kg, rtol=1e-15)
 
 
+@pytest.mark.slow
 def test_blind_pod_misses_everything():
     posterior = _posterior([2.0], [1.0], [0.5])
     total = total_emission(
@@ -83,6 +86,7 @@ def test_blind_pod_misses_everything():
     np.testing.assert_allclose(total.detected_kg, 0.0, atol=1e-5)
 
 
+@pytest.mark.slow
 def test_missing_mass_matches_independent_quadrature():
     mu, sigma, q_50, k = 2.0, 1.5, 100.0, 0.02
     posterior = _posterior([1.5], [mu], [sigma])
@@ -105,6 +109,7 @@ def test_missing_mass_matches_independent_quadrature():
     np.testing.assert_allclose(total.missing_kg, [1.5 * 4.0 * rate * 3.0], rtol=1e-8)
 
 
+@pytest.mark.slow
 def test_step_pod_splits_the_partial_moments():
     # P_d = 1 above q_c gives missing = Λ D ∫_{q_min}^{q_c} q f(q) dq, also on a
     # heavy-tailed family with a kink at its q_min
@@ -126,6 +131,7 @@ def test_step_pod_splits_the_partial_moments():
     np.testing.assert_allclose(total.missing_kg, [below], rtol=2e-3)
 
 
+@pytest.mark.slow
 def test_q_range_is_a_partial_moment():
     # a narrow range keeps only the mass inside it: no renormalisation to a mean
     posterior = _posterior([1.0], [0.0], [1.0])
@@ -141,6 +147,7 @@ def test_q_range_is_a_partial_moment():
     np.testing.assert_allclose(total.samples_kg, [partial], rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_detected_and_missing_add_to_the_total():
     posterior = _posterior([2.0, 3.0], [1.0, 2.0], [0.5, 1.0])
     total = total_emission(
@@ -157,6 +164,7 @@ def test_detected_and_missing_add_to_the_total():
     assert np.all(np.asarray(total.missing_kg) > 0.0)
 
 
+@pytest.mark.slow
 def test_non_constant_ground_process_integrates_the_kernel():
     samples = {
         "lambda_0": jnp.array([2.0]),
@@ -178,6 +186,7 @@ def test_non_constant_ground_process_integrates_the_kernel():
     np.testing.assert_allclose(total.samples_kg, [6.0 * math.exp(0.5)], rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_union_of_windows_sets_lambda_and_the_effective_time():
     posterior = _posterior([2.0], [0.0], [1.0])
     # overlapping and out of order: the union is [0, 3] ∪ [5, 6], 4 days
@@ -205,6 +214,7 @@ def test_rate_in_tg_per_year():
     np.testing.assert_allclose(total.rate_tg_per_yr(), [2.0, 4.0], rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_strata_sum_draw_by_draw():
     wells = _posterior([1.0, 2.0], [0.0, 0.0], [1.0, 1.0])
     compressors = _posterior([3.0, 4.0], [1.0, 1.0], [0.5, 0.5])
@@ -226,6 +236,7 @@ def test_strata_sum_draw_by_draw():
     assert both.t_effective_s == first.t_effective_s
 
 
+@pytest.mark.slow
 def test_missing_mass_gradient_matches_central_difference():
     def missing(mu):
         posterior = _posterior(jnp.ones(1), mu[None], jnp.ones(1))
@@ -292,6 +303,7 @@ def _expected_detected_fraction(config: FacilityConfig) -> float:
     return float(detected / config.E_Q_true)
 
 
+@pytest.mark.validation
 def test_detected_sum_is_biased_low_by_the_expected_factor():
     config = FacilityConfig()
     factor = _expected_detected_fraction(config)
@@ -307,7 +319,7 @@ def test_detected_sum_is_biased_low_by_the_expected_factor():
     np.testing.assert_allclose(observed.mean() / true.mean(), factor, rtol=0.03)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_recovers_simulated_total():
     # 06d's truth test: a population from the missing-mass simulator, fitted through
     # the TMTPP model with the marks observed exactly and the POD known

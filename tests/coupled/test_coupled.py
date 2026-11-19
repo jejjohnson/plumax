@@ -202,6 +202,7 @@ def test_fusion_reduces_emission_uncertainty():
     assert post2.emission_std <= post1.emission_std + 1e-12
 
 
+@pytest.mark.slow
 def test_posterior_covariance_is_psd_and_shaped():
     fwd = _two_instrument_forward()
     y = fwd.predict(2.0)
@@ -218,6 +219,7 @@ def test_posterior_covariance_is_psd_and_shaped():
     assert np.min(np.linalg.eigvalsh(p)) > -1e-10
 
 
+@pytest.mark.slow
 def test_recovers_per_instrument_bias():
     # A genuine inter-instrument offset must be absorbed into bias_inst, not Q.
     fwd = _two_instrument_forward()
@@ -235,6 +237,7 @@ def test_recovers_per_instrument_bias():
     np.testing.assert_allclose(np.asarray(post.biases), np.asarray(biases), atol=2e-10)
 
 
+@pytest.mark.slow
 def test_cross_instrument_holdout():
     # Invert on instrument 0 only, then predict instrument 1's observations from
     # the recovered Q; with a clean twin they must match (design §hold-out).

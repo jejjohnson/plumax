@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run fast tests
+        # an unmarked test over this many seconds fails (tests/conftest.py)
+        env:
+          PLUMAX_FAST_BUDGET: "5"
         run: uv run pytest -n 4 --dist loadfile --durations=15
 
   # PRs into main run Python 3.12; pushes to main run both versions.

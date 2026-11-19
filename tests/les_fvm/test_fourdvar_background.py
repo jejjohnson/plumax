@@ -88,6 +88,7 @@ def test_scale_acts_on_dirichlet_faces_only():
     assert isinstance(bc_set.north, Outflow1D)
 
 
+@pytest.mark.slow
 def test_none_is_identity():
     forward = _forward()
     observations = jnp.zeros((3, NY * NX))
@@ -162,6 +163,7 @@ def test_adjoint_identity_over_the_whole_control():
     np.testing.assert_allclose(forward_pairing, jnp.vdot(u, adjoint_v), rtol=1e-11)
 
 
+@pytest.mark.slow
 def test_prior_is_block_diagonal_with_the_means_stacked():
     forward = _forward()
     prior = _prior()
@@ -200,6 +202,7 @@ def test_invalid_background_is_rejected(c_b, covariance, bc_prior):
         BackgroundControl(c_b, lx.DiagonalLinearOperator(covariance), bc_prior)
 
 
+@pytest.mark.slow
 def test_background_on_another_grid_is_rejected():
     background = BackgroundControl(
         jnp.zeros((2, 2, 2)), lx.DiagonalLinearOperator(jnp.ones(8))
@@ -281,7 +284,7 @@ def test_bc_scale_std_needs_a_background():
         _ = result.posterior.bc_scale_std
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_inflow_bias_absorbed_by_bc_scale():
     # noise-free observations, so the outcome does not depend on a noise draw;
     # the error variance is 1 % of the plume, not of the inflow-dominated column,

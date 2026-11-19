@@ -99,7 +99,7 @@ def test_inhomogeneous_rejects_bad_quadrature() -> None:
         )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_inhomogeneous_intensity_recovers_slope() -> None:
     # Simulate a 1-D inhomogeneous Poisson process with log λ(x) = β0 + β·x on a
     # fine grid by thinning, then check the exposure-aware fit recovers β. The

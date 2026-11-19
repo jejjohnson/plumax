@@ -30,6 +30,7 @@ def _narrow(q: jax.Array) -> jax.Array:
     return MARK.log_prob(q, mu=0.5, sigma=0.8)
 
 
+@pytest.mark.slow
 def test_total_emission_missing_mass_is_unchanged():
     posterior = _posterior([1.5, 2.0], [2.0, 1.0], [1.5, 0.7])
     total = total_emission(
@@ -44,6 +45,7 @@ def test_total_emission_missing_mass_is_unchanged():
     )
 
 
+@pytest.mark.slow
 def test_log_thinned_rate_is_unchanged():
     # log p̄ = log ∫ P_d(q) LN(q; 2, 1.5²) dq, logistic P_d with q₅₀ = 100 kg/s
     value = log_thinned_rate(
@@ -56,6 +58,7 @@ def test_log_thinned_rate_is_unchanged():
     np.testing.assert_allclose(float(value), -1.6972490428452154, rtol=RTOL)
 
 
+@pytest.mark.slow
 def test_ess_report_is_unchanged():
     ess = np.asarray(
         ess_report(_catalog(0.5, n_draws=1000), log_integrand=_narrow, warn=False)
@@ -72,6 +75,7 @@ def test_ess_report_is_unchanged():
     np.testing.assert_allclose(ess.sum(), 21054.1288810667, rtol=RTOL)
 
 
+@pytest.mark.slow
 def test_pareto_k_is_unchanged():
     import integrix.expect as ix_expect
 
@@ -89,6 +93,7 @@ def test_pareto_k_is_unchanged():
     np.testing.assert_allclose(np.asarray(k_hat), expected, rtol=RTOL)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("name", "call"),
     [

@@ -65,6 +65,7 @@ def test_offset_is_zero_upwind_hits_the_knots_and_holds_beyond():
     np.testing.assert_allclose(beyond, KNOTS[-1], rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_zero_knots_give_the_straight_response():
     receptors = _grid()
     for plume in (
@@ -103,6 +104,7 @@ def test_offset_is_linear_in_the_knots(a, b, seed):
 # ── gate G2 with a centreline ────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_bent_pixel_average_conserves_mass_at_every_distance():
     """Gate G2, exact form, bent: a crosswind row of pixel averages sums to q."""
     plume = ColumnPlume(
@@ -116,6 +118,7 @@ def test_bent_pixel_average_conserves_mass_at_every_distance():
         np.testing.assert_allclose(mass, 1.0, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_bent_point_evaluation_conserves_mass_once_a_pixel_wide():
     """Gate G2, point form, bent: exact up to aliasing where w ≥ g."""
     plume = ColumnPlume(initial_width=INITIAL_WIDTH, knot_spacing=SPACING)
@@ -139,6 +142,7 @@ def test_bent_point_evaluation_conserves_mass_once_a_pixel_wide():
 # ── gradient and transforms ──────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_knot_gradient_matches_central_differences_and_is_local():
     plume = ColumnPlume(
         initial_width=INITIAL_WIDTH, pixel_size=PIXEL, knot_spacing=SPACING
@@ -172,6 +176,7 @@ def test_knot_gradient_matches_central_differences_and_is_local():
         assert bool(jnp.any(column[~outside] != 0.0))
 
 
+@pytest.mark.slow
 def test_eager_jit_vmap_agree_over_centrelines():
     plume = ColumnPlume(
         initial_width=INITIAL_WIDTH, pixel_size=PIXEL, knot_spacing=SPACING
@@ -189,6 +194,7 @@ def test_eager_jit_vmap_agree_over_centrelines():
     np.testing.assert_allclose(mapped, looped, rtol=1e-12, atol=1e-18)
 
 
+@pytest.mark.slow
 def test_float32_in_gives_float32_out():
     plume = ColumnPlume(
         initial_width=INITIAL_WIDTH, pixel_size=PIXEL, knot_spacing=SPACING
@@ -235,6 +241,7 @@ def test_knot_spacing_round_trips_through_the_config():
 # ── CentrelinePrior ──────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_matern_marginal_variance_is_the_closed_form():
     length_scale, amplitude = 1000.0, 300.0
     knot_distance = SPACING * jnp.arange(1, 34)
@@ -260,6 +267,7 @@ def test_random_walk_is_the_brownian_covariance():
     np.testing.assert_allclose(prior(knot_distance), expected, rtol=1e-12)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kind", ["matern32", "random_walk"])
 def test_draws_have_the_prior_covariance(kind):
     knot_distance = SPACING * jnp.arange(1, 7)
@@ -277,6 +285,7 @@ def test_draws_have_the_prior_covariance(kind):
     assert bool(jnp.all(jnp.abs(sample - covariance) < 3.0 * standard_error))
 
 
+@pytest.mark.slow
 @settings(max_examples=50, deadline=None)
 @given(
     increments=st.lists(st.floats(20.0, 500.0), min_size=1, max_size=30),

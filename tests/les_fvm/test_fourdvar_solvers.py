@@ -243,17 +243,20 @@ def _unsolved_problem():
     )
 
 
+@pytest.mark.slow
 def test_psas_names_the_vardax_issue_it_waits_on():
     # "psas" is not a method the Literal allows, so the hook may reject it first
     with raises_checked(ValueError, "vardax/issues/72", parameter="method"):
         solve_4dvar(_unsolved_problem(), method="psas")
 
 
+@pytest.mark.slow
 def test_unknown_method_is_rejected():
     with raises_checked(ValueError, "unknown method", parameter="method"):
         solve_4dvar(_unsolved_problem(), method="newton")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "options", [{"initial_source": jnp.zeros(2)}, {"solver": object()}]
 )

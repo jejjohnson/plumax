@@ -51,6 +51,7 @@ def _tmtpp_log_density(intensity, params):
     return float(density)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("intensity", "params", "reference"),
     [

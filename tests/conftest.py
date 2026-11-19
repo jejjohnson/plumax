@@ -63,3 +63,31 @@ def _release_compiled_code():
     """
     yield
     jax.clear_caches()
+
+
+#: seconds an unmarked test's call may take before it fails; 0 switches the check off
+_FAST_BUDGET = float(os.environ.get("PLUMAX_FAST_BUDGET") or 0.0)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Fail a passing unmarked test whose call ran longer than the fast budget.
+
+    The fast tier is every test without a ``slow`` or ``validation`` marker.
+    CI's fast job sets ``PLUMAX_FAST_BUDGET``, so a test that grows past it
+    fails there and gets a marker (or a smaller problem) instead of slowing
+    every run. Fixture setup is not counted.
+    """
+    outcome = yield
+    report = outcome.get_result()
+    if not _FAST_BUDGET or report.when != "call" or not report.passed:
+        return
+    if item.get_closest_marker("slow") or item.get_closest_marker("validation"):
+        return
+    if call.duration > _FAST_BUDGET:
+        report.outcome = "failed"
+        report.longrepr = (
+            f"{item.nodeid} took {call.duration:.1f} s, over the fast budget of "
+            f"{_FAST_BUDGET:g} s: shrink it, or mark it `slow` (deterministic) "
+            "or `validation` (statistical)"
+        )

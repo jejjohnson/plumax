@@ -165,6 +165,7 @@ def test_backends_declare_their_blocks():
     assert plume.emission_blocks == ("emission_rate", "log_emission_rate")
 
 
+@pytest.mark.slow
 def test_prior_must_match_the_declarations():
     source = _source()
     instrument = _instrument()
@@ -219,6 +220,7 @@ def test_with_wind_validation():
 # ── response_at properties ───────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 @settings(max_examples=25, deadline=None)
 @given(
     direction=st.floats(-math.pi, math.pi),
@@ -276,6 +278,7 @@ def _control(geometry):
     }
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("block", BLOCKS)
 def test_response_at_gradient_matches_central_differences(block):
     source = _source()
@@ -303,6 +306,7 @@ def test_response_at_gradient_matches_central_differences(block):
     np.testing.assert_allclose(jacobian, expected, rtol=1e-5, atol=1e-5 * scale)
 
 
+@pytest.mark.slow
 def test_response_at_eager_jit_vmap_agree():
     source = _source()
     instrument = _instrument(_receptors(length=600.0, half_width=300.0))
@@ -337,6 +341,7 @@ def test_response_at_eager_jit_vmap_agree():
     np.testing.assert_allclose(mapped, looped, rtol=1e-12, atol=1e-18)
 
 
+@pytest.mark.slow
 def test_float32_in_gives_float32_out():
     geometry = PlumeGeometry(
         location=jnp.zeros(2, dtype=jnp.float32),
@@ -358,6 +363,7 @@ def test_float32_in_gives_float32_out():
 # ── oracles ──────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_fisher_of_rate_and_wind_has_rank_one():
     # gate G4: h = exp(log Q − log U) r + Ω_bg constrains only log Q − log U
     source = _source()
@@ -411,6 +417,7 @@ def test_linear_line_density_equals_fusion():
     np.testing.assert_allclose(result.line_density, result.map_estimate["line_density"])
 
 
+@pytest.mark.slow
 def test_with_wind_moments_match_monte_carlo():
     result = _result()
     speed, speed_std = 3.5, 1.0
@@ -636,6 +643,7 @@ def _knot_distance(n_knots):
     return SPACING * jnp.arange(1, n_knots + 1)
 
 
+@pytest.mark.slow
 def test_centreline_block_is_declared_with_the_geometry():
     assert "centreline" not in _source().control_blocks
     assert _bent_source(n_knots=7).control_blocks["centreline"] == (7,)
@@ -669,6 +677,7 @@ def test_from_blocks_with_deviations_equals_from_std(std_scalar, std_vector):
     assert blocks.layout == diagonal.layout
 
 
+@pytest.mark.slow
 def test_from_blocks_places_a_dense_block_in_layout_order():
     knot_covariance = CentrelinePrior()(_knot_distance(3))
     mean = {"background": 0.0, "centreline": jnp.zeros(3), "width_exponent": 0.8}

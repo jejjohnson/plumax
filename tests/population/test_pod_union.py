@@ -89,6 +89,7 @@ def test_union_of_no_events_is_empty():
     assert log_pod_union([SATELLITE_A, SATELLITE_B])(empty).shape == (0,)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("model", "curve"),
     [
@@ -113,6 +114,7 @@ def test_hill_form_of_the_log_logistic_curve():
     np.testing.assert_allclose(pod_union([pod], jnp.asarray(q)), hill, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_union_is_the_independent_detection_closed_form():
     q = np.logspace(-1.0, 2.0, 31)
     expected = 1.0 - (1.0 - _hill(q, 3.0, 2.0)) * (1.0 - _hill(q, 10.0, 1.5))
@@ -154,6 +156,7 @@ def test_log_union_tail_is_accurate_with_a_finite_gradient():
     assert jnp.isfinite(jax.grad(log_pod)(jnp.array(1e6)))
 
 
+@pytest.mark.slow
 def test_log_union_gradient_matches_central_difference():
     def value(q50):
         calibration = {"a": {"q50": q50}, "b": {}}
@@ -541,6 +544,7 @@ def test_tod_bin_index_counts_hours_from_the_origin():
     assert tod_bin_index(jnp.array([0.0, 0.25]), tod_origin=20.0).tolist() == [20, 2]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model", ["log_logistic", "logistic"])
 def test_zero_shifts_are_the_unbinned_curve(model):
     binned = _binned((0.0,) * 24, model)
@@ -558,6 +562,7 @@ def test_zero_shifts_are_the_unbinned_curve(model):
         )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("model", ["log_logistic", "logistic"])
 def test_every_bin_reaches_certain_detection_at_large_rates(model):
     # the reason for a shift: a factor on P_d would stop short of 1
@@ -731,6 +736,7 @@ def test_total_emission_sums_the_missing_mass_over_the_hours():
     np.testing.assert_allclose(result.missing_kg, [expected], rtol=1e-5)
 
 
+@pytest.mark.slow
 def test_expected_events_by_bin_add_up_and_follow_the_clock():
     # a 1.5-day window from 06:00 over λ(t) = 2 + sin(2πt)
     def intensity(time):
@@ -863,6 +869,7 @@ def _expected_spread_ratios(n_truths: int, *, key: jax.Array) -> jax.Array:
     return jnp.nanmedian(jax.lax.map(ratios, truths), axis=0)
 
 
+@pytest.mark.validation
 def test_coverage_twin_is_informed_by_design():
     # the calculation behind TWIN_PODS and TWIN_INTERVALS, which needs no MCMC
     ratios = _expected_spread_ratios(100, key=jax.random.PRNGKey(0))

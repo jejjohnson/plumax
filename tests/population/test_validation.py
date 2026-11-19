@@ -286,6 +286,7 @@ def test_sbc_flags_a_fit_that_ignores_the_pod():
     assert jnp.min(result.ks_pvalues) < SBC_MIN_PVALUE
 
 
+@pytest.mark.slow
 def test_run_sbc_passes_a_conjugate_fit_and_flags_a_biased_one():
     def prior_sample(key):
         return {"mean": jax.random.normal(key)}
@@ -379,7 +380,7 @@ def _swap_catalog(*, noise=0.4, n_events=30, n_draws=1000, seed=0) -> EmissionCa
     return EmissionCatalog.from_events(events)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_prior_swap_statistic_is_within_is_noise():
     statistic = prior_swap_test(
         _swap_catalog(), priors=SWAP_PRIORS, n_replicates=SWAP_REPLICATES, **SWAP_FIT
@@ -387,7 +388,7 @@ def test_prior_swap_statistic_is_within_is_noise():
     assert statistic < 3.0
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_prior_swap_flags_a_missing_correction():
     # the negative control: a fit that does not divide the per-event prior out
     from plumax.population.fitting import fit_size_distribution_iw
@@ -464,7 +465,7 @@ def test_prior_swap_needs_draws_and_priors():
         prior_swap_test(_swap_catalog(), priors=SWAP_PRIORS, n_replicates=1)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_identifiability_stress():
     # (λ₀, Q₅₀) of each regime, chosen before the first run: marks have median 1, so
     # Q₅₀ = 5 sees only the upper tail of a busy basin and Q₅₀ = 0.02 sees nearly all

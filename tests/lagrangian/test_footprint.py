@@ -22,6 +22,7 @@ def _turb():
     return HomogeneousTurbulence(1.0, 1.0, 0.6, 30.0, 30.0, 20.0)
 
 
+@pytest.mark.slow
 def test_footprint_integrates_requested_horizon_for_partial_step():
     # Flux-sensitivity convention (units s·m²·kg⁻¹): Σ footprint · (ρ · mix_height)
     # = total surface residence time — no cell-area factor — which equals t_back
@@ -89,6 +90,7 @@ def test_footprint_units_convention():
     np.testing.assert_allclose(fp_half_rho, 2.0 * fp_ref, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_footprint_shape_and_nonnegative():
     wind = wind_from_speed_direction(5.0, 270.0)
     fp, x, y = compute_footprint(
@@ -109,6 +111,7 @@ def test_footprint_shape_and_nonnegative():
     assert fp.sum() > 0.0
 
 
+@pytest.mark.slow
 def test_footprint_lies_upwind_of_receptor():
     # Wind from west (flows east); backward particles travel west, so the
     # surface influence of a receptor is upwind (smaller x).

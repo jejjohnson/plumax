@@ -109,7 +109,7 @@ def test_a_legacy_uint32_key_is_accepted(mask: np.ndarray) -> None:
     assert out.shape == (3, H, W)
 
 
-@pytest.mark.slow  # 1,500 draws
+@pytest.mark.validation
 def test_a_copy_is_placed_uniformly_over_the_free_pixels() -> None:
     """A pixel at the rotation centre is moved to a uniform free pixel.
 
@@ -224,7 +224,7 @@ def test_degenerate_pvalue_inputs_raise() -> None:
 # ── gate VT2 (part): the notebook scene ───────────────────────────────────
 
 
-@pytest.mark.slow  # 200 vettings and the scene's forward model
+@pytest.mark.validation
 def test_vt2_scene_null_separates_the_plume_from_the_carbonate() -> None:
     """Gate VT2 (part): ``p̂_A = 0`` and ``p̂_B ≥ 0.05`` with 100 copies each.
 

@@ -332,6 +332,7 @@ def test_masked_pixels_match_masked_fusion():
 # ── plumbing ─────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_plume_response_matches_column_response():
     instrument = _column_instrument(1.0)
     traced = plume_response(SOURCE, instrument, jnp.zeros(2), jnp.array([5.0, 270.0]))

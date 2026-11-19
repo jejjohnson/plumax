@@ -106,6 +106,7 @@ def test_outflow_mass_budget():
     np.testing.assert_allclose(_interior_mass(cp), mass0, rtol=1e-4)
 
 
+@pytest.mark.slow
 def test_wall_ring_is_no_longer_frozen():
     """The wall-adjacent interior ring now receives a nonzero advective
     tendency (regression for the frozen-ring bug in #25)."""

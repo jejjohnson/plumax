@@ -23,6 +23,7 @@ def _log_hill(q, q50=1.0, steepness=2.0):
     return -jnp.log1p((q50 / q) ** steepness)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("power", [1.0, 2.0, -1.5])
 def test_log_gauss_hermite_lognormal_moments(power):
     # E[Qᵏ] = exp(kμ + k²σ²/2) for Q ~ LN(μ, σ²)
@@ -37,7 +38,7 @@ def test_log_gauss_hermite_stays_finite_where_linear_underflows():
     np.testing.assert_allclose(value, -400.0 * 5.0 + 0.5 * 400.0**2 * 0.005**2)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 @pytest.mark.parametrize("alpha", [1.5, 2.0, 2.5, 3.0, 4.0])
 def test_log_space_vs_pareto_is(alpha):
     mark = LognormalParetoMark(q_break_loc=2.0)
@@ -73,6 +74,7 @@ def test_log_simpson_handles_a_support_edge():
     np.testing.assert_allclose(value, 0.0, atol=1e-8)
 
 
+@pytest.mark.slow
 def test_pareto_smoothing_flags_heavy_tails():
     rng = np.random.default_rng(0)
     light = rng.normal(0.0, 0.3, 4000)
@@ -85,6 +87,7 @@ def test_pareto_smoothing_flags_heavy_tails():
     assert k_heavy > 0.7
 
 
+@pytest.mark.slow
 def test_pareto_smoothing_of_equal_weights_needs_no_fit():
     smoothed, k_hat = pareto_smoothed_log_weights(np.zeros(64))
     np.testing.assert_allclose(np.exp(smoothed), 1.0 / 64)

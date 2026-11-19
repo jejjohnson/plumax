@@ -267,6 +267,7 @@ def test_lagrangian_patterns_give_a_design_matrix():
 # ── errors ───────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_backend_errors():
     with pytest.raises(DomainError):
         LagrangianSource.point(

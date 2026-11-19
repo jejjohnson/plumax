@@ -44,6 +44,8 @@ uv run pytest tests/population/test_validation.py -m validation -v    # only val
 
 Plain `pytest` skips tests marked `slow` and `validation`. A `validation` test is statistical validation or anything else too long for every PR: mark it `validation` alone, not `slow` as well, so `-m slow` stays free of it. CI runs that tier nightly on main and on `workflow_dispatch` (`.github/workflows/validation.yml`), never on a PR.
 
+An unmarked test must stay fast. CI's fast job sets `PLUMAX_FAST_BUDGET=5`, and `tests/conftest.py` then fails any unmarked test whose call takes longer than that many seconds. Shrink such a test, or mark it `slow` if it is deterministic and `validation` if it is statistical. Set the variable locally to run the same check.
+
 ### Pre-commit checklist (all four must pass)
 
 ```bash

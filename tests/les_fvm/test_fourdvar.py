@@ -435,6 +435,7 @@ def test_build_problem_rejects_nonpositive_obs_variance():
         )
 
 
+@pytest.mark.slow
 def test_build_problem_per_overpass_variance_vector():
     # A length-n_t obs_variance is one variance per overpass (R_t): it must
     # broadcast across receptors (the (n_t, 1) interpretation), not align with
@@ -502,6 +503,7 @@ def test_build_problem_rejects_ambiguous_square_variance_vector():
         np.testing.assert_allclose(np.asarray(prob.obs_variance[t]), float(t + 1))
 
 
+@pytest.mark.slow
 def test_build_problem_rejects_nonfinite_obs_variance():
     # NaN passes the `<= 0` check, so obs_variance finiteness must be enforced
     # explicitly — otherwise the cost and posterior silently become NaN.
@@ -534,6 +536,7 @@ def test_build_problem_rejects_nonfinite_observations():
         )
 
 
+@pytest.mark.slow
 def test_build_problem_per_receptor_variance_vector():
     # A length-n_obs obs_variance stays per-receptor (broadcast across time).
     fwd = _forward()
@@ -600,7 +603,7 @@ def test_laplace_sample_shape_and_mean():
     np.testing.assert_allclose(sample_mean, np.asarray(res.source), atol=0.05)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_laplace_sample_covariance_matches_posterior_covariance():
     _, prob, res = _twin_map()
     n_samples = 20000

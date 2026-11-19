@@ -108,6 +108,7 @@ def test_linear_inversion_returns_to_prior_when_obs_uninformative():
     np.testing.assert_allclose(np.asarray(post.mean), qa, atol=1e-6)
 
 
+@pytest.mark.slow
 def test_linear_inversion_reduces_variance():
     coords, f, q_true = _toy_problem()
     n_obs, n_grid = f.shape
@@ -172,6 +173,7 @@ def test_linear_inversion_shape_validation():
 # ── Lognormal (sign-constrained) inversion ──────────────────────────────────
 
 
+@pytest.mark.slow
 def test_lognormal_inversion_is_nonnegative_and_recovers_truth():
     # The linear-in-log estimator is valid for *moderate* enhancements over the
     # prior, so the twin truth is a small (≤ ~15 %) perturbation of q_a.
@@ -191,6 +193,7 @@ def test_lognormal_inversion_is_nonnegative_and_recovers_truth():
     np.testing.assert_allclose(np.asarray(post.mean), q_true, rtol=0.1, atol=0.05)
 
 
+@pytest.mark.slow
 def test_lognormal_inversion_strictly_positive_under_large_negative_increment():
     # Even when the data push δ strongly negative, q = q_a · exp(δ) stays > 0
     # (the property a Gaussian inversion on q would violate by going negative).
@@ -218,6 +221,7 @@ def test_lognormal_inversion_rejects_nonpositive_prior_mean():
         )
 
 
+@pytest.mark.slow
 def test_lognormal_zero_innovation_returns_prior_mean():
     coords, f, _ = _toy_problem()
     n_obs, n_grid = f.shape
@@ -342,6 +346,7 @@ def test_lognormal_inversion_is_vmappable_over_prior_mean():
     assert out.shape == (2, n_grid)
 
 
+@pytest.mark.slow
 def test_matern32_differentiable_through_length_scale():
     # The prior must support gradient-based hyperparameter tuning: grad over
     # length_scale must not trip the eager positivity check.
@@ -360,6 +365,7 @@ def test_matern32_differentiable_through_length_scale():
     assert np.isfinite(float(g))
 
 
+@pytest.mark.slow
 def test_matern32_covariance_matches_the_closed_form_and_has_finite_gradients() -> None:
     """The kernellib-backed kernel (#350) is k(r) = σ² (1 + √3 r/ℓ) e^{−√3 r/ℓ}."""
     import jax

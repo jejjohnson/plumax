@@ -67,6 +67,7 @@ def _cases() -> dict[str, tuple[Any, tuple[Any, ...]]]:
 _CASES = _cases()
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", _CASES)
 def test_plume_operator_keeps_the_contract(name: str) -> None:
     op, inputs = _CASES[name]

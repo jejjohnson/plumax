@@ -59,6 +59,7 @@ def test_registry_lists_every_family():
         make_mark("gamma")
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_normalised_all_families(name):
     mark, theta = CASES[name]
@@ -119,6 +120,7 @@ def test_lognormal_pareto_is_continuous_with_a_pareto_tail():
     np.testing.assert_allclose(slope, -(alpha + 1.0))
 
 
+@pytest.mark.slow
 def test_mixture_of_one_component_is_the_lognormal():
     mixture = MixtureLognormalMark(n_components=1)
     q = jnp.array([0.2, 1.0, 5.0])
@@ -130,6 +132,7 @@ def test_mixture_of_one_component_is_the_lognormal():
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_numpyro_prior_gives_the_keyword_parameters(name):
     mark, theta = CASES[name]
@@ -140,7 +143,7 @@ def test_numpyro_prior_gives_the_keyword_parameters(name):
     assert bool(jnp.isfinite(mark.log_prob(1.0, **drawn)))
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_lognormal_pareto_recovery():
     from numpyro.infer import MCMC, NUTS
 
@@ -181,6 +184,7 @@ def test_lognormal_pareto_mean_with_a_break_far_below_the_body():
     np.testing.assert_allclose(mean, 2.5 * 2.0 / 1.5, rtol=1e-2)
 
 
+@pytest.mark.slow
 def test_lognormal_pareto_samples_a_body_far_below_its_centre():
     # Φ(z_b) underflows float64 here, yet the body keeps ~0.6 % of the mass
     from plumax.population._src.marks import _splice_log_weights

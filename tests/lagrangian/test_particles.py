@@ -102,7 +102,7 @@ def test_zero_turbulence_follows_streamline():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_well_mixed_velocity_variance_is_stationary():
     """Homogeneous OU started at stationarity keeps Var[v] ≈ σ² (well mixed)."""
     turb = HomogeneousTurbulence.isotropic(sigma=1.0, tau=20.0)
@@ -163,7 +163,7 @@ def test_wind_from_speed_direction_west_wind_flows_east():
     np.testing.assert_allclose(vec, [5.0, 0.0, 0.0], atol=1e-6)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_well_mixed_condition_hanna():
     """An initially uniform slab stays uniform under inhomogeneous Hanna turbulence.
 
@@ -228,6 +228,7 @@ def test_hanna_ground_level_drift_is_finite():
     assert np.all(np.isfinite(np.asarray(nxt.velocity)))
 
 
+@pytest.mark.slow
 def test_single_step_matches_manual_ou():
     turb = HomogeneousTurbulence.isotropic(sigma=1.0, tau=10.0)
     state = ParticleState(
