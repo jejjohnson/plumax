@@ -29,6 +29,7 @@ import einx
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
+from functax import quad as functax_quad
 from jaxtyping import Array, Float, Int
 
 from plumax._src.errors import DomainError
@@ -92,7 +93,8 @@ class ColumnObservation(eqx.Module):
 
         h_0 = Δz_0 / 2,  h_k = (Δz_{k-1} + Δz_k) / 2,  h_{K-1} = Δz_{K-2} / 2,
 
-        so Σ_k h_k c_k is ``jnp.trapezoid(c, x=levels)``.
+        so Σ_k h_k c_k is ``jnp.trapezoid(c, x=levels)``: the weights of
+        functax's trapezoid rule on the levels.
 
         Args:
             levels: Level heights z_k [m].
@@ -101,10 +103,8 @@ class ColumnObservation(eqx.Module):
         Returns:
             The observation, with no receptor index (it takes profiles).
         """
-        # Δz_k = z_{k+1} − z_k
-        spacing = jnp.diff(levels)
         # h_k = (Δz_{k-1} + Δz_k) / 2, with Δz_{-1} = Δz_{K-1} = 0
-        layer_weights = 0.5 * (jnp.pad(spacing, (0, 1)) + jnp.pad(spacing, (1, 0)))
+        layer_weights = functax_quad.trapezoid(levels).weights
         return cls(layer_weights=layer_weights, averaging_kernel=averaging_kernel)
 
     @classmethod

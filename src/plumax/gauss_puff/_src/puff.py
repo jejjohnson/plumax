@@ -35,6 +35,8 @@ import einx
 import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
+from functax import quad as functax_quad
+from integrix import rule as integrix_rule
 from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
@@ -601,7 +603,11 @@ def simulate_puff(
     # Trapezoidal vertical integration over the (endpoint-inclusive) z grid;
     # a plain ``sum * dz`` over-counts a vertically uniform component (such as
     # the background) by one grid interval. See gauss_plume.simulate_plume.
-    column = np.trapezoid(concentration, x=z_grid, axis=3)
+    # h_k, the trapezoid weights on the levels z_k
+    levels = functax_quad.trapezoid(z_grid)
+    # Ω(t, x, y) = Σ_k h_k C(t, x, y, z_k)
+    integral = integrix_rule.integrate(levels, concentration, axis=3)
+    column = np.asarray(integral.value)
 
     dataset = xr.Dataset(
         data_vars={

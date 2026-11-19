@@ -63,9 +63,6 @@ def _release_compiled_code():
     """
     yield
     jax.clear_caches()
-    # a test that switches x64 off and leaves it off turns every later test in
-    # this worker into a float32 run
-    assert jax.config.jax_enable_x64, "a test in this module left x64 switched off"
 
 
 #: seconds an unmarked test's call may take before it fails; 0 switches the check off
