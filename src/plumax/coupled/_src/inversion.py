@@ -48,15 +48,23 @@ from jaxtyping import Array, Float
 
 from plumax._src.controlled import AbstractControlledSource
 from plumax._src.errors import ControlBlockError, PayloadError
-from plumax._src.scalar_emission import GaussianEmission, LognormalEmission
+from plumax._src.scalar_emission import (
+    GaussianEmission,
+    LognormalEmission,
+    require_scalar,
+)
 from plumax._src.tracing import require_positive
-from plumax._src.vardax import require_vardax
+from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax
 from plumax.coupled._src.forward import (
     CoupledForward,
     _scale_response,
     plume_response,
 )
-from plumax.coupled.quality import StackedObservations, contribution_report
+from plumax.coupled.quality import (
+    StackedObservations,
+    contribution_report,
+    stack_observations,
+)
 from plumax.coupled.rtm import RadianceObservationOperator
 
 
@@ -268,19 +276,17 @@ class CoupledPrior:
         if covariance.ndim == 1:
             # L = diag(σ)
             return jnp.diag(jnp.sqrt(covariance))
-        psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
-        return gx.safe_cholesky(lx.MatrixLinearOperator(covariance, psd))
+        return gx.safe_cholesky(lx.MatrixLinearOperator(covariance, PSD_TAGS))
 
     def row_operator(self) -> lx.AbstractLinearOperator:
         """Σ_θ on a ``(1, D_θ)`` control row, the shape vardax applies it to."""
         covariance = jnp.asarray(self.covariance, dtype=float)
         if covariance.ndim == 1:
             return lx.DiagonalLinearOperator(einx.id("p -> 1 p", covariance))
-        psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
         return lx.FunctionLinearOperator(
             lambda row: einx.dot("row p, p q -> row q", row, covariance),
             jax.ShapeDtypeStruct((1, covariance.shape[0]), covariance.dtype),
-            psd,
+            PSD_TAGS,
         )
 
 
@@ -462,7 +468,7 @@ class CoupledProblem:
         A radiance pixel's mask and variance inflation apply to all its
         channels. Masked values are zero (jejjohnson/vardax#147).
         """
-        values, masks, variances = [], [], []
+        observations, masks, variances = [], [], []
         for instrument in self.forward.instruments:
             observation = jnp.asarray(self.observations[instrument.name], dtype=float)
             mask = instrument.observation_mask()
@@ -480,20 +486,12 @@ class CoupledProblem:
                 mask = einx.id("obs -> obs channel", mask, channel=num_channels)
             else:
                 variance = instrument.observation_variance()
-            if observation.shape != mask.shape:
-                raise ValueError(
-                    f"CoupledProblem: observation for {instrument.name!r} has shape "
-                    f"{observation.shape}; expected {mask.shape}."
-                )
-            # y = 0 where m = 0
-            kept_observation = jnp.where(mask > 0.0, observation, 0.0)
-            values.append(einx.id("... -> (...)", kept_observation))
-            masks.append(einx.id("... -> (...)", mask))
-            variances.append(einx.id("... -> (...)", variance))
-        return StackedObservations(
-            values=jnp.concatenate(values),
-            mask=jnp.concatenate(masks),
-            variance=jnp.concatenate(variances),
+            observations.append(observation)
+            masks.append(mask)
+            variances.append(variance)
+        # the shape check and the masked-pixel zero live in stack_observations
+        return stack_observations(
+            self.forward.instruments, observations, masks=masks, variances=variances
         )
 
 
@@ -660,7 +658,7 @@ class CoupledResult:
             )
         center = self.map_estimate[block]
         spread = self.std[block]
-        _require_scalar(center, "samples")
+        require_scalar(center, owner="CoupledResult", method="samples")
         if block in _LINE_DENSITY_BLOCKS:
             wind = self._wind_law("samples")
             if block == "log_line_density":
@@ -711,7 +709,7 @@ class CoupledResult:
             )
         block = self._payload_block(self.prior.mean)
         center = jnp.asarray(self.prior.mean[block], dtype=float)
-        _require_scalar(center, "prior_logpdf")
+        require_scalar(center, owner="CoupledResult", method="prior_logpdf")
         # Q's diagonal entry of Σ_θ, at its offset in the flattened layout
         offset = 0
         for name, length in self.prior.layout:
@@ -754,14 +752,6 @@ def _broadcasts(shape: tuple[int, ...], target: tuple[int, ...]) -> bool:
         return np.broadcast_shapes(shape, target) == target
     except ValueError:
         return False
-
-
-def _require_scalar(value: jax.Array, method: str) -> None:
-    if jnp.ndim(value) != 0:
-        raise PayloadError(
-            f"CoupledResult.{method}: the Tier V payload is for a scalar Q; this "
-            "result has one emission per parameter."
-        )
 
 
 def solve_coupled(
@@ -879,14 +869,7 @@ def solve_coupled(
             params_row, affine_model, batch
         )
 
-        def posterior_column(basis_vector: jax.Array) -> jax.Array:
-            # Σ_θ|y e_k on a (1, D_θ) row
-            basis_row = einx.id("param -> 1 param", basis_vector)
-            column_row = posterior.cov.mv(basis_row)
-            return einx.id("1 param -> param", column_row)
-
-        columns = jax.vmap(posterior_column)(jnp.eye(param_size, dtype=params.dtype))
-        covariance = gx.symmetrize(columns)
+        covariance = dense_covariance(posterior.cov, param_size, params.dtype)
         marginal_std = jnp.sqrt(jnp.clip(jnp.diagonal(covariance), 0.0, None))
         std = unflatten(marginal_std)
 

@@ -20,8 +20,43 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Float
 
+from plumax._src.errors import PayloadError
+
 
 _LOG_2PI = float(jnp.log(2.0 * jnp.pi))
+
+
+def require_scalar(value: ArrayLike, *, owner: str, method: str) -> None:
+    """Raise unless ``value`` is the scalar Q the Tier V payload is for.
+
+    Args:
+        value: The emission, or the block that holds it.
+        owner: The class whose method asks, for the message.
+        method: The method that asks, for the message.
+
+    Raises:
+        PayloadError: If ``value`` is not a scalar, one emission per parameter.
+    """
+    if jnp.ndim(value) != 0:
+        raise PayloadError(
+            f"{owner}.{method}: the Tier V payload is for a scalar Q; this "
+            "payload has one emission per parameter."
+        )
+
+
+def require_prior(owner: str, /, *, built_with: str, **fields: object) -> None:
+    """Raise if any of the prior fields the payload recalls is missing.
+
+    Args:
+        owner: The method that asks, as ``"Class.method"``, for the message.
+        built_with: The builder that fills the prior, for the message.
+        **fields: The prior fields; each is checked against ``None``.
+
+    Raises:
+        PayloadError: If any field is ``None``.
+    """
+    if any(value is None for value in fields.values()):
+        raise PayloadError(f"{owner}: no prior is carried; build it with {built_with}.")
 
 
 class GaussianEmission(eqx.Module):
