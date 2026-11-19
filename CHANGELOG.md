@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.3.0](https://github.com/jejjohnson/plumax/compare/v0.2.6...v0.3.0) (2026-11-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* **shared:** PlumeVetting, GaussianPlume, GaussianPuff and LagrangianDispersion no longer accept positional arguments, and plumax.geo operators reject JAX-backed GeoArrays.
+
+### Features
+
+* **obs:** plume-scene ingest with the sensitivity as the averaging kernel and a per-pixel noise ([#298](https://github.com/jejjohnson/plumax/issues/298)) ([b37e920](https://github.com/jejjohnson/plumax/commit/b37e9209654daffd19ffb5d77bf1c0aefdc501f7))
+
+
+### Code Refactoring
+
+* **shared:** one traced-aware validation helper replaces the hand-written positivity checks ([#354](https://github.com/jejjohnson/plumax/issues/354)) ([1505692](https://github.com/jejjohnson/plumax/commit/15056927b9a5b3db5857a2ef222ef6543f4573c5)), closes [#352](https://github.com/jejjohnson/plumax/issues/352)
+
 ## [0.2.6](https://github.com/jejjohnson/plumax/compare/v0.2.5...v0.2.6) (2026-11-18)
 
 
