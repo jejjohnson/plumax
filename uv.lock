@@ -18,10 +18,10 @@ resolution-markers = [
 
 [manifest]
 overrides = [
-    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.6" },
+    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
-    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.6" },
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
 ]
 
@@ -1171,8 +1171,8 @@ wheels = [
 
 [[package]]
 name = "functax"
-version = "0.0.6"
-source = { git = "https://github.com/jejjohnson/functax?tag=v0.0.6#7fdcd2729fe8d6a62de0ab2330ae6ae2da133ea2" }
+version = "0.0.11"
+source = { git = "https://github.com/jejjohnson/functax?tag=v0.0.11#4889ce196b4594839cf4bc472f6f731da641191b" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -1716,8 +1716,8 @@ wheels = [
 
 [[package]]
 name = "integrix"
-version = "0.0.5"
-source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.5#74375bf86fb361aad712e728c929b2754fb7fb3f" }
+version = "0.0.6"
+source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.6#0cd566e04422a74db4c5a3885fc457ef86b4941d" }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
@@ -3389,13 +3389,14 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.2.6"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
     { name = "finitevolx" },
+    { name = "functax" },
     { name = "gaussx" },
     { name = "integrix" },
     { name = "jax" },
@@ -3490,11 +3491,12 @@ requires-dist = [
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
-    { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.6" },
+    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
+    { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
-    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.5" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.6" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
