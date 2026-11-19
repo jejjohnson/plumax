@@ -239,7 +239,7 @@ def test_infer_emission_rate_rejects_nonpositive_noise_scales():
         )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_obs_noise_std_widens_posterior():
     # A larger observation-noise scale should yield a wider emission-rate
     # posterior on the same data — confirming the knob is actually wired into
@@ -280,7 +280,7 @@ def test_obs_noise_std_widens_posterior():
     assert std_wide > std_tight
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_infer_emission_rate_recovers_synthetic_Q():
     """NUTS should recover a synthetic emission rate from noisy transect data."""
     stab = "D"

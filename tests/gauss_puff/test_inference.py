@@ -170,6 +170,7 @@ def test_gaussian_puff_rw_model_rejects_zero_puffs():
         )
 
 
+@pytest.mark.slow
 def test_gaussian_puff_rw_model_runs_with_one_puff():
     # one release: the walk is its anchored first rate alone, with no steps
     schedule = WindSchedule.from_speed_direction(
@@ -459,7 +460,7 @@ def test_infer_rejects_observation_time_before_wind_schedule():
         )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_infer_emission_rate_recovers_synthetic_Q():
     """NUTS should recover a synthetic emission rate from time-series data."""
     import numpyro

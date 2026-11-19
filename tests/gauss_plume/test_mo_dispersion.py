@@ -257,6 +257,7 @@ def test_simulate_plume_accepts_golder():
     assert pg.attrs["stability_class"] == "D"
 
 
+@pytest.mark.slow
 def test_jit_and_vmap_agree_with_a_loop():
     inverse = jnp.array([-0.08, -0.02, 0.0, 0.02, 0.05])
     distance = jnp.array(700.0)

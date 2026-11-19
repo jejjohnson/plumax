@@ -30,6 +30,7 @@ def test_from_speed_direction_north_wind():
     np.testing.assert_allclose(sched.v_wind, -3.0, atol=1e-5)
 
 
+@pytest.mark.slow
 def test_constant_wind_cumulative_integrals():
     # Constant 5 m/s from west → I_u(t) = 5t, I_v(t) = 0, S(t) = 5t.
     times = np.linspace(0.0, 60.0, 7)
@@ -59,6 +60,7 @@ def test_piecewise_linear_wind_integrals():
     np.testing.assert_allclose(I_v, jnp.zeros_like(save_at), atol=1e-4)
 
 
+@pytest.mark.slow
 def test_wind_speed_accumulation_tracks_vector_magnitude():
     # Wind blowing diagonally at 5 m/s (45° from west → u=v=5/√2 each).
     # Not a meteorological "from" convention case — direct (u, v) construction.

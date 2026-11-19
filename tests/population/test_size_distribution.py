@@ -50,7 +50,7 @@ def test_empty_catalog_raises() -> None:
         fit_lognormal_size_distribution(EmissionCatalog())
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_synthetic_recovery() -> None:
     # Draw log Q_i from a known (mu, sigma), add modest per-event posterior
     # noise, and check the hierarchical fit recovers both population params.
@@ -71,7 +71,7 @@ def test_synthetic_recovery() -> None:
     assert s["sigma"]["q2.5"] - margin <= sigma_true <= s["sigma"]["q97.5"] + margin
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_uncertainty_propagation_widens_posterior() -> None:
     # Core correctness check: a catalog of poorly-constrained events must
     # yield a WIDER theta posterior than the same point estimates fit with

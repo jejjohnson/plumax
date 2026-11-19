@@ -148,6 +148,7 @@ def test_rise_grows_with_distance_and_falls_with_wind(
 # ── gradients and transforms ─────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("stability_class", ["D", "F"])
 def test_grad_matches_fd(stability_class):
     """∂Δh/∂T_s is finite and matches central differences, before and past x_f."""
@@ -174,6 +175,7 @@ def test_grad_finite_at_zero_buoyancy():
     assert np.isfinite(jax.grad(total)(290.0))
 
 
+@pytest.mark.slow
 def test_jit_and_vmap_match_loop():
     rise = BriggsPlumeRise(**_stack())
     x = jnp.array([[50.0, 500.0], [5000.0, 50000.0]])

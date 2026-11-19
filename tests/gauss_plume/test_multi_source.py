@@ -189,6 +189,7 @@ def test_per_source_feeds_the_population_catalogue():
 # ── the model ────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_free_slots_are_ordered_west_to_east():
     receptors = _receptor_grid(3, 3)
     draws = Predictive(multi_source_plume_model, num_samples=200)(
@@ -230,7 +231,7 @@ def test_invalid_layouts_rejected(kwargs):
         )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_k1_matches_single_source():
     """One always-on slot at the known source is the single-source posterior."""
     x_obs = jnp.linspace(200.0, 2000.0, 24)
@@ -277,7 +278,7 @@ def test_k1_matches_single_source():
     np.testing.assert_array_equal(multi.count_probabilities(), [0.0, 1.0])
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_three_sources_recovered():
     """Five candidate facilities, three emitting: K = 3 and each Q_k within σ_post."""
     receptors = _receptor_grid()

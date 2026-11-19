@@ -91,7 +91,7 @@ def _grid_posterior_mean(surface):
     return mu, sigma
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_prior_swap_invariance_of_the_likelihood():
     broad = _grid_log_likelihood(_catalog(1.5), Regime.FULL)
     narrow = _grid_log_likelihood(_catalog(0.5), Regime.FULL)
@@ -322,7 +322,7 @@ def test_tmtpp_model_composes_ground_marks_and_thinned_rate():
     np.testing.assert_allclose(thinned, dense, rtol=1e-6)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_prior_swap_invariance():
     from plumax.population.fitting import fit_size_distribution_iw
 

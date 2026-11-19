@@ -90,6 +90,7 @@ def test_column_matches_trapezoid_of_the_reflected_plume(
     np.testing.assert_allclose(trapezoid, closed_form, rtol=1e-4)
 
 
+@pytest.mark.slow
 def test_pixel_average_conserves_mass_at_every_distance():
     """Gate G2, exact form: a crosswind row of pixel averages sums to q."""
     plume = ColumnPlume(initial_width=INITIAL_WIDTH, pixel_size=PIXEL)
@@ -103,6 +104,7 @@ def test_pixel_average_conserves_mass_at_every_distance():
         np.testing.assert_allclose(mass, 1.0, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_point_evaluation_conserves_mass_once_the_plume_is_a_pixel_wide():
     """Gate G2, point form: the sampled sum is exact up to aliasing.
 
@@ -215,6 +217,7 @@ def test_response_is_invariant_to_a_rigid_motion(angle, shift_x, shift_y):
     )
 
 
+@pytest.mark.slow
 @settings(max_examples=30, deadline=None)
 @given(line_density=st.floats(1e-4, 10.0))
 def test_source_response_is_linear_in_line_density(line_density):
@@ -250,6 +253,7 @@ def _flat_response(theta, receptors, plume):
     return plume(receptors, geometry)
 
 
+@pytest.mark.slow
 def test_gradient_matches_central_differences():
     plume = ColumnPlume(initial_width=INITIAL_WIDTH, upwind_scale=INITIAL_WIDTH)
     receptors = jnp.array(
@@ -267,6 +271,7 @@ def test_gradient_matches_central_differences():
         np.testing.assert_allclose(jacobian[:, index], central, rtol=1e-5, atol=1e-12)
 
 
+@pytest.mark.slow
 def test_gradient_is_finite_at_the_source_with_the_hard_cut():
     plume = ColumnPlume(initial_width=INITIAL_WIDTH)
     receptors = jnp.array([[0.0, 0.0], [-30.0, 0.0], [30.0, 0.0]])
@@ -275,6 +280,7 @@ def test_gradient_is_finite_at_the_source_with_the_hard_cut():
     assert bool(jnp.all(jnp.isfinite(jacobian)))
 
 
+@pytest.mark.slow
 def test_gradient_with_pixel_average_matches_central_differences():
     plume = ColumnPlume(
         initial_width=INITIAL_WIDTH, upwind_scale=INITIAL_WIDTH, pixel_size=PIXEL
@@ -295,6 +301,7 @@ def test_gradient_with_pixel_average_matches_central_differences():
 # ── transforms ───────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_jit_and_vmap_agree_with_a_loop():
     plume = ColumnPlume(initial_width=INITIAL_WIDTH, upwind_scale=INITIAL_WIDTH)
     receptors = _grid(n=21)
@@ -324,6 +331,7 @@ def test_jit_and_vmap_agree_with_a_loop():
 # ── dtype, validation, backend, config ───────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_float32_in_gives_float32_out():
     receptors = jnp.asarray(_grid(n=5), dtype=jnp.float32)
     geometry = PlumeGeometry(

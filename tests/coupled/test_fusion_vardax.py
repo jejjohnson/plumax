@@ -157,6 +157,7 @@ def test_matches_the_hand_rolled_posterior(n_param):
     np.testing.assert_allclose(np.asarray(posterior.covariance), covariance, rtol=1e-9)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("n_param", [1, 2])
 def test_matches_the_dense_closed_form(n_param):
     forward, observations, prior_mean, prior_cov = _case(n_param)

@@ -61,6 +61,7 @@ def _rel(a, b):
     return float(jnp.max(jnp.abs(a - b)) / jnp.max(jnp.abs(b)))
 
 
+@pytest.mark.slow
 def test_source_receptor_shapes():
     f, *_ = _scene(*SCENES["overdetermined"])
     q = jnp.linspace(0.5, 1.5, f.shape[1])

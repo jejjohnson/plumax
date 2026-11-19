@@ -326,8 +326,8 @@ unsupported-operator = "ignore"
 testpaths = ["tests"]
 addopts = "-m 'not slow and not validation'"
 markers = [
-    "slow: takes over about 2 s in CI (e.g. solves, MCMC, training); skipped by default, run with -m slow, or -m 'not validation' for fast and slow",
-    "validation: statistical validation and other tests too long for every PR; skipped by default, runs nightly on main and on workflow_dispatch, run with -m validation, or -m '' for everything",
+    "slow: deterministic and over about 2 s (solves, compiles of a large model, long simulations); skipped by default, run with -m slow, or -m 'not validation' for fast and slow. An unmarked test must stay under the budget CI sets in PLUMAX_FAST_BUDGET",
+    "validation: statistical (coverage, recovery under MCMC, Monte Carlo tolerances) or too long for every PR; skipped by default, runs nightly on main and on workflow_dispatch, run with -m validation, or -m '' for everything",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

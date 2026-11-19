@@ -228,6 +228,7 @@ def test_evolve_puffs_constant_wind():
     np.testing.assert_allclose(state.mass, 0.05, atol=1e-6)
 
 
+@pytest.mark.slow
 def test_evolve_puffs_masks_unreleased():
     schedule = _constant_wind_schedule()
     release_times = jnp.array([0.0, 20.0, 40.0])
@@ -246,6 +247,7 @@ def test_evolve_puffs_masks_unreleased():
     assert float(state.travel_distance[2]) == pytest.approx(0.0, abs=1e-4)
 
 
+@pytest.mark.slow
 def test_evolve_puffs_time_varying_wind_advances_further_when_stronger():
     # A schedule where speed grows linearly — total travel at t=60 should be
     # > constant-5-m/s result.
@@ -296,6 +298,7 @@ def test_simulate_puff_field_is_sum_of_contributions():
     assert jnp.all(total > 0)
 
 
+@pytest.mark.slow
 def test_no_puffs_evolve_and_add_no_concentration():
     from plumax.gauss_puff.dispersion import calculate_pg_dispersion
 

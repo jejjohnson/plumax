@@ -78,12 +78,14 @@ def test_wait_time_quadrature_converges_at_second_order():
     assert abs(float(finer) - 0.5) < abs(float(wait) - 0.5) / 3.0
 
 
+@pytest.mark.slow
 def test_wait_time_tail_closure_covers_waits_beyond_the_grid():
     # E[Δt] = 2 × 10⁵ days, far beyond the grid's last node at 10⁴ days
     flat = DiurnalSinusoidalIntensity(lambda_0=5e-6, amplitude=0.0, phase_hours=0.0)
     np.testing.assert_allclose(expected_wait_time(flat, 0.0), 2e5, rtol=5e-5)
 
 
+@pytest.mark.slow
 def test_expected_count_derivative_in_the_horizon_is_the_intensity():
     # d/dh Λ(t, t + h) = λ(t + h), with Simpson nodes dense enough for a sinusoid
     kernel = DiurnalSinusoidalIntensity(**DIURNAL)
@@ -96,6 +98,7 @@ def test_expected_count_derivative_in_the_horizon_is_the_intensity():
     np.testing.assert_allclose(central, kernel(jnp.asarray(t + horizon)), rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_counts_over_adjoining_horizons_add():
     kernel = DiurnalSinusoidalIntensity(**DIURNAL)
     nodes = 288
@@ -106,6 +109,7 @@ def test_counts_over_adjoining_horizons_add():
     np.testing.assert_allclose(whole, parts, rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_diurnal_sanity():
     # the 06c check: peak λ at 14:00 means a much shorter wait than at 02:00
     kernel = DiurnalSinusoidalIntensity(lambda_0=8.0, amplitude=7.2, phase_hours=8.0)
@@ -117,6 +121,7 @@ def test_diurnal_sanity():
     assert float(peak_probability) > 2.0 * float(trough_probability)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("kernel", "t", "rtol"),
     [
@@ -131,6 +136,7 @@ def test_wait_time_matches_dense_integration(kernel, t, rtol):
     np.testing.assert_allclose(expected_wait_time(kernel, t), dense, rtol=rtol)
 
 
+@pytest.mark.slow
 def test_metrics_jit_and_vmap_match_a_python_loop():
     kernel = DiurnalSinusoidalIntensity(**DIURNAL)
     times = jnp.array([0.0, 0.3, 0.7])
@@ -141,6 +147,7 @@ def test_metrics_jit_and_vmap_match_a_python_loop():
     np.testing.assert_allclose(jitted, loop[1], rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_wait_time_gradient_matches_central_difference():
     def wait(rate):
         return expected_wait_time(DiurnalSinusoidalIntensity(rate, 0.8, 14.0), 0.3)
@@ -162,6 +169,7 @@ def test_parameters_with_an_instance_are_rejected():
         expected_wait_time(ConstantIntensity(1.0), 0.0, lambda_0=2.0)
 
 
+@pytest.mark.slow
 def test_posterior_metric_on_a_gamma_posterior():
     posterior = PoissonRatePosterior(
         alpha=401.0, beta=200.0, n_events=400, exposure=200.0
@@ -199,6 +207,7 @@ def test_gamma_posterior_needs_a_key():
         posterior_metric(expected_wait_time, posterior, 0.0)
 
 
+@pytest.mark.slow
 def test_posterior_metric_on_a_log_linear_posterior():
     beta0 = np.array([0.0, math.log(2.0)])
     beta = np.array([[1.0], [-3.0]])
@@ -216,6 +225,7 @@ def test_posterior_metric_on_a_log_linear_posterior():
         posterior_metric(expected_count, posterior, 0.0, 1.0)
 
 
+@pytest.mark.slow
 def test_log_linear_covariates_shape_the_intensity_in_time():
     # log λ(t) = β t, so Λ(0, 1) = (e^β − 1) / β
     posterior = InhomogeneousIntensityPosterior(
@@ -227,6 +237,7 @@ def test_log_linear_covariates_shape_the_intensity_in_time():
     np.testing.assert_allclose(result["samples"], [math.expm1(0.7) / 0.7], rtol=1e-10)
 
 
+@pytest.mark.slow
 def test_posterior_metric_on_tmtpp_draws():
     samples = {
         "lambda_0": jnp.array([1.0, 2.0]),
@@ -259,7 +270,7 @@ def test_tmtpp_kernel_maps_every_prior_site_to_its_field(name):
     np.testing.assert_allclose(rebuilt(times), prior_kernel(times), rtol=1e-12)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 @pytest.mark.parametrize("start", [14.0 / 24.0, 2.0 / 24.0])
 def test_mc_self_consistency(start):
     # thinning draws of a known λ(t), against the metrics at the same start time
@@ -290,7 +301,7 @@ def test_mc_self_consistency(start):
     assert abs(counts.mean() - count) < 4.0 * math.sqrt(count / n_replicates)
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_posterior_coverage():
     # conjugate in the mean: λ(t) = λ₀ + A sin(2πt − φ) over whole days integrates
     # to λ₀ T, so N ~ Poisson(λ₀ T) and λ₀ | N ~ Gamma(α₀ + N, β₀ + T)

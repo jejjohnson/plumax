@@ -35,6 +35,7 @@ NOISES = (
 # ── closed-form oracles ──────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_gaussian_log_prob_closed_form():
     obs = jnp.array([0.3, -1.2, 2.0])
     mean = jnp.array([0.0, 0.5, 1.0])
@@ -280,7 +281,7 @@ def test_puff_default_is_previous_gaussian_likelihood(model):
 # ── robustness (the issue's Definition of Done) ──────────────────────────────
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_student_t_robust_to_outliers():
     """5 % positive outliers: Student-t recovers Q within σ_post, Gaussian does not."""
     params = BRIGGS_DISPERSION_PARAMS["D"]

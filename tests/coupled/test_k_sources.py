@@ -76,6 +76,7 @@ def _observations(instruments, active=TRUE_ACTIVE, rates=TRUE_RATES, seed=0):
     return observations
 
 
+@pytest.mark.slow
 def test_slot_responses_are_the_single_source_columns():
     instruments = _instruments()
     matrices = slot_responses(SOURCE, instruments, CANDIDATES)
@@ -87,6 +88,7 @@ def test_slot_responses_are_the_single_source_columns():
             np.testing.assert_allclose(matrix[:, slot], single, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_forward_is_linear_in_the_active_slots():
     # Σ_k a_k Q_k r(x_k, y_k) is Tier I's MaskedSources sum through the column
     instrument = _instruments()[0]
@@ -116,7 +118,7 @@ def test_forward_is_linear_in_the_active_slots():
     )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_k1_matches_single_source():
     # one active slot in the masked problem is the single-source coupled problem
     instruments = _instruments()
@@ -234,6 +236,7 @@ def test_three_sources_two_instruments():
         assert posterior.per_source(slot).probability_active < 0.1
 
 
+@pytest.mark.slow
 def test_masked_pixels_do_not_enter_the_likelihood():
     from numpyro import handlers
     from numpyro.infer.util import log_density
@@ -293,6 +296,7 @@ def test_map_path_infers_the_background():
     assert abs(result.emission_rate[0] - TRUE_RATES[2]) < 3.0 * result.emission_std[0]
 
 
+@pytest.mark.slow
 def test_map_problem_does_not_need_numpyro(monkeypatch):
     # the vardax path works with the `assim` extra alone
     monkeypatch.setitem(sys.modules, "plumax.gauss_plume.inference", None)
@@ -326,6 +330,7 @@ def test_saturation_rate():
         saturation_rate([])
 
 
+@pytest.mark.slow
 def test_invalid_arguments_are_rejected():
     instruments = _instruments()
     with pytest.raises(ValueError, match="k_max"):

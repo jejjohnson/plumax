@@ -182,12 +182,14 @@ def _mo_over_pg_ratio(pbl_height: float, wind_speed: float = 5.0) -> float:
     return k_mo / float(pg.vertical)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("pbl_height", np.linspace(*MO_PG_AGREEMENT_Z_I, 5).tolist())
 def test_mo_neutral_limit(pbl_height):
     ratio = _mo_over_pg_ratio(pbl_height)
     assert abs(ratio - 1.0) <= MO_PG_BAND
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("pbl_height", "lower", "upper"),
     [
@@ -268,6 +270,7 @@ def test_mo_indexes_time_in_the_layer_and_the_pbl_field():
     np.testing.assert_allclose(field.vertical, scalar.vertical, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_mo_gradient_matches_central_difference():
     grid = _z_grid()
 
@@ -315,6 +318,7 @@ def _k_h_interior(wind, grid, **kwargs):
     return np.asarray(smagorinsky_k_h(wind, grid, t=0.0, **kwargs))[:, 1:-1, 1:-1]
 
 
+@pytest.mark.slow
 def test_smagorinsky_shear():
     grid = _smag_grid()
     uniform = smagorinsky_k_h(uniform_wind_field(grid, u=5.0, v=-2.0), grid, t=0.0)
@@ -327,6 +331,7 @@ def test_smagorinsky_shear():
     np.testing.assert_allclose(k_h[:, 1:-1, 1:-1], (0.2 * 10.0) ** 2 * 0.1, rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_smagorinsky_strain_flow_is_tension():
     # u = S x, v = −S y: D_T = 2 S, D_S = 0
     grid = _smag_grid()
@@ -335,6 +340,7 @@ def test_smagorinsky_strain_flow_is_tension():
     np.testing.assert_allclose(k_h, (0.25 * 10.0) ** 2 * 2.0 * 0.05, rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_smagorinsky_vanishes_without_deformation():
     grid = _smag_grid()
     # solid-body rotation: ∂v/∂x = Ω, ∂u/∂y = −Ω, D_S = 0
@@ -345,12 +351,14 @@ def test_smagorinsky_vanishes_without_deformation():
     np.testing.assert_allclose(_k_h_interior(divergence, grid), 0.0, atol=1e-9)
 
 
+@pytest.mark.slow
 def test_smagorinsky_ignores_vertical_shear():
     grid = _smag_grid()
     wind = _wind(grid, lambda t, x, y, z: (0.5 * z, 0.0 * z, 0.0 * z))
     assert np.all(np.asarray(smagorinsky_k_h(wind, grid, t=0.0)) == 0.0)
 
 
+@pytest.mark.slow
 def test_smagorinsky_filter_scale_on_an_anisotropic_grid():
     grid = _smag_grid(dx=10.0, dy=40.0)
     shear = _wind(grid, lambda t, x, y, z: (0.1 * y, 0.0 * y, 0.0 * y))
@@ -359,6 +367,7 @@ def test_smagorinsky_filter_scale_on_an_anisotropic_grid():
     np.testing.assert_allclose(_k_h_interior(shear, grid), expected, rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_smagorinsky_follows_time():
     grid = _smag_grid()
     wind = _wind(grid, lambda t, x, y, z: (t * y, 0.0 * y, 0.0 * y))
@@ -366,6 +375,7 @@ def test_smagorinsky_follows_time():
     np.testing.assert_allclose(k_h, (0.2 * 10.0) ** 2 * 2.0, rtol=1e-9)
 
 
+@pytest.mark.slow
 def test_smagorinsky_gradient_is_finite_at_rest():
     # a uniform wind is the double-where branch: an adjoint must stay finite
     grid = _smag_grid()
@@ -377,6 +387,7 @@ def test_smagorinsky_gradient_is_finite_at_rest():
     assert float(jax.grad(total)(3.0)) == 0.0
 
 
+@pytest.mark.slow
 def test_smagorinsky_gradient_matches_central_difference():
     grid = _smag_grid()
 
@@ -411,6 +422,7 @@ def test_field_diffusivities_reach_the_stability_guard():
         )
 
 
+@pytest.mark.slow
 def test_mo_and_smagorinsky_fields_drive_the_tendency():
     # both closures on one grid, through the operator: a linear tracer in z under
     # a K_z(z) profile has the tendency ∂_z K_z · ∂_z C in the column interior
@@ -434,6 +446,7 @@ def test_mo_and_smagorinsky_fields_drive_the_tendency():
     np.testing.assert_allclose(tendency[2:-2, 1, 1], expected, rtol=1e-9, atol=1e-12)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("shear", ["v_of_x", "u_of_y"])
 def test_smagorinsky_k_h_is_symmetric_across_opposite_walls(shear) -> None:
     """A linear shear's K_h is the same next to opposite walls (#352).

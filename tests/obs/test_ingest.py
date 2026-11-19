@@ -192,6 +192,7 @@ def files(tmp_path_factory, frame):
 # ---- tests ----------------------------------------------------------------
 
 
+@pytest.mark.slow
 def test_tropomi_screening_kernel_and_variance(files, frame):
     tropomi, _ = files
     clock = TimeAxis.from_datetimes(["2024-06-01T17:00:00"])
@@ -204,6 +205,7 @@ def test_tropomi_screening_kernel_and_variance(files, frame):
     assert 3600.0 <= obs.instrument.observation_time <= 3603.0
 
 
+@pytest.mark.slow
 def test_bbox_crop(files, frame):
     tropomi, _ = files
     lat0, lon0 = SITE

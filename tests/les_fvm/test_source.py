@@ -22,6 +22,7 @@ def _build_grid():
     )
 
 
+@pytest.mark.slow
 def test_constant_source_integrates_to_emission_rate():
     g = _build_grid()
     q = 0.07

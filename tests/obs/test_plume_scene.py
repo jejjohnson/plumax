@@ -296,6 +296,7 @@ def test_quality_raster_masks_cloud_water_and_saturation(paths, frame):
 # ── properties ──────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 @settings(max_examples=10, deadline=None)
 @given(margin=st.integers(0, 5))
 def test_window_is_the_bounding_box_plus_the_margin(paths, frame, margin):

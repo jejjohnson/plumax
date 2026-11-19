@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.les_fvm.advection import advection_tendency
 from plumax.les_fvm.boundary import (
@@ -85,6 +86,7 @@ def test_advection_variant_is_noop_without_dirichlet():
     np.testing.assert_array_equal(np.asarray(base), np.asarray(adv))
 
 
+@pytest.mark.slow
 def test_zero_dirichlet_inflow_injects_no_negative_tracer():
     """A zero-Dirichlet inflow wall must not create negative concentration.
 
@@ -178,6 +180,7 @@ def _zero_source(g):
     )
 
 
+@pytest.mark.slow
 def test_rhs_runs_and_is_interior_only():
     g = _build_grid()
     hbc, vbc = build_default_concentration_bc(

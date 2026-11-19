@@ -157,6 +157,7 @@ def test_tier_two_gaussian_payload():
     np.testing.assert_allclose(mass, 1.0, atol=1e-6)
 
 
+@pytest.mark.slow
 def test_tier_two_lognormal_payload():
     footprint, observation, _ = _tier_two_problem()
     log_cov = matern32_covariance(jnp.arange(3.0), variance=0.04, length_scale=1.5)
@@ -187,6 +188,7 @@ def test_hand_built_posteriors_report_the_missing_prior():
 # ── Tier III ─────────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_tier_three_payload_on_a_laplace_result():
     from plumax.les_fvm.fourdvar import FourDVarResult, PosteriorCovariance
 
@@ -317,6 +319,7 @@ def test_tier_four_coupled_payload(block):
 # ── the catalog ──────────────────────────────────────────────────────────────
 
 
+@pytest.mark.slow
 def test_event_from_posterior_fills_the_payload():
     footprint, observation, prior_cov = _tier_two_problem()
     posterior = linear_gaussian_inversion(
@@ -342,6 +345,7 @@ def test_event_from_posterior_fills_the_payload():
     assert EmissionCatalog.from_events([event]).n_events == 1
 
 
+@pytest.mark.slow
 def test_v1_posterior_leaves_the_payload_empty():
     class SummaryOnly:
         emission_rate = jnp.asarray(2.0)

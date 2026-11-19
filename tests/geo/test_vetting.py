@@ -110,6 +110,7 @@ def test_p_null_equals_the_null_run_by_hand(scene) -> None:
     np.testing.assert_array_equal(scores["p_null"], expected)
 
 
+@pytest.mark.slow
 def test_nodata_pixels_leave_the_candidates_and_the_pool(scene) -> None:
     mf = scene.mf.copy()
     hole = np.argwhere(scene.masks[0])[:5]
@@ -150,6 +151,7 @@ def test_attrs_hold_the_window_and_the_key(scene, scores: xr.Dataset) -> None:
     np.testing.assert_array_equal(scores.attrs["key"], np.asarray(key_data))
 
 
+@pytest.mark.slow
 def test_get_config_round_trips(scene) -> None:
     op = _operator(scene, n_null=7, k=30, keep=0.4, degree=1)
     config = json.loads(json.dumps(op.get_config()))
@@ -160,12 +162,14 @@ def test_get_config_round_trips(scene) -> None:
     assert rebuilt.get_config() == config
 
 
+@pytest.mark.slow
 def test_from_config_without_the_arrays_raises(scene) -> None:
     config = _operator(scene).get_config()
     with pytest.raises(TypeError, match="table= and delta_grid="):
         PlumeVetting.from_config(config)
 
 
+@pytest.mark.slow
 def test_a_cube_without_wavelengths_raises(scene) -> None:
     cube, mf = _carriers(scene)
     cube = cube.replace(attrs={})
@@ -173,6 +177,7 @@ def test_a_cube_without_wavelengths_raises(scene) -> None:
         _operator(scene, n_null=0)(cube, mf, scene.masks)
 
 
+@pytest.mark.slow
 def test_wavelengths_that_do_not_match_the_bands_raise(scene) -> None:
     cube, mf = _carriers(scene)
     cube = cube.replace(attrs={"wavelengths": scene.wavelength_nm[:-1].tolist()})
@@ -180,6 +185,7 @@ def test_wavelengths_that_do_not_match_the_bands_raise(scene) -> None:
         _operator(scene, n_null=0)(cube, mf, scene.masks)
 
 
+@pytest.mark.slow
 def test_a_table_that_does_not_match_the_fitting_bands_raises(scene) -> None:
     cube, mf = _carriers(scene)
     op = PlumeVetting(
@@ -192,12 +198,14 @@ def test_a_table_that_does_not_match_the_fitting_bands_raises(scene) -> None:
         op(cube, mf, scene.masks)
 
 
+@pytest.mark.slow
 def test_masks_off_the_cube_grid_raise(scene) -> None:
     cube, mf = _carriers(scene)
     with pytest.raises(ShapeError, match="masks"):
         _operator(scene, n_null=0)(cube, mf, scene.masks[:, :-1])
 
 
+@pytest.mark.slow
 def test_a_negative_n_null_raises(scene) -> None:
     with pytest.raises(ParameterError, match="n_null"):
         _operator(scene, n_null=-1)

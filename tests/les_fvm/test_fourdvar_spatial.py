@@ -64,6 +64,7 @@ def _toy() -> tuple[SpatialControl, object]:
     return control, _forward(control)
 
 
+@pytest.mark.slow
 def test_kronecker_matches_dense():
     # the Kronecker build is the product kernel, evaluated here cell by cell
     control = _control()
@@ -78,6 +79,7 @@ def test_kronecker_matches_dense():
     assert np.max(np.abs(np.asarray(covariance - dense))) < 1e-8 * float(std.max()) ** 2
 
 
+@pytest.mark.slow
 def test_isotropic_control_is_the_dense_matern_not_the_product_kernel():
     separable = _control(prior_std=jnp.ones((NY, NX))).prior_covariance(Y, X)
     isotropic = _control(prior_std=jnp.ones((NY, NX)), separable=False)
@@ -92,6 +94,7 @@ def test_isotropic_control_is_the_dense_matern_not_the_product_kernel():
     assert float(gap) > 0.01
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -119,6 +122,7 @@ def test_prior_sqrt_factorises_the_covariance(overrides):
     np.testing.assert_array_equal(np.triu(np.asarray(root), 1), 0.0)
 
 
+@pytest.mark.slow
 def test_mask_restricts_the_covariance_to_the_active_cells():
     mask = jnp.ones((NY, NX), dtype=bool).at[1, 2].set(False)
     masked = _control(mask=mask).prior_covariance(Y, X).as_matrix()
@@ -127,6 +131,7 @@ def test_mask_restricts_the_covariance_to_the_active_cells():
     np.testing.assert_allclose(masked, full[np.ix_(active, active)], atol=1e-14)
 
 
+@pytest.mark.slow
 def test_time_basis_gives_the_kronecker_flux_covariance_and_the_mean():
     # Φ = L_t makes the flux covariance B_t ⊗ B_s at the save times
     temporal = matern32_covariance(SAVE_TIMES, variance=1.0, length_scale=30.0)
@@ -347,6 +352,7 @@ def test_two_source_recovery():
     assert (int(peak[0]), int(peak[1])) == (6, 5)
 
 
+@pytest.mark.slow
 def test_temporal_control_is_the_prior_arguments():
     times = jnp.linspace(0.0, 40.0, 5)
     forward = build_forward(

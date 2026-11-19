@@ -142,6 +142,7 @@ def test_pod_powerlaw_gradient_matches_finite_differences():
     np.testing.assert_allclose(jax.grad(log_likelihood)(2.0), central, rtol=1e-5)
 
 
+@pytest.mark.slow
 def test_posterior_mean_and_standard_error_come_from_integrix() -> None:
     """plumax#247: the posterior mean is integrix's Monte Carlo average of the
     draws NumPyro made, equal to ``np.mean`` to 1e-12, with its standard error

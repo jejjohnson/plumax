@@ -109,6 +109,7 @@ def test_width_law_is_recovered():
     np.testing.assert_allclose(exponent, 0.85, rtol=1e-6)
 
 
+@pytest.mark.slow
 def test_line_density_times_wind_is_the_cross_sectional_flux():
     # an axis-aligned ridge three pixels wide, the source on a pixel centre
     shape = (41, 30)
@@ -219,6 +220,7 @@ def test_moments_ignore_nan_samples(seed):
 # ── statistics ──────────────────────────────────────────────────────────────
 
 
+@pytest.mark.validation
 def test_signed_sum_is_unbiased_and_the_positive_part_is_not():
     # φ = 0, the source on a pixel centre: the samples are the pixels, so the
     # sample noise is the pixel noise
@@ -260,6 +262,7 @@ def test_signed_sum_is_unbiased_and_the_positive_part_is_not():
     assert bias < n_sample * PIXEL * sigma / math.sqrt(2.0 * math.pi)
 
 
+@pytest.mark.validation
 def test_positive_part_bias_on_pure_noise_is_s_delta_sigma_over_root_two_pi():
     shape = (41, 12)
     transform = _grid(*shape, west=-0.5 * PIXEL, north=20.5 * PIXEL)

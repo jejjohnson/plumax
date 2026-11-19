@@ -49,6 +49,7 @@ def test_check_observations_rejects_empty_and_mismatched_inputs() -> None:
         check_observations("f", [1.0, 2.0], ([0.0, 1.0], [0.0], [0.0, 1.0]))
 
 
+@pytest.mark.slow
 def test_run_nuts_samples_and_accepts_a_seed_or_a_key() -> None:
     numpyro = pytest.importorskip("numpyro")
     import numpyro.distributions as dist
@@ -69,6 +70,7 @@ def test_run_nuts_samples_and_accepts_a_seed_or_a_key() -> None:
     assert abs(float(jnp.mean(by_seed["loc"])) - 3.0) < 1.0
 
 
+@pytest.mark.slow
 def test_run_nuts_runs_gibbs_over_a_discrete_site() -> None:
     numpyro = pytest.importorskip("numpyro")
     import numpyro.distributions as dist

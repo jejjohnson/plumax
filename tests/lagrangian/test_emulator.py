@@ -163,6 +163,7 @@ def test_simulator_matches_the_particle_model_seeded_by_context():
     np.testing.assert_array_equal(reference[0], first)
 
 
+@pytest.mark.slow
 def test_simulator_compiles_the_particle_scan_once():
     calls = []
 
@@ -314,6 +315,7 @@ def test_emulated_footprint_matches_loop_jit_and_vmap():
     np.testing.assert_allclose(batched[0], looped, rtol=1e-12)
 
 
+@pytest.mark.slow
 def test_emulator_gradient_matches_finite_differences():
     emulator = _untrained()
     context = jnp.array([3.1, 0.2])
@@ -450,7 +452,7 @@ def test_adjoint_calibration():
         )
 
 
-@pytest.mark.slow
+@pytest.mark.validation
 def test_residual_below_5pct(trained):
     _, _, footprints, emulated = trained
     error = emulator_relative_error(emulated, footprints)
