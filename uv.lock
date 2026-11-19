@@ -1967,6 +1967,21 @@ wheels = [
 ]
 
 [[package]]
+name = "kernellib"
+version = "0.0.22"
+source = { git = "https://github.com/jejjohnson/kernellib?tag=v0.0.22#c50e01faba1ce13a720e017d6ecc8a773a48bb10" }
+dependencies = [
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "gaussx" },
+    { name = "geonnax" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+]
+
+[[package]]
 name = "kernex"
 version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3385,6 +3400,7 @@ dependencies = [
     { name = "integrix" },
     { name = "jax" },
     { name = "jaxlib" },
+    { name = "kernellib" },
     { name = "netcdf4" },
     { name = "numpy" },
     { name = "optimistix" },
@@ -3482,6 +3498,7 @@ requires-dist = [
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
+    { name = "kernellib", git = "https://github.com/jejjohnson/kernellib?tag=v0.0.22" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
     { name = "netcdf4" },
     { name = "numpy", specifier = ">=2.0" },
