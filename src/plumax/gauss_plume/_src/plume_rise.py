@@ -41,9 +41,9 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from plumax._src.constants import GRAVITY
 from plumax._src.errors import ParameterError
 from plumax._src.tracing import require_positive
-from plumax.met._src.surface_layer import GRAVITY
 
 
 #: Default potential-temperature gradient ∂θ/∂z [K m⁻¹] of the stable classes

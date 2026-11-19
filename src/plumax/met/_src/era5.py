@@ -46,11 +46,11 @@ from __future__ import annotations
 from pathlib import Path
 
 import einx
-import jax.numpy as jnp
 import numpy as np
 import xarray as xr
 from jaxtyping import Float, Int
 
+from plumax._src.constants import GRAVITY as GRAVITY, R_DRY as R_DRY
 from plumax._src.errors import (
     GridMismatchError,
     MissingVariableError,
@@ -59,16 +59,10 @@ from plumax._src.errors import (
 from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
-from plumax.met._src.regrid import IndexMap, bilinear_at, frame_wind, stagger_points
+from plumax.met._src.regrid import IndexMap, onto_analysis_grid, stagger_points
 from plumax.met._src.time import TimeAxis
-from plumax.met._src.wrf import _interpolate_vertical
 from plumax.met.field import MetField
 
-
-#: Standard gravity g [m s⁻²], as xrops's hypsometric integration uses.
-GRAVITY = 9.80665
-#: Dry-air gas constant R_d [J kg⁻¹ K⁻¹].
-R_DRY = 287.04
 
 #: CDS spellings → the names this loader uses.
 _RENAMES = {
@@ -214,32 +208,19 @@ def load_era5(
         pbl_height = _close_seam(pbl_height)
 
     # --- onto the analysis grid ---
-    grid_z = np.asarray(plume_grid.z, dtype=np.float64)
-    # z_surface = z₀ − Δz/2
-    grid_surface = grid_z[0] - 0.5 * plume_grid.dz
-    # h_k = z_k − z_surface
-    target_heights = grid_z - grid_surface
     to_index = _regular_index_map(lat, lon, frame)
     points = stagger_points(plume_grid, frame, to_index, loader="load_era5")
-    at_t = points["t"]
-    on_levels = lambda field: _interpolate_vertical(height_agl, field, target_heights)
-    u_frame, v_frame = frame_wind(on_levels(u_east), on_levels(v_north), points)
-    wind_up_t = bilinear_at(on_levels(wind_up), at_t.i, at_t.j)
-    temperature_t = bilinear_at(on_levels(temperature), at_t.i, at_t.j)
-    pressure_t = bilinear_at(on_levels(pressure_pa), at_t.i, at_t.j)
-    pbl_height_t = bilinear_at(pbl_height, at_t.i, at_t.j)
-    dtype = plume_grid.x.dtype
-    as_jax = lambda array: jnp.asarray(array, dtype=dtype)
-    return MetField(
-        plume_grid=plume_grid,
-        times=as_jax(clock.seconds),
-        u=as_jax(u_frame),
-        v=as_jax(v_frame),
-        w=as_jax(wind_up_t),
-        temperature=as_jax(temperature_t),
-        pressure=as_jax(pressure_t),
-        pbl_height=as_jax(pbl_height_t),
-        t0=clock.t0_iso,
+    return onto_analysis_grid(
+        plume_grid,
+        points,
+        height_agl,
+        clock,
+        u_east=u_east,
+        v_north=v_north,
+        wind_up=wind_up,
+        temperature=temperature,
+        pressure=pressure_pa,
+        pbl_height=pbl_height,
     )
 
 

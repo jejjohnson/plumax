@@ -15,3 +15,18 @@ BOLTZMANN = 1.380649e-23
 P_STANDARD = 101_325.0
 #: Near-surface temperature [K] (ISA sea level), when a scene gives none.
 T_STANDARD = 288.15
+
+#: von Kármán constant κ.
+KARMAN = 0.4
+#: Standard gravity g [m s⁻²].
+GRAVITY = 9.80665
+#: Gravitational acceleration WRF uses for its geopotential [m s⁻²].
+WRF_GRAVITY = 9.81
+#: Dry-air gas constant R_d [J kg⁻¹ K⁻¹].
+R_DRY = 287.04
+#: Specific heat of dry air at constant pressure c_p [J kg⁻¹ K⁻¹].
+CP_DRY = 1004.5
+#: Dry-air gas constant over specific heat, κ_d = R_d / c_p.
+KAPPA = R_DRY / CP_DRY
+#: Reference pressure of potential temperature p_ref [Pa].
+P_REFERENCE = 1.0e5

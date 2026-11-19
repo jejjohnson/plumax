@@ -12,12 +12,15 @@ import dataclasses
 from collections.abc import Callable
 
 import einx
+import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Float
 
 from plumax._src.errors import DomainError
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
+from plumax.met._src.time import TimeAxis
+from plumax.met.field import MetField
 
 
 #: Frame metres ``(x, y)`` → source fractional indices ``(i, j)``, NaN outside.
@@ -205,3 +208,106 @@ def frame_wind(
     # v = u_e ê_y + v_n n̂_y
     wind_y = u_east_at_v * east_y_at_v + v_north_at_v * north_y_at_v
     return wind_x, wind_y
+
+
+def analysis_heights(plume_grid: PlumeGrid3D) -> Float[np.ndarray, " level"]:
+    """Heights above ground of the analysis grid's levels.
+
+    The analysis grid's lower boundary is its surface (``make_grid``
+    semantics), a half cell below the first level.
+
+    Returns:
+        h_k = z_k − (z₀ − Δz/2) [m], one per level.
+    """
+    grid_z = np.asarray(plume_grid.z, dtype=np.float64)
+    # z_surface = z₀ − Δz/2
+    grid_surface = grid_z[0] - 0.5 * plume_grid.dz
+    # h_k = z_k − z_surface
+    return grid_z - grid_surface
+
+
+def interpolate_vertical(
+    z_src: np.ndarray, field: np.ndarray, z_target: np.ndarray
+) -> np.ndarray:
+    """Per-column linear interpolation from levels ``z_src`` to ``z_target``.
+
+    ``z_src`` and ``field`` are ``(n_time, n_lev, ny, nx)`` with ``z_src``
+    increasing along the level axis; returns ``(n_time, nz, ny, nx)``.
+    Targets outside a column's range take that column's end value.
+    """
+    num_levels = z_src.shape[1]
+    out = np.empty((field.shape[0], z_target.shape[0], *field.shape[2:]), field.dtype)
+    for target, target_height in enumerate(z_target):
+        upper = np.clip((z_src <= target_height).sum(axis=1), 1, num_levels - 1)[
+            :, None
+        ]
+        lower = upper - 1
+        z_lower = np.take_along_axis(z_src, lower, axis=1)[:, 0]
+        z_upper = np.take_along_axis(z_src, upper, axis=1)[:, 0]
+        field_lower = np.take_along_axis(field, lower, axis=1)[:, 0]
+        field_upper = np.take_along_axis(field, upper, axis=1)[:, 0]
+        # θ = clip((z_k − z_lo) / (z_hi − z_lo), 0, 1)
+        frac = np.clip((target_height - z_lower) / (z_upper - z_lower), 0.0, 1.0)
+        # (1 − θ) f_lo + θ f_hi
+        out[:, target] = (1.0 - frac) * field_lower + frac * field_upper
+    return out
+
+
+def onto_analysis_grid(
+    plume_grid: PlumeGrid3D,
+    points: dict[str, StaggerPoints],
+    height_agl: Float[np.ndarray, "time source_level row col"],
+    clock: TimeAxis,
+    *,
+    u_east: Float[np.ndarray, "time source_level row col"],
+    v_north: Float[np.ndarray, "time source_level row col"],
+    wind_up: Float[np.ndarray, "time source_level row col"],
+    temperature: Float[np.ndarray, "time source_level row col"],
+    pressure: Float[np.ndarray, "time source_level row col"],
+    pbl_height: Float[np.ndarray, "time row col"],
+) -> MetField:
+    """A met source's fields on the analysis grid, as a :class:`MetField`.
+
+    Each field is interpolated in height to the analysis levels, then sampled
+    bilinearly at the analysis points; the earth-relative wind is projected
+    onto the frame's axes at the U- and V-points (:func:`frame_wind`).
+
+    Args:
+        plume_grid: The analysis grid.
+        points: The source indices of the T-, U- and V-points
+            (:func:`stagger_points`).
+        height_agl: Height above ground of each source level [m].
+        clock: The source's time axis.
+        u_east: Eastward wind on the source's mass points [m s⁻¹].
+        v_north: Northward wind on the source's mass points [m s⁻¹].
+        wind_up: Vertical wind [m s⁻¹].
+        temperature: Air temperature [K].
+        pressure: Air pressure [Pa].
+        pbl_height: Boundary-layer height [m].
+
+    Returns:
+        The met field, in the analysis grid's dtype.
+    """
+    target_heights = analysis_heights(plume_grid)
+    at_t = points["t"]
+
+    def on_levels(field: np.ndarray) -> np.ndarray:
+        return interpolate_vertical(height_agl, field, target_heights)
+
+    u_frame, v_frame = frame_wind(on_levels(u_east), on_levels(v_north), points)
+    dtype = plume_grid.x.dtype
+
+    def as_jax(array: np.ndarray):
+        return jnp.asarray(array, dtype=dtype)
+
+    return MetField(
+        plume_grid=plume_grid,
+        times=as_jax(clock.seconds),
+        u=as_jax(u_frame),
+        v=as_jax(v_frame),
+        w=as_jax(bilinear_at(on_levels(wind_up), at_t.i, at_t.j)),
+        temperature=as_jax(bilinear_at(on_levels(temperature), at_t.i, at_t.j)),
+        pressure=as_jax(bilinear_at(on_levels(pressure), at_t.i, at_t.j)),
+        pbl_height=as_jax(bilinear_at(pbl_height, at_t.i, at_t.j)),
+        t0=clock.t0_iso,
+    )
