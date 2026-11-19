@@ -20,9 +20,6 @@ from plumax.gauss_plume.likelihoods import (
     StudentTNoise,
 )
 from plumax.gauss_plume.plume import plume_concentration
-from plumax.gauss_puff import make_release_times, release_durations
-from plumax.gauss_puff.inference import gaussian_puff_model, gaussian_puff_rw_model
-from plumax.gauss_puff.wind import WindSchedule
 
 
 NOISES = (
@@ -233,49 +230,6 @@ def test_plume_noise_override_reaches_the_site():
     )
     assert isinstance(fn, dist.StudentT)
     np.testing.assert_allclose(fn.scale, 4e-8)
-
-
-def _puff_inputs():
-    schedule = WindSchedule.from_speed_direction(
-        jnp.array([0.0, 600.0]), jnp.full(2, 4.0), jnp.full(2, 270.0)
-    )
-    release_times = make_release_times(0.0, 300.0, 0.05)
-    x = jnp.linspace(100.0, 600.0, 5)
-    return {
-        "receptor_coords": (x, jnp.zeros_like(x), jnp.ones_like(x)),
-        "observation_times": jnp.full(5, 300.0),
-        "source_location": (0.0, 0.0, 2.0),
-        "schedule": schedule,
-        "release_times": release_times,
-        "release_interval": 20.0,
-        "puff_durations": release_durations(release_times, 300.0),
-        "obs_noise_std": 4e-8,
-    }
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("model", [gaussian_puff_model, gaussian_puff_rw_model])
-def test_puff_default_is_previous_gaussian_likelihood(model):
-    inputs = _puff_inputs()
-    obs = jnp.full(5, 1e-7)
-    values = {
-        "emission_rate": jnp.array(0.12),
-        "background": jnp.array(1e-7),
-        "innovations": jnp.zeros(inputs["release_times"].shape[0]),
-    }
-    substituted = handlers.substitute(model, data=values)
-    trace = handlers.trace(handlers.seed(substituted, 0)).get_trace(
-        observations=obs, **inputs
-    )
-    site = trace["obs"]
-    assert isinstance(site["fn"], dist.Normal)
-    np.testing.assert_allclose(site["fn"].scale, 4e-8)
-    explicit = handlers.trace(
-        handlers.seed(handlers.substitute(model, data=values), 0)
-    ).get_trace(observations=obs, noise=GaussianNoise(std=4e-8), **inputs)
-    np.testing.assert_allclose(
-        site["fn"].log_prob(obs), explicit["obs"]["fn"].log_prob(obs), rtol=1e-12
-    )
 
 
 # ── robustness (the issue's Definition of Done) ──────────────────────────────

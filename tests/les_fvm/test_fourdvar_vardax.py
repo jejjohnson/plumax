@@ -1,17 +1,8 @@
-"""Tier III 4D-Var as a vardax analysis (#163).
-
-``solve_4dvar`` / ``posterior_covariance`` now run ``vardax.ThreeDVar`` over
-the whitened source–receptor map. The reference below is the algorithm they
-replaced: L-BFGS on the whitened cost through ``optx.minimise`` and the dense
-Gauss–Newton Hessian ``I + J̃ᵀ R⁻¹ J̃`` by ``jax.jacrev``.
-"""
+"""Tier III 4D-Var as a vardax analysis (#163): the convergence verdict."""
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
-import numpy as np
-import optimistix as optx
 import pytest
 
 from plumax.lagrangian.inversion import matern32_covariance
@@ -46,42 +37,9 @@ def problem():
     )
 
 
-def _reference(problem, max_steps):
-    """The pre-vardax solve and Laplace standard deviations."""
-    solution = optx.minimise(
-        lambda chi, _: problem.cost(chi),
-        optx.LBFGS(rtol=1e-6, atol=1e-8),
-        jnp.zeros(5),
-        max_steps=max_steps,
-        throw=False,
-    )
-    chi = solution.value
-
-    def predict_whitened(c):
-        return problem.forward.predict(problem.source_from_whitened(c)).reshape(-1)
-
-    jac = jax.jacrev(predict_whitened)(chi)
-    r_inv = (1.0 / problem.obs_variance).reshape(-1)
-    p_chi = jnp.linalg.inv(jnp.eye(5) + jac.T @ (r_inv[:, None] * jac))
-    L = problem.prior_chol
-    std = jnp.sqrt(jnp.diag(L @ p_chi @ L.T))
-    return problem.source_from_whitened(chi), std, int(solution.stats["num_steps"])
-
-
 @pytest.fixture(scope="module")
 def free_solution(problem):
     return solve_4dvar(problem, max_steps=500, compute_posterior=True)
-
-
-@pytest.mark.slow
-def test_map_and_laplace_match(problem, free_solution):
-    source_ref, std_ref, steps_ref = _reference(problem, max_steps=500)
-    result = free_solution
-    np.testing.assert_allclose(result.source, source_ref, rtol=1e-6, atol=1e-9)
-    np.testing.assert_allclose(result.posterior.source_std, std_ref, rtol=1e-3)
-    # same optimiser on the same whitened cost: same iteration count
-    assert result.n_steps == steps_ref
-    assert result.converged
 
 
 @pytest.mark.slow

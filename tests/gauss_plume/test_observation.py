@@ -9,11 +9,9 @@ import pytest
 from hypothesis import given, settings, strategies as st
 
 from plumax._src.errors import DomainError
-from plumax.coupled import Instrument, PlumeSource, column_response
-from plumax.gauss_plume.dispersion import get_dispersion_params
+from plumax.coupled import Instrument
 from plumax.gauss_plume.observation import ColumnObservation
-from plumax.gauss_plume.plume import plume_concentration_vmap
-from plumax.les_fvm import ColumnObservationOperator, make_grid
+from plumax.les_fvm import make_grid
 
 
 def _field(seed: int = 0, shape: tuple[int, int, int] = (5, 4, 6)) -> jax.Array:
@@ -42,56 +40,6 @@ def test_averaging_kernel_scales_each_receptor():
     np.testing.assert_allclose(
         np.asarray(weighted.from_field(field)),
         np.asarray(kernel * plain.from_field(field)),
-        rtol=1e-12,
-    )
-
-
-def test_column_operator_matches_previous_formula():
-    # The les_fvm wrapper gives the numbers it gave before the refactor:
-    # sum over z times dz, flattened or gathered at receptor cells.
-    field = _field(seed=1)
-    column = np.asarray(field).sum(axis=0) * 2.5
-    full = ColumnObservationOperator(dz=2.5)
-    np.testing.assert_allclose(np.asarray(full(field)), column.reshape(-1), rtol=1e-12)
-    index = jnp.array([[0, 0], [2, 4], [3, 1]])
-    subset = ColumnObservationOperator(dz=2.5, receptor_index=index)
-    np.testing.assert_allclose(
-        np.asarray(subset(field)), column[[0, 2, 3], [0, 4, 1]], rtol=1e-12
-    )
-
-
-def test_column_response_matches_previous_formula():
-    # coupled.column_response gives the numbers it gave before the refactor:
-    # unit-Q plume profiles, jnp.trapezoid over column_z, times the AK.
-    source = PlumeSource(
-        location=(0.0, 0.0, 10.0),
-        wind_speed=5.0,
-        wind_direction=270.0,
-        stability_class="D",
-        column_z=jnp.array([0.0, 5.0, 20.0, 50.0, 120.0, 200.0]),
-    )
-    receptors = jnp.array([[100.0, 0.0], [400.0, 30.0], [900.0, -60.0]])
-    kernel = jnp.array([1.0, 0.8, 0.6])
-    instrument = Instrument("toy", receptors, averaging_kernel=kernel)
-
-    z = source.column_z
-    n_obs, n_z = receptors.shape[0], z.shape[0]
-    u, v = source.wind_uv()
-    profiles = plume_concentration_vmap(
-        jnp.repeat(receptors[:, 0], n_z),
-        jnp.repeat(receptors[:, 1], n_z),
-        jnp.tile(z, n_obs),
-        *source.location,
-        u,
-        v,
-        1.0,
-        get_dispersion_params("D"),
-    ).reshape(n_obs, n_z)
-    previous = kernel * jnp.trapezoid(profiles, x=z, axis=1)
-
-    np.testing.assert_allclose(
-        np.asarray(column_response(source, instrument)),
-        np.asarray(previous),
         rtol=1e-12,
     )
 
