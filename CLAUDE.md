@@ -50,7 +50,7 @@ An unmarked test must stay fast. CI's fast job sets `PLUMAX_FAST_BUDGET=5`, and 
 
 ```bash
 uv run pytest -n 4 --dist loadfile --durations=15             # Fast tests (every PR)
-uv run pytest -n 4 --dist loadfile -m "not validation" --cov=src/plumax      # Fast and slow with coverage (PRs into main, pushes to main)
+uv run pytest -n 4 --dist loadfile -m "not validation" --cov=src/plumax      # Fast and slow with coverage (CI runs this in shards on PRs into main and pushes to main)
 uv run --group lint ruff check .              # Lint — ENTIRE repo, not just src/plumax/
 uv run --group lint ruff format --check .     # Format — ENTIRE repo
 uv run --group typecheck ty check src/plumax  # Typecheck — package only
