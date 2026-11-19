@@ -34,6 +34,7 @@ from jaxtyping import Array, ArrayLike, Float
 
 from plumax._src.controlled import AbstractControlledSource
 from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 
 
 if TYPE_CHECKING:
@@ -425,18 +426,14 @@ class ColumnPlume(eqx.Module):
     knot_spacing: float | None = None
 
     def __check_init__(self) -> None:
-        if self.reference_distance <= 0.0:
-            raise ParameterError(
-                f"reference_distance must be > 0, got {self.reference_distance}"
-            )
-        if self.initial_width < 0.0:
-            raise ParameterError(f"initial_width must be ≥ 0, got {self.initial_width}")
-        if self.upwind_scale is not None and self.upwind_scale <= 0.0:
-            raise ParameterError(f"upwind_scale must be > 0, got {self.upwind_scale}")
-        if self.pixel_size is not None and self.pixel_size <= 0.0:
-            raise ParameterError(f"pixel_size must be > 0, got {self.pixel_size}")
-        if self.knot_spacing is not None and self.knot_spacing <= 0.0:
-            raise ParameterError(f"knot_spacing must be > 0, got {self.knot_spacing}")
+        require_positive("reference_distance", self.reference_distance)
+        require_positive("initial_width", self.initial_width, allow_zero=True)
+        if self.upwind_scale is not None:
+            require_positive("upwind_scale", self.upwind_scale)
+        if self.pixel_size is not None:
+            require_positive("pixel_size", self.pixel_size)
+        if self.knot_spacing is not None:
+            require_positive("knot_spacing", self.knot_spacing)
 
     def __call__(
         self,

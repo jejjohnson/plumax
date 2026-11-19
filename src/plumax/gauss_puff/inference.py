@@ -13,8 +13,8 @@ wind schedule. This module provides:
   ``Q_i`` under a random-walk prior, for state-estimation workflows.
 
 The log-space prior parameters are derived from real-scale ``(mean, std)``
-via :func:`plumax.gauss_plume.inference._lognormal_from_moments`,
-reused here to keep the plume and puff inference helpers aligned.
+via :meth:`plumax._src.scalar_emission.LognormalEmission.from_moments`,
+shared with the plume inference helpers.
 """
 
 from __future__ import annotations

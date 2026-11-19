@@ -62,9 +62,9 @@ import lineax as lx
 import numpy as np
 
 from plumax._src.errors import PayloadError
-from plumax._src.scalar_emission import GaussianEmission, gaussian_total
-from plumax._src.tracing import _is_traced
-from plumax._src.vardax import require_argminax, require_vardax
+from plumax._src.scalar_emission import GaussianEmission, gaussian_total, require_prior
+from plumax._src.tracing import _is_traced, require_positive
+from plumax._src.vardax import PSD_TAGS, require_argminax, require_vardax, row_operator
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import matern32_covariance
 from plumax.les_fvm.boundary import (
@@ -90,10 +90,6 @@ if TYPE_CHECKING:
 
 
 # ── control layouts ──────────────────────────────────────────────────────────
-
-
-#: Tags of a covariance operator or a covariance factor built from one.
-_PSD_TAGS = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
 
 
 @dataclass(frozen=True)
@@ -186,14 +182,12 @@ class SpatialControl:
         active = np.asarray(self.mask, dtype=bool)
         if not active.any():
             raise ValueError("SpatialControl: `mask` has no active cell.")
-        if not self.length_scale_m > 0.0:
-            raise ValueError("SpatialControl: `length_scale_m` must be > 0.")
+        require_positive("length_scale_m", self.length_scale_m, caller="SpatialControl")
         mean = np.asarray(self.prior_mean, dtype=float)[active]
         std = np.asarray(self.prior_std, dtype=float)[active]
         if not (np.all(np.isfinite(mean)) and np.all(np.isfinite(std))):
             raise ValueError("SpatialControl: priors must be finite on active cells.")
-        if np.any(std <= 0.0):
-            raise ValueError("SpatialControl: `prior_std` must be > 0 on active cells.")
+        require_positive("prior_std", std, caller="SpatialControl")
         if self.time_basis is not None:
             self._mean_coefficients()
 
@@ -343,12 +337,12 @@ class SpatialControl:
         if self._is_kronecker():
             correlation_y, correlation_x = self._correlation_factors(y, x)
             correlation = gx.Kronecker(
-                lx.MatrixLinearOperator(correlation_y, _PSD_TAGS),
-                lx.MatrixLinearOperator(correlation_x, _PSD_TAGS),
+                lx.MatrixLinearOperator(correlation_y, PSD_TAGS),
+                lx.MatrixLinearOperator(correlation_x, PSD_TAGS),
             )
         else:
             correlation = lx.MatrixLinearOperator(
-                self._active_correlation(y, x), _PSD_TAGS
+                self._active_correlation(y, x), PSD_TAGS
             )
         # B = (I_K ⊗ Σ_σ) (I_K ⊗ ρ) (I_K ⊗ Σ_σ)
         covariance = self._scale() @ self._over_basis(correlation) @ self._scale()
@@ -383,7 +377,7 @@ class SpatialControl:
 
 def _cholesky(covariance: jax.Array) -> jax.Array:
     # adaptive jitter: a fixed kick fails on badly scaled Matérn priors
-    operator = lx.MatrixLinearOperator(covariance, _PSD_TAGS)
+    operator = lx.MatrixLinearOperator(covariance, PSD_TAGS)
     return gx.safe_cholesky(operator)
 
 
@@ -1047,19 +1041,6 @@ class FourDVarProblem:
         observations = self.observations / jnp.sqrt(self.obs_variance)
         obs_size = observations.size
 
-        def row_operator(operator: lx.AbstractLinearOperator, size: int):
-            def apply_row(row: jax.Array) -> jax.Array:
-                # A x, kept as a row
-                product = operator.mv(row[0])
-                return einx.id("obs -> 1 obs", product)
-
-            return lx.FunctionLinearOperator(
-                apply_row,
-                jax.ShapeDtypeStruct((1, size), dtype),
-                frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
-            )
-
-        psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
         # B = L Lᵀ
         prior_covariance = einx.dot(
             "row inner, col inner -> row col", self.prior_chol, self.prior_chol
@@ -1070,7 +1051,7 @@ class FourDVarProblem:
             # unused by the solve and the posterior (the control's prior is
             # ½‖χ‖²); B = L Lᵀ for consistency
             prior_cov_op=row_operator(
-                lx.MatrixLinearOperator(prior_covariance, psd), state_size
+                lx.MatrixLinearOperator(prior_covariance, PSD_TAGS), state_size, dtype
             ),
             obs_cov_op=lx.IdentityLinearOperator(
                 jax.ShapeDtypeStruct((1, obs_size), dtype)
@@ -1220,7 +1201,7 @@ def _build_temporal_problem(
     chol = gx.safe_cholesky(
         lx.MatrixLinearOperator(
             source_prior_covariance,
-            tags=frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag}),
+            tags=PSD_TAGS,
         )
     )
 
@@ -1433,11 +1414,12 @@ class FourDVarResult:
                 per-cell flux control.
         """
         self._require_time_series()
-        if self.prior_mean is None or self.prior_covariance is None:
-            raise PayloadError(
-                "FourDVarResult.prior_logpdf: this result carries no prior; "
-                "build it with solve_4dvar."
-            )
+        require_prior(
+            "FourDVarResult.prior_logpdf",
+            built_with="solve_4dvar",
+            prior_mean=self.prior_mean,
+            prior_covariance=self.prior_covariance,
+        )
         return self._mean_law(self.prior_mean, self.prior_covariance).log_prob(q)
 
     @staticmethod
@@ -1752,7 +1734,7 @@ def _gauss_newton_laplace(
     # Ĥ_χ = I + J̃ᵀ J̃, symmetrised so the PSD tag is exact
     precision = gx.symmetrize(identity + gauss_newton)
     return amx.curvature.Laplace(
-        whitened_control, lx.MatrixLinearOperator(precision, _PSD_TAGS)
+        whitened_control, lx.MatrixLinearOperator(precision, PSD_TAGS)
     )
 
 

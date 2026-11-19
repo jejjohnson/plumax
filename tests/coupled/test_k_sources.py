@@ -13,6 +13,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from plumax._src.scalar_emission import LognormalEmission
 from plumax.coupled import (
     CoupledPrior,
     CoupledProblem,
@@ -27,7 +28,6 @@ from plumax.coupled import (
     solve_coupled,
 )
 from plumax.coupled.inversion import plume_response
-from plumax.gauss_plume._src.inference import _lognormal_from_moments
 from plumax.gauss_plume.dispersion import get_dispersion_params
 from plumax.gauss_plume.multi_source import MaskedSources, MultiSourcePosterior
 
@@ -142,7 +142,8 @@ def test_k1_matches_single_source():
         column_z=SOURCE.column_z,
         background=0.0,
     )
-    log_mean, log_std = _lognormal_from_moments(0.1, 0.08)
+    emission = LognormalEmission.from_moments(0.1, 0.08)
+    log_mean, log_std = emission.loc, emission.scale
     single = solve_coupled(
         CoupledProblem(
             forward=build_coupled_forward(single_source, instruments),

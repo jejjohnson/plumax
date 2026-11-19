@@ -48,23 +48,23 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import einx
-import gaussx as gx
 import jax
 import jax.core
 import jax.numpy as jnp
 import lineax as lx
 from jax.typing import ArrayLike
 from jaxtyping import Float
+from kernellib.functional import matern_kernel
 
-from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import (
     GaussianEmission,
     gaussian_total,
     lognormal_total,
+    require_prior,
     sample_lognormal_total,
 )
-from plumax._src.tracing import _is_traced
-from plumax._src.vardax import require_vardax
+from plumax._src.tracing import require_positive
+from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax, row_operator
 
 
 if TYPE_CHECKING:
@@ -120,11 +120,12 @@ class GaussianPosterior:
         Raises:
             PayloadError: If the posterior was built without its prior.
         """
-        if self.prior_mean is None or self.prior_covariance is None:
-            raise PayloadError(
-                "GaussianPosterior.prior_logpdf: this posterior carries no prior; "
-                "build it with linear_gaussian_inversion."
-            )
+        require_prior(
+            "GaussianPosterior.prior_logpdf",
+            built_with="linear_gaussian_inversion",
+            prior_mean=self.prior_mean,
+            prior_covariance=self.prior_covariance,
+        )
         weights = jnp.ones_like(self.prior_mean)
         prior = gaussian_total(self.prior_mean, self.prior_covariance, weights)
         return prior.log_prob(q)
@@ -164,11 +165,8 @@ def matern32_covariance(
     # Validate eagerly for concrete inputs; skip under jit/grad/vmap (the doc
     # advertises gradient-based tuning of variance / length_scale, where these
     # would be tracers and a Python ``<=`` test would raise).
-    if not _is_traced(variance, length_scale):
-        if variance <= 0.0:
-            raise ValueError("matern32_covariance: `variance` must be > 0.")
-        if length_scale <= 0.0:
-            raise ValueError("matern32_covariance: `length_scale` must be > 0.")
+    require_positive("variance", variance, caller="matern32_covariance")
+    require_positive("length_scale", length_scale, caller="matern32_covariance")
     coords = jnp.asarray(coordinates, dtype=float)
     if coords.shape[0] == 0:
         # einx rejects empty axes; no points have an empty covariance
@@ -176,16 +174,10 @@ def matern32_covariance(
         return jnp.zeros((0, 0), dtype=dtype)
     if coords.ndim == 1:
         coords = einx.id("point -> point 1", coords)
-    # Δ_ij = x_i − x_j
-    diff = einx.subtract(
-        "first coord, second coord -> first second coord", coords, coords
+    # k_ij = σ² (1 + √3 r_ij / ℓ) exp(−√3 r_ij / ℓ),  r_ij = ‖x_i − x_j‖
+    return matern_kernel(
+        coords, coords, jnp.asarray(variance), jnp.asarray(length_scale), 1.5
     )
-    # r_ij = ‖x_i − x_j‖
-    distance = jnp.sqrt(einx.sum("first second [coord]", diff**2) + 1e-300)
-    # s = √3 r / ℓ
-    scaled = jnp.sqrt(3.0) * distance / length_scale
-    # k = σ² (1 + s) exp(−s)
-    return variance * (1.0 + scaled) * jnp.exp(-scaled)
 
 
 def observation_covariance(
@@ -266,32 +258,18 @@ def _blue_update(
     vdx = require_vardax(caller)
     num_grid = prior_cov.shape[0]
     obs_size = obs_var.shape[0]
-    psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
     if obs_var.ndim == 2:
-        obs_cov = lx.MatrixLinearOperator(obs_var, psd)
+        obs_cov = lx.MatrixLinearOperator(obs_var, PSD_TAGS)
     else:
         obs_cov = lx.DiagonalLinearOperator(obs_var)
-
-    def row_operator(
-        operator: lx.AbstractLinearOperator, size: int
-    ) -> lx.FunctionLinearOperator:
-        # vardax applies covariances to (1, size) rows
-        def apply_to_row(row):
-            # y = M x, kept as a (1, size) row
-            product = operator.mv(row[0])
-            return einx.id("dim -> 1 dim", product)
-
-        return lx.FunctionLinearOperator(
-            apply_to_row,
-            jax.ShapeDtypeStruct((1, size), prior_cov.dtype),
-            psd,
-        )
 
     analysis = vdx.OptimalInterpolation(
         obs_op=footprint_operator(jacobian),
         prior_mean=jnp.zeros((1, num_grid), dtype=prior_cov.dtype),
-        prior_cov_op=row_operator(lx.MatrixLinearOperator(prior_cov, psd), num_grid),
-        obs_cov_op=row_operator(obs_cov, obs_size),
+        prior_cov_op=row_operator(
+            lx.MatrixLinearOperator(prior_cov, PSD_TAGS), num_grid, prior_cov.dtype
+        ),
+        obs_cov_op=row_operator(obs_cov, obs_size, prior_cov.dtype),
         solver=lx.Cholesky(),
     )
     batch = vdx.Batch1D(
@@ -303,14 +281,8 @@ def _blue_update(
     # badly when the observations are much more precise than the prior
     posterior = analysis.posterior(batch, vdx.LaplaceCovariance(solver=lx.Cholesky()))
 
-    def column(basis_vector):
-        # P* e_i: one lazy mat-vec per basis vector
-        row = einx.id("param -> 1 param", basis_vector)
-        product = posterior.cov.mv(row)
-        return einx.id("1 param -> param", product)
-
-    covariance = jax.vmap(column)(jnp.eye(num_grid, dtype=prior_cov.dtype))
-    return posterior.mean[0], gx.symmetrize(covariance)
+    covariance = dense_covariance(posterior.cov, num_grid, prior_cov.dtype)
+    return posterior.mean[0], covariance
 
 
 def linear_gaussian_inversion(
@@ -430,11 +402,12 @@ class LognormalPosterior:
         Raises:
             PayloadError: If the posterior was built without its prior.
         """
-        if self.prior_mean is None or self.prior_log_covariance is None:
-            raise PayloadError(
-                "LognormalPosterior.prior_logpdf: this posterior carries no prior; "
-                "build it with lognormal_inversion."
-            )
+        require_prior(
+            "LognormalPosterior.prior_logpdf",
+            built_with="lognormal_inversion",
+            prior_mean=self.prior_mean,
+            prior_log_covariance=self.prior_log_covariance,
+        )
         zeros = jnp.zeros_like(self.prior_mean)
         prior = lognormal_total(zeros, self.prior_log_covariance, self.prior_mean)
         return prior.log_prob(q)
@@ -493,8 +466,7 @@ def lognormal_inversion(
     # Eager positivity check; skipped under jit/vmap over `prior_mean` (where a
     # host-bool conversion would raise). The lognormal form q = q_a·exp(δ)
     # implicitly assumes q_a > 0; a non-positive concrete q_a is a usage error.
-    if not _is_traced(prior_mean) and bool(jnp.any(prior_emission_rate <= 0.0)):
-        raise ValueError("lognormal_inversion: `prior_mean` (q_a) must be > 0.")
+    require_positive("prior_mean", prior_emission_rate, caller="lognormal_inversion")
 
     # F̃ = F diag(q_a)
     log_jacobian = einx.multiply(

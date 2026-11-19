@@ -1967,6 +1967,21 @@ wheels = [
 ]
 
 [[package]]
+name = "kernellib"
+version = "0.0.22"
+source = { git = "https://github.com/jejjohnson/kernellib?tag=v0.0.22#c50e01faba1ce13a720e017d6ecc8a773a48bb10" }
+dependencies = [
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "gaussx" },
+    { name = "geonnax" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "lineax" },
+]
+
+[[package]]
 name = "kernex"
 version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -3385,6 +3400,7 @@ dependencies = [
     { name = "integrix" },
     { name = "jax" },
     { name = "jaxlib" },
+    { name = "kernellib" },
     { name = "netcdf4" },
     { name = "numpy" },
     { name = "optimistix" },
@@ -3403,6 +3419,7 @@ emulate = [
     { name = "pipekit-train", extra = ["cache", "equinox"] },
 ]
 geo = [
+    { name = "functax" },
     { name = "georeader-spaceml" },
     { name = "geotoolz-ops", extra = ["morph"] },
     { name = "scikit-learn" },
@@ -3473,6 +3490,7 @@ requires-dist = [
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },
     { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
+    { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.6" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
@@ -3480,6 +3498,7 @@ requires-dist = [
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
+    { name = "kernellib", git = "https://github.com/jejjohnson/kernellib?tag=v0.0.22" },
     { name = "matplotlib", marker = "extra == 'notebooks'" },
     { name = "netcdf4" },
     { name = "numpy", specifier = ">=2.0" },

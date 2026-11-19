@@ -58,26 +58,32 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Float
 
+from plumax._src.constants import (
+    KAPPA as KAPPA,
+    P_REFERENCE as P_REFERENCE,
+    WRF_GRAVITY,
+)
 from plumax._src.errors import (
-    MissingExtraError,
     MissingVariableError,
     TimeAxisError,
 )
+from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
-from plumax.met._src.regrid import bilinear_at, frame_wind, stagger_points
+from plumax.met._src.regrid import (
+    analysis_heights,
+    interpolate_vertical,
+    onto_analysis_grid,
+    stagger_points,
+)
 from plumax.met._src.time import TimeAxis
 from plumax.met.field import MetField
 
 
 #: Gravitational acceleration used by WRF for the geopotential [m s⁻²].
-GRAVITY = 9.81
-#: WRF reference pressure for potential temperature [Pa].
-P_REFERENCE = 1.0e5
+GRAVITY = WRF_GRAVITY
 #: WRF base-state potential temperature added to the perturbation ``T`` [K].
 THETA_BASE = 300.0
-#: Dry-air gas constant over specific heat at constant pressure.
-KAPPA = 287.04 / 1004.5
 
 
 def load_wrf(
@@ -145,11 +151,7 @@ def load_wrf(
     # --- vertical targets ---
     # The analysis grid's lower boundary is its surface (``make_grid``
     # semantics), and WRF heights are above ground.
-    grid_z = np.asarray(plume_grid.z, dtype=np.float64)
-    # z_surface = z₀ − Δz/2
-    grid_surface = grid_z[0] - 0.5 * plume_grid.dz
-    # h_k = z_k − z_surface
-    target_heights = grid_z - grid_surface
+    target_heights = analysis_heights(plume_grid)
     dtype = plume_grid.x.dtype
     as_jax = lambda array: jnp.asarray(array, dtype=dtype)
 
@@ -157,25 +159,17 @@ def load_wrf(
         # --- horizontal, by lat/lon ---
         to_index = _wrf_index_map(lat_mass, lon_mass, origin)
         points = stagger_points(plume_grid, origin, to_index, loader="load_wrf")
-        at_t = points["t"]
-        on_levels = lambda field: _interpolate_vertical(
-            height_agl, field, target_heights
-        )
-        u_frame, v_frame = frame_wind(on_levels(u_mass), on_levels(v_mass), points)
-        wind_up_t = bilinear_at(on_levels(w_mass), at_t.i, at_t.j)
-        temperature_t = bilinear_at(on_levels(temperature), at_t.i, at_t.j)
-        pressure_t = bilinear_at(on_levels(pressure), at_t.i, at_t.j)
-        pbl_height_t = bilinear_at(pbl_height, at_t.i, at_t.j)
-        return MetField(
-            plume_grid=plume_grid,
-            times=as_jax(clock.seconds),
-            u=as_jax(u_frame),
-            v=as_jax(v_frame),
-            w=as_jax(wind_up_t),
-            temperature=as_jax(temperature_t),
-            pressure=as_jax(pressure_t),
-            pbl_height=as_jax(pbl_height_t),
-            t0=clock.t0_iso,
+        return onto_analysis_grid(
+            plume_grid,
+            points,
+            height_agl,
+            clock,
+            u_east=u_mass,
+            v_north=v_mass,
+            wind_up=w_mass,
+            temperature=temperature,
+            pressure=pressure,
+            pbl_height=pbl_height,
         )
 
     # --- horizontal, by WRF metres ---
@@ -204,7 +198,7 @@ def load_wrf(
     )
 
     def onto(field: np.ndarray, easting: np.ndarray, northing: np.ndarray):
-        column = _interpolate_vertical(height_agl, field, target_heights)
+        column = interpolate_vertical(height_agl, field, target_heights)
         # (fx, fy) = (x / DX, y / DY)
         return _bilinear(column, easting / spacing_x, northing / spacing_y)
 
@@ -223,13 +217,10 @@ def load_wrf(
 
 def _require_open_wrfout():
     """``xrops.atm.open_wrfout``, or an error naming the ``io`` extra."""
-    try:
-        import xrops.atm
-    except ImportError as err:
-        raise MissingExtraError(
-            "load_wrf reads through xrops; install it with `pip install 'plumax[io]'`"
-        ) from err
-    return xrops.atm.open_wrfout
+    xrops_atm = require_extra(
+        "xrops.atm", extra="io", caller="load_wrf", purpose="reads through xrops"
+    )
+    return xrops_atm.open_wrfout
 
 
 def _earth_relative_wind(
@@ -358,33 +349,6 @@ def _check_inside(
             f"x ∈ [0, {x_max:g}] m, y ∈ [0, {y_max:g}] m. Shrink the grid or "
             "move `origin`; the loader does not extrapolate horizontally."
         )
-
-
-def _interpolate_vertical(
-    z_src: np.ndarray, field: np.ndarray, z_target: np.ndarray
-) -> np.ndarray:
-    """Per-column linear interpolation from levels ``z_src`` to ``z_target``.
-
-    ``z_src`` and ``field`` are ``(n_time, n_lev, ny, nx)`` with ``z_src``
-    increasing along the level axis; returns ``(n_time, nz, ny, nx)``.
-    Targets outside a column's range take that column's end value.
-    """
-    num_levels = z_src.shape[1]
-    out = np.empty((field.shape[0], z_target.shape[0], *field.shape[2:]), field.dtype)
-    for target, target_height in enumerate(z_target):
-        upper = np.clip((z_src <= target_height).sum(axis=1), 1, num_levels - 1)[
-            :, None
-        ]
-        lower = upper - 1
-        z_lower = np.take_along_axis(z_src, lower, axis=1)[:, 0]
-        z_upper = np.take_along_axis(z_src, upper, axis=1)[:, 0]
-        field_lower = np.take_along_axis(field, lower, axis=1)[:, 0]
-        field_upper = np.take_along_axis(field, upper, axis=1)[:, 0]
-        # θ = clip((z_k − z_lo) / (z_hi − z_lo), 0, 1)
-        frac = np.clip((target_height - z_lower) / (z_upper - z_lower), 0.0, 1.0)
-        # (1 − θ) f_lo + θ f_hi
-        out[:, target] = (1.0 - frac) * field_lower + frac * field_upper
-    return out
 
 
 def _bilinear(field: np.ndarray, fx: np.ndarray, fy: np.ndarray) -> np.ndarray:

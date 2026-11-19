@@ -164,11 +164,10 @@ the API reference list every parameter.
 ## Not just methane
 
 The transport and the inference treat a passive tracer: an emission rate in
-kg s⁻¹ goes in, a concentration in kg m⁻³ comes out. Three places still
+kg s⁻¹ goes in, a concentration in kg m⁻³ comes out. Two places still
 assume methane: `coupled.rtm` converts column mass to ΔVMR with
-`CH4_MOLAR_MASS_KG_PER_MOL`; `les_fvm` labels its outputs "methane"; and the
-`population` intensity kernels are named for methane sectors, although their
-maths is sector-agnostic.
+`CH4_MOLAR_MASS_KG_PER_MOL`, and the `population` intensity kernels are named
+for methane sectors, although their maths is sector-agnostic.
 
 ## Links
 

@@ -42,6 +42,33 @@ from plumax.vetting.seeds import background_pool, select_seeds
 __all__ = ["VettingResult", "vet_candidate"]
 
 
+# Defaults shared by `vet_candidate` and `PlumeVetting`.
+DEFAULT_K = 40
+DEFAULT_KEEP = 0.5
+DEFAULT_DEGREE = 2
+DEFAULT_BOX = 200
+
+
+def _check_vet_inputs(table: Array, num_fit: int, name: str, per_band: str) -> None:
+    """Check that ``table`` is ``(D, Bf)`` with one column per fitting band.
+
+    Args:
+        table: The transmittance table.
+        num_fit: ``Bf``, the number of fitting bands.
+        name: The calling function, prefixed to the error message.
+        per_band: What each column stands for, ending the sentence
+            ``one column per ...`` in the error message.
+
+    Raises:
+        ShapeError: If ``table`` is not 2-D with ``num_fit`` columns.
+    """
+    if table.ndim != 2 or table.shape[1] != num_fit:
+        raise ShapeError(
+            f"{name}: table must be (D, {num_fit}), one column per {per_band}, "
+            f"got {table.shape}"
+        )
+
+
 class VettingResult(eqx.Module):
     """One candidate's scores and the spectra behind them.
 
@@ -78,10 +105,10 @@ def vet_candidate(
     window: AbsorptionWindow,
     *,
     exclude: Bool[ArrayLike, " C H W"] | None = None,
-    k: int = 40,
-    keep: float = 0.5,
-    degree: int = 2,
-    box: int = 200,
+    k: int = DEFAULT_K,
+    keep: float = DEFAULT_KEEP,
+    degree: int = DEFAULT_DEGREE,
+    box: int = DEFAULT_BOX,
 ) -> VettingResult:
     """Vet one candidate mask: seeds, pool, pairs, ratio, fit and ``D_norm``.
 
@@ -163,11 +190,12 @@ def vet_candidate(
     fit_b = window.fit_bands(wavelength_nm)
     # B_f = ∑_b 1[b is a fitting band]
     num_fit = int(fit_b.sum())
-    if table.ndim != 2 or table.shape[1] != num_fit:
-        raise ShapeError(
-            f"vet_candidate: table must be (D, {num_fit}), one column per band of "
-            f"the window's {num_fit} fitting bands, got {table.shape}"
-        )
+    _check_vet_inputs(
+        table,
+        num_fit,
+        "vet_candidate",
+        f"band of the window's {num_fit} fitting bands",
+    )
 
     seeds = select_seeds(mf, mask, k=k)  # (H, W)
     pool = background_pool(

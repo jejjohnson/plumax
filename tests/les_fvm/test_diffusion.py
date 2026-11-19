@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -66,12 +65,12 @@ def test_pg_eddy_diffusivity_positive_values():
 
 
 def test_pg_eddy_diffusivity_rejects_zero_wind_speed():
-    with pytest.raises(ValueError, match=r"wind_speed must be > 0"):
+    with pytest.raises(ValueError, match=r"`wind_speed` must be > 0"):
         pg_eddy_diffusivity(stability_class="C", wind_speed=0.0)
 
 
 def test_pg_eddy_diffusivity_rejects_zero_reference_distance():
-    with pytest.raises(ValueError, match=r"reference_distance must be > 0"):
+    with pytest.raises(ValueError, match=r"`reference_distance` must be > 0"):
         pg_eddy_diffusivity(stability_class="C", wind_speed=5.0, reference_distance=0.0)
 
 
@@ -294,7 +293,7 @@ def test_mo_jit_matches_eager():
 
 def test_mo_rejects_a_negative_pbl_height():
     grid = _z_grid()
-    with pytest.raises(eqx.EquinoxRuntimeError, match="pbl_height"):
+    with pytest.raises(ValueError, match="pbl_height"):
         mo_eddy_diffusivity(grid, _surface_layer(0.4, 0.0), -1.0, it=0, k_h=1.0)
 
 
@@ -392,7 +391,7 @@ def test_smagorinsky_gradient_matches_central_difference():
 
 def test_smagorinsky_rejects_a_non_positive_constant():
     grid = _smag_grid()
-    with pytest.raises(ValueError, match="c_s must be > 0"):
+    with pytest.raises(ValueError, match="`c_s` must be > 0"):
         smagorinsky_k_h(uniform_wind_field(grid), grid, c_s=0.0, t=0.0)
 
 
@@ -433,3 +432,32 @@ def test_mo_and_smagorinsky_fields_drive_the_tendency():
     # ∂_z(K_z ∂_z C) with the face-mean K_z, levels with both faces in the interior
     expected = gradient * (k_z[2:] - k_z[:-2]) / (2.0 * grid.dz)
     np.testing.assert_allclose(tendency[2:-2, 1, 1], expected, rtol=1e-9, atol=1e-12)
+
+
+@pytest.mark.parametrize("shear", ["v_of_x", "u_of_y"])
+def test_smagorinsky_k_h_is_symmetric_across_opposite_walls(shear) -> None:
+    """A linear shear's K_h is the same next to opposite walls (#352).
+
+    Before the fix, ``shear_strain`` zeroed the corner row and column that sit
+    on the south and west walls, so the cells next to those walls alone read
+    |D| = S/√2 for a shear along them. The cells next to the walls normal to
+    the gradient read S/√2 on every side, from the wind's edge-padded ghost
+    ring, and every other cell reads S.
+    """
+    grid = make_grid((0.0, 80.0, 8), (0.0, 80.0, 8), (0.0, 40.0, 4))
+    rate = 0.1
+    if shear == "v_of_x":
+        wind = lambda t, x, y, z: (jnp.zeros_like(x), rate * x, jnp.zeros_like(x))
+    else:
+        wind = lambda t, x, y, z: (rate * y, jnp.zeros_like(y), jnp.zeros_like(y))
+    c_s = 0.2
+    k_h = smagorinsky_k_h(wind_field_from_callable(grid, wind), grid, t=0.0, c_s=c_s)
+    # |D| = K_h / (c_s² Δx Δy)
+    deformation = np.asarray(k_h) / (c_s**2 * grid.dx * grid.dy)
+    expected = np.full(deformation.shape, rate)
+    if shear == "v_of_x":
+        expected[..., 0] = expected[..., -1] = rate / np.sqrt(2.0)
+    else:
+        expected[..., 0, :] = expected[..., -1, :] = rate / np.sqrt(2.0)
+    np.testing.assert_allclose(deformation, expected, rtol=1e-4)
+    np.testing.assert_allclose(deformation, deformation[:, ::-1, ::-1], rtol=1e-4)

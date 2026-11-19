@@ -31,6 +31,10 @@ from collections.abc import Callable
 import jax.numpy as jnp
 from jax import jit
 
+from plumax.gauss_plume._src.dispersion import (
+    STABILITY_CLASSES as STABILITY_CLASSES,
+    lookup_stability,
+)
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     calculate_briggs_dispersion,
@@ -43,9 +47,6 @@ DispersionFn = Callable[
     [jnp.ndarray, jnp.ndarray],
     tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray],
 ]
-
-
-STABILITY_CLASSES: tuple[str, ...] = ("A", "B", "C", "D", "E", "F")
 
 
 # Format: [a_y, b_y, c_y, a_z, b_z, c_z]
@@ -88,12 +89,9 @@ def get_pg_params(stability_class: str) -> jnp.ndarray:
     ValueError
         If ``stability_class`` is not one of A-F.
     """
-    if stability_class not in PG_DISPERSION_PARAMS:
-        raise ValueError(
-            f"get_pg_params: stability_class must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
-    return PG_DISPERSION_PARAMS[stability_class]
+    return lookup_stability(
+        PG_DISPERSION_PARAMS, stability_class, caller="get_pg_params"
+    )
 
 
 @jit

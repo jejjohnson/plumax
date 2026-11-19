@@ -22,27 +22,16 @@ import abc
 from typing import TYPE_CHECKING
 
 import equinox as eqx
-import jax
-import jax.core
 import jax.numpy as jnp
 import jax.scipy.stats as jstats
-import numpy as np
 from jaxtyping import Array, Float
 
 from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 
 
 if TYPE_CHECKING:
     import numpyro.distributions as dist
-
-
-def _require_positive(name: str, value: object) -> None:
-    # Traced values (a noise built inside jit or a NumPyro trace) skip the
-    # eager check; concrete ones get a clear error at construction.
-    if isinstance(value, jax.core.Tracer):
-        return
-    if not bool(np.all(np.asarray(value) > 0.0)):
-        raise ParameterError(f"{name} must be > 0, got {value!r}")
 
 
 class Noise(eqx.Module):
@@ -114,13 +103,13 @@ class GaussianNoise(Noise):
         >>> GaussianNoise(std=0.0)  # doctest: +IGNORE_EXCEPTION_DETAIL
         Traceback (most recent call last):
         ...
-        ParameterError: std must be > 0, got 0.0
+        ParameterError: `std` must be > 0 (got 0.0)
     """
 
     std: float | Float[Array, "*#obs"]
 
     def __check_init__(self) -> None:
-        _require_positive("std", self.std)
+        require_positive("std", self.std)
 
     def distribution(self, mean: Float[Array, "*obs"]) -> dist.Distribution:
         import numpyro.distributions as dist
@@ -173,8 +162,8 @@ class StudentTNoise(Noise):
     df: float = 5.0
 
     def __check_init__(self) -> None:
-        _require_positive("scale", self.scale)
-        _require_positive("df", self.df)
+        require_positive("scale", self.scale)
+        require_positive("df", self.df)
 
     def distribution(self, mean: Float[Array, "*obs"]) -> dist.Distribution:
         import numpyro.distributions as dist
@@ -221,7 +210,7 @@ class HeteroscedasticNoise(Noise):
     std: Float[Array, " obs"]
 
     def __check_init__(self) -> None:
-        _require_positive("std", self.std)
+        require_positive("std", self.std)
 
     @classmethod
     def from_variance(cls, variance: Float[Array, " obs"]) -> HeteroscedasticNoise:

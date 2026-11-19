@@ -18,8 +18,12 @@ Public surface
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import jax.numpy as jnp
 from jax import jit
+
+from plumax._src.errors import ParameterError
 
 
 STABILITY_CLASSES: tuple[str, ...] = ("A", "B", "C", "D", "E", "F")
@@ -34,6 +38,58 @@ BRIGGS_DISPERSION_PARAMS: dict[str, jnp.ndarray] = {
     "E": jnp.array([0.06, 0.0001, -0.5, 0.03, 0.0003, -1.0]),
     "F": jnp.array([0.04, 0.0001, -0.5, 0.016, 0.0003, -1.0]),
 }
+
+
+def check_stability(
+    stability_class: str,
+    *,
+    caller: str,
+    table: Mapping[str, jnp.ndarray] = BRIGGS_DISPERSION_PARAMS,
+) -> None:
+    """Fail unless ``stability_class`` is a key of ``table`` (one of A–F).
+
+    Args:
+        stability_class: The Pasquill–Gifford class.
+        caller: The public function the check guards, for the message.
+        table: The parameter table the class indexes.
+
+    Raises:
+        ParameterError: ``stability_class`` is not in ``table``. It subclasses
+            ``ValueError``.
+
+    Examples:
+        >>> check_stability("D", caller="simulate_plume")
+        >>> check_stability("G", caller="simulate_plume")
+        Traceback (most recent call last):
+        ...
+        plumax._src.errors.ParameterError: simulate_plume: `stability_class` must be one of ('A', 'B', 'C', 'D', 'E', 'F'), got 'G'
+    """
+    if stability_class not in table:
+        raise ParameterError(
+            f"{caller}: `stability_class` must be one of "
+            f"{STABILITY_CLASSES}, got {stability_class!r}"
+        )
+
+
+def lookup_stability(
+    table: Mapping[str, jnp.ndarray], stability_class: str, *, caller: str
+) -> jnp.ndarray:
+    """The parameter vector of ``stability_class`` in ``table``, after checking it.
+
+    Args:
+        table: A table of six parameters per class, such as
+            :data:`BRIGGS_DISPERSION_PARAMS`.
+        stability_class: The Pasquill–Gifford class.
+        caller: The public function the lookup serves, for the message.
+
+    Returns:
+        The class's parameter vector, shape (6,).
+
+    Raises:
+        ParameterError: ``stability_class`` is not in ``table``.
+    """
+    check_stability(stability_class, caller=caller, table=table)
+    return table[stability_class]
 
 
 def get_dispersion_params(stability_class: str) -> jnp.ndarray:
@@ -54,12 +110,18 @@ def get_dispersion_params(stability_class: str) -> jnp.ndarray:
     ValueError
         If ``stability_class`` is not one of A-F.
     """
-    if stability_class not in BRIGGS_DISPERSION_PARAMS:
-        raise ValueError(
-            f"get_dispersion_params: stability_class must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
-    return BRIGGS_DISPERSION_PARAMS[stability_class]
+    return lookup_stability(
+        BRIGGS_DISPERSION_PARAMS, stability_class, caller="get_dispersion_params"
+    )
+
+
+def stacked_params(table: Mapping[str, jnp.ndarray]) -> jnp.ndarray:
+    """The six parameters of every class, stacked in :data:`STABILITY_CLASSES` order.
+
+    Returns:
+        Shape (6, 6): one row per class A–F.
+    """
+    return jnp.stack([table[name] for name in STABILITY_CLASSES])
 
 
 @jit

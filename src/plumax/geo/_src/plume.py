@@ -38,14 +38,18 @@ declare ``fill_value=NaN``, and label images use ``0`` (see
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
 
+from plumax._src.constants import P_STANDARD, T_STANDARD
+from plumax._src.extras import require_extra
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
+from plumax.geo._src.plume_array import transect_line, wind_frame
 from plumax.geo.plume_array import (
     ColumnUnit,
     Connectivity,
@@ -65,6 +69,7 @@ try:
     import geopandas as gpd
     import pandas as pd
     from geoops.carrier import (
+        Coupling,
         affine_of,
         as_tuple,
         callable_name,
@@ -84,7 +89,6 @@ try:
     from georeader import vectorize
     from pipekit_ops import Operator
     from pyproj import CRS, Transformer
-    from shapely.geometry import LineString
     from shapely.ops import unary_union
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
@@ -115,6 +119,25 @@ def _single_band_nan(array: GeoArray | np.ndarray) -> np.ndarray:
     return squeeze_single_band(mask_invalid_to_nan(array))
 
 
+def _mask_and_enhancement(
+    geo_array: GeoArray | np.ndarray, plume_mask: GeoArray | np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Boolean ``(H, W)`` plume mask and NaN-filled ``(H, W)`` enhancement map.
+
+    Shared by :class:`IMEEstimate` and :class:`CrossSectionalFlux`.
+
+    Args:
+        geo_array: Column-enhancement carrier.
+        plume_mask: Plume mask on the same pixel grid.
+
+    Returns:
+        ``(mask, enhancement)``.
+    """
+    mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
+    enhancement = _single_band_nan(geo_array)
+    return mask, enhancement
+
+
 def _masked_mass(enhancement: np.ndarray, mask: np.ndarray, area: float) -> float:
     """∑ᵢ mᵢ Ωᵢ ΔA over an ``(H, W)`` map, with NaN pixels left out.
 
@@ -140,6 +163,72 @@ def _instance_labels(array: GeoArray | np.ndarray) -> np.ndarray:
     labels = squeeze_single_band(np.asarray(array)).astype(np.int64, copy=False)
     valid = squeeze_single_band(valid_pixels(array))
     return np.where(valid, labels, 0)
+
+
+def _label_fields(
+    geo_labels: GeoArray | np.ndarray,
+    column: GeoArray | np.ndarray,
+    name: str,
+    albedo: GeoArray | np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray | None]:
+    """Validate and extract the label map, column and optional albedo fields.
+
+    Shared preamble of :class:`PlumeColumnStats` and :class:`PlumeQNDFeatures`.
+
+    Args:
+        geo_labels: Instance label map.
+        column: Column field on the label map's grid.
+        name: Operator name used in error messages.
+        albedo: Optional albedo field on the label map's grid.
+
+    Returns:
+        ``(labels, column, albedo)`` as ``(H, W)`` arrays (``albedo`` is
+        ``None`` when not given).
+
+    Raises:
+        ValueError: If a field's grid or shape does not match the labels.
+    """
+    require_ndim(geo_labels, (2, 3), name)
+    require_grid_match(geo_labels, column, name, names=("labels", "column"))
+    if albedo is not None:
+        require_grid_match(geo_labels, albedo, name, names=("labels", "albedo"))
+    labels = _instance_labels(geo_labels)
+    col_arr = _single_band_nan(column).astype(float, copy=False)
+    if col_arr.shape != labels.shape:
+        raise ValueError(
+            f"column shape {col_arr.shape} does not match label shape {labels.shape}"
+        )
+    if albedo is None:
+        return labels, col_arr, None
+    alb_arr = _single_band_nan(albedo).astype(float, copy=False)
+    if alb_arr.shape != labels.shape:
+        raise ValueError(
+            f"albedo shape {alb_arr.shape} does not match label shape {labels.shape}"
+        )
+    return labels, col_arr, alb_arr
+
+
+def _instances_full(
+    labels: np.ndarray,
+) -> Iterator[tuple[int, np.ndarray, int]]:
+    """Yield ``(label, full_mask, area)`` per non-zero label.
+
+    ``full_mask`` is the instance's boolean mask on the full ``labels`` grid
+    and ``area`` its pixel count. One full-size mask exists at a time, so
+    memory stays O(H W) however many instances the raster holds.
+    """
+    for lbl, compact, bbox in _iter_instances(labels):
+        row_start, col_start, row_stop, col_stop = bbox
+        full_mask = np.zeros(labels.shape, dtype=bool)
+        full_mask[row_start:row_stop, col_start:col_stop] = compact
+        yield lbl, full_mask, int(compact.sum())
+
+
+def _frame(rows: list[dict[str, Any]], columns: list[str]) -> pd.DataFrame:
+    """DataFrame of ``rows``, or an empty frame with ``columns`` when none."""
+    if not rows:
+        return pd.DataFrame(columns=columns)
+    return pd.DataFrame(rows)
 
 
 class PlumeMask(Operator):
@@ -168,6 +257,10 @@ class PlumeMask(Operator):
         ...     threshold="percentile:99.5", min_area_px=50,
         ... )(enhancement)
     """
+
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    # a scene threshold, then connected components
+    coupling: ClassVar[Coupling] = Coupling(couples={"space"}, reach=None)
 
     def __init__(
         self,
@@ -213,6 +306,10 @@ class PlumeContours(Operator):
     Examples:
         >>> labels = PlumeContours(min_area_px=50)(mask)
     """
+
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    # connected components
+    coupling: ClassVar[Coupling] = Coupling(couples={"space"}, reach=None)
 
     def __init__(
         self,
@@ -284,6 +381,11 @@ class PlumeFootprint(Operator):
     Examples:
         >>> gdf = PlumeFootprint(min_area_m2=500.0)(mask, kg_m2)
     """
+
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"space"}, reach=None, kind="conversion"
+    )
 
     _terminal: ClassVar[bool] = True
 
@@ -502,6 +604,10 @@ class WindAdvectionCone(Operator):
         ... )(enhancement)
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    # depends only on the grid, the source and the wind
+    coupling: ClassVar[Coupling] = Coupling(reads_values=False)
+
     def __init__(
         self,
         *,
@@ -621,6 +727,11 @@ class IMEEstimate(Operator):
             print(result["emission_rate_kg_s"])
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"space"}, reach=None, kind="conversion"
+    )
+
     _terminal: ClassVar[bool] = True
 
     def __init__(
@@ -636,8 +747,7 @@ class IMEEstimate(Operator):
         self.length_method = length_method
         self.pixel_area_m2 = pixel_area_m2
         self.return_uncertainty = return_uncertainty
-        if uncertainty_fraction < 0.0:
-            raise ValueError("uncertainty_fraction must be non-negative")
+        require_positive("uncertainty_fraction", uncertainty_fraction, allow_zero=True)
         self.uncertainty_fraction = uncertainty_fraction
 
     def _apply(
@@ -649,8 +759,7 @@ class IMEEstimate(Operator):
         require_grid_match(
             geo_array, plume_mask, "IMEEstimate", names=("enhancement", "plume_mask")
         )
-        mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
-        enhancement = _single_band_nan(geo_array)
+        mask, enhancement = _mask_and_enhancement(geo_array, plume_mask)
         area = (
             self.pixel_area_m2
             if self.pixel_area_m2 is not None
@@ -730,6 +839,11 @@ class CrossSectionalFlux(Operator):
             )(kg_m2, mask)
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"space"}, reach=None, kind="conversion"
+    )
+
     _terminal: ClassVar[bool] = True
 
     def __init__(
@@ -760,10 +874,9 @@ class CrossSectionalFlux(Operator):
             names=("enhancement", "plume_mask"),
         )
         wind_norm = float(np.hypot(self.wind_u, self.wind_v))
-        if wind_norm == 0.0:
-            raise ValueError("wind vector must be non-zero")
-        mask = squeeze_single_band(np.asarray(plume_mask)).astype(bool)
-        enhancement = _single_band_nan(geo_array)
+        # e_∥, e_⊥ of the wind; raises on a zero wind vector
+        e_par, e_perp = wind_frame(self.wind_u, self.wind_v)
+        mask, enhancement = _mask_and_enhancement(geo_array, plume_mask)
         area = pixel_area(affine_of(geo_array))
         width = float(np.sqrt(area))
         easting, northing = pixel_centers(mask.shape, affine_of(geo_array))
@@ -789,18 +902,9 @@ class CrossSectionalFlux(Operator):
                 float(np.max(np.abs(across[mask]))) if mask.any() else width,
                 width,
             )
-            # s_c = s₀ + d w / ‖w‖
-            centre_x = self.source[0] + (self.wind_u / wind_norm) * distance
-            centre_y = self.source[1] + (self.wind_v / wind_norm) * distance
-            # e_⊥ = (−v, u) / ‖w‖
-            normal_x = -self.wind_v / wind_norm
-            normal_y = self.wind_u / wind_norm
-            line = LineString(
-                [
-                    (centre_x - normal_x * half_len, centre_y - normal_y * half_len),
-                    (centre_x + normal_x * half_len, centre_y + normal_y * half_len),
-                ]
-            )
+            # s_c = s₀ + d e_∥
+            centre = np.asarray(self.source, dtype=float) + distance * e_par
+            line = transect_line(centre, e_perp, -half_len, half_len)
             rows.append(
                 {
                     "geometry": line,
@@ -817,8 +921,9 @@ class ColumnToMass(Operator):
     """Convert column enhancement units (ppm m / mol m^-2 / kg m^-2).
 
     Thin wrapper over :func:`convert_column_units`. The ppm m conversion
-    assumes a standard molar volume (298.15 K, 1 atm); see that
-    function's docstring for the exact relation and caveats. Nodata
+    uses the ideal-gas air density at the layer's pressure and temperature,
+    the ISA sea-level 101 325 Pa and 288.15 K unless the scene's are given;
+    see that function's docstring for the exact relation. Nodata
     pixels (non-finite or equal to the fill value) are not converted:
     they hold ``NaN`` and the output declares ``fill_value=NaN``
     (a converted column is a new quantity, so the input's fill -- e.g.
@@ -828,6 +933,8 @@ class ColumnToMass(Operator):
         gas: ``"CH4"`` (default) or ``"CO2"``.
         units_in: Units of the input carrier.
         units_out: Desired output units.
+        pressure_pa: Layer pressure p [Pa] for the ppm m conversion.
+        temperature_k: Layer temperature T [K] for the ppm m conversion.
 
     Examples:
         >>> kg_m2 = ColumnToMass(
@@ -835,16 +942,23 @@ class ColumnToMass(Operator):
         ... )(enhancement)
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling()
+
     def __init__(
         self,
         *,
         gas: str = "CH4",
         units_in: ColumnUnit = "ppm_m",
         units_out: ColumnUnit = "kg_m2",
+        pressure_pa: float = P_STANDARD,
+        temperature_k: float = T_STANDARD,
     ) -> None:
         self.gas = gas
         self.units_in = units_in
         self.units_out = units_out
+        self.pressure_pa = pressure_pa
+        self.temperature_k = temperature_k
 
     def _apply(self, column: GeoArray | np.ndarray) -> GeoArray | np.ndarray:
         out = convert_column_units(
@@ -852,6 +966,8 @@ class ColumnToMass(Operator):
             gas=self.gas,
             units_in=self.units_in,
             units_out=self.units_out,
+            pressure_pa=self.pressure_pa,
+            temperature_k=self.temperature_k,
         )
         if np.ndim(out) < 2:
             return wrap_like(column, out)
@@ -922,6 +1038,10 @@ class PlumeShapeFilter(Operator):
         max_fiber_width: Upper bound on ``area / fiber_length``.
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    # shape measures of connected components
+    coupling: ClassVar[Coupling] = Coupling(couples={"space"}, reach=None)
+
     def __init__(
         self,
         *,
@@ -931,8 +1051,7 @@ class PlumeShapeFilter(Operator):
         min_fiber_width: float = 1.0,
         max_fiber_width: float = 100.0,
     ) -> None:
-        if min_area_px < 0:
-            raise ValueError("min_area_px must be non-negative")
+        require_positive("min_area_px", min_area_px, allow_zero=True)
         if min_fiber_to_major_ratio < 0 or max_fiber_to_major_ratio <= 0:
             raise ValueError("fiber-to-major ratio bounds must be non-negative")
         if min_fiber_to_major_ratio > max_fiber_to_major_ratio:
@@ -1047,34 +1166,26 @@ class PlumeColumnStats(Operator):
     grid (``ValueError`` otherwise).
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"space"}, reach=None, kind="conversion"
+    )
+
     _terminal: ClassVar[bool] = True
 
     def _apply(
         self, geo_labels: GeoArray | np.ndarray, column: GeoArray | np.ndarray
     ) -> pd.DataFrame:
-        require_ndim(geo_labels, (2, 3), "PlumeColumnStats")
-        require_grid_match(
-            geo_labels, column, "PlumeColumnStats", names=("labels", "column")
-        )
-        labels = _instance_labels(geo_labels)
-        col_arr = _single_band_nan(column).astype(float, copy=False)
-        if col_arr.shape != labels.shape:
-            raise ValueError(
-                "column shape "
-                f"{col_arr.shape} does not match label shape {labels.shape}"
-            )
+        labels, col_arr, _ = _label_fields(geo_labels, column, "PlumeColumnStats")
         rows: list[dict[str, Any]] = []
-        for lbl, compact, bbox in _iter_instances(labels):
-            row_start, col_start, row_stop, col_stop = bbox
-            full_mask = np.zeros_like(col_arr, dtype=bool)
-            full_mask[row_start:row_stop, col_start:col_stop] = compact
+        for lbl, full_mask, area in _instances_full(labels):
             mean_plume, background_mean, background_std, contrast, z_score, ipa = (
                 _in_out_mask_stats(col_arr, full_mask)
             )
             rows.append(
                 {
                     "label": lbl,
-                    "area": int(compact.sum()),
+                    "area": area,
                     "mean_enhancement": mean_plume,
                     "background_mean": background_mean,
                     "background_std": background_std,
@@ -1083,20 +1194,19 @@ class PlumeColumnStats(Operator):
                     "intensity_per_area": ipa,
                 }
             )
-        if not rows:
-            return pd.DataFrame(
-                columns=[
-                    "label",
-                    "area",
-                    "mean_enhancement",
-                    "background_mean",
-                    "background_std",
-                    "contrast",
-                    "z_score",
-                    "intensity_per_area",
-                ]
-            )
-        return pd.DataFrame(rows)
+        return _frame(
+            rows,
+            [
+                "label",
+                "area",
+                "mean_enhancement",
+                "background_mean",
+                "background_std",
+                "contrast",
+                "z_score",
+                "intensity_per_area",
+            ],
+        )
 
 
 def _qnd_polynomial(
@@ -1153,13 +1263,12 @@ def _dbscan_clump_count(
     DBSCAN cluster into multiple "clumps" whenever its members are within
     ``eps`` but not 4-adjacent.
     """
-    try:
-        from sklearn.cluster import DBSCAN
-    except ModuleNotFoundError as err:  # pragma: no cover - scikit-learn is in [geo]
-        raise MissingExtraError(
-            "PlumeQNDFeatures counts clumps with scikit-learn's DBSCAN: "
-            "pip install 'plumax[geo]'"
-        ) from err
+    DBSCAN = require_extra(
+        "sklearn.cluster",
+        extra="geo",
+        caller="PlumeQNDFeatures",
+        purpose="counts clumps with scikit-learn's DBSCAN",
+    ).DBSCAN
 
     in_mask = values[mask]
     in_mask = in_mask[np.isfinite(in_mask)]
@@ -1212,6 +1321,11 @@ class PlumeQNDFeatures(Operator):
             pixels are eligible for clustering.
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"space"}, reach=None, kind="conversion"
+    )
+
     _terminal: ClassVar[bool] = True
 
     def __init__(
@@ -1224,8 +1338,7 @@ class PlumeQNDFeatures(Operator):
     ) -> None:
         if degree < 1:
             raise ValueError("degree must be >= 1")
-        if eps <= 0:
-            raise ValueError("eps must be positive")
+        require_positive("eps", eps)
         if min_samples < 1:
             raise ValueError("min_samples must be >= 1")
         if not 0.0 < perc_threshold < 100.0:
@@ -1241,38 +1354,14 @@ class PlumeQNDFeatures(Operator):
         column: GeoArray | np.ndarray,
         albedo: GeoArray | np.ndarray | None = None,
     ) -> pd.DataFrame:
-        require_ndim(geo_labels, (2, 3), "PlumeQNDFeatures")
-        require_grid_match(
-            geo_labels, column, "PlumeQNDFeatures", names=("labels", "column")
+        labels, col_arr, alb_arr = _label_fields(
+            geo_labels, column, "PlumeQNDFeatures", albedo
         )
-        if albedo is not None:
-            require_grid_match(
-                geo_labels, albedo, "PlumeQNDFeatures", names=("labels", "albedo")
-            )
-        labels = _instance_labels(geo_labels)
-        col_arr = _single_band_nan(column).astype(float, copy=False)
-        if col_arr.shape != labels.shape:
-            raise ValueError(
-                "column shape "
-                f"{col_arr.shape} does not match label shape {labels.shape}"
-            )
-        if albedo is None:
-            alb_arr = None
-        else:
-            alb_arr = _single_band_nan(albedo).astype(float, copy=False)
-            if alb_arr.shape != labels.shape:
-                raise ValueError(
-                    "albedo shape "
-                    f"{alb_arr.shape} does not match label shape {labels.shape}"
-                )
 
         col_keys = [f"qnd_column_c{power}" for power in range(self.degree + 1)]
         alb_keys = [f"qnd_albedo_c{power}" for power in range(self.degree + 1)]
         rows: list[dict[str, Any]] = []
-        for lbl, compact, bbox in _iter_instances(labels):
-            row_start, col_start, row_stop, col_stop = bbox
-            full_mask = np.zeros_like(col_arr, dtype=bool)
-            full_mask[row_start:row_stop, col_start:col_stop] = compact
+        for lbl, full_mask, area in _instances_full(labels):
             qnd_col = _qnd_polynomial(col_arr, full_mask, self.degree)
             qnd_alb = (
                 _qnd_polynomial(alb_arr, full_mask, self.degree)
@@ -1291,7 +1380,7 @@ class PlumeQNDFeatures(Operator):
             )
             row: dict[str, Any] = {
                 "label": lbl,
-                "area": int(compact.sum()),
+                "area": area,
                 "n_clumps": num_clumps,
                 "contrast": contrast,
                 "z_score": z_score,
@@ -1301,8 +1390,9 @@ class PlumeQNDFeatures(Operator):
             row.update(dict(zip(alb_keys, qnd_alb.tolist(), strict=True)))
             rows.append(row)
 
-        if not rows:
-            empty_cols = [
+        return _frame(
+            rows,
+            [
                 "label",
                 "area",
                 "n_clumps",
@@ -1311,6 +1401,5 @@ class PlumeQNDFeatures(Operator):
                 "intensity_per_area",
                 *col_keys,
                 *alb_keys,
-            ]
-            return pd.DataFrame(columns=empty_cols)
-        return pd.DataFrame(rows)
+            ],
+        )

@@ -25,7 +25,8 @@ from jax.typing import ArrayLike
 from jaxtyping import Float, Int
 from scipy import stats
 
-from plumax._src.tracing import _is_traced
+from plumax._src.nuts import run_nuts
+from plumax._src.tracing import require_positive
 from plumax.population._src._xtremax import require_xtremax
 
 
@@ -149,12 +150,8 @@ def fit_poisson_rate(
         ValueError: If ``area`` or ``duration`` is non-positive (skipped
             for traced values).
     """
-    if not _is_traced(area) and float(area) <= 0.0:
-        msg = f"area must be positive, got {area!r}"
-        raise ValueError(msg)
-    if not _is_traced(duration) and float(duration) <= 0.0:
-        msg = f"duration must be positive, got {duration!r}"
-        raise ValueError(msg)
+    require_positive("area", area)
+    require_positive("duration", duration)
 
     num_events = catalog.n_events
     exposure = float(area) * float(duration)
@@ -275,14 +272,11 @@ def fit_inhomogeneous_intensity(
             f"quadrature_covariates, got {weights.shape} vs ({quad.shape[0]},)"
         )
         raise ValueError(msg)
-    if np.any(weights <= 0.0):
-        msg = "quadrature_weights must be strictly positive"
-        raise ValueError(msg)
+    require_positive("quadrature_weights", weights)
 
     import jax
     import numpyro
     import numpyro.distributions as dist
-    from numpyro.infer import MCMC, NUTS
 
     num_covariates = cov.shape[1]
     cov_j = jax.numpy.asarray(cov)
@@ -301,21 +295,16 @@ def fit_inhomogeneous_intensity(
         )
         numpyro.factor("point_process", log_likelihood)
 
-    kernel = NUTS(model)
-    mcmc = MCMC(
-        kernel,
+    samples = run_nuts(
+        model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress_bar=False,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
         event_covariates=cov_j,
         node_covariates=quad_j,
         node_weights=weights_j,
     )
-    samples = mcmc.get_samples()
     return InhomogeneousIntensityPosterior(
         beta0_samples=np.asarray(samples["beta0"]),
         beta_samples=np.asarray(samples["beta"]),

@@ -243,14 +243,26 @@ class StackedObservations(eqx.Module):
 
 def stack_observations(
     instruments: Sequence[Instrument],
-    observations: Sequence[Float[Array, " _"]],
+    observations: Sequence[Float[Array, " ..."]],
+    *,
+    masks: Sequence[Float[Array, " ..."]] | None = None,
+    variances: Sequence[Float[Array, " ..."]] | None = None,
 ) -> StackedObservations:
     """Stack the instruments' observations, masks and variances for vardax.
+
+    Each instrument's observation, mask and variance is flattened and the
+    blocks are concatenated; this is the one place that checks the shapes and
+    zeroes the masked pixels.
 
     Args:
         instruments: The instruments, with any quality policy already applied.
         observations: One observation vector per instrument, aligned with
             ``instruments``. Masked entries may hold anything, NaN included.
+        masks: A mask per instrument in place of its ``observation_mask()``,
+            for observations with more than one value per pixel (a radiance
+            channel axis). The observation must have the mask's shape.
+        variances: A variance per instrument in place of its
+            ``observation_variance()``, with the shape of the mask.
 
     Returns:
         The stacked observations, masked entries set to zero.
@@ -273,23 +285,28 @@ def stack_observations(
             f"stack_observations: got {len(observations)} observation vectors for "
             f"{len(instruments)} instruments."
         )
-    values, masks, variances = [], [], []
-    for instrument, observation in zip(instruments, observations, strict=True):
-        if np.shape(observation) != (instrument.n_obs,):
+    values, mask_blocks, variance_blocks = [], [], []
+    for index, (instrument, observation) in enumerate(
+        zip(instruments, observations, strict=True)
+    ):
+        mask = instrument.observation_mask() if masks is None else masks[index]
+        variance = (
+            instrument.observation_variance() if variances is None else variances[index]
+        )
+        if np.shape(observation) != mask.shape:
             raise ValueError(
                 f"stack_observations: observation for {instrument.name!r} must be "
-                f"({instrument.n_obs},); got {np.shape(observation)}."
+                f"{mask.shape}; got {np.shape(observation)}."
             )
-        mask = instrument.observation_mask()
         # y_i = 0 where m_i = 0, so a NaN never reaches the cost
         filled = jnp.where(mask > 0.0, jnp.asarray(observation, dtype=float), 0.0)
-        values.append(filled)
-        masks.append(mask)
-        variances.append(instrument.observation_variance())
+        values.append(einx.id("... -> (...)", filled))
+        mask_blocks.append(einx.id("... -> (...)", mask))
+        variance_blocks.append(einx.id("... -> (...)", variance))
     return StackedObservations(
         values=jnp.concatenate(values),
-        mask=jnp.concatenate(masks),
-        variance=jnp.concatenate(variances),
+        mask=jnp.concatenate(mask_blocks),
+        variance=jnp.concatenate(variance_blocks),
     )
 
 

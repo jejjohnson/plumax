@@ -9,19 +9,19 @@ alternative.
 
 from __future__ import annotations
 
-import math
 from typing import Literal
 
 import einx
 import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
+from kernellib.functional import matern_kernel
 
 from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 
 
 #: √3, the scale of the Matérn-3/2 kernel.
-_SQRT_THREE = math.sqrt(3.0)
 
 _KINDS = ("matern32", "random_walk")
 
@@ -94,12 +94,9 @@ class CentrelinePrior(eqx.Module):
     jitter: float = 1e-8
 
     def __check_init__(self) -> None:
-        if self.length_scale <= 0.0:
-            raise ParameterError(f"length_scale must be > 0, got {self.length_scale}")
-        if self.amplitude <= 0.0:
-            raise ParameterError(f"amplitude must be > 0, got {self.amplitude}")
-        if self.jitter < 0.0:
-            raise ParameterError(f"jitter must be ≥ 0, got {self.jitter}")
+        require_positive("length_scale", self.length_scale)
+        require_positive("amplitude", self.amplitude)
+        require_positive("jitter", self.jitter, allow_zero=True)
         if self.kind not in _KINDS:
             raise ParameterError(
                 f"kind must be one of {list(_KINDS)}, got {self.kind!r}"
@@ -120,17 +117,14 @@ class CentrelinePrior(eqx.Module):
             conditioned = increment * shared
         else:
             # --- kernel between the knots ---
-            # r_jk = |d_j − d_k|
-            difference = einx.subtract(
-                "row, col -> row col", knot_distance, knot_distance
-            )
-            separation = jnp.abs(difference)
-            # k(d_j, d_k) = σ_m² (1 + √3 r / ℓ) exp(−√3 r / ℓ)
-            gram_knots = self._matern(separation)
+            knots = einx.id("knot -> knot 1", knot_distance)
+            source = jnp.zeros((1, 1), dtype=knots.dtype)
+            # k(d_j, d_k) = σ_m² (1 + √3 r / ℓ) exp(−√3 r / ℓ), r = |d_j − d_k|
+            gram_knots = self._matern(knots, knots)
 
             # --- condition on m(0) = 0 ---
             # k(d_j, 0)
-            gram_source = self._matern(jnp.abs(knot_distance))
+            gram_source = einx.id("knot 1 -> knot", self._matern(knots, source))
             # k(d_j, 0) k(0, d_k) / k(0, 0)
             outer = einx.multiply("row, col -> row col", gram_source, gram_source)
             correction = outer / source_variance
@@ -144,11 +138,17 @@ class CentrelinePrior(eqx.Module):
         covariance = conditioned + self.jitter * source_variance * identity
         return covariance
 
-    def _matern(self, separation: Float[Array, "*shape"]) -> Float[Array, "*shape"]:
-        # √3 r / ℓ
-        scaled = _SQRT_THREE * separation / self.length_scale
-        # σ_m² (1 + √3 r / ℓ) exp(−√3 r / ℓ)
-        return self.amplitude**2 * (1.0 + scaled) * jnp.exp(-scaled)
+    def _matern(
+        self, first: Float[Array, "row 1"], second: Float[Array, "col 1"]
+    ) -> Float[Array, "row col"]:
+        # σ_m² (1 + √3 r / ℓ) exp(−√3 r / ℓ), from kernellib
+        return matern_kernel(
+            first,
+            second,
+            jnp.asarray(self.amplitude**2),
+            jnp.asarray(self.length_scale),
+            1.5,
+        )
 
 
 __all__ = ["CentrelinePrior"]

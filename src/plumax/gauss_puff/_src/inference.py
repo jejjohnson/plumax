@@ -13,8 +13,8 @@ wind schedule. This module provides:
   ``Q_i`` under a random-walk prior, for state-estimation workflows.
 
 The log-space prior parameters are derived from real-scale ``(mean, std)``
-via :func:`plumax.gauss_plume.inference._lognormal_from_moments`,
-reused here to keep the plume and puff inference helpers aligned.
+via :meth:`plumax._src.scalar_emission.LognormalEmission.from_moments`,
+shared with the plume inference helpers.
 """
 
 from __future__ import annotations
@@ -27,12 +27,14 @@ import numpyro
 import numpyro.distributions as dist
 from jaxtyping import Array, Float
 from numpy.typing import NDArray
-from numpyro.infer import MCMC, NUTS
 
-from plumax.gauss_plume._src.inference import _lognormal_from_moments
+from plumax._src.checks import check_observations
+from plumax._src.nuts import run_nuts
+from plumax._src.scalar_emission import LognormalEmission
+from plumax._src.tracing import require_positive
+from plumax.gauss_plume._src.dispersion import check_stability
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
 from plumax.gauss_puff.dispersion import (
-    STABILITY_CLASSES,
     get_dispersion_scheme,
 )
 from plumax.gauss_puff.puff import (
@@ -277,17 +279,17 @@ def gaussian_puff_model(
         release_interval,
     )
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
-    if stability_class not in scheme_params_dict:
-        raise ValueError(
-            f"gaussian_puff_model: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    check_stability(
+        stability_class, caller="gaussian_puff_model", table=scheme_params_dict
+    )
     dispersion_params = scheme_params_dict[stability_class]
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
-    emission_rate = numpyro.sample("emission_rate", dist.LogNormal(log_mean, log_std))
+    emission_rate = numpyro.sample(
+        "emission_rate", dist.LogNormal(emission.loc, emission.scale)
+    )
     background = numpyro.sample("background", dist.HalfNormal(background_prior_std))
 
     # The forward model is evaluated whenever its inputs are present —
@@ -359,11 +361,9 @@ def gaussian_puff_rw_model(
     ``noise`` override (default ``GaussianNoise(obs_noise_std)``).
     """
     scheme_params_dict, dispersion_fn = get_dispersion_scheme(scheme)
-    if stability_class not in scheme_params_dict:
-        raise ValueError(
-            f"gaussian_puff_rw_model: `stability_class` must be one of "
-            f"{STABILITY_CLASSES}, got {stability_class!r}"
-        )
+    check_stability(
+        stability_class, caller="gaussian_puff_rw_model", table=scheme_params_dict
+    )
     dispersion_params = scheme_params_dict[stability_class]
 
     num_puffs = release_times.shape[0]
@@ -373,7 +373,7 @@ def gaussian_puff_rw_model(
             "got n_puffs=0. Check that t_end − t_start ≥ 1/release_frequency."
         )
 
-    log_mean, log_std = _lognormal_from_moments(
+    emission = LognormalEmission.from_moments(
         prior_emission_rate_mean, prior_emission_rate_std
     )
 
@@ -384,7 +384,7 @@ def gaussian_puff_rw_model(
     # Build ln Q_i by cumulative sum of scaled innovations, first anchored
     # to the LogNormal prior location.
     # ln Q₀ = μ_log + σ_log ε₀
-    first = log_mean + log_std * innovations[0]
+    first = emission.loc + emission.scale * innovations[0]
     # δ_i = σ_rw ε_i
     increments = rw_step_std * innovations[1:]
     # ln Q_i = ln Q₀ + Σ_{j ≤ i} δ_j
@@ -441,21 +441,7 @@ def _validate_inference_inputs(
 
     Returns the coerced ``(obs, coords, times)`` NumPy views on success.
     """
-    obs = np.asarray(observations)
-    if obs.size == 0:
-        raise ValueError(f"{func_name}: `observations` must contain ≥ 1 point")
-    if len(observation_coords) != 3:
-        raise ValueError(
-            f"{func_name}: `observation_coords` must be (x, y, z); "
-            f"got length {len(observation_coords)}"
-        )
-    coords = tuple(np.asarray(coord) for coord in observation_coords)
-    for axis_name, arr in zip("xyz", coords, strict=False):
-        if arr.shape != obs.shape:
-            raise ValueError(
-                f"{func_name}: `observation_coords` axis '{axis_name}' "
-                f"has shape {arr.shape} ≠ observations shape {obs.shape}"
-            )
+    obs, coords = check_observations(func_name, observations, observation_coords)
     times = np.asarray(observation_times)
     if times.shape != obs.shape:
         raise ValueError(
@@ -499,19 +485,14 @@ def _validate_inference_inputs(
         raise ValueError(
             f"{func_name}: `source_location` must contain exactly three values"
         )
-    if not (release_frequency > 0.0):
-        raise ValueError(
-            f"{func_name}: `release_frequency` must be > 0 (got {release_frequency!r})"
-        )
+    require_positive("release_frequency", release_frequency, caller=func_name)
     if not (t_end > t_start):
         raise ValueError(
             f"{func_name}: `t_end` must be > `t_start` "
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
-    if not (prior_mean > 0.0):
-        raise ValueError(f"{func_name}: `prior_mean` must be > 0 (got {prior_mean!r})")
-    if not (prior_std > 0.0):
-        raise ValueError(f"{func_name}: `prior_std` must be > 0 (got {prior_std!r})")
+    require_positive("prior_mean", prior_mean, caller=func_name)
+    require_positive("prior_std", prior_std, caller=func_name)
     return obs, coords, times
 
 
@@ -601,15 +582,14 @@ def infer_emission_rate(
     coords_jax = tuple(jnp.asarray(coord) for coord in coords)
     times_jax = jnp.asarray(times)
 
-    mcmc = MCMC(
-        NUTS(gaussian_puff_model),
+    draws = run_nuts(
+        gaussian_puff_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
+        print_summary=print_summary,
         observations=obs_jax,
         receptor_coords=coords_jax,
         observation_times=times_jax,
@@ -625,9 +605,7 @@ def infer_emission_rate(
         obs_noise_std=obs_noise_std,
         noise=noise,
     )
-    if print_summary:
-        mcmc.print_summary()
-    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}
+    return {site: np.asarray(value) for site, value in draws.items()}
 
 
 def infer_emission_timeseries(
@@ -680,31 +658,22 @@ def infer_emission_timeseries(
         prior_mean,
         prior_std,
     )
-    if not (rw_step_std > 0.0):
-        raise ValueError(
-            "infer_emission_timeseries: `rw_step_std` must be > 0 "
-            f"(got {rw_step_std!r})"
-        )
-    if not (obs_noise_std > 0.0):
-        raise ValueError(
-            "infer_emission_timeseries: `obs_noise_std` must be > 0 "
-            f"(got {obs_noise_std!r})"
-        )
+    require_positive("rw_step_std", rw_step_std, caller="infer_emission_timeseries")
+    require_positive("obs_noise_std", obs_noise_std, caller="infer_emission_timeseries")
 
     schedule = WindSchedule.from_speed_direction(wind_times, wind_speed, wind_direction)
     release_times = make_release_times(t_start, t_end, release_frequency)
     release_interval = frequency_to_release_interval(release_frequency)
     puff_durations = release_durations(release_times, t_end)
 
-    mcmc = MCMC(
-        NUTS(gaussian_puff_rw_model),
+    draws = run_nuts(
+        gaussian_puff_rw_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
+        print_summary=print_summary,
         observations=jnp.asarray(obs),
         receptor_coords=tuple(jnp.asarray(coord) for coord in coords),
         observation_times=jnp.asarray(times),
@@ -721,6 +690,4 @@ def infer_emission_timeseries(
         obs_noise_std=obs_noise_std,
         noise=noise,
     )
-    if print_summary:
-        mcmc.print_summary()
-    return {site: np.asarray(draws) for site, draws in mcmc.get_samples().items()}
+    return {site: np.asarray(value) for site, value in draws.items()}

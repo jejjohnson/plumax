@@ -20,20 +20,18 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from plumax._src.constants import (
+    CP_DRY as CP_DRY,
+    GRAVITY as GRAVITY,
+    KARMAN as KARMAN,
+    P_REFERENCE as P_REFERENCE,
+    R_DRY as R_DRY,
+)
 from plumax._src.errors import PlumaxError
+from plumax._src.tracing import require
 from plumax.met.field import MetField
 
 
-#: von Kármán constant κ.
-KARMAN = 0.4
-#: Gravitational acceleration g [m s⁻²].
-GRAVITY = 9.80665
-#: Dry-air gas constant R_d [J kg⁻¹ K⁻¹].
-R_DRY = 287.04
-#: Specific heat of dry air at constant pressure c_p [J kg⁻¹ K⁻¹].
-CP_DRY = 1004.5
-#: Reference pressure of potential temperature p_ref [Pa].
-P_REFERENCE = 1.0e5
 #: Floor on ``u*`` [m s⁻¹] where it divides ``1/L``, so calm columns stay finite.
 U_STAR_FLOOR = 1.0e-3
 
@@ -325,7 +323,7 @@ class MoninObukhov(eqx.Module):
         sensible_heat_flux: float | Float[Array, "*#columns"],
     ) -> SurfaceLayer:
         z0 = jnp.asarray(z0, dtype=field.u.dtype)
-        z0 = eqx.error_if(z0, jnp.any(z0 <= 0.0), "z0 must be positive")
+        z0 = require(z0 > 0.0, "z0 must be positive", value=z0)
 
         # --- lowest level ---
         # z = Δz / 2 above the grid's surface

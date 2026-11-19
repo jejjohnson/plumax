@@ -34,17 +34,21 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import einx
-import gaussx as gx
 import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 
-from plumax._src.errors import PayloadError
-from plumax._src.scalar_emission import GaussianEmission
-from plumax._src.vardax import require_vardax
+from plumax._src.scalar_emission import GaussianEmission, require_prior, require_scalar
+from plumax._src.tracing import require_positive
+from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax
 from plumax.coupled.forward import CoupledForward
-from plumax.coupled.quality import QualityPolicy, apply_quality, full_weight_pixels
+from plumax.coupled.quality import (
+    QualityPolicy,
+    apply_quality,
+    full_weight_pixels,
+    stack_observations,
+)
 
 
 @dataclass(frozen=True)
@@ -103,7 +107,7 @@ class FusionPosterior:
         Raises:
             PayloadError: For design-matrix (vector) emissions.
         """
-        self._require_scalar("samples")
+        require_scalar(self.emission_rate, owner="FusionPosterior", method="samples")
         return GaussianEmission(self.emission_rate, self.emission_std).sample(key, n)
 
     def prior_logpdf(self, q: jax.Array) -> jax.Array:
@@ -112,40 +116,34 @@ class FusionPosterior:
         Raises:
             PayloadError: For vector emissions, or without the prior.
         """
-        self._require_scalar("prior_logpdf")
-        if self.prior_mean is None or self.prior_covariance is None:
-            raise PayloadError(
-                "FusionPosterior.prior_logpdf: this posterior carries no prior; "
-                "build it with fuse_observations."
-            )
+        require_scalar(
+            self.emission_rate, owner="FusionPosterior", method="prior_logpdf"
+        )
+        require_prior(
+            "FusionPosterior.prior_logpdf",
+            built_with="fuse_observations",
+            prior_mean=self.prior_mean,
+            prior_covariance=self.prior_covariance,
+        )
         prior_std = jnp.sqrt(self.prior_covariance[0, 0])
         return GaussianEmission(self.prior_mean[0], prior_std).log_prob(q)
-
-    def _require_scalar(self, method: str) -> None:
-        if jnp.ndim(self.emission_rate) != 0:
-            raise PayloadError(
-                f"FusionPosterior.{method}: the Tier V payload is for a scalar Q; "
-                "this posterior has one emission per design-matrix column."
-            )
 
 
 def _stack_design(
     forward: CoupledForward,
-) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
-    """Build the stacked design matrix ``G``, observation variance and background.
+) -> tuple[jax.Array, jax.Array]:
+    """Build the stacked design matrix ``G`` and the background offset.
 
     ``G`` has shape ``(n_total_obs, n_param + n_inst)``: the first ``n_param``
     columns are the concatenated unit-``Q`` responses (one column for a scalar
     ``Q``); column ``n_param + i`` is the indicator (ones) for the rows
-    belonging to instrument ``i`` (its additive bias). Returns
-    ``(G, r, m, bg)`` with ``r`` the stacked observation variance, ``m`` the
-    stacked observation mask and ``bg`` the stacked background offset.
+    belonging to instrument ``i`` (its additive bias). Returns ``(G, bg)``
+    with ``bg`` the background offset; the observation mask and variance come
+    from :func:`plumax.coupled.quality.stack_observations`.
     """
     num_instruments = len(forward.instruments)
     cols_bias = []
     response_blocks = []
-    var_blocks = []
-    mask_blocks = []
     for index, (inst, resp) in enumerate(
         zip(forward.instruments, forward.responses, strict=True)
     ):
@@ -155,18 +153,14 @@ def _stack_design(
             response_blocks.append(einx.id("obs -> obs 1", resp))
         else:
             response_blocks.append(resp)
-        var_blocks.append(inst.observation_variance())
-        mask_blocks.append(inst.observation_mask())
         indicator = jnp.zeros((obs_size, num_instruments)).at[:, index].set(1.0)
         cols_bias.append(indicator)
     response = jnp.concatenate(response_blocks, axis=0)
     bias_cols = jnp.concatenate(cols_bias, axis=0)
     # G = [R_Q | bias indicators]
     design = einx.id("obs param, obs inst -> obs (param + inst)", response, bias_cols)
-    obs_variance = jnp.concatenate(var_blocks)
-    mask = jnp.concatenate(mask_blocks)
     background = jnp.asarray(forward.source.background, dtype=float)
-    return design, obs_variance, mask, background
+    return design, background
 
 
 def _n_emission_params(forward: CoupledForward) -> int:
@@ -217,11 +211,10 @@ def _information_form_analysis(
         ImportError: Without the ``assim`` extra.
     """
     vdx = require_vardax("fuse_observations")
-    psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
     analysis = vdx.OptimalInterpolation(
         obs_op=vdx.LinearObs(operator=lx.MatrixLinearOperator(design)),
         prior_mean=prior_mean,
-        prior_cov_op=lx.MatrixLinearOperator(prior_covariance, psd),
+        prior_cov_op=lx.MatrixLinearOperator(prior_covariance, PSD_TAGS),
         obs_cov_op=lx.DiagonalLinearOperator(obs_variance),
         form="state",
         solver=lx.Cholesky(),
@@ -233,8 +226,10 @@ def _information_form_analysis(
     posterior = analysis.posterior(batch)
     state_size = prior_mean.shape[0]
     # P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹, one lazy mat-vec per basis vector
-    covariance = jax.vmap(posterior.cov.mv)(jnp.eye(state_size, dtype=prior_mean.dtype))
-    return posterior.mean, gx.symmetrize(covariance)
+    covariance = dense_covariance(
+        posterior.cov, state_size, prior_mean.dtype, rows=False
+    )
+    return posterior.mean, covariance
 
 
 def fuse_observations(
@@ -315,20 +310,13 @@ def fuse_observations(
             f"fuse_observations: got {len(observations)} observation vectors for "
             f"{num_instruments} instruments."
         )
-    obs_blocks = []
-    for inst, obs in zip(forward.instruments, observations, strict=True):
-        observed = jnp.asarray(obs, dtype=float)
-        if observed.shape != (inst.n_obs,):
-            raise ValueError(
-                f"fuse_observations: observation for {inst.name!r} must be "
-                f"({inst.n_obs},); got {observed.shape}."
-            )
-        obs_blocks.append(observed)
-    stacked_obs = jnp.concatenate(obs_blocks)
-
-    design, obs_variance, mask, background = _stack_design(forward)
+    # shape check, masked-pixel zero, and the stacked mask and variance
+    stacked = stack_observations(forward.instruments, observations)
+    design, background = _stack_design(forward)
+    mask = stacked.mask
+    obs_variance = stacked.variance
     # y − c_bg
-    shifted_obs = stacked_obs - background
+    shifted_obs = stacked.values - background
     posterior_mean, posterior_cov = _information_form_analysis(
         design,
         shifted_obs,
@@ -379,8 +367,8 @@ def default_prior(
     Returns:
         ``(prior_mean, prior_covariance)`` ready for :func:`fuse_observations`.
     """
-    if emission_prior_std <= 0.0 or bias_prior_std <= 0.0:
-        raise ValueError("default_prior: prior standard deviations must be > 0.")
+    require_positive("emission_prior_std", emission_prior_std, caller="default_prior")
+    require_positive("bias_prior_std", bias_prior_std, caller="default_prior")
     mean = jnp.concatenate([jnp.array([emission_prior_mean]), jnp.zeros(n_instruments)])
     variances = np.concatenate(
         [[emission_prior_std**2], np.full(n_instruments, bias_prior_std**2)]

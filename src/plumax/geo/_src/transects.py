@@ -29,12 +29,15 @@ from jaxtyping import Bool, Float
 from scipy import ndimage, optimize, signal
 
 from plumax._src.errors import DomainError, ParameterError
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
+from plumax.geo._src.plume_array import angle_frame, transect_line
 from plumax.geo.plume_array import pixel_area, squeeze_single_band
 
 
 try:
     import geopandas as gpd
+    from functax.geometry import to_pixel
     from geoops.carrier import (
         affine_of,
         as_tuple,
@@ -44,7 +47,6 @@ try:
         require_projected_crs,
     )
     from pipekit_ops import Operator
-    from shapely.geometry import LineString
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.transects needs the [geo] extra: pip install 'plumax[geo]'"
@@ -175,8 +177,7 @@ def cross_plume_transects(
         -half_samples, half_samples + 1, dtype=np.float64
     )
     # e_∥ = (cos φ, sin φ),  e_⊥ = (−sin φ, cos φ)
-    along = np.array([math.cos(direction), math.sin(direction)])
-    across = np.array([-math.sin(direction), math.cos(direction)])
+    along, across = angle_frame(direction)
     # p_kj = s₀ + d_k e_∥ + c_j e_⊥
     downwind = einx.multiply("transect, axis -> transect axis", distance, along)
     crosswind = einx.multiply("offset, axis -> offset axis", offset, across)
@@ -327,14 +328,12 @@ def fit_transect_gaussians(
         >>> bool(fits["converged"][0])
         True
     """
-    if min_width <= 0.0:
-        raise ParameterError(f"min_width must be > 0, got {min_width}")
+    require_positive("min_width", min_width)
     offset = np.asarray(profiles.offset, dtype=np.float64)
     spacing_sample = profiles.sample_spacing
     # m_max = 2 h
     bound = 2.0 * float(np.max(np.abs(offset))) if max_offset is None else max_offset
-    if bound <= 0.0:
-        raise ParameterError(f"max_offset must be > 0, got {max_offset}")
+    require_positive("max_offset", bound)
     lower = np.array([0.0, -bound, min_width])
     upper = np.array([np.inf, bound, np.inf])
     moments = transect_moments(profiles)
@@ -455,10 +454,8 @@ def smooth_centreline(
         raise ParameterError(
             f"polyorder must be in [0, window), got {polyorder} for window {window}"
         )
-    if n_iter < 0:
-        raise ParameterError(f"n_iter must be ≥ 0, got {n_iter}")
-    if threshold <= 0.0:
-        raise ParameterError(f"threshold must be > 0, got {threshold}")
+    require_positive("n_iter", n_iter, allow_zero=True)
+    require_positive("threshold", threshold)
     if rejected not in ("smoothed", "zero"):
         raise ParameterError(f"rejected must be 'smoothed' or 'zero', got {rejected!r}")
     dtype = np.result_type(np.asarray(centre).dtype, np.float32)
@@ -540,12 +537,8 @@ def fit_width_law(
         >>> round(reference_width, 6), round(exponent, 6)
         (100.0, 0.8)
     """
-    if reference_distance <= 0.0:
-        raise ParameterError(
-            f"reference_distance must be > 0, got {reference_distance}"
-        )
-    if initial_width < 0.0:
-        raise ParameterError(f"initial_width must be ≥ 0, got {initial_width}")
+    require_positive("reference_distance", reference_distance)
+    require_positive("initial_width", initial_width, allow_zero=True)
     distance = np.asarray(distance, dtype=np.float64)
     width = np.asarray(width, dtype=np.float64)
     kept = np.isfinite(width) & (width > initial_width) & (distance > 0.0)
@@ -660,14 +653,13 @@ class CrossPlumeProfile(Operator):
         smoothed = smooth_centreline(fits["centre"], fits["width"], fits["converged"])
 
         # e_∥, e_⊥
-        along = np.array([math.cos(self.direction), math.sin(self.direction)])
-        across = np.array([-math.sin(self.direction), math.cos(self.direction)])
+        along, across = angle_frame(self.direction)
         first, last = float(profiles.offset[0]), float(profiles.offset[-1])
         rows: list[dict[str, Any]] = []
         for transect, distance in enumerate(profiles.distance.tolist()):
             # s₀ + d_k e_∥ + c e_⊥ at the two ends
             middle = np.asarray(self.source) + distance * along
-            line = LineString([middle + first * across, middle + last * across])
+            line = transect_line(middle, across, first, last)
             rows.append(
                 {
                     "geometry": line,
@@ -692,11 +684,9 @@ def _check_sampling(
 ) -> None:
     if n_transects < 1:
         raise ParameterError(f"n_transects must be ≥ 1, got {n_transects}")
-    if spacing <= 0.0 or half_length <= 0.0 or spacing_sample <= 0.0:
-        raise ParameterError(
-            "spacing, half_length and sample_spacing must be > 0, got "
-            f"{spacing}, {half_length} and {spacing_sample}"
-        )
+    require_positive("spacing", spacing)
+    require_positive("half_length", half_length)
+    require_positive("sample_spacing", spacing_sample)
     if spacing < pixel_side * (1.0 - 1e-9):
         raise ParameterError(
             f"spacing {spacing} m is below one pixel ({pixel_side} m): closer "
@@ -714,14 +704,19 @@ def _pixel_indices(
     points: Float[np.ndarray, "transect offset axis"], transform: Any
 ) -> tuple[Float[np.ndarray, "transect offset"], Float[np.ndarray, "transect offset"]]:
     """Fractional ``(row, col)`` of each point, pixel centres at integers."""
-    # (x − c, y − f)
-    easting = points[..., 0] - transform.c
-    northing = points[..., 1] - transform.f
     # [col + ½, row + ½] = A⁻¹ (x − c, y − f), with A = [[a, b], [d, e]]
-    determinant = transform.a * transform.e - transform.b * transform.d
-    col = (transform.e * easting - transform.b * northing) / determinant - 0.5
-    row = (-transform.d * easting + transform.a * northing) / determinant - 0.5
-    return row, col
+    row_col = to_pixel(
+        (
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.e,
+            transform.f,
+        ),
+        points,
+    )
+    return row_col[..., 0], row_col[..., 1]
 
 
 def _near_nodata(

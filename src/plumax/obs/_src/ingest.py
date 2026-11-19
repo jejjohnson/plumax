@@ -41,26 +41,23 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Array, Float, Shaped
 
+from plumax._src.constants import (
+    AVOGADRO,
+    BOLTZMANN as BOLTZMANN,
+    M_CH4,
+    P_STANDARD,
+    T_STANDARD,
+)
 from plumax._src.errors import (
-    MissingExtraError,
     MissingVariableError,
     ScreeningError,
 )
+from plumax._src.extras import require_extra
+from plumax._src.units import ppm_m_to_column_mass
 from plumax.coupled import Instrument
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.time import TimeAxis
 
-
-#: Molar mass of CH₄, M [kg mol⁻¹].
-M_CH4 = 0.0160425
-#: Avogadro's number N_A [mol⁻¹].
-AVOGADRO = 6.02214076e23
-#: Boltzmann constant k_B [J K⁻¹].
-BOLTZMANN = 1.380649e-23
-#: Standard surface pressure [Pa] for products that report none.
-P_STANDARD = 101_325.0
-#: Near-surface temperature [K] for the ppm·m conversion when none is given.
-T_STANDARD = 288.15
 
 #: (lon_min, lat_min, lon_max, lat_max) [degrees].
 BBox = tuple[float, float, float, float]
@@ -85,15 +82,19 @@ class ColumnObservation(eqx.Module):
 
 
 def _readers():
-    try:
-        import xrops.atm.gas.ch4
-        import xrproducts
-    except ImportError as err:
-        raise MissingExtraError(
-            "the L2 loaders read through xrproducts / xrops; install them with "
-            "`pip install 'plumax[io]'`"
-        ) from err
-    return xrproducts, xrops.atm.gas.ch4.dry_air_column
+    xrops_ch4 = require_extra(
+        "xrops.atm.gas.ch4",
+        extra="io",
+        caller="the L2 loaders",
+        purpose="read through xrproducts / xrops",
+    )
+    xrproducts = require_extra(
+        "xrproducts",
+        extra="io",
+        caller="the L2 loaders",
+        purpose="read through xrproducts / xrops",
+    )
+    return xrproducts, xrops_ch4.dry_air_column
 
 
 def ppb_to_column_mass(
@@ -128,48 +129,6 @@ def ppb_to_column_mass(
     per_molecule = 1.0e-9 / AVOGADRO
     # ΔΩ = Δχ · 10⁻⁹ · N_dry · M / N_A
     return np.asarray(delta_ppb * per_molecule * dry_air_molecules * M_CH4)
-
-
-def ppm_m_to_column_mass(
-    enhancement_ppm_m: Float[np.ndarray, "*#pixel"] | float,
-    *,
-    pressure_pa: float,
-    temperature_k: float,
-) -> Float[np.ndarray, " ..."]:
-    """Column-mass enhancement of a path-integrated enhancement.
-
-    ΔΩ = E · 10⁻⁶ · (p / (k_B T)) · M / N_A.
-
-    Args:
-        enhancement_ppm_m: Path-integrated enhancement E [ppm m].
-        pressure_pa: Layer pressure p [Pa].
-        temperature_k: Layer temperature T [K].
-
-    Returns:
-        ΔΩ [kg m⁻²].
-
-    Examples:
-        1000 ppm·m at 1013.25 hPa and 288.15 K: 42.3 mol m⁻³ · 1 mm · M:
-
-        >>> import numpy as np
-        >>> mass = ppm_m_to_column_mass(
-        ...     1000.0, pressure_pa=101_325.0, temperature_k=288.15
-        ... )
-        >>> bool(np.isclose(mass, 42.29e-3 * 0.0160425, rtol=1e-3))
-        True
-
-        Thinner air at altitude carries less mass for the same E:
-
-        >>> high = ppm_m_to_column_mass(
-        ...     1000.0, pressure_pa=70_000.0, temperature_k=288.15
-        ... )
-        >>> bool(high < mass)
-        True
-    """
-    # n = p / (k_B T)  [molecules m⁻³]
-    number_density = pressure_pa / (BOLTZMANN * temperature_k)
-    # ΔΩ = E · 10⁻⁶ · n · M / N_A
-    return np.asarray(enhancement_ppm_m * 1.0e-6 * number_density * M_CH4 / AVOGADRO)
 
 
 def load_tropomi_l2(
@@ -467,6 +426,64 @@ def _scene_time(dataset: xr.Dataset) -> np.datetime64:
     return np.datetime64("NaT")
 
 
+def _observation_time(clock: TimeAxis | None, when: np.datetime64) -> float:
+    """Seconds of ``when`` on ``clock``, or ``0.0`` without a clock or for NaT.
+
+    Args:
+        clock: The time axis, or ``None``.
+        when: The observation time.
+
+    Returns:
+        ``clock.to_seconds(when)`` as a float, ``0.0`` when there is no clock
+        or ``when`` is NaT.
+    """
+    no_clock = clock is None or np.isnat(when)
+    return 0.0 if no_clock else float(clock.to_seconds(when))
+
+
+def _column_observation(
+    name: str,
+    receptors: Float[np.ndarray, "kept 2"],
+    kernel: Float[np.ndarray, " kept"],
+    retrieval_variance: Float[np.ndarray, " kept"] | float,
+    enhancement: Float[np.ndarray, " kept"],
+    when: np.datetime64,
+    clock: TimeAxis | None,
+    *,
+    flags: np.ndarray | None = None,
+    mask: np.ndarray | None = None,
+) -> ColumnObservation:
+    """Build the :class:`ColumnObservation` of one scene's kept pixels.
+
+    Args:
+        name: Instrument name.
+        receptors: Receptor ``(x, y)`` per kept pixel.
+        kernel: Averaging kernel per kept pixel.
+        retrieval_variance: Retrieval variance R_retr.
+        enhancement: Observed column enhancement per kept pixel.
+        when: Observation time.
+        clock: Time axis for ``observation_time``, or ``None``.
+        flags: Optional per-pixel quality flags.
+        mask: Optional per-pixel observation mask.
+
+    Returns:
+        The observation, with the instrument's ``observation_time`` set by
+        :func:`_observation_time`.
+    """
+    instrument = Instrument(
+        name=name,
+        receptors=jnp.asarray(receptors),
+        averaging_kernel=jnp.asarray(kernel),
+        retrieval_variance=jnp.asarray(retrieval_variance),
+        observation_time=_observation_time(clock, when),
+        flags=None if flags is None else jnp.asarray(flags),
+        mask=None if mask is None else jnp.asarray(mask),
+    )
+    return ColumnObservation(
+        instrument=instrument, enhancement=jnp.asarray(enhancement), time=when
+    )
+
+
 def _observation(
     name: str,
     frame: LocalFrame,
@@ -479,17 +496,8 @@ def _observation(
 ) -> ColumnObservation:
     easting, northing = frame.to_xy(kept["lat"], kept["lon"])
     receptors = einx.id("p, p -> p (1 + 1)", easting, northing)
-    no_clock = clock is None or np.isnat(when)
-    seconds = 0.0 if no_clock else float(clock.to_seconds(when))
     # R_retr = σ_Ω²
     retrieval_variance = obs_noise_std**2
-    instrument = Instrument(
-        name=name,
-        receptors=jnp.asarray(receptors),
-        averaging_kernel=jnp.asarray(kernel),
-        retrieval_variance=jnp.asarray(retrieval_variance),
-        observation_time=seconds,
-    )
-    return ColumnObservation(
-        instrument=instrument, enhancement=jnp.asarray(enhancement), time=when
+    return _column_observation(
+        name, receptors, kernel, retrieval_variance, enhancement, when, clock
     )

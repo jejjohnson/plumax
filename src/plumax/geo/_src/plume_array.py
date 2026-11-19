@@ -15,6 +15,7 @@ trace-gas plume literature cited per function:
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 import einx
@@ -22,6 +23,9 @@ import numpy as np
 from jaxtyping import Bool, Float, Num, Shaped
 from scipy.spatial import ConvexHull, QhullError
 
+from plumax._src.constants import M_CH4, M_CO2, P_STANDARD, T_STANDARD
+from plumax._src.tracing import require_positive
+from plumax._src.units import ppm_m_to_column_moles
 from plumax.errors import MissingExtraError
 
 
@@ -29,7 +33,7 @@ try:
     from geoops.carrier import pixel_xy, single_band
     from geoops.measure import Connectivity, label_components, skeleton_length
     from geoops.segment import ThresholdMode, threshold_mask
-    from shapely.geometry import MultiPoint
+    from shapely.geometry import LineString, MultiPoint
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.plume_array needs the [geo] extra: pip install 'plumax[geo]'"
@@ -56,12 +60,12 @@ ColumnUnit = Literal["ppm_m", "mol_m2", "kg_m2"]
 
 # Molar masses (kg/mol) for supported trace gases.
 MOLAR_MASS_KG_PER_MOL = {
-    "CH4": 0.01604,
-    "CO2": 0.04401,
+    "CH4": M_CH4,
+    "CO2": M_CO2,
 }
-# Standard molar volume of an ideal gas at 298.15 K, 1 atm (m^3/mol).
-# Used only by ``convert_column_units`` to translate ppm m (mixing ratio
-# integrated along path) into mol/m^2 for typical near-surface conditions.
+# Deprecated: the molar volume of an ideal gas at 298.15 K and 1 atm (m^3/mol).
+# ``convert_column_units`` no longer uses it (it converts at the scene's
+# pressure and temperature); kept for one release, then removed.
 STANDARD_MOLAR_VOLUME_M3_PER_MOL = 0.024465
 
 
@@ -195,8 +199,7 @@ def wind_advection_cone(
         raise ValueError("wind vector must be non-zero")
     if not 0.0 <= half_angle_deg <= 180.0:
         raise ValueError("half_angle_deg must be in [0, 180]")
-    if max_distance <= 0.0:
-        raise ValueError("max_distance must be positive")
+    require_positive("max_distance", max_distance)
 
     easting, northing = pixel_centers(shape, transform)
     # Δx = x − x_source
@@ -225,37 +228,52 @@ def convert_column_units(
     gas: str = "CH4",
     units_in: ColumnUnit = "ppm_m",
     units_out: ColumnUnit = "kg_m2",
+    pressure_pa: float = P_STANDARD,
+    temperature_k: float = T_STANDARD,
 ) -> Float[np.ndarray, "*dims"]:
     r"""Convert column enhancement among ppm m, mol/m^2, and kg/m^2.
 
-    The conversions are
+    A ppm m enhancement is a mixing ratio integrated along the path, so its
+    amount of gas depends on the air number density there, :math:`p / (k_B T)`:
 
     .. math::
 
-        \Omega_{\mathrm{mol/m^2}} \;=\; \frac{X \cdot 10^{-6}}{V_m}, \qquad
+        \Omega_{\mathrm{mol/m^2}} \;=\; \frac{X \cdot 10^{-6}\, p}{k_B T N_A},
+        \qquad
         \Omega_{\mathrm{kg/m^2}}  \;=\; M_{\mathrm{gas}}
                                         \cdot \Omega_{\mathrm{mol/m^2}}
 
-    where ``X`` is the column-integrated volume mixing ratio in ppm m,
-    :math:`V_m = 0.024465` m^3/mol is the standard molar volume of an
-    ideal gas at 298.15 K and 1 atm, and :math:`M_{\mathrm{gas}}` is the
-    molar mass (CH4: 0.01604 kg/mol; CO2: 0.04401 kg/mol).
+    where ``X`` is the enhancement in ppm m, :math:`p` and :math:`T` the
+    pressure and temperature of the layer, :math:`k_B` the Boltzmann constant,
+    :math:`N_A` Avogadro's number and :math:`M_{\mathrm{gas}}` the molar mass
+    (CH4: 0.0160425 kg/mol; CO2: 0.04401 kg/mol). It is the same relation as
+    :func:`plumax.obs.ppm_m_to_column_mass`, and both default to the ISA
+    sea-level 101 325 Pa and 288.15 K; pass the scene's values when known.
 
-    The ppm m branch therefore assumes near-surface conditions. Pass
-    ``mol_m2`` or ``kg_m2`` inputs when retrieval-specific pressure and
-    temperature corrections have already been applied upstream (e.g. by
-    a matched-filter retrieval per Thompson 2015 / Foote 2020).
+    Args:
+        values: The column enhancement, in ``units_in``.
+        gas: ``"CH4"`` or ``"CO2"``.
+        units_in: Units of ``values``.
+        units_out: Units of the result.
+        pressure_pa: Layer pressure p [Pa], used by the ppm m conversions.
+        temperature_k: Layer temperature T [K], used by the ppm m conversions.
+
+    Returns:
+        The enhancement in ``units_out``.
     """
     gas_key = gas.upper()
     if gas_key not in MOLAR_MASS_KG_PER_MOL:
         supported = ", ".join(sorted(MOLAR_MASS_KG_PER_MOL))
         raise ValueError(f"unsupported gas {gas!r}; expected one of {supported}")
     molar_mass = MOLAR_MASS_KG_PER_MOL[gas_key]
+    # mol m⁻² per ppm m at (p, T)
+    moles_per_ppm_m = float(
+        ppm_m_to_column_moles(1.0, pressure_pa=pressure_pa, temperature_k=temperature_k)
+    )
 
     arr = np.asarray(values, dtype=float)
     if units_in == "ppm_m":
-        # 1e-6 converts ppm to a fraction; molar volume assumes standard air.
-        mol_m2 = arr * 1e-6 / STANDARD_MOLAR_VOLUME_M3_PER_MOL
+        mol_m2 = arr * moles_per_ppm_m
     elif units_in == "mol_m2":
         mol_m2 = arr
     elif units_in == "kg_m2":
@@ -264,12 +282,86 @@ def convert_column_units(
         raise ValueError("units_in must be 'ppm_m', 'mol_m2', or 'kg_m2'")
 
     if units_out == "ppm_m":
-        return mol_m2 * STANDARD_MOLAR_VOLUME_M3_PER_MOL * 1e6
+        return mol_m2 / moles_per_ppm_m
     if units_out == "mol_m2":
         return mol_m2
     if units_out == "kg_m2":
         return mol_m2 * molar_mass
     raise ValueError("units_out must be 'ppm_m', 'mol_m2', or 'kg_m2'")
+
+
+def wind_frame(
+    u: float, v: float
+) -> tuple[Float[np.ndarray, " 2"], Float[np.ndarray, " 2"]]:
+    """Unit along-wind and cross-wind vectors of a wind vector.
+
+    Args:
+        u: Eastward wind component.
+        v: Northward wind component.
+
+    Returns:
+        ``(e_par, e_perp)``, each a length-2 ``(x, y)`` array.
+
+    Raises:
+        ValueError: If the wind vector is zero.
+    """
+    norm = float(np.hypot(u, v))
+    if norm == 0.0:
+        raise ValueError("wind vector must be non-zero")
+    # e_∥ = (u, v) / ‖w‖,  e_⊥ = (−v, u) / ‖w‖
+    return np.array([u / norm, v / norm]), np.array([-v / norm, u / norm])
+
+
+def angle_frame(
+    direction: float,
+) -> tuple[Float[np.ndarray, " 2"], Float[np.ndarray, " 2"]]:
+    """Unit along-wind and cross-wind vectors of a direction angle.
+
+    Args:
+        direction: Angle φ of the along-wind axis, counter-clockwise from +x
+            (radians).
+
+    Returns:
+        ``(e_par, e_perp)``, each a length-2 ``(x, y)`` array.
+    """
+    # e_∥ = (cos φ, sin φ),  e_⊥ = (−sin φ, cos φ)
+    return (
+        np.array([math.cos(direction), math.sin(direction)]),
+        np.array([-math.sin(direction), math.cos(direction)]),
+    )
+
+
+def transect_line(
+    centre: Float[np.ndarray, " 2"],
+    e_perp: Float[np.ndarray, " 2"],
+    first: float,
+    last: float,
+) -> LineString:
+    """Cross-wind transect line through ``centre`` between two offsets.
+
+    Args:
+        centre: ``(x, y)`` of the transect centre.
+        e_perp: Unit cross-wind vector.
+        first: Cross-wind offset of the first end.
+        last: Cross-wind offset of the second end.
+
+    Returns:
+        The segment from ``centre + first e_⊥`` to ``centre + last e_⊥``.
+    """
+    # p_end = s_c + c e_⊥
+    return LineString([centre + first * e_perp, centre + last * e_perp])
+
+
+def _max_pairwise(coords: Float[np.ndarray, "n 2"]) -> float:
+    """Largest pairwise distance among ``coords`` (``n²`` memory)."""
+    # δ = p_first − p_second
+    offset = einx.subtract(
+        "first coord, second coord -> first second coord", coords, coords
+    )
+    # d² = Σ_coord δ²
+    squared = einx.sum("first second [coord]", offset**2)
+    # D = √(max_{first,second} d²)
+    return float(np.sqrt(einx.max("[first second]", squared)))
 
 
 def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
@@ -286,14 +378,7 @@ def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
     except QhullError:
         order = np.lexsort((points[:, 1], points[:, 0]))
         candidates = points[order[[0, -1]]]
-    # δ = p_first − p_second
-    offset = einx.subtract(
-        "first coord, second coord -> first second coord", candidates, candidates
-    )
-    # d² = Σ_coord δ²
-    squared = einx.sum("first second [coord]", offset**2)
-    # D = √(max_{first,second} d²)
-    return float(np.sqrt(einx.max("[first second]", squared)))
+    return _max_pairwise(candidates)
 
 
 def plume_length(
@@ -371,14 +456,7 @@ def plume_length(
             coords = np.asarray(hull.coords)
         else:
             coords = points
-        # δ = p_first − p_second
-        offset = einx.subtract(
-            "first coord, second coord -> first second coord", coords, coords
-        )
-        # d² = Σ_coord δ²
-        squared = einx.sum("first second [coord]", offset**2)
-        # D = √(max_{first,second} d²)
-        return float(np.sqrt(einx.max("[first second]", squared)))
+        return _max_pairwise(coords)
     if method == "skeleton":
         length = skeleton_length(active, step=transform)
         if length <= 0.0:

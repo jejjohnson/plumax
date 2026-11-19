@@ -24,7 +24,7 @@ def _event(rate: float, std: float, **kw: object) -> EmissionEvent:
 
 
 def test_event_rejects_negative_std() -> None:
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match="`emission_std` must be ≥ 0"):
         _event(1.0, -0.5)
 
 

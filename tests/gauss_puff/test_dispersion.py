@@ -32,7 +32,7 @@ def test_get_pg_params_roundtrip():
 
 
 def test_get_pg_params_rejects_bad_class():
-    with pytest.raises(ValueError, match=r"stability_class must be one of"):
+    with pytest.raises(ValueError, match=r"`stability_class` must be one of"):
         get_pg_params("Z")
 
 

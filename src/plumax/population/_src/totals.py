@@ -25,6 +25,7 @@ import jax.numpy as jnp
 from integrix import expect as integrix_expect
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require_positive
 from plumax.population._src.fitting_iw import TMTPPPosterior
 from plumax.population._src.pod_union import (
     TOD_BINS,
@@ -35,8 +36,7 @@ from plumax.population._src.pod_union import (
 )
 from plumax.population._src.processes import (
     NODES_PER_DAY,
-    LogIntensity,
-    _quadrature_points,
+    expected_events,
     expected_events_by_tod_bin,
 )
 
@@ -113,11 +113,8 @@ def _stratum_emission(
 
         # --- ground process ---
         # Λ = Σ_w ∫_w λ(t) dt
-        expected_events = sum(
-            LogIntensity(
-                kernel,
-                n_integration_points=_quadrature_points(stop - start, nodes_per_day),
-            ).integrate(start, stop)
+        ground_events = sum(
+            expected_events(kernel, start, stop, nodes_per_day=nodes_per_day)
             for start, stop in windows
         )
 
@@ -145,7 +142,7 @@ def _stratum_emission(
             )
 
         # M_total = Λ E_f[Q] D
-        total = expected_events * mean_rate * event_duration
+        total = ground_events * mean_rate * event_duration
         if pods is not None and is_tod_binned(pods):
             # Λ_b = Σ_w ∫_{w ∩ b} λ(t) dt
             events_by_bin = sum(
@@ -181,7 +178,7 @@ def _stratum_emission(
             missing_rate = missing_rate_of(draw_log_pod)
 
         # M_missing = Λ E_f[Q (1 − P_d(Q))] D
-        missing = expected_events * missing_rate * event_duration
+        missing = ground_events * missing_rate * event_duration
         return total, missing
 
     draws = {name: jnp.asarray(value) for name, value in posterior.samples.items()}
@@ -295,10 +292,7 @@ def total_emission(
         raise ValueError(
             f"total_emission: need 0 < q_min < q_max < inf, got ({q_min}, {q_max})."
         )
-    if not event_duration > 0.0:
-        raise ValueError(
-            f"total_emission: event_duration must be > 0, got {event_duration}."
-        )
+    require_positive("event_duration", event_duration, caller="total_emission")
     windows = _merge_windows(horizon)
     parts = [
         _stratum_emission(

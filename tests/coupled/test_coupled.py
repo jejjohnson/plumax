@@ -73,7 +73,7 @@ def test_instrument_rejects_bad_receptors_and_ak():
 
 def test_instrument_rejects_nonpositive_variance():
     inst = Instrument("X", _grid(2, 2, 0, 1, 0, 1), retrieval_variance=0.0)
-    with pytest.raises(ValueError, match="variance must be > 0"):
+    with pytest.raises(ValueError, match="`obs_variance` must be > 0"):
         inst.observation_variance()
 
 
@@ -275,7 +275,7 @@ def test_fuse_observations_shape_validation():
 
 
 def test_default_prior_rejects_nonpositive_std():
-    with pytest.raises(ValueError, match="standard deviations"):
+    with pytest.raises(ValueError, match="`emission_prior_std` must be > 0"):
         default_prior(
             n_instruments=1,
             emission_prior_mean=1.0,

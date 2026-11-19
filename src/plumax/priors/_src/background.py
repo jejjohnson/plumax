@@ -13,6 +13,7 @@ import numpy as np
 from jaxtyping import Float
 
 from plumax._src.errors import GridMismatchError, PlumaxError
+from plumax._src.tracing import require_positive
 
 
 def per_tile_background(
@@ -62,8 +63,7 @@ def per_tile_background(
             f"per_tile_background: receptors must be ({values.size}, 2); "
             f"got {positions.shape}"
         )
-    if not tile_m > 0.0:
-        raise PlumaxError("per_tile_background: `tile_m` must be positive")
+    require_positive("tile_m", tile_m, caller="per_tile_background", error=PlumaxError)
     # tile(𝐱) = (⌊x / ℓ⌋, ⌊y / ℓ⌋)
     tiles = np.floor(positions / tile_m).astype(np.int64)
     tile_x, tile_y = einx.id("obs c -> c obs", tiles)

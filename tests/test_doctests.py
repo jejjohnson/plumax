@@ -9,7 +9,14 @@ import pytest
 
 
 DOCTESTED_MODULES = (
+    "plumax._src.checks",
+    "plumax._src.domain",
+    "plumax._src.extras",
+    "plumax._src.tracing",
+    "plumax._src.units",
+    "plumax._src.wind",
     "plumax.coupled._src.quality",
+    "plumax.gauss_plume._src.dispersion",
     "plumax.gauss_plume._src.likelihoods",
     "plumax.gauss_plume._src.mo_dispersion",
     "plumax.gauss_plume._src.multi_source",

@@ -13,13 +13,13 @@ takes the two sets as flat indices (``np.flatnonzero``).
 from __future__ import annotations
 
 import einx
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, ArrayLike, Bool, Float
 from radtrax import DegenerateInputError, ParameterError, ShapeError
 
-from plumax.vetting._src.morphology import dilate
+from plumax._src.tracing import require, require_positive
+from plumax.vetting._src.morphology import dilate, union_masks
 
 
 __all__ = ["background_pool", "select_seeds"]
@@ -94,8 +94,9 @@ def select_seeds(
     if k < 1:
         raise ParameterError(f"select_seeds: k must be >= 1, got {k}")
     cap_percentile = _check_percentile(cap_percentile)
-    if grow < 0:
-        raise ParameterError(f"select_seeds: grow must be >= 0, got {grow}")
+    require_positive(
+        "grow", grow, caller="select_seeds", allow_zero=True, error=ParameterError
+    )
     mf = jnp.asarray(mf)
     mask = jnp.asarray(mask, dtype=bool)
     _check_image("select_seeds", mf, mask, "mask")
@@ -180,8 +181,9 @@ def background_pool(
          [0 0 0 0 0 0]
          [0 0 0 0 0 0]]
     """
-    if box < 0:
-        raise ParameterError(f"background_pool: box must be >= 0, got {box}")
+    require_positive(
+        "box", box, caller="background_pool", allow_zero=True, error=ParameterError
+    )
     mf = jnp.asarray(mf)
     seeds = jnp.asarray(seeds, dtype=bool)
     _check_image("background_pool", mf, seeds, "seeds")
@@ -202,16 +204,10 @@ def background_pool(
     near = einx.logical_and("H, W -> H W", near_row, near_col)
     pool = near & jnp.any(rows) & ~seeds & (jnp.abs(mf) < threshold)
     if exclude is not None:
-        exclude = jnp.asarray(exclude, dtype=bool)
-        if exclude.ndim != 3 or exclude.shape[1:] != mf.shape:
-            raise ShapeError(
-                f"background_pool: exclude must be (C, {height}, {width}), "
-                f"got {exclude.shape}"
-            )
-        # einx rejects a zero-size axis; no masks exclude nothing
-        if exclude.shape[0] > 0:
-            # O = O ∖ ⋃_c M_c
-            pool &= ~einx.any("[C] H W", exclude)
+        # O = O ∖ ⋃_c M_c
+        pool &= ~union_masks(
+            jnp.asarray(exclude, dtype=bool), mf.shape, "background_pool"
+        )
     return _require_any(
         pool,
         "background_pool: the pool is empty; no pixel near the seeds is "
@@ -240,24 +236,16 @@ def _check_percentile(percentile: Float[ArrayLike, ""]) -> Float[Array, ""]:
     It fails eagerly, or under ``jit``.
     """
     percentile = jnp.asarray(percentile, dtype=float)
-    # bad = ¬(0 < q ≤ 100)
-    bad = ~((percentile > 0.0) & (percentile <= 100.0))
-    message = "select_seeds: cap_percentile must be in (0, 100]"
-    try:
-        out_of_range = bool(bad)
-    except (jax.errors.TracerBoolConversionError, jax.errors.ConcretizationTypeError):
-        return eqx.error_if(percentile, bad, message)
-    if out_of_range:
-        raise ParameterError(f"{message}, got {float(percentile)}")
-    return percentile
+    # ok = 0 < q ≤ 100
+    ok = (percentile > 0.0) & (percentile <= 100.0)
+    return require(
+        ok,
+        "select_seeds: cap_percentile must be in (0, 100]",
+        value=percentile,
+        error=ParameterError,
+    )
 
 
 def _require_any(mask: Bool[Array, "H W"], message: str) -> Bool[Array, "H W"]:
     """``mask``, after failing on an empty one: eagerly, or under ``jit``."""
-    try:
-        empty = not bool(jnp.any(mask))
-    except (jax.errors.TracerBoolConversionError, jax.errors.ConcretizationTypeError):
-        return eqx.error_if(mask, ~jnp.any(mask), message)
-    if empty:
-        raise DegenerateInputError(message)
-    return mask
+    return require(jnp.any(mask), message, value=mask, error=DegenerateInputError)

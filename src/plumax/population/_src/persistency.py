@@ -30,8 +30,8 @@ from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray
 from plumax.population._src.fitting_iw import TMTPPPosterior
 from plumax.population._src.processes import (
     NODES_PER_DAY,
-    LogIntensity,
     _quadrature_points,
+    expected_events,
     poisson_kernel,
 )
 from plumax.population.intensity import ConstantIntensity
@@ -60,14 +60,6 @@ class _LogLinearIntensity(eqx.Module):
         )
         # c exp(β₀ + z(t) · β)
         return self.rate_scale * jnp.exp(self.beta0 + linear)
-
-
-def _compensator(
-    kernel: Any, start: ArrayLike, stop: ArrayLike, *, num_points: int
-) -> Float[Array, "*time"]:
-    # Λ(a, b) = ∫ₐᵇ λ(t) dt
-    log_intensity = LogIntensity(kernel, n_integration_points=num_points)
-    return log_intensity.integrate(start, stop)
 
 
 def expected_count(
@@ -110,7 +102,7 @@ def expected_count(
     kernel = poisson_kernel(intensity, theta, caller="expected_count")
     num_points = _quadrature_points(float(horizon), nodes_per_day)
     start = jnp.asarray(t, dtype=float)
-    return _compensator(kernel, start, start + horizon, num_points=num_points)
+    return expected_events(kernel, start, start + horizon, num_points=num_points)
 
 
 def occurrence_probability(
@@ -214,7 +206,7 @@ def expected_wait_time(
     # --- compensator ---
     # ΔΛₖ = ∫ λ(t + s) ds over cell k
     increments = jax.vmap(
-        lambda low, high: _compensator(
+        lambda low, high: expected_events(
             kernel, start + low, start + high, num_points=nodes_per_cell
         )
     )(lags[:-1], lags[1:])

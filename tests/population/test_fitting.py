@@ -55,7 +55,7 @@ def test_power_law_evaluates():
 def test_run_mcmc_rejects_invalid_inputs():
     with pytest.raises(ValueError, match=r"at least one observation"):
         run_mcmc(np.array([]), num_warmup=1, num_samples=1, num_chains=1)
-    with pytest.raises(ValueError, match=r"strictly positive"):
+    with pytest.raises(ValueError, match=r"`data_values` must be > 0"):
         run_mcmc(np.array([10.0, 0.0]), num_warmup=1, num_samples=1, num_chains=1)
     with pytest.raises(ValueError, match=r"closed support"):
         run_mcmc(

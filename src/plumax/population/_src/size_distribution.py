@@ -33,6 +33,8 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from scipy import stats
 
+from plumax._src.nuts import run_nuts
+
 
 if TYPE_CHECKING:
     from plumax.population.catalog import EmissionCatalog
@@ -203,29 +205,30 @@ def fit_lognormal_size_distribution(
     import jax
     import numpyro
     import numpyro.distributions as dist
-    from numpyro.infer import MCMC, NUTS
+
+    from plumax.population._src.marks import _lognormal_prior
 
     log_mean, log_std = catalog.log_moments()
     log_mean_j = jax.numpy.asarray(log_mean)
     log_std_j = jax.numpy.asarray(log_std)
 
     def model(obs_mean: Any, obs_std: Any) -> None:
-        population_mean = numpyro.sample("mu", dist.Normal(0.0, mu_prior_scale))
-        population_std = numpyro.sample("sigma", dist.HalfNormal(sigma_prior_scale))
+        population_mean, population_std = _lognormal_prior(
+            "", mu_prior_scale, sigma_prior_scale
+        )
         # σ_eff² = σ² + σ_obs,i²
         eff_std = jax.numpy.sqrt(population_std**2 + obs_std**2)
         numpyro.sample("obs", dist.Normal(population_mean, eff_std), obs=obs_mean)
 
-    kernel = NUTS(model)
-    mcmc = MCMC(
-        kernel,
+    samples = run_nuts(
+        model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress_bar=False,
+        obs_mean=log_mean_j,
+        obs_std=log_std_j,
     )
-    mcmc.run(jax.random.PRNGKey(seed), obs_mean=log_mean_j, obs_std=log_std_j)
-    samples = mcmc.get_samples()
     return SizeDistributionPosterior(
         mu_samples=np.asarray(samples["mu"]),
         sigma_samples=np.asarray(samples["sigma"]),

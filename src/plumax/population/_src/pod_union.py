@@ -37,6 +37,8 @@ import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 from jaxtyping import Array, ArrayLike, Bool, Float, Int
 
+from plumax._src.tracing import require_positive
+
 
 #: Below this η, log softplus(η) = η and log(1 − e^{−a}) = log a to double precision.
 _TAIL = -20.0
@@ -86,16 +88,14 @@ class InstrumentPOD:
                 f"InstrumentPOD: model must be one of {_FLUX_ONLY_MODELS}, the "
                 f"registry curves in Q alone, got {self.model!r}."
             )
-        if not (self.q50 > 0.0 and self.slope > 0.0):
-            raise ValueError(
-                f"InstrumentPOD: q50 and slope must be > 0, got "
-                f"({self.q50}, {self.slope})."
-            )
-        if self.q50_std < 0.0 or self.slope_std < 0.0:
-            raise ValueError(
-                f"InstrumentPOD: q50_std and slope_std must be ≥ 0, got "
-                f"({self.q50_std}, {self.slope_std})."
-            )
+        require_positive("q50", self.q50, caller="InstrumentPOD")
+        require_positive("slope", self.slope, caller="InstrumentPOD")
+        require_positive(
+            "q50_std", self.q50_std, caller="InstrumentPOD", allow_zero=True
+        )
+        require_positive(
+            "slope_std", self.slope_std, caller="InstrumentPOD", allow_zero=True
+        )
         if self.tod_bins is not None:
             shifts = tuple(float(shift) for shift in self.tod_bins)
             if len(shifts) != TOD_BINS or not all(map(math.isfinite, shifts)):

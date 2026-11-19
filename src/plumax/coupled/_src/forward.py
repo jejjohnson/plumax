@@ -43,6 +43,7 @@ import numpy as np
 from jaxtyping import Array, Float
 
 from plumax._src.controlled import AbstractControlledSource
+from plumax._src.wind import wind_components
 from plumax.coupled.instrument import Instrument
 from plumax.gauss_plume.dispersion import get_dispersion_params
 from plumax.gauss_plume.observation import ColumnObservation
@@ -85,10 +86,9 @@ class PlumeSource(AbstractControlledSource):
 
     def wind_uv(self) -> tuple[float, float]:
         """Wind ``(u, v)`` [m/s] from speed + meteorological direction."""
-        direction = np.deg2rad(self.wind_direction)
-        # (u, v) = −s (sin φ, cos φ)
-        wind_east = -self.wind_speed * np.sin(direction)
-        wind_north = -self.wind_speed * np.cos(direction)
+        wind_east, wind_north = wind_components(
+            self.wind_speed, self.wind_direction, xp=np
+        )
         return float(wind_east), float(wind_north)
 
     @property
@@ -212,10 +212,7 @@ def plume_response(
     easting = einx.id("obs -> (obs level)", receptors[:, 0], level=num_levels)
     northing = einx.id("obs -> (obs level)", receptors[:, 1], level=num_levels)
     height = einx.id("level -> (obs level)", levels, obs=receptors.shape[0])
-    direction = jnp.deg2rad(wind[1])
-    # (u, v) = −s (sin φ, cos φ)
-    wind_u = -wind[0] * jnp.sin(direction)
-    wind_v = -wind[0] * jnp.cos(direction)
+    wind_u, wind_v = wind_components(wind[0], wind[1])
     concentration = plume_concentration_vmap(
         easting,
         northing,

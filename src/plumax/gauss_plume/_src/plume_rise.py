@@ -38,14 +38,12 @@ The plume rises by the larger of the two, Δh = max(Δh_b, Δh_m).
 from __future__ import annotations
 
 import equinox as eqx
-import jax
-import jax.core
 import jax.numpy as jnp
-import numpy as np
 from jaxtyping import Array, Float
 
+from plumax._src.constants import GRAVITY
 from plumax._src.errors import ParameterError
-from plumax.met._src.surface_layer import GRAVITY
+from plumax._src.tracing import require_positive
 
 
 #: Default potential-temperature gradient ∂θ/∂z [K m⁻¹] of the stable classes
@@ -57,17 +55,6 @@ UNSTABLE_NEUTRAL_CLASSES: tuple[str, ...] = ("A", "B", "C", "D")
 
 # Buoyancy flux [m⁴ s⁻³] separating the two A–D final-rise distances.
 _BUOYANCY_FLUX_BREAK = 55.0
-
-
-def _require_positive(name: str, value: object, *, allow_zero: bool = False) -> None:
-    # Traced values skip the eager check; concrete ones fail at construction.
-    if isinstance(value, jax.core.Tracer):
-        return
-    array = np.asarray(value)
-    ok = np.all(array >= 0.0) if allow_zero else np.all(array > 0.0)
-    if not bool(ok):
-        bound = "≥ 0" if allow_zero else "> 0"
-        raise ParameterError(f"{name} must be {bound}, got {value!r}")
 
 
 def _safe_power(
@@ -160,10 +147,10 @@ class BriggsPlumeRise(eqx.Module):
             raise ParameterError(
                 f"stability_class must be one of A-F, got {self.stability_class!r}"
             )
-        _require_positive("exit_velocity", self.exit_velocity, allow_zero=True)
-        _require_positive("exit_temperature", self.exit_temperature)
-        _require_positive("stack_diameter", self.stack_diameter)
-        _require_positive("ambient_temperature", self.ambient_temperature)
+        require_positive("exit_velocity", self.exit_velocity, allow_zero=True)
+        require_positive("exit_temperature", self.exit_temperature)
+        require_positive("stack_diameter", self.stack_diameter)
+        require_positive("ambient_temperature", self.ambient_temperature)
 
     @property
     def is_stable(self) -> bool:

@@ -38,7 +38,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax.typing import ArrayLike
 
-from plumax._src.tracing import _is_traced
+from plumax._src.tracing import require_positive
 
 
 class Instrument(eqx.Module):
@@ -151,11 +151,9 @@ class Instrument(eqx.Module):
         # (every jnp op inside a trace is, even on concrete inputs) and a
         # host-bool conversion would raise. Guard on ``obs_variance`` itself, using the
         # shared ``_is_traced`` helper to match the inversion modules.
-        if not _is_traced(obs_variance) and bool(jnp.any(obs_variance <= 0.0)):
-            raise ValueError(
-                f"Instrument {self.name!r}: total observation variance must be > 0 "
-                "(check retrieval / representation / alignment variances)."
-            )
+        require_positive(
+            "obs_variance", obs_variance, caller=f"Instrument {self.name!r}"
+        )
         if self.variance_inflation is not None:
             # R ← ρ R, the per-pixel variance inflation
             obs_variance = obs_variance * jnp.asarray(

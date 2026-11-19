@@ -18,11 +18,14 @@ import dataclasses
 from collections.abc import Callable
 
 import einx
+import gaussx as gx
 import jax
 import jax.numpy as jnp
+import lineax as lx
 import numpy as np
 from jaxtyping import Array, Float
 
+from plumax._src.vardax import PSD_TAGS
 from plumax.coupled._src.inversion import CoupledProblem, CoupledResult
 
 
@@ -42,7 +45,8 @@ class FitDiagnostics:
             is singular along the parameter.
         data_fraction: 1 − [Σ_θ|y]_aa / [Σ_θ]_aa by block: 0 when the prior
             set the parameter, near 1 when the data did.
-        dofs: Degrees of freedom for signal d_s = tr(I − (I + Lᵀ F L)⁻¹).
+        dofs: Degrees of freedom for signal d_s = tr A, with A the averaging
+            kernel (``gaussx.information_diagnostics``).
         prior_pull: (θ*_a − μ_θ,a) / √[Σ_θ]_aa by block.
         reduced_chi2: χ²_red = Σₙ ωₙ rₙ² / σₙ² / (N_i − d_s) by instrument.
         rms_residual: √(Σₙ ωₙ rₙ² / N_i) by instrument.
@@ -60,13 +64,14 @@ class FitDiagnostics:
 def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagnostics:
     """Diagnostics of a solved coupled problem.
 
-    F = J_hᵀ Σ_ε⁻¹ J_h;  V[a] ≥ [F⁻¹]_aa;  Σ_θ|y = L (I + Lᵀ F L)⁻¹ Lᵀ.
+    F = J_hᵀ Σ_ε⁻¹ J_h;  V[a] ≥ [F⁻¹]_aa;  Σ_θ|y = (Σ_θ⁻¹ + F)⁻¹.
 
     Algorithm:
         1. Evaluate the Jacobian J_h of the stacked prediction at θ*.
         2. Form F = J_hᵀ Σ_ε⁻¹ J_h with the masked, inflated variances.
         3. Eigendecompose F; bound each parameter, or report inf.
-        4. Compare the posterior with the prior, block by block.
+        4. Compute the posterior and d_s with ``gaussx.information_diagnostics``
+           and compare the posterior with the prior, block by block.
         5. Compute the residual statistics of each instrument.
 
     The posterior in step 4 is the Gauss–Newton one at θ*, the covariance
@@ -122,7 +127,6 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     prior = problem.prior
     prior_mean, unflatten = prior.flatten()
     params = jnp.asarray(result.mean, dtype=prior_mean.dtype)
-    param_size = prior_mean.shape[0]
 
     # --- Jacobian at the MAP ---
     # J_h = ∂h / ∂θ at θ*
@@ -161,25 +165,22 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     bound_std = jnp.where(null_weight > _NULL_WEIGHT, jnp.inf, jnp.sqrt(bound_variance))
 
     # --- posterior against prior ---
+    # Σ_ε^{-1/2} J_h, so the noise is white; a masked pixel is a zero row
+    whitened_jacobian = einx.multiply(
+        "obs param, obs -> obs param", obs_jacobian, jnp.sqrt(obs_precision)
+    )
     # Σ_θ = L Lᵀ
     cholesky = prior.cholesky()
-    # Lᵀ F L
-    whitened_fisher = einx.dot(
-        "row a, a b, b col -> row col", cholesky, fisher, cholesky
+    prior_covariance = einx.dot("row a, col a -> row col", cholesky, cholesky)
+    # Σ_θ|y, d_s = tr A, by a QR of [Σ_ε^{-1/2} J_h; L⁻¹] (Rodgers 2000)
+    information = gx.information_diagnostics(
+        whitened_jacobian,
+        lx.DiagonalLinearOperator(jnp.ones(whitened_jacobian.shape[0])),
+        lx.MatrixLinearOperator(prior_covariance, PSD_TAGS),
     )
-    # I + Lᵀ F L
-    whitened_precision = jnp.eye(param_size, dtype=fisher.dtype) + whitened_fisher
-    # (I + Lᵀ F L)⁻¹
-    whitened_covariance = jnp.linalg.inv(whitened_precision)
-    # d_s = tr(I − (I + Lᵀ F L)⁻¹)
-    dofs = param_size - jnp.trace(whitened_covariance)
-    # Σ_θ|y = L (I + Lᵀ F L)⁻¹ Lᵀ
-    posterior_covariance = einx.dot(
-        "row a, a b, col b -> row col", cholesky, whitened_covariance, cholesky
-    )
-    prior_variance = jnp.diagonal(
-        einx.dot("row a, col a -> row col", cholesky, cholesky)
-    )
+    dofs = information.dofs
+    posterior_covariance = information.posterior_cov
+    prior_variance = jnp.diagonal(prior_covariance)
     # 1 − [Σ_θ|y]_aa / [Σ_θ]_aa
     data_fraction = 1.0 - jnp.diagonal(posterior_covariance) / prior_variance
     # (θ* − μ_θ) / √[Σ_θ]_aa

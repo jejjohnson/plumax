@@ -31,6 +31,7 @@ import numpy as np
 from jaxtyping import Array, Bool, Float
 
 from plumax._src.scalar_emission import LognormalEmission
+from plumax._src.tracing import require_positive
 from plumax.coupled._src.inversion import (
     CoupledPrior,
     CoupledProblem,
@@ -74,12 +75,9 @@ class MaskedKPrior:
             raise ValueError(
                 f"MaskedKPrior: prior_active must be in (0, 1], got {self.prior_active}."
             )
-        if not (
-            self.emission_mean > 0.0
-            and self.emission_std > 0.0
-            and self.background_std > 0.0
-        ):
-            raise ValueError("MaskedKPrior: the prior scales must be > 0.")
+        require_positive("emission_mean", self.emission_mean, caller="MaskedKPrior")
+        require_positive("emission_std", self.emission_std, caller="MaskedKPrior")
+        require_positive("background_std", self.background_std, caller="MaskedKPrior")
 
 
 def slot_responses(

@@ -30,7 +30,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 import numpyro
@@ -39,8 +38,9 @@ import scipy.special
 from jax.scipy.special import erfc
 from jax.scipy.stats import norm as jax_norm
 from jax.typing import ArrayLike
-from numpyro.infer import MCMC, NUTS
 
+from plumax._src.nuts import run_nuts
+from plumax._src.tracing import require_positive
 from plumax.population._src.fitting_iw import (
     MarkPosterior,
     TMTPPPosterior,
@@ -97,12 +97,9 @@ def lognorm_cdf(x: ArrayLike, x50: float, s: float) -> np.ndarray:
         ValueError: If any of ``x``, ``x50``, ``s`` are non-positive.
     """
     rates = np.asarray(x)
-    if np.any(rates <= 0.0):
-        raise ValueError("lognorm_cdf: all entries of `x` must be > 0")
-    if not (x50 > 0.0):
-        raise ValueError(f"lognorm_cdf: `x50` must be > 0 (got {x50!r})")
-    if not (s > 0.0):
-        raise ValueError(f"lognorm_cdf: `s` must be > 0 (got {s!r})")
+    require_positive("x", rates, caller="lognorm_cdf")
+    require_positive("x50", x50, caller="lognorm_cdf")
+    require_positive("s", s, caller="lognorm_cdf")
     # P_d = 1 − ½ erfc((ln x − ln x₅₀) / (√2 s))
     return 1.0 - 0.5 * scipy.special.erfc(
         (np.log(rates) - np.log(x50)) / (np.sqrt(2.0) * s)
@@ -223,29 +220,24 @@ def run_mcmc(
         )
     if np.any(~np.isfinite(data_values)):
         raise ValueError("run_mcmc: `data_values` must contain only finite values")
-    if np.any(data_values <= 0.0):
-        raise ValueError("run_mcmc: `data_values` must be strictly positive")
+    require_positive("data_values", data_values, caller="run_mcmc")
     if np.any((data_values < x_min) | (data_values > x_max)):
         raise ValueError(
             "run_mcmc: all `data_values` must lie within the closed support "
             f"[x_min, x_max] = [{x_min}, {x_max}]"
         )
 
-    kernel = NUTS(pod_powerlaw_model)
-    mcmc = MCMC(
-        kernel,
+    samples = run_nuts(
+        pod_powerlaw_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress_bar=False,
+        print_summary=print_summary,
+        x_obs=data_values,
+        x_min=x_min,
+        x_max=x_max,
     )
-
-    rng_key = jax.random.PRNGKey(seed)
-    mcmc.run(rng_key, x_obs=data_values, x_min=x_min, x_max=x_max)
-    if print_summary:
-        mcmc.print_summary()
-
-    samples = mcmc.get_samples()
     return pd.DataFrame(
         {
             "x0": np.asarray(samples["x0"]),

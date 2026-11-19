@@ -50,7 +50,7 @@ import einx
 import jax.numpy as jnp
 import numpy as np
 
-from plumax._src.tracing import _is_traced
+from plumax._src.tracing import _is_traced, require_positive
 
 
 if TYPE_CHECKING:
@@ -139,9 +139,7 @@ class EmissionEvent:
         """
         if _is_traced(self.emission_std):
             return
-        if float(self.emission_std) < 0.0:
-            msg = f"emission_std must be non-negative, got {self.emission_std!r}"
-            raise ValueError(msg)
+        require_positive("emission_std", self.emission_std, allow_zero=True)
 
 
 def _scalar_q_summary(posterior: object) -> tuple[jax.Array, jax.Array]:

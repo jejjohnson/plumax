@@ -22,6 +22,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from plumax._src.dataset import label_concentrations
+from plumax._src.domain import cell_centres, edge_axis
+from plumax._src.tracing import require_positive
 from plumax.lagrangian._src.wind_interp import mean_wind
 from plumax.lagrangian.particles import (
     ParticleState,
@@ -123,10 +126,13 @@ def simulate_lagrangian(
     """
     import xarray as xr
 
-    if not (emission_rate > 0.0):
-        raise ValueError("simulate_lagrangian: `emission_rate` must be > 0")
-    if source_location[2] < 0.0:
-        raise ValueError("simulate_lagrangian: source height must be ≥ 0")
+    require_positive("emission_rate", emission_rate, caller="simulate_lagrangian")
+    require_positive(
+        "source_location[2]",
+        source_location[2],
+        caller="simulate_lagrangian",
+        allow_zero=True,
+    )
 
     if wind is None:
         if wind_speed is None or wind_direction is None:
@@ -140,13 +146,12 @@ def simulate_lagrangian(
             "simulate_lagrangian: pass `wind` or the speed/direction pair, not both."
         )
 
-    x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
-    y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
-    z_edges = np.linspace(domain_z[0], domain_z[1], int(domain_z[2]) + 1)
-    # c_i = (e_i + e_{i+1}) / 2
-    x_centers = 0.5 * (x_edges[:-1] + x_edges[1:])
-    y_centers = 0.5 * (y_edges[:-1] + y_edges[1:])
-    z_centers = 0.5 * (z_edges[:-1] + z_edges[1:])
+    x_edges = edge_axis(domain_x)
+    y_edges = edge_axis(domain_y)
+    z_edges = edge_axis(domain_z)
+    x_centers = cell_centres(x_edges)
+    y_centers = cell_centres(y_edges)
+    z_centers = cell_centres(z_edges)
     # V_cell = Δx Δy Δz
     cell_volume = float(
         (x_edges[1] - x_edges[0])
@@ -204,14 +209,7 @@ def simulate_lagrangian(
             "background_concentration": background_conc,
         },
     )
-    dataset["concentration"].attrs = {
-        "long_name": "Mass concentration",
-        "units": "kg/m^3",
-    }
-    dataset["column_concentration"].attrs = {
-        "long_name": "Column-integrated concentration",
-        "units": "kg/m^2",
-    }
+    label_concentrations(dataset)
     return dataset
 
 

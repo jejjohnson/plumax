@@ -60,7 +60,8 @@ from radtrax.slab import (
     forward_nonlinear_normalized,
 )
 
-from plumax._src.tracing import _is_traced
+from plumax._src.constants import AVOGADRO, M_CH4
+from plumax._src.tracing import require_positive
 from plumax.coupled.forward import PlumeSource, column_response
 
 
@@ -75,9 +76,10 @@ if TYPE_CHECKING:
     from plumax.coupled.instrument import Instrument
 
 
-# Methane molar mass and Avogadro's number for the mass→molecule conversion.
-CH4_MOLAR_MASS_KG_PER_MOL: float = 0.0160425  # [kg/mol]
-AVOGADRO_PER_MOL: float = 6.02214076e23  # [molecules/mol]
+# Methane molar mass and Avogadro's number for the mass→molecule conversion,
+# kept under their rtm names (both are plumax._src.constants values).
+CH4_MOLAR_MASS_KG_PER_MOL: float = M_CH4  # [kg/mol]
+AVOGADRO_PER_MOL: float = AVOGADRO  # [molecules/mol]
 CM2_PER_M2: float = 1e4  # [cm²/m²]
 
 
@@ -139,14 +141,11 @@ def column_mass_to_delta_vmr(
     """
     # Eager geometry validation, skipped under jit/grad/vmap (the scalars could
     # be tracers in a differentiable pipeline) — mirrors the inversion modules.
-    if not _is_traced(p_atm, T_K, path_length_cm) and (
-        p_atm <= 0.0 or T_K <= 0.0 or path_length_cm <= 0.0
-    ):
-        raise ValueError(
-            "column_mass_to_delta_vmr: `p_atm`, `T_K` and `path_length_cm` "
-            f"must be > 0 (got p_atm={p_atm!r}, T_K={T_K!r}, "
-            f"path_length_cm={path_length_cm!r})."
-        )
+    require_positive("p_atm", p_atm, caller="column_mass_to_delta_vmr")
+    require_positive("T_K", T_K, caller="column_mass_to_delta_vmr")
+    require_positive(
+        "path_length_cm", path_length_cm, caller="column_mass_to_delta_vmr"
+    )
     column_mass = jnp.asarray(column_mass_kg_m2, dtype=float)
     # Gas column number density [molecules/cm²].
     # N_gas = m (N_A / M_CH₄) / 1e4

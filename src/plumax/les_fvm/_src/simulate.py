@@ -17,6 +17,8 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Array, Float
 
+from plumax._src.dataset import label_concentrations
+from plumax._src.tracing import require_positive
 from plumax.gauss_puff.wind import WindSchedule
 from plumax.les_fvm._src.boundary import AxisBCSpec
 from plumax.les_fvm.boundary import build_default_concentration_bc
@@ -348,8 +350,7 @@ def _build_save_times(
     diffrax's ``SaveAt(ts=...)`` rejects save points outside the integration
     interval, so we clip explicitly and dedupe the trailing value.
     """
-    if save_interval <= 0.0:
-        raise ValueError(f"save_interval must be > 0 (got {save_interval!r})")
+    require_positive("save_interval", save_interval)
     if end_time < t_start:
         raise ValueError(
             f"end_time must be >= t_start (got t_start={t_start}, end_time={end_time})"
@@ -661,15 +662,8 @@ def _to_dataset(
         },
         attrs=attrs,
     )
-    dataset["concentration"].attrs = {
-        "long_name": "Methane concentration",
-        "units": "kg/m³",
-    }
     dataset["column_concentration"] = (
         dataset["concentration"].sum(dim="z") * plume_grid.dz
     )
-    dataset["column_concentration"].attrs = {
-        "long_name": "Column-integrated methane",
-        "units": "kg/m²",
-    }
+    label_concentrations(dataset)
     return dataset

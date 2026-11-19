@@ -24,16 +24,27 @@ from jaxtyping import Array, ArrayLike, Bool, Float
 from radtrax import DegenerateInputError, ParameterError, ShapeError
 from radtrax.retrieval.absorption import AbsorptionWindow
 
+from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.vetting import VettingResult, null_masks, null_pvalue, vet_candidate
+from plumax.vetting._src.vet import (
+    DEFAULT_BOX,
+    DEFAULT_DEGREE,
+    DEFAULT_K,
+    DEFAULT_KEEP,
+    _check_vet_inputs,
+)
 
 
 try:
     from geoops.carrier import (
+        Coupling,
         invalid_values,
+        jsonable,
         require_geoarray,
         require_grid_match,
         single_band,
+        valid_pixels,
     )
     from pipekit_ops import Operator
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
@@ -52,7 +63,7 @@ __all__ = ["PlumeVetting"]
 class PlumeVetting(Operator):
     """Vet every candidate of a scene and its scene null; scores as a Dataset.
 
-    Called as ``PlumeVetting(window, table, delta_grid)(cube, mf, masks)``.
+    Called as ``PlumeVetting(window=..., table=..., delta_grid=...)(cube, mf, masks)``.
     For each candidate ``M_c`` of ``masks``, with every candidate kept out of
     the background pool,
 
@@ -109,29 +120,43 @@ class PlumeVetting(Operator):
 
             from plumax.geo import PlumeVetting
 
-            scores = PlumeVetting(window, table, delta_grid, n_null=100)(
+            scores = PlumeVetting(
+                window=window, table=table, delta_grid=delta_grid, n_null=100
+            )(
                 cube, mf, masks
             )
             scores["d_norm"], scores["p_null"]
     """
 
+    backends: ClassVar[tuple[str, ...] | None] = ("numpy",)
+    # fits the bands of a candidate's pixels and draws a null pool across the scene
+    coupling: ClassVar[Coupling] = Coupling(
+        couples={"band", "space"}, reach=None, kind="conversion"
+    )
+
+    forbid_in_yaml: ClassVar[bool] = True
     _terminal: ClassVar[bool] = True
 
     def __init__(
         self,
+        *,
         window: AbsorptionWindow,
         table: Float[ArrayLike, "D Bf"],
         delta_grid: Float[ArrayLike, " D"],
-        *,
         n_null: int = 100,
         key: Array | None = None,
-        k: int = 40,
-        keep: float = 0.5,
-        degree: int = 2,
-        box: int = 200,
+        k: int = DEFAULT_K,
+        keep: float = DEFAULT_KEEP,
+        degree: int = DEFAULT_DEGREE,
+        box: int = DEFAULT_BOX,
     ) -> None:
-        if n_null < 0:
-            raise ParameterError(f"PlumeVetting: n_null must be >= 0, got {n_null}")
+        require_positive(
+            "n_null",
+            n_null,
+            caller="PlumeVetting",
+            allow_zero=True,
+            error=ParameterError,
+        )
         self.window = window
         self.table = table
         self.delta_grid = delta_grid
@@ -168,7 +193,7 @@ class PlumeVetting(Operator):
 
         # nodata pixels never enter a candidate, the pool or a null copy
         # invalid = ∃ band: nodata
-        invalid = einx.any("[band] y x", np.asarray(invalid_values(cube)))
+        invalid = ~valid_pixels(cube)
         invalid |= np.asarray(single_band(invalid_values(enhancement), name="mf"))
         exclude = masks
         if invalid.any():
@@ -182,11 +207,12 @@ class PlumeVetting(Operator):
         fit_bands = self.window.fit_bands(wavelength_nm)
         num_fit_bands = int(fit_bands.sum())
         table = jnp.asarray(self.table)
-        if table.ndim != 2 or table.shape[1] != num_fit_bands:
-            raise ShapeError(
-                f"PlumeVetting: table must be (D, {num_fit_bands}), one column per "
-                f"fitting band of the cube's wavelengths, got {table.shape}"
-            )
+        _check_vet_inputs(
+            table,
+            num_fit_bands,
+            "PlumeVetting",
+            "fitting band of the cube's wavelengths",
+        )
 
         def vet(mask: np.ndarray) -> VettingResult:
             return vet_candidate(
@@ -288,7 +314,7 @@ class PlumeVetting(Operator):
     def get_config(self) -> dict[str, Any]:
         """The JSON-safe configuration, without the arrays (table, grid, key)."""
         return {
-            "window": json.loads(json.dumps(dataclasses.asdict(self.window))),
+            "window": jsonable(dataclasses.asdict(self.window)),
             "n_null": self.n_null,
             "k": self.k,
             "keep": self.keep,
@@ -321,9 +347,9 @@ class PlumeVetting(Operator):
         for name in ("fit_nm", "absorbing_nm"):
             window[name] = tuple(tuple(band) for band in window[name])
         return cls(
-            AbsorptionWindow(**window),
-            table,
-            delta_grid,
+            window=AbsorptionWindow(**window),
+            table=table,
+            delta_grid=delta_grid,
             key=key,
             **config,
         )

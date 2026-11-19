@@ -33,6 +33,8 @@ import einx
 import jax
 import jax.numpy as jnp
 
+from plumax._src.tracing import require_positive
+
 
 # Below this magnitude a turbulent σ is treated as zero (deterministic limit).
 _SIGMA_FLOOR: float = 1e-12
@@ -64,11 +66,14 @@ class HomogeneousTurbulence:
 
     def __post_init__(self) -> None:
         for name in ("sigma_u", "sigma_v", "sigma_w"):
-            if getattr(self, name) < 0.0:
-                raise ValueError(f"HomogeneousTurbulence: `{name}` must be ≥ 0")
+            require_positive(
+                name,
+                getattr(self, name),
+                caller="HomogeneousTurbulence",
+                allow_zero=True,
+            )
         for name in ("tau_u", "tau_v", "tau_w"):
-            if not (getattr(self, name) > 0.0):
-                raise ValueError(f"HomogeneousTurbulence: `{name}` must be > 0")
+            require_positive(name, getattr(self, name), caller="HomogeneousTurbulence")
 
     @classmethod
     def isotropic(cls, sigma: float, tau: float) -> HomogeneousTurbulence:
@@ -301,8 +306,7 @@ class HannaTurbulence:
     coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER
 
     def __post_init__(self) -> None:
-        if not (self.z_floor > 0.0):
-            raise ValueError("HannaTurbulence: `z_floor` must be > 0")
+        require_positive("z_floor", self.z_floor, caller="HannaTurbulence")
 
     def at(self, z: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Return ``(σ, τ_L)`` at height(s) ``z`` from the Hanna (1982) profiles.

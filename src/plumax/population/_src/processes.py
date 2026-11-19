@@ -170,6 +170,35 @@ def expected_events_by_tod_bin(
     return jax.ops.segment_sum(per_cell, cell_bins, num_segments=n_bins)
 
 
+def expected_events(
+    kernel: Any,
+    start: ArrayLike,
+    stop: ArrayLike,
+    *,
+    nodes_per_day: int = NODES_PER_DAY,
+    num_points: int | None = None,
+) -> Float[Array, "*time"]:
+    """Expected events of a kernel over an interval, Λ(a, b) = ∫ₐᵇ λ(t) dt.
+
+    The kernel's closed-form compensator when it has one, else Simpson's rule.
+
+    Args:
+        kernel: A kernel from :mod:`plumax.population.intensity`.
+        start: Start a [days].
+        stop: End b [days]. With ``num_points`` unset, ``stop - start`` is a
+            concrete number, since it sets the node count.
+        nodes_per_day: Simpson nodes per day, without a closed form.
+        num_points: Simpson nodes in all, instead of ``nodes_per_day`` per day, for
+            an interval whose length is traced.
+
+    Returns:
+        Λ(a, b).
+    """
+    if num_points is None:
+        num_points = _quadrature_points(stop - start, nodes_per_day)
+    return LogIntensity(kernel, n_integration_points=num_points).integrate(start, stop)
+
+
 def _quadrature_points(window_length: float, nodes_per_day: int) -> int:
     # odd, so Simpson's rule uses the nodes as given
     nodes = max(math.ceil(window_length * nodes_per_day), 2)
