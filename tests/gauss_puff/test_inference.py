@@ -456,9 +456,9 @@ def test_infer_rejects_observation_time_before_wind_schedule():
         )
 
 
-@pytest.fixture
-def float32():
-    """Run one test in float32, then give the suite its float64 back."""
+@pytest.mark.validation
+def test_infer_emission_rate_recovers_synthetic_Q():
+    """NUTS should recover a synthetic emission rate from time-series data."""
     import numpyro
 
     numpyro.enable_x64(False)

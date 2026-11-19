@@ -35,6 +35,8 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 import scipy.special
+from functax import quad as functax_quad
+from integrix import rule as integrix_rule
 from jax.scipy.special import erfc
 from jax.scipy.stats import norm as jax_norm
 from jax.typing import ArrayLike
@@ -159,7 +161,9 @@ def pod_powerlaw_model(
     )
     # q(ξ) e^{(1 − α) ξ}
     integrand = pod_on_grid * jnp.exp(-exponent * log_grid + log_grid)
-    I_theta = jnp.trapezoid(integrand, log_grid)
+    # I(θ) = ∫ q(ξ) e^{(1 − α) ξ} dξ, trapezoid weights on the ξ grid
+    nodes = functax_quad.trapezoid(log_grid)
+    I_theta = integrix_rule.integrate(nodes, integrand).value
     I_theta = jnp.clip(I_theta, min=1e-300)
 
     # log L = −α Σ log x + Σ log q − N log I(θ)

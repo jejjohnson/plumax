@@ -26,6 +26,8 @@ from typing import TYPE_CHECKING
 import einx
 import jax.numpy as jnp
 import numpy as np
+from functax import quad as functax_quad
+from integrix import rule as integrix_rule
 from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Float
@@ -327,7 +329,11 @@ def simulate_plume(
     # both endpoints, so a plain ``sum * dz`` over-counts a vertically uniform
     # component (e.g. a background) by one grid interval, a factor
     # num_z / (num_z − 1).
-    column = np.trapezoid(concentration, x=height, axis=2)
+    # h_k, the trapezoid weights on the levels z_k
+    levels = functax_quad.trapezoid(height)
+    # Ω(x, y) = Σ_k h_k C(x, y, z_k)
+    integral = integrix_rule.integrate(levels, concentration, axis=2)
+    column = np.asarray(integral.value)
 
     dataset = xr.Dataset(
         data_vars={
