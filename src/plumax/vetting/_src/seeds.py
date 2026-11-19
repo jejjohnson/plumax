@@ -19,7 +19,7 @@ from jaxtyping import Array, ArrayLike, Bool, Float
 from radtrax import DegenerateInputError, ParameterError, ShapeError
 
 from plumax._src.tracing import require, require_positive
-from plumax.vetting._src.morphology import dilate
+from plumax.vetting._src.morphology import dilate, union_masks
 
 
 __all__ = ["background_pool", "select_seeds"]
@@ -204,16 +204,10 @@ def background_pool(
     near = einx.logical_and("H, W -> H W", near_row, near_col)
     pool = near & jnp.any(rows) & ~seeds & (jnp.abs(mf) < threshold)
     if exclude is not None:
-        exclude = jnp.asarray(exclude, dtype=bool)
-        if exclude.ndim != 3 or exclude.shape[1:] != mf.shape:
-            raise ShapeError(
-                f"background_pool: exclude must be (C, {height}, {width}), "
-                f"got {exclude.shape}"
-            )
-        # einx rejects a zero-size axis; no masks exclude nothing
-        if exclude.shape[0] > 0:
-            # O = O ∖ ⋃_c M_c
-            pool &= ~einx.any("[C] H W", exclude)
+        # O = O ∖ ⋃_c M_c
+        pool &= ~union_masks(
+            jnp.asarray(exclude, dtype=bool), mf.shape, "background_pool"
+        )
     return _require_any(
         pool,
         "background_pool: the pool is empty; no pixel near the seeds is "

@@ -34,7 +34,6 @@ import xarray as xr
 from jaxtyping import Array, Bool, Float, Int
 
 from plumax._src.errors import (
-    DomainError,
     GridMismatchError,
     MissingVariableError,
     ParameterError,
@@ -42,6 +41,7 @@ from plumax._src.errors import (
     UnitsError,
 )
 from plumax._src.extras import require_extra
+from plumax._src.geometry import direction_from_centroid
 from plumax._src.tracing import require_positive
 from plumax.coupled import Instrument, QualityFlag
 from plumax.met._src.frames import LocalFrame
@@ -51,6 +51,7 @@ from plumax.obs._src.ingest import (
     P_STANDARD,
     T_STANDARD,
     ColumnObservation,
+    _column_observation,
     _readers,
     _scene_time,
     ppm_m_to_column_mass,
@@ -314,7 +315,15 @@ def load_emit_plume_complex(
     pixel_index = einx.id("p, p -> p (1 + 1)", row_index, col_index)
 
     observation = _column_observation(
-        name, receptors, kept, _scene_time(dataset), clock, dtype
+        name,
+        receptors,
+        kept["kernel"],
+        kept["variance"],
+        kept["enhancement"],
+        _scene_time(dataset),
+        clock,
+        flags=kept["flags"],
+        mask=kept["mask"].astype(dtype),
     )
     return PlumeScene(
         observation=observation,
@@ -426,7 +435,17 @@ def matched_filter_scene(
     kept = _kept_pixels(column_mass, gain, obs_noise_std, mask, keep, flags)
     easting, northing = frame.to_xy(lat, lon)
     receptors = einx.id("p, p -> p (1 + 1)", easting[keep], northing[keep])
-    return _column_observation(name, receptors, kept, np.datetime64("NaT"), None, dtype)
+    return _column_observation(
+        name,
+        receptors,
+        kept["kernel"],
+        kept["variance"],
+        kept["enhancement"],
+        np.datetime64("NaT"),
+        None,
+        flags=kept["flags"],
+        mask=kept["mask"].astype(dtype),
+    )
 
 
 def _raster(field: xr.DataArray) -> np.ndarray:
@@ -700,42 +719,15 @@ def _direction(
         total = float(einx.sum("[pixel]", weight))
     if total <= 0.0:
         raise ScreeningError("no usable pixel lies inside the plume outline")
-    # s̄ = ∑ₙ wₙ sₙ / ∑ₙ wₙ
-    centroid = einx.dot("pixel axis, pixel -> axis", receptors, weight) / total
-    # s̄ − s₀
-    offset = centroid - origin
-    if math.hypot(float(offset[0]), float(offset[1])) < pixel_size:
-        raise DomainError(
+    return direction_from_centroid(
+        receptors,
+        weight,
+        origin,
+        pixel_size,
+        undefined_message=(
             "the plume's centroid is within a pixel of its origin, so the "
             "starting direction is undefined"
-        )
-    # φ₀ = atan2(s̄₂ − s₀₂, s̄₁ − s₀₁)
-    return math.atan2(float(offset[1]), float(offset[0]))
-
-
-def _column_observation(
-    name: str,
-    receptors: np.ndarray,
-    kept: dict[str, np.ndarray],
-    when: np.datetime64,
-    clock: TimeAxis | None,
-    dtype: np.dtype,
-) -> ColumnObservation:
-    no_clock = clock is None or np.isnat(when)
-    seconds = 0.0 if no_clock else float(clock.to_seconds(when))
-    instrument = Instrument(
-        name=name,
-        receptors=jnp.asarray(receptors),
-        averaging_kernel=jnp.asarray(kept["kernel"]),
-        retrieval_variance=jnp.asarray(kept["variance"]),
-        observation_time=seconds,
-        flags=jnp.asarray(kept["flags"]),
-        mask=jnp.asarray(kept["mask"].astype(dtype)),
-    )
-    return ColumnObservation(
-        instrument=instrument,
-        enhancement=jnp.asarray(kept["enhancement"]),
-        time=when,
+        ),
     )
 
 

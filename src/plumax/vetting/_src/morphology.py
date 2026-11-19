@@ -6,12 +6,46 @@ or geotoolz, so `plumax.vetting` stays an L1 module on arrays.
 
 from __future__ import annotations
 
+import einx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Array, ArrayLike, Bool
+from radtrax import ShapeError
 
 
-__all__ = ["dilate"]
+__all__ = ["dilate", "union_masks"]
+
+
+def union_masks(
+    stack: Bool[ArrayLike, "C H W"], shape: tuple[int, int], name: str
+) -> Bool[ArrayLike, "H W"]:
+    """Union ⋃_c M_c of a ``(C, H, W)`` stack of masks, empty stack included.
+
+    Works on NumPy and JAX arrays alike and returns the same kind.
+
+    Args:
+        stack: The masks, as an array (``np.ndarray`` or ``jax.Array``) of
+            booleans.
+        shape: The ``(H, W)`` the masks must have.
+        name: The calling function, prefixed to the error message.
+
+    Returns:
+        The union, ``(H, W)``; all ``False`` for ``C = 0``.
+
+    Raises:
+        ShapeError: If ``stack`` is not ``(C, H, W)``.
+    """
+    height, width = shape
+    if stack.ndim != 3 or stack.shape[1:] != shape:
+        raise ShapeError(
+            f"{name}: exclude must be (C, {height}, {width}), got {stack.shape}"
+        )
+    # einx rejects a zero-size axis; no masks make an empty union
+    if stack.shape[0] == 0:
+        return np.zeros(shape, dtype=bool)
+    # ⋃_c M_c
+    return einx.any("[C] H W", stack)
 
 
 def dilate(mask: Bool[ArrayLike, "H W"], steps: int = 1) -> Bool[Array, "H W"]:

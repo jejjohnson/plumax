@@ -115,6 +115,7 @@ population = ["numpyro>=0.21", "pyyaml>=6", "xtremax>=0.0.4"]
 # declaring them; scikit-learn's DBSCAN counts clumps in PlumeQNDFeatures.
 # Imported lazily, so the base install stays carrier-free (gate P5).
 geo = [
+    "functax>=0.0.6",
     "georeader-spaceml>=2.4.1",
     "geotoolz-ops[morph]>=0.18.1",
     "scikit-learn>=1.4",

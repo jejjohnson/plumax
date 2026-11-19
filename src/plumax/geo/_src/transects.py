@@ -31,11 +31,13 @@ from scipy import ndimage, optimize, signal
 from plumax._src.errors import DomainError, ParameterError
 from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
+from plumax.geo._src.plume_array import angle_frame, transect_line
 from plumax.geo.plume_array import pixel_area, squeeze_single_band
 
 
 try:
     import geopandas as gpd
+    from functax.geometry import to_pixel
     from geoops.carrier import (
         affine_of,
         as_tuple,
@@ -45,7 +47,6 @@ try:
         require_projected_crs,
     )
     from pipekit_ops import Operator
-    from shapely.geometry import LineString
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.transects needs the [geo] extra: pip install 'plumax[geo]'"
@@ -176,8 +177,7 @@ def cross_plume_transects(
         -half_samples, half_samples + 1, dtype=np.float64
     )
     # e_∥ = (cos φ, sin φ),  e_⊥ = (−sin φ, cos φ)
-    along = np.array([math.cos(direction), math.sin(direction)])
-    across = np.array([-math.sin(direction), math.cos(direction)])
+    along, across = angle_frame(direction)
     # p_kj = s₀ + d_k e_∥ + c_j e_⊥
     downwind = einx.multiply("transect, axis -> transect axis", distance, along)
     crosswind = einx.multiply("offset, axis -> offset axis", offset, across)
@@ -653,14 +653,13 @@ class CrossPlumeProfile(Operator):
         smoothed = smooth_centreline(fits["centre"], fits["width"], fits["converged"])
 
         # e_∥, e_⊥
-        along = np.array([math.cos(self.direction), math.sin(self.direction)])
-        across = np.array([-math.sin(self.direction), math.cos(self.direction)])
+        along, across = angle_frame(self.direction)
         first, last = float(profiles.offset[0]), float(profiles.offset[-1])
         rows: list[dict[str, Any]] = []
         for transect, distance in enumerate(profiles.distance.tolist()):
             # s₀ + d_k e_∥ + c e_⊥ at the two ends
             middle = np.asarray(self.source) + distance * along
-            line = LineString([middle + first * across, middle + last * across])
+            line = transect_line(middle, across, first, last)
             rows.append(
                 {
                     "geometry": line,
@@ -705,14 +704,19 @@ def _pixel_indices(
     points: Float[np.ndarray, "transect offset axis"], transform: Any
 ) -> tuple[Float[np.ndarray, "transect offset"], Float[np.ndarray, "transect offset"]]:
     """Fractional ``(row, col)`` of each point, pixel centres at integers."""
-    # (x − c, y − f)
-    easting = points[..., 0] - transform.c
-    northing = points[..., 1] - transform.f
     # [col + ½, row + ½] = A⁻¹ (x − c, y − f), with A = [[a, b], [d, e]]
-    determinant = transform.a * transform.e - transform.b * transform.d
-    col = (transform.e * easting - transform.b * northing) / determinant - 0.5
-    row = (-transform.d * easting + transform.a * northing) / determinant - 0.5
-    return row, col
+    row_col = to_pixel(
+        (
+            transform.a,
+            transform.b,
+            transform.c,
+            transform.d,
+            transform.e,
+            transform.f,
+        ),
+        points,
+    )
+    return row_col[..., 0], row_col[..., 1]
 
 
 def _near_nodata(

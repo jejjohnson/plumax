@@ -15,6 +15,7 @@ trace-gas plume literature cited per function:
 
 from __future__ import annotations
 
+import math
 from typing import Any, Literal
 
 import einx
@@ -32,7 +33,7 @@ try:
     from geoops.carrier import pixel_xy, single_band
     from geoops.measure import Connectivity, label_components, skeleton_length
     from geoops.segment import ThresholdMode, threshold_mask
-    from shapely.geometry import MultiPoint
+    from shapely.geometry import LineString, MultiPoint
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.plume_array needs the [geo] extra: pip install 'plumax[geo]'"
@@ -289,6 +290,80 @@ def convert_column_units(
     raise ValueError("units_out must be 'ppm_m', 'mol_m2', or 'kg_m2'")
 
 
+def wind_frame(
+    u: float, v: float
+) -> tuple[Float[np.ndarray, " 2"], Float[np.ndarray, " 2"]]:
+    """Unit along-wind and cross-wind vectors of a wind vector.
+
+    Args:
+        u: Eastward wind component.
+        v: Northward wind component.
+
+    Returns:
+        ``(e_par, e_perp)``, each a length-2 ``(x, y)`` array.
+
+    Raises:
+        ValueError: If the wind vector is zero.
+    """
+    norm = float(np.hypot(u, v))
+    if norm == 0.0:
+        raise ValueError("wind vector must be non-zero")
+    # e_∥ = (u, v) / ‖w‖,  e_⊥ = (−v, u) / ‖w‖
+    return np.array([u / norm, v / norm]), np.array([-v / norm, u / norm])
+
+
+def angle_frame(
+    direction: float,
+) -> tuple[Float[np.ndarray, " 2"], Float[np.ndarray, " 2"]]:
+    """Unit along-wind and cross-wind vectors of a direction angle.
+
+    Args:
+        direction: Angle φ of the along-wind axis, counter-clockwise from +x
+            (radians).
+
+    Returns:
+        ``(e_par, e_perp)``, each a length-2 ``(x, y)`` array.
+    """
+    # e_∥ = (cos φ, sin φ),  e_⊥ = (−sin φ, cos φ)
+    return (
+        np.array([math.cos(direction), math.sin(direction)]),
+        np.array([-math.sin(direction), math.cos(direction)]),
+    )
+
+
+def transect_line(
+    centre: Float[np.ndarray, " 2"],
+    e_perp: Float[np.ndarray, " 2"],
+    first: float,
+    last: float,
+) -> LineString:
+    """Cross-wind transect line through ``centre`` between two offsets.
+
+    Args:
+        centre: ``(x, y)`` of the transect centre.
+        e_perp: Unit cross-wind vector.
+        first: Cross-wind offset of the first end.
+        last: Cross-wind offset of the second end.
+
+    Returns:
+        The segment from ``centre + first e_⊥`` to ``centre + last e_⊥``.
+    """
+    # p_end = s_c + c e_⊥
+    return LineString([centre + first * e_perp, centre + last * e_perp])
+
+
+def _max_pairwise(coords: Float[np.ndarray, "n 2"]) -> float:
+    """Largest pairwise distance among ``coords`` (``n²`` memory)."""
+    # δ = p_first − p_second
+    offset = einx.subtract(
+        "first coord, second coord -> first second coord", coords, coords
+    )
+    # d² = Σ_coord δ²
+    squared = einx.sum("first second [coord]", offset**2)
+    # D = √(max_{first,second} d²)
+    return float(np.sqrt(einx.max("[first second]", squared)))
+
+
 def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
     """Largest distance between two of ``points``, in bounded memory.
 
@@ -303,14 +378,7 @@ def _diameter(points: Float[np.ndarray, "n 2"]) -> float:
     except QhullError:
         order = np.lexsort((points[:, 1], points[:, 0]))
         candidates = points[order[[0, -1]]]
-    # δ = p_first − p_second
-    offset = einx.subtract(
-        "first coord, second coord -> first second coord", candidates, candidates
-    )
-    # d² = Σ_coord δ²
-    squared = einx.sum("first second [coord]", offset**2)
-    # D = √(max_{first,second} d²)
-    return float(np.sqrt(einx.max("[first second]", squared)))
+    return _max_pairwise(candidates)
 
 
 def plume_length(
@@ -388,14 +456,7 @@ def plume_length(
             coords = np.asarray(hull.coords)
         else:
             coords = points
-        # δ = p_first − p_second
-        offset = einx.subtract(
-            "first coord, second coord -> first second coord", coords, coords
-        )
-        # d² = Σ_coord δ²
-        squared = einx.sum("first second [coord]", offset**2)
-        # D = √(max_{first,second} d²)
-        return float(np.sqrt(einx.max("[first second]", squared)))
+        return _max_pairwise(coords)
     if method == "skeleton":
         length = skeleton_length(active, step=transform)
         if length <= 0.0:
