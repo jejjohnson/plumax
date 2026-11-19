@@ -24,7 +24,8 @@ import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jax.scipy.integrate import trapezoid
+from functax import quad as functax_quad
+from integrix import rule as integrix_rule
 from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray
 
 from plumax.population._src.fitting_iw import TMTPPPosterior
@@ -218,7 +219,9 @@ def expected_wait_time(
     # --- survival ---
     # S(sₖ) = exp(−Λ(t, t + sₖ))
     survival = jnp.exp(-cumulative)
-    body = trapezoid(survival, lags)
+    # ∫₀^{s_max} S(s) ds, trapezoid weights on the lags sₖ
+    lag_rule = functax_quad.trapezoid(lags)
+    body = integrix_rule.integrate(lag_rule, survival).value
     # λ̄ over the last decade [s_max / 10, s_max]
     last_decade = lags >= 0.1 * MAX_WAIT
     decade_start = jnp.argmax(last_decade)

@@ -30,6 +30,8 @@ import dataclasses
 from dataclasses import dataclass
 
 import numpy as np
+from functax import quad as functax_quad
+from integrix import rule as integrix_rule
 from jax.typing import ArrayLike
 from scipy.special import expit
 
@@ -165,8 +167,11 @@ def compute_E_Pd(
         -((log_rate - mu) ** 2) / (2.0 * sigma**2)
     )
     pod_values = logistic_pod(Q, Q_50, k)
-    # E[P_d] = ∫ P_d(e^u) N(u; μ, σ²) du
-    return float(np.trapezoid(pod_values * gauss_kernel, log_rate))
+    # wₙ, the trapezoid weights on the nodes uₙ
+    nodes = functax_quad.trapezoid(log_rate)
+    # E[P_d] = ∫ P_d(e^u) N(u; μ, σ²) du ≈ Σₙ wₙ P_d(e^{uₙ}) N(uₙ; μ, σ²)
+    expectation = integrix_rule.integrate(nodes, pod_values * gauss_kernel)
+    return float(expectation.value)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
