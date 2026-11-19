@@ -195,16 +195,28 @@ def test_time_slice_and_errors(tmp_path, frame, grid):
         load_era5(pl, sl, plume_grid=grid, frame=far)
 
 
-def test_global_grid_interpolates_across_the_seam(tmp_path):
-    """A 0–359° global axis must sample across 359°/0° like a -180–179° one."""
-    site = (5.0, -0.3)  # 0.3° west of Greenwich: between the 359° and 0° columns
+@pytest.mark.parametrize(
+    ("site", "east"),
+    [
+        # A 0–359° global axis must sample across 359°/0° like a -180–179° one.
+        # The site is 0.3° west of Greenwich: between the 359° and 0° columns.
+        pytest.param((5.0, -0.3), np.arange(0.0, 360.0, 1.0), id="global_grid"),
+        # A [0, 360) subset across 0° must load like the same subset in ±180°.
+        # The site is between the 359.5° and 359.75° columns; east sorts to 0 … 359.75.
+        pytest.param(
+            (5.0, -0.4),
+            np.array([359.5, 359.75, 0.0, 0.25, 0.5]),
+            id="regional_subset",
+        ),
+    ],
+)
+def test_longitude_axis_interpolates_across_the_seam(tmp_path, site, east):
     seam_frame = LocalFrame.at(*site)
     grid = make_grid(*DOMAIN, dtype=jnp.float64)
     lat = np.array([6.0, 5.0, 4.0])
-    east = np.arange(0.0, 360.0, 1.0)  # global, periodic
     centred = ((east + 180.0) % 360.0) - 180.0
     order = np.argsort(centred)
-    a, b = tmp_path / "global", tmp_path / "centred"
+    a, b = tmp_path / "east", tmp_path / "centred"
     a.mkdir()
     b.mkdir()
     across = load_era5(
@@ -221,33 +233,14 @@ def test_global_grid_interpolates_across_the_seam(tmp_path):
         )
 
 
-def test_regional_subset_across_greenwich(tmp_path):
-    """A [0, 360) subset across 0° must load like the same subset in ±180°."""
-    site = (5.0, -0.4)  # between the 359.5° and 359.75° columns
-    seam_frame = LocalFrame.at(*site)
+def test_regional_subset_gap_across_greenwich_is_not_coverage(tmp_path):
     grid = make_grid(*DOMAIN, dtype=jnp.float64)
     lat = np.array([6.0, 5.0, 4.0])
     east = np.array([359.5, 359.75, 0.0, 0.25, 0.5])  # sorts to 0 … 359.75
-    centred = ((east + 180.0) % 360.0) - 180.0  # -0.5 … 0.5
-    a, b = tmp_path / "east", tmp_path / "centred"
-    a.mkdir()
-    b.mkdir()
-    across = load_era5(
-        *write_era5(a, lon=east, lat=lat), plume_grid=grid, frame=seam_frame
-    )
-    inside = load_era5(
-        *write_era5(b, lon=centred, lat=lat), plume_grid=grid, frame=seam_frame
-    )
-    for name in ("u", "v", "pressure", "pbl_height"):
-        np.testing.assert_allclose(
-            np.asarray(getattr(across, name)),
-            np.asarray(getattr(inside, name)),
-            rtol=1e-12,
-        )
     # the sorted axis's false gap (0.5° to 359.5°) is not coverage
     with pytest.raises(ValueError, match="outside"):
         load_era5(
-            *write_era5(a, lon=east, lat=lat),
+            *write_era5(tmp_path, lon=east, lat=lat),
             plume_grid=grid,
             frame=LocalFrame.at(5.0, 100.0),
         )

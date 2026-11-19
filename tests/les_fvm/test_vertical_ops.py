@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import jax.numpy as jnp
 import numpy as np
+import pytest
 
 from plumax.les_fvm._src.vertical_ops import (
     vertical_advection_tendency,
@@ -26,32 +27,30 @@ def test_vertical_advection_zero_w_gives_zero_tendency():
     np.testing.assert_allclose(np.asarray(t), 0.0, atol=1e-6)
 
 
-def test_vertical_advection_matches_upwind_analytic_positive_w():
-    # Linear profile C = z, constant w > 0 everywhere.  The upwind flux at
-    # k-face with w>0 uses C from the cell below; tendency at T[k] is
-    # -(F[k+1/2] - F[k-1/2])/dz = -(w·(k) - w·(k-1))/dz = -w.
+@pytest.mark.parametrize(
+    ("w_value", "expected", "check_ghosts"),
+    [
+        # Linear profile C = z, constant w > 0 everywhere.  The upwind flux at
+        # k-face with w>0 uses C from the cell below; tendency at T[k] is
+        # -(F[k+1/2] - F[k-1/2])/dz = -(w·(k) - w·(k-1))/dz = -w.
+        # Interior cells: tendency = -w = -2.0 at every interior k.
+        pytest.param(2.0, -2.0, True, id="positive_w"),
+        # For w < 0 the upwind reconstruction pulls from above.  Tendency is
+        # -(F[k+1/2] - F[k-1/2])/dz = -w * (C[k+1] - C[k])/dz = -w for C = z.
+        pytest.param(-3.0, 3.0, False, id="negative_w"),  # expected = -w
+    ],
+)
+def test_vertical_advection_matches_upwind_analytic(w_value, expected, check_ghosts):
     nz, ny, nx = 6, 1, 1
     c = _linear_z_field(nz, ny, nx, slope=1.0)  # C[k,...] = k
-    w = jnp.full((nz, ny, nx), 2.0)
-    dz = 1.0
-    t = vertical_advection_tendency(c, w, dz=dz)
-    # Ghost cells: k=0 and k=-1 remain zero.
-    t_np = np.asarray(t)
-    np.testing.assert_allclose(t_np[0], 0.0)
-    np.testing.assert_allclose(t_np[-1], 0.0)
-    # Interior cells: tendency = -w = -2.0 at every interior k.
-    np.testing.assert_allclose(t_np[1:-1], -2.0, atol=1e-5)
-
-
-def test_vertical_advection_matches_upwind_analytic_negative_w():
-    # For w < 0 the upwind reconstruction pulls from above.  Tendency is
-    # -(F[k+1/2] - F[k-1/2])/dz = -w * (C[k+1] - C[k])/dz = -w for C = z.
-    nz, ny, nx = 6, 1, 1
-    c = _linear_z_field(nz, ny, nx, slope=1.0)
-    w = jnp.full((nz, ny, nx), -3.0)
+    w = jnp.full((nz, ny, nx), w_value)
     t = vertical_advection_tendency(c, w, dz=1.0)
     t_np = np.asarray(t)
-    np.testing.assert_allclose(t_np[1:-1], 3.0, atol=1e-5)  # = -w
+    if check_ghosts:
+        # Ghost cells: k=0 and k=-1 remain zero.
+        np.testing.assert_allclose(t_np[0], 0.0)
+        np.testing.assert_allclose(t_np[-1], 0.0)
+    np.testing.assert_allclose(t_np[1:-1], expected, atol=1e-5)
 
 
 def test_vertical_diffusion_constant_profile_zero_tendency():

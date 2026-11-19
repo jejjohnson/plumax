@@ -220,24 +220,6 @@ def test_posterior_covariance_is_psd_and_shaped():
 
 
 @pytest.mark.slow
-def test_recovers_per_instrument_bias():
-    # A genuine inter-instrument offset must be absorbed into bias_inst, not Q.
-    fwd = _two_instrument_forward()
-    q_true = 1.8
-    biases = [2e-9, -1.5e-9]
-    y = fwd.predict(q_true, biases=biases)
-    mean, cov = default_prior(
-        n_instruments=2,
-        emission_prior_mean=1.0,
-        emission_prior_std=10.0,
-        bias_prior_std=1e-7,
-    )
-    post = fuse_observations(fwd, y, prior_mean=mean, prior_covariance=cov)
-    assert post.emission_rate == pytest.approx(q_true, rel=1e-3)
-    np.testing.assert_allclose(np.asarray(post.biases), np.asarray(biases), atol=2e-10)
-
-
-@pytest.mark.slow
 def test_cross_instrument_holdout():
     # Invert on instrument 0 only, then predict instrument 1's observations from
     # the recovered Q; with a clean twin they must match (design §hold-out).

@@ -274,14 +274,6 @@ def test_simulate_pg_rejects_all_zero_schedule():
         )
 
 
-def test_simulate_rejects_mismatched_initial_concentration():
-    # Initial tracer shape must match the interior grid shape (no ghost ring).
-    with pytest.raises(ValueError, match=r"does not match interior shape"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(initial_concentration=jnp.zeros((4, 4, 4)))
-        )
-
-
 @pytest.mark.slow
 def test_simulate_accepts_explicit_wind_field():
     # Passing a pre-built PrescribedWindField should skip both the uniform
@@ -338,13 +330,6 @@ def test_stable_step_bound_formula():
     ) == float("inf")
 
 
-def test_fixed_step_solver_rejects_unstable_dt0():
-    # Regression for #29: a fixed-step solver with dt0 far above the CFL limit
-    # must raise before integration, not blow up mid-solve.
-    with pytest.raises(ValueError, match="stable step"):
-        simulate_eulerian_dispersion(**_common_kwargs(solver="heun", dt0=1000.0))
-
-
 @pytest.mark.slow
 def test_fixed_step_solver_runs_within_stability_bound():
     # A bound-compliant dt0 on a fixed-step solver integrates normally.
@@ -361,57 +346,95 @@ def test_adaptive_solver_skips_stability_guard():
     assert isinstance(ds, xr.Dataset)
 
 
-def test_stability_guard_rejects_negative_diffusivity():
-    # Anti-diffusion (negative K) is unconditionally unstable; taking |K| would
-    # let the guard approve a step the real tendency then blows up on, so the
-    # guard must reject a negative diffusivity outright.
-    with pytest.raises(ValueError, match="non-negative"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(solver="heun", dt0=0.1, eddy_diffusivity=(-1.0, 1.0))
-        )
+@pytest.mark.parametrize(
+    ("overrides", "match"),
+    [
+        # Initial tracer shape must match the interior grid shape (no ghost ring).
+        pytest.param(
+            {"initial_concentration": jnp.zeros((4, 4, 4))},
+            r"does not match interior shape",
+            id="mismatched_initial_concentration",
+        ),
+        # Regression for #29: a fixed-step solver with dt0 far above the CFL limit
+        # must raise before integration, not blow up mid-solve.
+        pytest.param(
+            {"solver": "heun", "dt0": 1000.0},
+            "stable step",
+            id="fixed_step_solver_unstable_dt0",
+        ),
+        # Anti-diffusion (negative K) is unconditionally unstable; taking |K| would
+        # let the guard approve a step the real tendency then blows up on, so the
+        # guard must reject a negative diffusivity outright.
+        pytest.param(
+            {"solver": "heun", "dt0": 0.1, "eddy_diffusivity": (-1.0, 1.0)},
+            "non-negative",
+            id="stability_guard_negative_diffusivity",
+        ),
+        # A caller-supplied conservative peak overrides the sampled estimate: a huge
+        # max_wind_speed tightens the advective CFL bound and rejects dt0 even
+        # though the actual (uniform 5 m/s) wind would be fine.
+        pytest.param(
+            {"solver": "heun", "dt0": 0.5, "max_wind_speed": 1.0e6},
+            "stable step",
+            id="stability_guard_max_wind_speed_override",
+        ),
+        # Anti-diffusion is invalid regardless of solver; validation is unconditional
+        # (not gated behind the fixed-step guard), so an adaptive run also rejects it.
+        pytest.param(
+            {"solver": "tsit5", "eddy_diffusivity": (-1.0, 1.0)},
+            "non-negative",
+            id="negative_diffusivity_adaptive_solver",
+        ),
+        # A NaN K makes every dt0 > bound comparison false, silently disabling the
+        # guard — so a non-finite diffusivity must be rejected outright.
+        pytest.param(
+            {"solver": "heun", "dt0": 0.5, "eddy_diffusivity": (float("nan"), 1.0)},
+            "finite",
+            id="nonfinite_diffusivity",
+        ),
+        # A negative or non-finite override would zero/NaN the bound and disable the
+        # guard; it must be rejected at the entry point (before any solve).
+        pytest.param(
+            {"max_wind_speed": -1.0},
+            "max_wind_speed",
+            id="invalid_max_wind_speed_negative",
+        ),
+        pytest.param(
+            {"max_wind_speed": float("nan")},
+            "max_wind_speed",
+            id="invalid_max_wind_speed_nan",
+        ),
+        pytest.param(
+            {"max_wind_speed": float("inf")},
+            "max_wind_speed",
+            id="invalid_max_wind_speed_inf",
+        ),
+        # A NaN uniform-wind component would make the CFL bound NaN; reject it at
+        # wind-field construction, regardless of solver.
+        pytest.param(
+            {"uniform_wind": (float("nan"), 0.0, 0.0)},
+            "finite",
+            id="nonfinite_uniform_wind",
+        ),
+    ],
+)
+def test_simulate_rejects_invalid_config_before_integrating(overrides, match):
+    with pytest.raises(ValueError, match=match):
+        simulate_eulerian_dispersion(**_common_kwargs(**overrides))
 
 
-def test_stability_guard_honors_max_wind_speed_override():
-    # A caller-supplied conservative peak overrides the sampled estimate: a huge
-    # max_wind_speed tightens the advective CFL bound and rejects dt0 even
-    # though the actual (uniform 5 m/s) wind would be fine.
-    with pytest.raises(ValueError, match="stable step"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(solver="heun", dt0=0.5, max_wind_speed=1.0e6)
-        )
-
-
-def test_negative_diffusivity_rejected_even_for_adaptive_solver():
-    # Anti-diffusion is invalid regardless of solver; validation is unconditional
-    # (not gated behind the fixed-step guard), so an adaptive run also rejects it.
-    with pytest.raises(ValueError, match="non-negative"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(solver="tsit5", eddy_diffusivity=(-1.0, 1.0))
-        )
-
-
-def test_nonfinite_diffusivity_rejected():
-    # A NaN K makes every dt0 > bound comparison false, silently disabling the
-    # guard — so a non-finite diffusivity must be rejected outright.
-    with pytest.raises(ValueError, match="finite"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(
-                solver="heun", dt0=0.5, eddy_diffusivity=(float("nan"), 1.0)
-            )
-        )
-
-
-def test_invalid_max_wind_speed_rejected():
-    # A negative or non-finite override would zero/NaN the bound and disable the
-    # guard; it must be rejected at the entry point (before any solve).
-    for bad in (-1.0, float("nan"), float("inf")):
-        with pytest.raises(ValueError, match="max_wind_speed"):
-            simulate_eulerian_dispersion(**_common_kwargs(max_wind_speed=bad))
-
-
-def test_stability_guard_rejects_nonfinite_wind():
-    # A NaN wind component reads as calm through max(prev, nan), so the guard
-    # would approve a step the RHS then corrupts; the sampler must reject it.
+@pytest.mark.parametrize(
+    "extra_kwargs",
+    [
+        # A NaN wind component reads as calm through max(prev, nan), so the guard
+        # would approve a step the RHS then corrupts; the sampler must reject it.
+        pytest.param({}, id="stability_guard"),
+        # The override supplies the maxima but must not bypass finiteness: the field
+        # is still sampled, so a NaN callable wind is rejected even with an override.
+        pytest.param({"max_wind_speed": 10.0}, id="max_wind_speed_override"),
+    ],
+)
+def test_stability_guard_rejects_nonfinite_wind(extra_kwargs):
     from plumax.les_fvm.wind import wind_field_from_callable
 
     g = make_grid((0.0, 400.0, 16), (0.0, 200.0, 8), (0.0, 80.0, 8))
@@ -435,45 +458,7 @@ def test_stability_guard_rejects_nonfinite_wind():
             eddy_diffusivity=(1.0, 1.0),
             solver="heun",
             dt0=0.5,
-        )
-
-
-def test_max_wind_speed_override_still_rejects_nonfinite_wind():
-    # The override supplies the maxima but must not bypass finiteness: the field
-    # is still sampled, so a NaN callable wind is rejected even with an override.
-    from plumax.les_fvm.wind import wind_field_from_callable
-
-    g = make_grid((0.0, 400.0, 16), (0.0, 200.0, 8), (0.0, 80.0, 8))
-
-    def nan_wind(t, X, Y, Z):
-        del t, Y, Z
-        return jnp.full_like(X, jnp.nan), jnp.zeros_like(X), jnp.zeros_like(X)
-
-    wf = wind_field_from_callable(g, nan_wind)
-    with pytest.raises(ValueError, match="non-finite"):
-        simulate_eulerian_dispersion(
-            domain_x=(0.0, 400.0, 16),
-            domain_y=(0.0, 200.0, 8),
-            domain_z=(0.0, 80.0, 8),
-            t_start=0.0,
-            t_end=20.0,
-            save_interval=10.0,
-            emission_rate=0.1,
-            source_location=(50.0, 100.0, 20.0),
-            wind_field=wf,
-            eddy_diffusivity=(1.0, 1.0),
-            solver="heun",
-            dt0=0.5,
-            max_wind_speed=10.0,
-        )
-
-
-def test_nonfinite_uniform_wind_rejected():
-    # A NaN uniform-wind component would make the CFL bound NaN; reject it at
-    # wind-field construction, regardless of solver.
-    with pytest.raises(ValueError, match="finite"):
-        simulate_eulerian_dispersion(
-            **_common_kwargs(uniform_wind=(float("nan"), 0.0, 0.0))
+            **extra_kwargs,
         )
 
 

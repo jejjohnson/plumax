@@ -15,11 +15,6 @@ from plumax.gauss_plume.plume import plume_concentration
 from tests._type_check import raises_checked
 
 
-def test_model_importable():
-    # Smoke — confirms the numpyro import path stays working.
-    assert callable(gaussian_plume_model)
-
-
 # ── LogNormal prior parameterisation ─────────────────────────────────────────
 
 

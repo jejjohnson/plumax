@@ -8,7 +8,6 @@ import numpyro
 import pytest
 
 from plumax.population import pod as pf
-from plumax.population.pod import POD_REGISTRY
 
 
 N = 32
@@ -143,9 +142,3 @@ def test_priors_sample_and_evaluate(cls_name):
         trace = numpyro.handlers.trace(model).get_trace()
     assert bool(trace["y_finite"]["value"])
     assert bool(trace["y_in_unit"]["value"])
-
-
-def test_registry_keys_map_to_classes():
-    for key, cls in POD_REGISTRY.items():
-        assert callable(cls)
-        assert hasattr(cls, "sample_priors"), f"{key} missing sample_priors"

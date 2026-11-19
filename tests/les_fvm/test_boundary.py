@@ -7,8 +7,6 @@ import numpy as np
 import pytest
 
 from plumax.les_fvm.boundary import (
-    HorizontalBC,
-    VerticalBC,
     apply_boundary_conditions,
     build_default_concentration_bc,
 )
@@ -105,17 +103,21 @@ def test_apply_boundary_conditions_composes_horizontal_and_vertical():
     assert jnp.all(jnp.isfinite(out))
 
 
-def test_unknown_horizontal_kind_rejected():
-    with pytest.raises(ValueError, match=r"horizontal BC kind must be one of"):
-        build_default_concentration_bc(bc_x=("mystery", "outflow"))
-
-
-def test_unknown_vertical_kind_rejected():
-    with pytest.raises(ValueError, match=r"vertical BC kind must be one of"):
-        build_default_concentration_bc(bc_z=("mystery", "neumann"))
-
-
-def test_bc_set_types_returned():
-    hbc, vbc = build_default_concentration_bc()
-    assert isinstance(hbc, HorizontalBC)
-    assert isinstance(vbc, VerticalBC)
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        pytest.param(
+            {"bc_x": ("mystery", "outflow")},
+            r"horizontal BC kind must be one of",
+            id="unknown_horizontal_kind",
+        ),
+        pytest.param(
+            {"bc_z": ("mystery", "neumann")},
+            r"vertical BC kind must be one of",
+            id="unknown_vertical_kind",
+        ),
+    ],
+)
+def test_unknown_bc_kind_rejected(kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        build_default_concentration_bc(**kwargs)

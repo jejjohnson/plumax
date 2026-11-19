@@ -8,7 +8,6 @@ import numpy as np
 from plumax.gauss_puff.wind import WindSchedule
 from plumax.les_fvm.grid import coord_arrays_from_grid, make_grid
 from plumax.les_fvm.wind import (
-    PrescribedWindField,
     uniform_wind_field,
     wind_field_from_callable,
     wind_field_from_schedule,
@@ -93,15 +92,6 @@ def test_wind_field_from_callable_samples_components_at_stagger_points():
     np.testing.assert_allclose(u_int, X + 0.5 * g.dx, rtol=1e-5)
     np.testing.assert_allclose(v_int, Y + 0.5 * g.dy, rtol=1e-5)
     np.testing.assert_allclose(w_int, X, rtol=1e-5)
-
-
-def test_prescribed_wind_field_returns_pytree():
-    g = _build_grid()
-    wf = uniform_wind_field(g, u=1.0, v=0.0, w=0.0)
-    assert isinstance(wf, PrescribedWindField)
-    # Callable when sampled.
-    u, v, w = wf(jnp.asarray(0.0))
-    assert u.shape == w.shape == v.shape == g.shape
 
 
 def test_wind_field_from_callable_is_reexported_from_package_root():

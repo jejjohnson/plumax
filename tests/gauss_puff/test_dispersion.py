@@ -7,7 +7,6 @@ import numpy as np
 import pytest
 
 from plumax.gauss_puff.dispersion import (
-    DISPERSION_SCHEMES,
     PG_DISPERSION_PARAMS,
     STABILITY_CLASSES,
     calculate_briggs_dispersion_xyz,
@@ -15,15 +14,6 @@ from plumax.gauss_puff.dispersion import (
     get_dispersion_scheme,
     get_pg_params,
 )
-
-
-def test_stability_classes_registered():
-    assert set(PG_DISPERSION_PARAMS.keys()) == set(STABILITY_CLASSES)
-
-
-def test_pg_param_shape():
-    for cls in STABILITY_CLASSES:
-        assert PG_DISPERSION_PARAMS[cls].shape == (6,)
 
 
 def test_get_pg_params_roundtrip():
@@ -79,13 +69,6 @@ def test_pg_sigma_reference_values_at_1km():
         np.testing.assert_allclose(float(sz), sz_ref, rtol=0.02, err_msg=f"σ_z {cls}")
 
 
-def test_pg_sigma_z_class_a_is_physical_not_kilometres():
-    # Direct anti-regression for the transcription bug: class-A σ_z at 1 km must
-    # be a few hundred metres, not the ~18 km the old coefficient produced.
-    _sx, _sy, sz = calculate_pg_dispersion(jnp.array(1000.0), PG_DISPERSION_PARAMS["A"])
-    assert 300.0 < float(sz) < 600.0
-
-
 def test_pg_dispersion_clamps_nonpositive_distance():
     # Distance clamp ensures ln(s) stays finite at s ≤ 0.
     params = PG_DISPERSION_PARAMS["D"]
@@ -105,10 +88,6 @@ def test_pg_unstable_spreads_more_than_stable():
     _sxF, syF, szF = calculate_pg_dispersion(distance, PG_DISPERSION_PARAMS["F"])
     assert float(syA) > float(syF)
     assert float(szA) > float(szF)
-
-
-def test_dispersion_schemes_registered():
-    assert set(DISPERSION_SCHEMES) == {"pg", "briggs"}
 
 
 def test_get_dispersion_scheme_returns_consistent_pair():

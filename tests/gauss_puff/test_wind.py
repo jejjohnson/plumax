@@ -12,22 +12,22 @@ from plumax.gauss_puff.wind import (
 )
 
 
-def test_from_speed_direction_west_wind():
-    # Wind "from west" (270°) should give +u, ≈0 v.
+@pytest.mark.parametrize(
+    ("speed", "direction", "expected_u", "expected_v"),
+    [
+        # Wind "from west" (270°) should give +u, ≈0 v.
+        pytest.param(5.0, 270.0, 5.0, 0.0, id="west_wind"),
+        # Wind "from north" (0°): flows south → v negative.
+        pytest.param(3.0, 0.0, 0.0, -3.0, id="north_wind"),
+    ],
+)
+def test_from_speed_direction(speed, direction, expected_u, expected_v):
     times = np.linspace(0, 10, 5)
-    speed = np.full(5, 5.0)
-    direction = np.full(5, 270.0)
-    sched = WindSchedule.from_speed_direction(times, speed, direction)
-    np.testing.assert_allclose(sched.u_wind, 5.0, atol=1e-5)
-    np.testing.assert_allclose(sched.v_wind, 0.0, atol=1e-5)
-
-
-def test_from_speed_direction_north_wind():
-    # Wind "from north" (0°): flows south → v negative.
-    times = np.linspace(0, 10, 5)
-    sched = WindSchedule.from_speed_direction(times, np.full(5, 3.0), np.full(5, 0.0))
-    np.testing.assert_allclose(sched.u_wind, 0.0, atol=1e-5)
-    np.testing.assert_allclose(sched.v_wind, -3.0, atol=1e-5)
+    sched = WindSchedule.from_speed_direction(
+        times, np.full(5, speed), np.full(5, direction)
+    )
+    np.testing.assert_allclose(sched.u_wind, expected_u, atol=1e-5)
+    np.testing.assert_allclose(sched.v_wind, expected_v, atol=1e-5)
 
 
 @pytest.mark.slow

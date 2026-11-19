@@ -36,18 +36,6 @@ def test_lagrangian_operator_runs_and_is_operator():
     assert float(ds["concentration"].max()) > 0.0
 
 
-def test_lagrangian_operator_config_reports_keys():
-    op = LagrangianDispersion(
-        turbulence=HomogeneousTurbulence.isotropic(1.0, 30.0),
-        domain_x=(0.0, 100.0, 10),
-        domain_y=(0.0, 100.0, 10),
-        domain_z=(0.0, 100.0, 10),
-    )
-    cfg = op.get_config()
-    assert cfg["n_particles"] == 5000
-    assert cfg["domain_x"] == (0.0, 100.0, 10)
-
-
 def test_lagrangian_dispersion_config_keys():
     # Regression for #52: the config payload must reflect the real constructor
     # surface — no bogus `stability_class` key (a GaussianPlume copy-paste), and
