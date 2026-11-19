@@ -13,6 +13,7 @@ DOCTESTED_MODULES = (
     "plumax._src.domain",
     "plumax._src.extras",
     "plumax._src.tracing",
+    "plumax._src.units",
     "plumax._src.wind",
     "plumax.coupled._src.quality",
     "plumax.gauss_plume._src.dispersion",

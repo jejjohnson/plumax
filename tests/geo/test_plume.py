@@ -1216,3 +1216,47 @@ def test_cross_sectional_flux_on_integrix_matches_the_numpy_sum(seed: int) -> No
         on_transect = mask_arr & in_strip
         expected = float(np.nansum(enhancement[on_transect] * 3.0 * width))
         assert row.flux_kg_s == pytest.approx(expected, rel=1e-12, abs=1e-18)
+
+
+def test_ppm_m_conversion_agrees_with_obs_at_the_same_pressure_and_temperature() -> (
+    None
+):
+    """geo and obs convert ppm m with one ideal-gas relation (#344).
+
+    On d8895ac geo used a fixed 298.15 K molar volume and CH4 molar mass
+    0.01604, so the two disagreed by 3.5 % at their defaults.
+    """
+    from plumax.obs import ppm_m_to_column_mass
+
+    values = np.array([0.0, 250.0, 1000.0])
+    for pressure, temperature in ((101_325.0, 288.15), (85_000.0, 300.0)):
+        geo_mass = convert_column_units(
+            values,
+            gas="CH4",
+            units_in="ppm_m",
+            units_out="kg_m2",
+            pressure_pa=pressure,
+            temperature_k=temperature,
+        )
+        obs_mass = ppm_m_to_column_mass(
+            values, pressure_pa=pressure, temperature_k=temperature
+        )
+        np.testing.assert_allclose(geo_mass, obs_mass, rtol=1e-12)
+    defaults = convert_column_units(values, gas="CH4", units_in="ppm_m")
+    np.testing.assert_allclose(
+        defaults,
+        ppm_m_to_column_mass(values, pressure_pa=101_325.0, temperature_k=288.15),
+        rtol=1e-12,
+    )
+
+
+def test_column_to_mass_passes_the_scene_pressure_and_temperature() -> None:
+    values = np.full((4, 4), 1000.0)
+    standard = geo.ColumnToMass()(values)
+    thin = geo.ColumnToMass(pressure_pa=70_000.0)(values)
+    np.testing.assert_allclose(
+        np.asarray(thin) / np.asarray(standard), 70_000.0 / 101_325.0, rtol=1e-6
+    )
+    assert (
+        geo.ColumnToMass(pressure_pa=70_000.0).get_config()["pressure_pa"] == 70_000.0
+    )
