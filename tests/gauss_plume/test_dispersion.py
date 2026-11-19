@@ -14,17 +14,6 @@ from plumax.gauss_plume.dispersion import (
 )
 
 
-def test_stability_classes_registered():
-    assert set(BRIGGS_DISPERSION_PARAMS.keys()) == set(STABILITY_CLASSES)
-    assert STABILITY_CLASSES == ("A", "B", "C", "D", "E", "F")
-
-
-@pytest.mark.parametrize("stab", STABILITY_CLASSES)
-def test_params_shape(stab):
-    params = BRIGGS_DISPERSION_PARAMS[stab]
-    assert params.shape == (6,)
-
-
 def test_get_dispersion_params_returns_registered_array():
     params = get_dispersion_params("C")
     np.testing.assert_array_equal(

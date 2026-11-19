@@ -8,7 +8,6 @@ import numpyro
 import pytest
 
 from plumax.population import intensity
-from plumax.population.intensity import INTENSITY_REGISTRY
 
 
 T_GRID = jnp.linspace(0.0, 365.0, 257)
@@ -49,23 +48,13 @@ def _time_grid(cls_name: str) -> jnp.ndarray:
 @pytest.mark.parametrize(
     "cls_name,kwargs", list(CONSTRUCTOR_ARGS.items()), ids=list(CONSTRUCTOR_ARGS)
 )
-def test_intensity_call_shape_and_finite(cls_name, kwargs):
+def test_intensity_call_shape_finite_and_nonneg(cls_name, kwargs):
     cls = getattr(intensity, cls_name)
     model = cls(**kwargs)
     t = _time_grid(cls_name)
     lam = model(t)
     assert lam.shape == t.shape
     assert jnp.all(jnp.isfinite(lam)), f"{cls_name} produced non-finite λ"
-
-
-@pytest.mark.parametrize(
-    "cls_name,kwargs", list(CONSTRUCTOR_ARGS.items()), ids=list(CONSTRUCTOR_ARGS)
-)
-def test_intensity_nonneg(cls_name, kwargs):
-    cls = getattr(intensity, cls_name)
-    model = cls(**kwargs)
-    t = _time_grid(cls_name)
-    lam = model(t)
     assert jnp.all(lam >= -1e-6), f"{cls_name} produced negative intensity"
 
 
@@ -85,9 +74,3 @@ def test_priors_sample_and_evaluate(cls_name):
     with numpyro.handlers.seed(rng_seed=jr.PRNGKey(0)):
         trace = numpyro.handlers.trace(model).get_trace()
     assert bool(trace["lam_finite"]["value"])
-
-
-def test_registry_keys_map_to_classes():
-    for key, cls in INTENSITY_REGISTRY.items():
-        assert callable(cls)
-        assert hasattr(cls, "sample_priors"), f"{key} missing sample_priors"

@@ -19,35 +19,46 @@ from plumax.gauss_plume.plume import (
 # ── Coordinate rotation ──────────────────────────────────────────────────────
 
 
-def test_rotation_identity_for_easterly_wind():
-    # Wind from west (u > 0, v = 0) → downwind axis aligns with +x.
-    x = jnp.array([100.0, 200.0, 300.0])
-    y = jnp.array([0.0, 50.0, -50.0])
-    x_wind, y_wind = rotate_to_wind_frame(x, y, 0.0, 0.0, 5.0, 0.0)
-    np.testing.assert_allclose(np.asarray(x_wind), [100.0, 200.0, 300.0], atol=1e-4)
-    np.testing.assert_allclose(np.asarray(y_wind), [0.0, 50.0, -50.0], atol=1e-4)
-
-
-def test_rotation_northerly_wind():
-    # Wind toward +y (u=0, v=5): downwind should be dy, crosswind should be -dx.
-    x = jnp.array([50.0, -50.0])
-    y = jnp.array([100.0, 200.0])
-    x_wind, y_wind = rotate_to_wind_frame(x, y, 0.0, 0.0, 0.0, 5.0)
-    np.testing.assert_allclose(np.asarray(x_wind), [100.0, 200.0], atol=1e-4)
-    np.testing.assert_allclose(np.asarray(y_wind), [-50.0, 50.0], atol=1e-4)
-
-
-def test_rotation_translates_by_source():
+@pytest.mark.parametrize(
+    ("x", "y", "source_xy", "wind_uv", "expected_x", "expected_y"),
+    [
+        # Wind from west (u > 0, v = 0) → downwind axis aligns with +x.
+        pytest.param(
+            [100.0, 200.0, 300.0],
+            [0.0, 50.0, -50.0],
+            (0.0, 0.0),
+            (5.0, 0.0),
+            [100.0, 200.0, 300.0],
+            [0.0, 50.0, -50.0],
+            id="identity_for_easterly_wind",
+        ),
+        # Wind toward +y (u=0, v=5): downwind should be dy, crosswind should be -dx.
+        pytest.param(
+            [50.0, -50.0],
+            [100.0, 200.0],
+            (0.0, 0.0),
+            (0.0, 5.0),
+            [100.0, 200.0],
+            [-50.0, 50.0],
+            id="northerly_wind",
+        ),
+        pytest.param(
+            [100.0],
+            [50.0],
+            (100.0, 50.0),
+            (5.0, 0.0),
+            [0.0],
+            [0.0],
+            id="translates_by_source",
+        ),
+    ],
+)
+def test_rotation_to_wind_frame(x, y, source_xy, wind_uv, expected_x, expected_y):
     x_wind, y_wind = rotate_to_wind_frame(
-        jnp.array([100.0]),
-        jnp.array([50.0]),
-        source_x=100.0,
-        source_y=50.0,
-        wind_u=5.0,
-        wind_v=0.0,
+        jnp.array(x), jnp.array(y), *source_xy, *wind_uv
     )
-    np.testing.assert_allclose(np.asarray(x_wind), [0.0], atol=1e-4)
-    np.testing.assert_allclose(np.asarray(y_wind), [0.0], atol=1e-4)
+    np.testing.assert_allclose(np.asarray(x_wind), expected_x, atol=1e-4)
+    np.testing.assert_allclose(np.asarray(y_wind), expected_y, atol=1e-4)
 
 
 # ── Forward model ────────────────────────────────────────────────────────────

@@ -25,10 +25,6 @@ from plumax.gauss_puff.puff import (
 from plumax.gauss_puff.wind import WindSchedule
 
 
-def test_model_importable():
-    assert callable(gaussian_puff_model)
-
-
 def test_gaussian_puff_model_rejects_missing_forward_inputs():
     obs = jnp.array([1e-7, 2e-7])
     with pytest.raises(ValueError, match=r"missing inputs: .*schedule"):

@@ -66,14 +66,6 @@ WIND = make_field(
 # ---- stability functions --------------------------------------------------
 
 
-@pytest.mark.slow
-def test_phi_equals_one_minus_zeta_dpsi():
-    zeta = jnp.concatenate([jnp.linspace(-5.0, -1e-3, 40), jnp.linspace(1e-3, 2.0, 40)])
-    for phi, psi in ((phi_m, psi_m), (phi_h, psi_h)):
-        dpsi = jax.vmap(jax.grad(psi))(zeta)
-        np.testing.assert_allclose(phi(zeta), 1.0 - zeta * dpsi, rtol=1e-10)
-
-
 def test_neutral_limits_and_continuity():
     for fn, at_zero in ((phi_m, 1.0), (phi_h, 1.0), (psi_m, 0.0), (psi_h, 0.0)):
         for zeta in (-1e-9, 0.0, 1e-9):

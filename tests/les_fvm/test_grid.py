@@ -43,40 +43,45 @@ def test_make_grid_coordinate_alignment():
     np.testing.assert_allclose(np.asarray(g.x), expected_x)
 
 
-def test_make_grid_rejects_small_interior():
-    with pytest.raises(ValueError, match=r"at least 4 interior cells"):
-        make_grid(
-            domain_x=(0.0, 10.0, 3),
-            domain_y=(0.0, 10.0, 4),
-            domain_z=(0.0, 10.0, 4),
-        )
-
-
-def test_make_grid_rejects_nonpositive_extent():
-    with pytest.raises(ValueError, match=r"extent must be positive"):
-        make_grid(
-            domain_x=(10.0, 10.0, 4),
-            domain_y=(0.0, 10.0, 4),
-            domain_z=(0.0, 10.0, 4),
-        )
-
-
-def test_make_grid_error_message_names_correct_axis():
-    # Regression test for PR #16: the validation error used to always say
-    # ``x_max - x_min`` regardless of which axis failed.  The message must
-    # now name the actual axis that violated the constraint.
-    with pytest.raises(ValueError, match=r"y_max - y_min"):
-        make_grid(
-            domain_x=(0.0, 10.0, 4),
-            domain_y=(5.0, 5.0, 4),  # zero y-extent
-            domain_z=(0.0, 10.0, 4),
-        )
-    with pytest.raises(ValueError, match=r"z_max - z_min"):
-        make_grid(
-            domain_x=(0.0, 10.0, 4),
-            domain_y=(0.0, 10.0, 4),
-            domain_z=(5.0, 5.0, 4),  # zero z-extent
-        )
+@pytest.mark.parametrize(
+    ("domain_x", "domain_y", "domain_z", "match"),
+    [
+        pytest.param(
+            (0.0, 10.0, 3),
+            (0.0, 10.0, 4),
+            (0.0, 10.0, 4),
+            r"at least 4 interior cells",
+            id="small_interior",
+        ),
+        pytest.param(
+            (10.0, 10.0, 4),
+            (0.0, 10.0, 4),
+            (0.0, 10.0, 4),
+            r"extent must be positive",
+            id="nonpositive_extent",
+        ),
+        # Regression test for PR #16: the validation error used to always say
+        # ``x_max - x_min`` regardless of which axis failed.  The message must
+        # now name the actual axis that violated the constraint.
+        pytest.param(
+            (0.0, 10.0, 4),
+            (5.0, 5.0, 4),  # zero y-extent
+            (0.0, 10.0, 4),
+            r"y_max - y_min",
+            id="error_message_names_y_axis",
+        ),
+        pytest.param(
+            (0.0, 10.0, 4),
+            (0.0, 10.0, 4),
+            (5.0, 5.0, 4),  # zero z-extent
+            r"z_max - z_min",
+            id="error_message_names_z_axis",
+        ),
+    ],
+)
+def test_make_grid_rejects_invalid_domain(domain_x, domain_y, domain_z, match):
+    with pytest.raises(ValueError, match=match):
+        make_grid(domain_x=domain_x, domain_y=domain_y, domain_z=domain_z)
 
 
 def test_coord_arrays_from_grid_layout():

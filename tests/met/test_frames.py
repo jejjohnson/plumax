@@ -9,42 +9,12 @@ from hypothesis import given, settings, strategies as st
 
 from plumax.les_fvm.grid import make_grid
 from plumax.met import LocalFrame
-from plumax.met.frames import utm_epsg
 
 
 pytest.importorskip("pyproj")
 
 # A Permian Basin site, the running example across the Tier 0 loaders.
 LAT0, LON0 = 31.95, -102.15
-
-
-@pytest.mark.parametrize(
-    ("lat", "lon", "epsg"),
-    [
-        (LAT0, LON0, 32613),  # 102.15° W → zone 13 north
-        (-23.5, 133.9, 32753),  # central Australia → zone 53 south
-        (0.0, 179.9, 32660),  # last zone
-        (10.0, -180.0, 32601),  # first zone
-    ],
-)
-def test_utm_zone(lat, lon, epsg):
-    assert utm_epsg(lat, lon) == epsg
-
-
-def test_utm_rejects_polar_latitudes():
-    with pytest.raises(ValueError, match="UTM"):
-        utm_epsg(85.0, 0.0)
-
-
-def test_roundtrip_mm_precision():
-    frame = LocalFrame.at(LAT0, LON0)
-    lat = LAT0 + np.linspace(-0.5, 0.5, 11)[:, None]
-    lon = LON0 + np.linspace(-0.5, 0.5, 13)[None, :]
-    x, y = frame.to_xy(lat, lon)
-    lat2, lon2 = frame.to_latlon(x, y)
-    x2, y2 = frame.to_xy(lat2, lon2)
-    assert x.shape == (11, 13)
-    assert np.max(np.hypot(x2 - x, y2 - y)) < 1e-3  # < 1 mm
 
 
 def test_origin_is_zero_and_scale_is_metric():

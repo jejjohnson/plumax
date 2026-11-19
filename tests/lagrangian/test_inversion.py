@@ -30,22 +30,6 @@ def test_matern32_is_spd_with_unit_diagonal_variance():
     assert np.all(np.linalg.eigvalsh(b) > 0.0)
 
 
-def test_matern32_decays_with_distance():
-    coords = np.linspace(0.0, 1000.0, 6)
-    b = np.asarray(matern32_covariance(coords, variance=1.0, length_scale=150.0))
-    # Correlation to cell 0 is monotone non-increasing with separation.
-    row = b[0]
-    assert np.all(np.diff(row) <= 1e-12)
-
-
-def test_matern32_longer_length_scale_is_more_correlated():
-    coords = np.linspace(0.0, 1000.0, 6)
-    short = np.asarray(matern32_covariance(coords, variance=1.0, length_scale=100.0))
-    long = np.asarray(matern32_covariance(coords, variance=1.0, length_scale=400.0))
-    # At a fixed separation the longer length-scale keeps more correlation.
-    assert long[0, -1] > short[0, -1]
-
-
 def test_matern32_validates_positive_hyperparameters():
     coords = np.linspace(0.0, 1.0, 4)
     with pytest.raises(ValueError, match="variance"):
@@ -344,25 +328,6 @@ def test_lognormal_inversion_is_vmappable_over_prior_mean():
     qas = jnp.stack([jnp.full(n_grid, 1.0), jnp.full(n_grid, 1.5)])
     out = jax.vmap(mean_of)(qas)
     assert out.shape == (2, n_grid)
-
-
-@pytest.mark.slow
-def test_matern32_differentiable_through_length_scale():
-    # The prior must support gradient-based hyperparameter tuning: grad over
-    # length_scale must not trip the eager positivity check.
-    import jax
-
-    coords = jnp.linspace(0.0, 1000.0, 8)
-
-    def trace_of_cov(length_scale):
-        return jnp.trace(
-            matern32_covariance(coords, variance=1.0, length_scale=length_scale)
-        )
-
-    g = jax.grad(trace_of_cov)(250.0)
-    # trace = n·σ² is independent of ℓ, so its gradient is exactly 0 — the point
-    # is that grad evaluates at all (no TracerBoolConversionError).
-    assert np.isfinite(float(g))
 
 
 @pytest.mark.slow

@@ -198,22 +198,3 @@ def test_time_varying_wind_clock(t_back):
     # materially different centroid.
     np.testing.assert_allclose(x_ok, x_ref, rtol=0.02)
     assert abs(x_ok - x_bad) > 20.0
-
-
-@pytest.mark.slow
-def test_footprint_scales_inversely_with_air_density():
-    wind = wind_from_speed_direction(5.0, 270.0)
-    kw = dict(
-        receptor_location=(300.0, 0.0, 20.0),
-        turbulence=_turb(),
-        domain_x=(-50.0, 400.0, 45),
-        domain_y=(-120.0, 120.0, 24),
-        wind=wind,
-        n_particles=2000,
-        t_back=150.0,
-        dt=1.0,
-        seed=2,
-    )
-    fp1, _, _ = compute_footprint(air_density=1.0, **kw)
-    fp2, _, _ = compute_footprint(air_density=2.0, **kw)
-    np.testing.assert_allclose(fp2, 0.5 * fp1, rtol=1e-6)

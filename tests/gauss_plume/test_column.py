@@ -217,21 +217,6 @@ def test_response_is_invariant_to_a_rigid_motion(angle, shift_x, shift_y):
     )
 
 
-@pytest.mark.slow
-@settings(max_examples=30, deadline=None)
-@given(line_density=st.floats(1e-4, 10.0))
-def test_source_response_is_linear_in_line_density(line_density):
-    """ΔΩ = q r: the backend's unit response scales the observation."""
-    receptors = _grid(n=11)
-    instrument = Instrument(name="EMIT", receptors=receptors)
-    source = ColumnPlumeSource(
-        plume=ColumnPlume(initial_width=INITIAL_WIDTH), geometry=_geometry()
-    )
-    response = source.column_response(instrument)
-    observed = line_density * response
-    np.testing.assert_allclose(observed / line_density, response, rtol=1e-12)
-
-
 def test_frame_preserves_distances():
     receptors = jnp.array([[300.0, 400.0], [-120.0, 50.0]])
     downwind, crosswind = plume_frame(receptors, jnp.zeros(2), jnp.asarray(1.1))

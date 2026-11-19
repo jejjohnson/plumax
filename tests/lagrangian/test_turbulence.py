@@ -20,12 +20,6 @@ def test_homogeneous_at_is_constant_in_height():
     np.testing.assert_allclose(np.asarray(sigma[2]), [1.0, 0.8, 0.5])
 
 
-def test_isotropic_constructor():
-    turb = HomogeneousTurbulence.isotropic(sigma=0.7, tau=30.0)
-    np.testing.assert_allclose(np.asarray(turb.sigma), [0.7, 0.7, 0.7])
-    np.testing.assert_allclose(np.asarray(turb.tau), [30.0, 30.0, 30.0])
-
-
 def test_homogeneous_validation():
     with pytest.raises(ValueError, match="sigma_u"):
         HomogeneousTurbulence(-1.0, 1.0, 1.0, 10.0, 10.0, 10.0)

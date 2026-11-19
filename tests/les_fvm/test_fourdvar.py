@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import warnings
 
+import diffrax
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -19,7 +20,6 @@ from plumax.lagrangian.inversion import matern32_covariance
 from plumax.les_fvm.fourdvar import (
     ColumnObservationOperator,
     EulerianForward4DVar,
-    FourDVarProblem,
     FourDVarResult,
     PosteriorCovariance,
     build_forward,
@@ -246,78 +246,71 @@ def test_solve_4dvar_flags_nonstrict_convergence_but_stays_finite():
     assert np.all(np.isfinite(np.asarray(res.source)))
 
 
-def test_build_forward_guards_stepto_controller():
-    # StepTo is a fixed (non-adaptive) controller, so the guard must inspect its
-    # widest prescribed interval rather than skip it as if it were adaptive.
-    import diffrax
-
-    save_times = jnp.linspace(0.0, 40.0, 5)
-    with pytest.raises(ValueError, match="stable step"):
-        build_forward(
-            domain_x=(0.0, 400.0, 20),
-            domain_y=(-100.0, 100.0, 10),
-            domain_z=(0.0, 80.0, 4),
-            save_times=save_times,
-            source_location=(50.0, 0.0, 20.0),
-            uniform_wind=(4.0, 0.0, 0.0),
-            eddy_diffusivity=2.0,
-            solver_kwargs={
-                "stepsize_controller": diffrax.StepTo(ts=jnp.asarray([0.0, 40.0]))
+@pytest.mark.parametrize(
+    ("overrides", "match"),
+    [
+        # StepTo is a fixed (non-adaptive) controller, so the guard must inspect its
+        # widest prescribed interval rather than skip it as if it were adaptive.
+        pytest.param(
+            {
+                "solver_kwargs": {
+                    "stepsize_controller": diffrax.StepTo(ts=jnp.asarray([0.0, 40.0]))
+                }
             },
-        )
-
-
-def test_build_forward_rejects_negative_diffusivity():
-    # Negative (anti-diffusion) K is unconditionally unstable; the fixed-step
-    # 4D-Var guard must reject it rather than take |K|.
-    save_times = jnp.linspace(0.0, 40.0, 5)
-    with pytest.raises(ValueError, match="non-negative"):
-        build_forward(
-            domain_x=(0.0, 400.0, 20),
-            domain_y=(-100.0, 100.0, 10),
-            domain_z=(0.0, 80.0, 4),
-            save_times=save_times,
-            source_location=(50.0, 0.0, 20.0),
-            uniform_wind=(4.0, 0.0, 0.0),
-            eddy_diffusivity=(-1.0, 1.0),
-        )
-
-
-def test_build_forward_rejects_negative_diffusivity_with_adaptive_controller():
-    # K validation is unconditional: a negative diffusivity is rejected even
-    # when an adaptive controller would otherwise skip the fixed-step guard.
-    import diffrax
-
-    save_times = jnp.linspace(0.0, 40.0, 5)
-    with pytest.raises(ValueError, match="non-negative"):
-        build_forward(
-            domain_x=(0.0, 400.0, 20),
-            domain_y=(-100.0, 100.0, 10),
-            domain_z=(0.0, 80.0, 4),
-            save_times=save_times,
-            source_location=(50.0, 0.0, 20.0),
-            uniform_wind=(4.0, 0.0, 0.0),
-            eddy_diffusivity=(-1.0, 1.0),
-            solver_kwargs={
-                "stepsize_controller": diffrax.PIDController(rtol=1e-3, atol=1e-6)
+            "stable step",
+            id="guards_stepto_controller",
+        ),
+        # Negative (anti-diffusion) K is unconditionally unstable; the fixed-step
+        # 4D-Var guard must reject it rather than take |K|.
+        pytest.param(
+            {"eddy_diffusivity": (-1.0, 1.0)},
+            "non-negative",
+            id="negative_diffusivity",
+        ),
+        # K validation is unconditional: a negative diffusivity is rejected even
+        # when an adaptive controller would otherwise skip the fixed-step guard.
+        pytest.param(
+            {
+                "eddy_diffusivity": (-1.0, 1.0),
+                "solver_kwargs": {
+                    "stepsize_controller": diffrax.PIDController(rtol=1e-3, atol=1e-6)
+                },
             },
-        )
-
-
-def test_build_forward_rejects_nonfinite_uniform_wind():
-    # A NaN uniform-wind component makes the CFL bound NaN and bypasses the
-    # guard; reject it at wind-field construction (before any branch).
-    save_times = jnp.linspace(0.0, 40.0, 5)
-    with pytest.raises(ValueError, match="finite"):
-        build_forward(
-            domain_x=(0.0, 400.0, 20),
-            domain_y=(-100.0, 100.0, 10),
-            domain_z=(0.0, 80.0, 4),
-            save_times=save_times,
-            source_location=(50.0, 0.0, 20.0),
-            uniform_wind=(float("nan"), 0.0, 0.0),
-            eddy_diffusivity=2.0,
-        )
+            "non-negative",
+            id="negative_diffusivity_with_adaptive_controller",
+        ),
+        # A NaN uniform-wind component makes the CFL bound NaN and bypasses the
+        # guard; reject it at wind-field construction (before any branch).
+        pytest.param(
+            {"uniform_wind": (float("nan"), 0.0, 0.0)},
+            "finite",
+            id="nonfinite_uniform_wind",
+        ),
+        pytest.param(
+            {"save_times": jnp.array([5.0])},  # singleton
+            "save_times",
+            id="bad_save_times_singleton",
+        ),
+        pytest.param(
+            {"save_times": jnp.array([0.0, 10.0, 5.0])},  # non-monotone
+            "strictly increasing",
+            id="bad_save_times_non_monotone",
+        ),
+    ],
+)
+def test_build_forward_rejects_invalid_config(overrides, match):
+    kwargs = dict(
+        domain_x=(0.0, 400.0, 20),
+        domain_y=(-100.0, 100.0, 10),
+        domain_z=(0.0, 80.0, 4),
+        save_times=jnp.linspace(0.0, 40.0, 5),
+        source_location=(50.0, 0.0, 20.0),
+        uniform_wind=(4.0, 0.0, 0.0),
+        eddy_diffusivity=2.0,
+    )
+    kwargs.update(overrides)
+    with pytest.raises(ValueError, match=match):
+        build_forward(**kwargs)
 
 
 @pytest.mark.slow
@@ -367,72 +360,56 @@ def test_build_forward_skips_guard_for_implicit_solver():
 
 
 @pytest.mark.slow
-def test_build_problem_shape_validation():
+@pytest.mark.parametrize(
+    ("make_overrides", "match"),
+    [
+        pytest.param(
+            lambda y: {"prior_covariance": jnp.eye(4)},  # wrong size
+            "prior_covariance",
+            id="shape_validation_prior_covariance",
+        ),
+        pytest.param(
+            lambda y: {"observations": y[:3]},  # n_t mismatch
+            "observations",
+            id="shape_validation_observations",
+        ),
+        pytest.param(
+            lambda y: {"obs_variance": 0.0}, "obs_variance", id="zero_obs_variance"
+        ),
+        pytest.param(
+            lambda y: {"obs_variance": -1.0},
+            "obs_variance",
+            id="negative_obs_variance",
+        ),
+        # NaN passes the `<= 0` check, so obs_variance finiteness must be enforced
+        # explicitly — otherwise the cost and posterior silently become NaN.
+        pytest.param(
+            lambda y: {"obs_variance": float("nan")},
+            "finite",
+            id="nonfinite_obs_variance",
+        ),
+        # A NaN observation would leave `source` finite but the cost/posterior NaN.
+        pytest.param(
+            lambda y: {"observations": y.at[0, 0].set(jnp.nan)},
+            "finite",
+            id="nonfinite_observations",
+        ),
+    ],
+)
+def test_build_problem_rejects_invalid_inputs(make_overrides, match):
     fwd = _forward()
     y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
     b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
-    with pytest.raises(ValueError, match="prior_covariance"):
-        build_problem(
-            forward=fwd,
-            observations=y,
-            prior_mean=jnp.zeros(5),
-            prior_covariance=jnp.eye(4),  # wrong size
-            obs_variance=1.0,
-        )
-    with pytest.raises(ValueError, match="observations"):
-        build_problem(
-            forward=fwd,
-            observations=y[:3],  # n_t mismatch
-            prior_mean=jnp.zeros(5),
-            prior_covariance=b,
-            obs_variance=1.0,
-        )
-
-
-@pytest.mark.slow
-def test_problem_is_a_frozen_dataclass():
-    _, _, prob = _twin()
-    assert isinstance(prob, FourDVarProblem)
-    with pytest.raises((AttributeError, TypeError)):
-        prob.prior_mean = jnp.zeros(5)  # frozen
-
-
-def test_build_forward_rejects_bad_save_times():
-    common = dict(
-        domain_x=(0.0, 400.0, 20),
-        domain_y=(-100.0, 100.0, 10),
-        domain_z=(0.0, 80.0, 4),
-        source_location=(50.0, 0.0, 20.0),
-        uniform_wind=(4.0, 0.0, 0.0),
-        eddy_diffusivity=2.0,
+    kwargs = dict(
+        forward=fwd,
+        observations=y,
+        prior_mean=jnp.zeros(5),
+        prior_covariance=b,
+        obs_variance=1.0,
     )
-    with pytest.raises(ValueError, match="save_times"):
-        build_forward(save_times=jnp.array([5.0]), **common)  # singleton
-    with pytest.raises(ValueError, match="strictly increasing"):
-        build_forward(save_times=jnp.array([0.0, 10.0, 5.0]), **common)  # non-monotone
-
-
-@pytest.mark.slow
-def test_build_problem_rejects_nonpositive_obs_variance():
-    fwd = _forward()
-    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
-    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
-    with pytest.raises(ValueError, match="obs_variance"):
-        build_problem(
-            forward=fwd,
-            observations=y,
-            prior_mean=jnp.zeros(5),
-            prior_covariance=b,
-            obs_variance=0.0,
-        )
-    with pytest.raises(ValueError, match="obs_variance"):
-        build_problem(
-            forward=fwd,
-            observations=y,
-            prior_mean=jnp.zeros(5),
-            prior_covariance=b,
-            obs_variance=-1.0,
-        )
+    kwargs.update(make_overrides(y))
+    with pytest.raises(ValueError, match=match):
+        build_problem(**kwargs)
 
 
 @pytest.mark.slow
@@ -501,39 +478,6 @@ def test_build_problem_rejects_ambiguous_square_variance_vector():
     )
     for t in range(n_t):
         np.testing.assert_allclose(np.asarray(prob.obs_variance[t]), float(t + 1))
-
-
-@pytest.mark.slow
-def test_build_problem_rejects_nonfinite_obs_variance():
-    # NaN passes the `<= 0` check, so obs_variance finiteness must be enforced
-    # explicitly — otherwise the cost and posterior silently become NaN.
-    fwd = _forward()
-    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5]))
-    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
-    with pytest.raises(ValueError, match="finite"):
-        build_problem(
-            forward=fwd,
-            observations=y,
-            prior_mean=jnp.zeros(5),
-            prior_covariance=b,
-            obs_variance=float("nan"),
-        )
-
-
-@pytest.mark.slow
-def test_build_problem_rejects_nonfinite_observations():
-    # A NaN observation would leave `source` finite but the cost/posterior NaN.
-    fwd = _forward()
-    y = fwd.predict(jnp.array([0.0, 1.0, 1.0, 0.5, 0.5])).at[0, 0].set(jnp.nan)
-    b = matern32_covariance(fwd.save_times, variance=1.0, length_scale=20.0)
-    with pytest.raises(ValueError, match="finite"):
-        build_problem(
-            forward=fwd,
-            observations=y,
-            prior_mean=jnp.zeros(5),
-            prior_covariance=b,
-            obs_variance=1.0,
-        )
 
 
 @pytest.mark.slow

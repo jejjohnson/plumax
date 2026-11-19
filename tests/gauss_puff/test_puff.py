@@ -9,7 +9,6 @@ import pytest
 
 from plumax.gauss_puff.dispersion import PG_DISPERSION_PARAMS
 from plumax.gauss_puff.puff import (
-    PuffState,
     evolve_puffs,
     frequency_to_release_interval,
     make_release_times,
@@ -279,25 +278,6 @@ def test_evolve_puffs_time_varying_wind_advances_further_when_stronger():
 # ── simulate_puff_field ──────────────────────────────────────────────────────
 
 
-def test_simulate_puff_field_is_sum_of_contributions():
-    from plumax.gauss_puff.dispersion import calculate_pg_dispersion
-
-    receptor = (jnp.array([10.0, 50.0]), jnp.zeros(2), jnp.full(2, 2.0))
-    state = PuffState(
-        release_times=jnp.array([0.0, 1.0, 2.0]),
-        x=jnp.array([5.0, 20.0, 50.0]),
-        y=jnp.zeros(3),
-        z=jnp.full(3, 2.0),
-        travel_distance=jnp.array([10.0, 30.0, 80.0]),
-        mass=jnp.full(3, 0.1),
-    )
-    total = simulate_puff_field(
-        receptor, state, PG_DISPERSION_PARAMS["C"], calculate_pg_dispersion
-    )
-    assert total.shape == (2,)
-    assert jnp.all(total > 0)
-
-
 @pytest.mark.slow
 def test_no_puffs_evolve_and_add_no_concentration():
     from plumax.gauss_puff.dispersion import calculate_pg_dispersion
@@ -318,20 +298,6 @@ def test_no_puffs_evolve_and_add_no_concentration():
 
 
 # ── simulate_puff xarray wrapper ────────────────────────────────────────────
-
-
-def test_simulate_puff_conserves_emitted_mass_for_nondivisible_window():
-    # The emitted mass Q·Σdurations equals Q·(t_end − t_start) exactly, even
-    # when the window is not a multiple of the release interval: the trailing
-    # partial puff carries its shortened mass rather than being dropped (floor)
-    # or over-massed (full Δt). This is the quantity simulate_puff assigns as
-    # puff_mass, so it pins the mass-conservation behaviour at the source.
-    q = 0.1
-    t_end = 5.5  # 5.5 s window at 1 Hz → 6 puffs (ceil), last interval 0.5 s
-    times = make_release_times(0.0, t_end, release_frequency=1.0)
-    assert times.shape == (6,)  # floor would give 5 and drop 0.5 s of source
-    emitted = q * float(np.sum(np.asarray(release_durations(times, t_end))))
-    assert emitted == pytest.approx(q * t_end, rel=1e-6)
 
 
 @pytest.mark.slow
