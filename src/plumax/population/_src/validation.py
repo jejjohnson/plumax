@@ -274,8 +274,7 @@ def _regime_correlation(
     num_warmup: int,
     num_samples: int,
 ) -> float:
-    from numpyro.infer import MCMC, NUTS
-
+    from plumax._src.nuts import run_nuts
     from plumax.population._src.fitting_iw import tmtpp_iw_model
     from plumax.population._src.importance import EventEvidence
     from plumax.population._src.marks import LognormalMark
@@ -306,14 +305,8 @@ def _regime_correlation(
     detected_column = jnp.zeros((0, 1), dtype=detected.dtype)
     if num_detected:
         detected_column = einx.id("event -> event 1", detected)
-    mcmc = MCMC(
-        NUTS(tmtpp_iw_model),
-        num_warmup=num_warmup,
-        num_samples=num_samples,
-        progress_bar=False,
-    )
-    mcmc.run(
-        mcmc_key,
+    samples = run_nuts(
+        tmtpp_iw_model,
         event_times,
         mask,
         EventEvidence(jnp.zeros((num_detected, 1)), detected_column),
@@ -322,8 +315,10 @@ def _regime_correlation(
         window=window,
         pods=[pod],
         support=(1e-6, 1e6),
+        seed=mcmc_key,
+        num_warmup=num_warmup,
+        num_samples=num_samples,
     )
-    samples = mcmc.get_samples()
     draws = jnp.stack([samples["lambda_0"], samples["pod.stress.q50"]])
     # corr(λ₀, Q₅₀)
     return float(jnp.corrcoef(draws)[0, 1])

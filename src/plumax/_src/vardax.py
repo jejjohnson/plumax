@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from types import ModuleType
 
+from plumax._src.extras import require_extra
+
 
 def require_vardax(caller: str) -> ModuleType:
-    """Import vardax, or raise an ``ImportError`` naming the extra.
+    """Import vardax, or raise a ``MissingExtraError`` naming the extra.
 
     Args:
         caller: The public function that needs vardax, for the message.
@@ -22,20 +24,18 @@ def require_vardax(caller: str) -> ModuleType:
         The ``vardax`` module.
 
     Raises:
-        ImportError: If vardax is not installed.
+        MissingExtraError: If vardax is not installed.
     """
-    try:
-        import vardax
-    except ImportError as exc:
-        raise ImportError(
-            f"{caller} solves the inversion with vardax; install it with "
-            "`pip install 'plumax[assim]'`."
-        ) from exc
-    return vardax
+    return require_extra(
+        "vardax",
+        extra="assim",
+        caller=caller,
+        purpose="solves the inversion with vardax",
+    )
 
 
 def require_argminax(caller: str) -> ModuleType:
-    """Import argminax, or raise an ``ImportError`` naming the extra.
+    """Import argminax, or raise a ``MissingExtraError`` naming the extra.
 
     argminax builds the Laplace posterior at a 4D-Var MAP; it ships in the
     same ``assim`` extra as vardax.
@@ -47,14 +47,12 @@ def require_argminax(caller: str) -> ModuleType:
         The ``argminax`` module, with ``argminax.curvature`` loaded.
 
     Raises:
-        ImportError: If argminax is not installed.
+        MissingExtraError: If argminax is not installed.
     """
-    try:
-        import argminax
-        import argminax.curvature  # a submodule, not loaded by the package
-    except ImportError as exc:
-        raise ImportError(
-            f"{caller} builds the Laplace posterior with argminax; install it "
-            "with `pip install 'plumax[assim]'`."
-        ) from exc
-    return argminax
+    return require_extra(
+        "argminax",
+        extra="assim",
+        caller=caller,
+        purpose="builds the Laplace posterior with argminax",
+        submodules=("curvature",),
+    )

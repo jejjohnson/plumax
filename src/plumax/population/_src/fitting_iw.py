@@ -36,6 +36,7 @@ import numpy as np
 from integrix import expect as integrix_expect
 from jaxtyping import Array, Bool, Float
 
+from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require
 from plumax.population._src.importance import (
     EventEvidence,
@@ -575,28 +576,22 @@ def fit_size_distribution_iw(
     Raises:
         PayloadError: When the events lack the payload the regime needs.
     """
-    from numpyro.infer import MCMC, NUTS
-
     regime = Regime(regime)
     family = MARKS[mark](**(mark_fields or {}))
     evidence = catalog_evidence(
         catalog, regime=regime, n_nodes=n_nodes, measure=measure
     )
-    mcmc = MCMC(
-        NUTS(mark_iw_model),
+    draws = run_nuts(
+        mark_iw_model,
+        evidence,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress_bar=False,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
-        evidence,
         mark=family,
         log_pod=log_pod,
         support=support,
     )
-    draws = mcmc.get_samples()
     prefix = "mark."
     samples = {
         name[len(prefix) :]: np.asarray(value)

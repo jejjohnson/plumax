@@ -36,8 +36,9 @@ import numpyro.distributions as dist
 from jax.typing import ArrayLike
 from jaxtyping import Float
 from numpy.typing import NDArray
-from numpyro.infer import MCMC, NUTS, DiscreteHMCGibbs
 
+from plumax._src.checks import check_observations
+from plumax._src.nuts import run_nuts
 from plumax._src.scalar_emission import EmpiricalEmission, LognormalEmission
 from plumax._src.tracing import require_positive
 from plumax.gauss_plume.dispersion import (
@@ -339,21 +340,9 @@ def infer_emission_rate(
             f"infer_emission_rate: `stability_class` must be one of "
             f"{STABILITY_CLASSES}, got {stability_class!r}"
         )
-    obs = np.asarray(observations)
-    if obs.size == 0:
-        raise ValueError("infer_emission_rate: `observations` must contain ≥ 1 point")
-    if len(observation_coords) != 3:
-        raise ValueError(
-            "infer_emission_rate: `observation_coords` must be (x, y, z); "
-            f"got length {len(observation_coords)}"
-        )
-    coords = tuple(np.asarray(coord) for coord in observation_coords)
-    for axis_name, arr in zip("xyz", coords, strict=False):
-        if arr.shape != obs.shape:
-            raise ValueError(
-                f"infer_emission_rate: `observation_coords` axis '{axis_name}' "
-                f"has shape {arr.shape} ≠ observations shape {obs.shape}"
-            )
+    obs, coords = check_observations(
+        "infer_emission_rate", observations, observation_coords
+    )
     require_positive("prior_mean", prior_mean, caller="infer_emission_rate")
     require_positive("prior_std", prior_std, caller="infer_emission_rate")
     require_positive("obs_noise_std", obs_noise_std, caller="infer_emission_rate")
@@ -371,21 +360,19 @@ def infer_emission_rate(
     obs_jax = jnp.asarray(obs)
     coords_jax = tuple(jnp.asarray(coord) for coord in coords)
 
-    inner = NUTS(gaussian_plume_model)
     # Discrete latents can't be handled by NUTS on their own without
     # `funsor` enumeration. `DiscreteHMCGibbs` wraps NUTS with a Gibbs
     # step over the categorical stability-class site, avoiding the extra
     # dependency while giving a valid joint sampler.
-    kernel = DiscreteHMCGibbs(inner) if infer_stability else inner
-    mcmc = MCMC(
-        kernel,
+    samples = run_nuts(
+        gaussian_plume_model,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
+        print_summary=print_summary,
+        discrete_gibbs=infer_stability,
         observations=obs_jax,
         receptor_coords=coords_jax,
         source_location=source_location,
@@ -399,10 +386,8 @@ def infer_emission_rate(
         background_prior_std=background_prior_std,
         noise=noise,
     )
-    if print_summary:
-        mcmc.print_summary()
 
-    draws = {name: np.asarray(value) for name, value in mcmc.get_samples().items()}
+    draws = {name: np.asarray(value) for name, value in samples.items()}
     return EmissionRateSamples(draws, prior_mean=prior_mean, prior_std=prior_std)
 
 
@@ -679,21 +664,9 @@ def infer_multi_source(
             f"infer_multi_source: `stability_class` must be one of "
             f"{STABILITY_CLASSES}, got {stability_class!r}"
         )
-    obs = np.asarray(observations)
-    if obs.size == 0:
-        raise ValueError("infer_multi_source: `observations` must contain ≥ 1 point")
-    if len(observation_coords) != 3:
-        raise ValueError(
-            "infer_multi_source: `observation_coords` must be (x, y, z); "
-            f"got length {len(observation_coords)}"
-        )
-    coords = tuple(np.asarray(coord) for coord in observation_coords)
-    for axis_name, arr in zip("xyz", coords, strict=True):
-        if arr.shape != obs.shape:
-            raise ValueError(
-                f"infer_multi_source: `observation_coords` axis '{axis_name}' "
-                f"has shape {arr.shape} ≠ observations shape {obs.shape}"
-            )
+    obs, coords = check_observations(
+        "infer_multi_source", observations, observation_coords
+    )
     for name, value in (
         ("prior_mean", prior_mean),
         ("prior_std", prior_std),
@@ -754,27 +727,23 @@ def _run_masked_k(
     Shared by the Tier I and Tier IV masked-K runners, whose models take the same
     slot arguments.
     """
-    inner = NUTS(model)
-    kernel = DiscreteHMCGibbs(inner) if prior_active < 1.0 else inner
-    mcmc = MCMC(
-        kernel,
+    candidates = (
+        None if candidate_locations is None else jnp.asarray(candidate_locations)
+    )
+    samples = run_nuts(
+        model,
+        observations,
+        seed=seed,
         num_warmup=num_warmup,
         num_samples=num_samples,
         num_chains=num_chains,
         progress_bar=progress_bar,
-    )
-    candidates = (
-        None if candidate_locations is None else jnp.asarray(candidate_locations)
-    )
-    mcmc.run(
-        jax.random.PRNGKey(seed),
-        observations,
+        discrete_gibbs=prior_active < 1.0,
         k_max=k_max,
         candidate_locations=candidates,
         prior_active=prior_active,
         **model_kwargs,
     )
-    samples = mcmc.get_samples()
     num_draws = samples["emission_rate"].shape[0]
     if "active" in samples:
         active = np.asarray(samples["active"], dtype=bool)

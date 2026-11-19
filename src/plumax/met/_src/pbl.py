@@ -12,7 +12,7 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Float
 
-from plumax._src.errors import MissingExtraError
+from plumax._src.extras import require_extra
 from plumax.lagrangian.turbulence import DEFAULT_CORIOLIS_PARAMETER, HannaTurbulence
 from plumax.met._src.surface_layer import CP_DRY, P_REFERENCE, R_DRY, SurfaceLayer
 from plumax.met.field import MetField
@@ -67,13 +67,12 @@ def pbl_height_bulk_richardson(
         >>> bool(((height > 350.0) & (height < 1000.0)).all())
         True
     """
-    try:
-        import xrops.atm
-    except ImportError as err:
-        raise MissingExtraError(
-            "pbl_height_bulk_richardson runs through xrops; install it with "
-            "`pip install 'plumax[io]'`"
-        ) from err
+    xrops_atm = require_extra(
+        "xrops.atm",
+        extra="io",
+        caller="pbl_height_bulk_richardson",
+        purpose="runs through xrops",
+    )
     grid = field.plume_grid
     grid_z = np.asarray(grid.z, dtype=np.float64)
     # z_surface = z₀ − Δz/2
@@ -111,7 +110,7 @@ def pbl_height_bulk_richardson(
         },
         coords={"z_agl": ("level", heights)},
     )
-    result = xrops.atm.pbl_height_bulk_richardson(
+    result = xrops_atm.pbl_height_bulk_richardson(
         profiles, theta_v="theta_v", ri_crit=ri_crit, height="z_agl"
     )
     return result["pbl_height"].transpose("time", "y", "x").values

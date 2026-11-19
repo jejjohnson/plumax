@@ -36,12 +36,12 @@ from jaxtyping import Array, Bool, Float, Int
 from plumax._src.errors import (
     DomainError,
     GridMismatchError,
-    MissingExtraError,
     MissingVariableError,
     ParameterError,
     ScreeningError,
     UnitsError,
 )
+from plumax._src.extras import require_extra
 from plumax._src.tracing import require_positive
 from plumax.coupled import Instrument, QualityFlag
 from plumax.met._src.frames import LocalFrame
@@ -447,13 +447,13 @@ def _quality_flags(
     where ``EMITBandMask`` flags saturation; both decoded in swath geometry
     and then sent through the GLT when there is one.
     """
-    try:
-        from geoops.qa import EMITBandMask, EMITL2AMask
-    except ImportError as err:
-        raise MissingExtraError(
-            "the quality raster is decoded by geoops.qa; install it with "
-            "`pip install 'plumax[geo]'`"
-        ) from err
+    geoops_qa = require_extra(
+        "geoops.qa",
+        extra="geo",
+        caller="the quality raster",
+        purpose="is decoded by geoops.qa",
+    )
+    EMITBandMask, EMITL2AMask = geoops_qa.EMITBandMask, geoops_qa.EMITL2AMask
     quality = xr.open_dataset(quality_path)
     quality = quality.rename(
         {
