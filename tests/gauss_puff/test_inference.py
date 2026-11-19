@@ -456,13 +456,19 @@ def test_infer_rejects_observation_time_before_wind_schedule():
         )
 
 
-@pytest.mark.validation
-def test_infer_emission_rate_recovers_synthetic_Q():
-    """NUTS should recover a synthetic emission rate from time-series data."""
+@pytest.fixture
+def float32():
+    """Run one test in float32, then give the suite its float64 back."""
     import numpyro
 
     numpyro.enable_x64(False)
+    yield
+    numpyro.enable_x64(True)
 
+
+@pytest.mark.validation
+def test_infer_emission_rate_recovers_synthetic_Q(float32):
+    """NUTS should recover a synthetic emission rate from time-series data."""
     from plumax.gauss_puff.puff import simulate_puff
 
     # Simulate a true field.
