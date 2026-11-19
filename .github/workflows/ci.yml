@@ -30,14 +30,41 @@ jobs:
         run: uv run pytest -n 4 --dist loadfile --durations=15
 
   # PRs into main run Python 3.12; pushes to main run both versions.
-  # Two workers: at -n 4 the suite exceeded the runner's memory.
+  # The fast and slow tiers run in shards, one runner each, so a PR waits for
+  # the longest shard and not for the sum. Two workers per runner: at -n 4 the
+  # suite exceeded the runner's memory. The last shard takes every test
+  # directory the others do not name, so a new directory is never skipped.
   full:
     if: github.event_name == 'push' || github.base_ref == 'main'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    name: full (${{ matrix.python-version }}, ${{ matrix.shard.name }})
     strategy:
       fail-fast: false
       matrix:
         python-version: ${{ fromJSON(github.event_name == 'push' && '["3.12", "3.13"]' || '["3.12"]') }}
+        shard:
+          - name: les_fvm
+            paths: >-
+              tests/les_fvm
+              --ignore=tests/les_fvm/test_fourdvar_solvers.py
+              --ignore=tests/les_fvm/test_fourdvar_spatial.py
+              --ignore=tests/les_fvm/test_fourdvar_background.py
+          - name: les_fvm-4dvar
+            paths: >-
+              tests/les_fvm/test_fourdvar_solvers.py
+              tests/les_fvm/test_fourdvar_spatial.py
+              tests/les_fvm/test_fourdvar_background.py
+          - name: population
+            paths: tests/population
+          - name: coupled
+            paths: tests/coupled
+          - name: rest
+            paths: >-
+              tests
+              --ignore=tests/les_fvm
+              --ignore=tests/population
+              --ignore=tests/coupled
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -46,15 +73,47 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run fast and slow tests with coverage
-        run: uv run pytest -n 2 --dist loadfile -m "not validation" --durations=15 --cov=src/plumax --cov-report=term-missing --cov-report=xml:coverage.xml
-      - name: Upload coverage report
+        # each shard writes its own coverage data; the coverage job applies the floor
+        env:
+          COVERAGE_FILE: .coverage.${{ matrix.shard.name }}
+        run: uv run pytest ${{ matrix.shard.paths }} -n 2 --dist loadfile -m "not validation" --durations=15 --cov=src/plumax --cov-report= --cov-fail-under=0
+      - name: Upload coverage data
         if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-data-${{ matrix.shard.name }}
+          path: .coverage.${{ matrix.shard.name }}
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Combines the shards' coverage data, applies the 80 % floor and reports once.
+  coverage:
+    needs: full
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: uv sync --group dev
+      - name: Download coverage data
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-data-*
+          merge-multiple: true
+      - name: Combine and check the floor
+        run: |
+          uv run coverage combine
+          uv run coverage report
+          uv run coverage xml -o coverage.xml
+      - name: Upload coverage report
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.xml
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
         uses: codecov/codecov-action@v7
         with:
           files: ./coverage.xml
