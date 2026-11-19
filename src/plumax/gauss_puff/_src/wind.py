@@ -34,6 +34,8 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
 
+from plumax._src.wind import wind_components
+
 
 if TYPE_CHECKING:  # NumPy arrays are accepted as factory inputs only.
     import numpy as np
@@ -91,12 +93,9 @@ class WindSchedule(eqx.Module):
         """
         times_j = jnp.asarray(times, dtype=jnp.float32)
         speed_j = jnp.asarray(wind_speed, dtype=jnp.float32)
-        # θ = direction · π / 180
-        direction_radians = jnp.deg2rad(jnp.asarray(wind_direction, dtype=jnp.float32))
-        # u = −|V| sin θ
-        wind_east = -speed_j * jnp.sin(direction_radians)
-        # v = −|V| cos θ
-        wind_north = -speed_j * jnp.cos(direction_radians)
+        wind_east, wind_north = wind_components(
+            speed_j, jnp.asarray(wind_direction, dtype=jnp.float32)
+        )
         return cls(times=times_j, u_wind=wind_east, v_wind=wind_north)
 
     def _interp_u(self) -> diffrax.LinearInterpolation:

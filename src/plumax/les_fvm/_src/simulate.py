@@ -17,6 +17,7 @@ import numpy as np
 import xarray as xr
 from jaxtyping import Array, Float
 
+from plumax._src.dataset import label_concentrations
 from plumax._src.tracing import require_positive
 from plumax.gauss_puff.wind import WindSchedule
 from plumax.les_fvm._src.boundary import AxisBCSpec
@@ -661,15 +662,8 @@ def _to_dataset(
         },
         attrs=attrs,
     )
-    dataset["concentration"].attrs = {
-        "long_name": "Methane concentration",
-        "units": "kg/m³",
-    }
     dataset["column_concentration"] = (
         dataset["concentration"].sum(dim="z") * plume_grid.dz
     )
-    dataset["column_concentration"].attrs = {
-        "long_name": "Column-integrated methane",
-        "units": "kg/m²",
-    }
+    label_concentrations(dataset)
     return dataset

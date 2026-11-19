@@ -33,9 +33,9 @@ def test_get_dispersion_params_returns_registered_array():
 
 
 def test_get_dispersion_params_rejects_unknown_class():
-    with pytest.raises(ValueError, match=r"stability_class must be one of"):
+    with pytest.raises(ValueError, match=r"`stability_class` must be one of"):
         get_dispersion_params("Z")
-    with pytest.raises(ValueError, match=r"stability_class must be one of"):
+    with pytest.raises(ValueError, match=r"`stability_class` must be one of"):
         get_dispersion_params("a")  # case-sensitive
 
 

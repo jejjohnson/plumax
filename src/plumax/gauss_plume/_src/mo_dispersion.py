@@ -38,6 +38,7 @@ import jax.numpy as jnp
 from jaxtyping import Array, Float, Int
 
 from plumax._src.tracing import require, require_positive
+from plumax.gauss_plume._src.dispersion import stacked_params
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
     STABILITY_CLASSES,
@@ -310,9 +311,7 @@ class GolderDispersion(eqx.Module):
         self, distance: Float[Array, "*shape"]
     ) -> tuple[Float[Array, "*shape"], Float[Array, "*shape"]]:
         # σ^PG(x; k) for every class k, stacked along a leading class axis
-        params = jnp.stack(
-            [BRIGGS_DISPERSION_PARAMS[name] for name in STABILITY_CLASSES]
-        )
+        params = stacked_params(BRIGGS_DISPERSION_PARAMS)
         crosswind_all, vertical_all = jax.vmap(
             calculate_briggs_dispersion, in_axes=(None, 0)
         )(distance, params)
