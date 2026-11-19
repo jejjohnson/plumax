@@ -35,7 +35,6 @@ import numpyro
 import numpyro.distributions as dist
 from jax.typing import ArrayLike
 from jaxtyping import Float
-from numpy.typing import NDArray
 
 from plumax._src.checks import check_observations
 from plumax._src.nuts import run_nuts
@@ -69,7 +68,7 @@ class EmissionRateSamples(dict):
     """
 
     def __init__(
-        self, draws: dict[str, NDArray], *, prior_mean: float, prior_std: float
+        self, draws: dict[str, np.ndarray], *, prior_mean: float, prior_std: float
     ) -> None:
         super().__init__(draws)
         self.prior_mean = prior_mean
@@ -237,8 +236,8 @@ def gaussian_plume_model(
 
 
 def infer_emission_rate(
-    observations: NDArray,
-    observation_coords: tuple[NDArray, NDArray, NDArray],
+    observations: np.ndarray,
+    observation_coords: tuple[np.ndarray, np.ndarray, np.ndarray],
     source_location: tuple[float, float, float],
     wind_speed: float,
     wind_direction: float,
@@ -575,8 +574,8 @@ def multi_source_plume_model(
 
 
 def infer_multi_source(
-    observations: NDArray,
-    observation_coords: tuple[NDArray, NDArray, NDArray],
+    observations: np.ndarray,
+    observation_coords: tuple[np.ndarray, np.ndarray, np.ndarray],
     *,
     wind_speed: float,
     wind_direction: float,

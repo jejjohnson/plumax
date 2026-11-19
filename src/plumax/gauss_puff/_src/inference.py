@@ -26,7 +26,6 @@ import numpy as np
 import numpyro
 import numpyro.distributions as dist
 from jaxtyping import Array, Float
-from numpy.typing import NDArray
 
 from plumax._src.checks import check_observations
 from plumax._src.nuts import run_nuts
@@ -497,13 +496,13 @@ def _validate_inference_inputs(
 
 
 def infer_emission_rate(
-    observations: NDArray,
-    observation_coords: tuple[NDArray, NDArray, NDArray],
-    observation_times: NDArray,
+    observations: np.ndarray,
+    observation_coords: tuple[np.ndarray, np.ndarray, np.ndarray],
+    observation_times: np.ndarray,
     source_location: tuple[float, float, float],
-    wind_times: NDArray,
-    wind_speed: NDArray,
-    wind_direction: NDArray,
+    wind_times: np.ndarray,
+    wind_speed: np.ndarray,
+    wind_direction: np.ndarray,
     release_frequency: float,
     t_start: float,
     t_end: float,
@@ -519,7 +518,7 @@ def infer_emission_rate(
     progress_bar: bool = False,
     print_summary: bool = False,
     noise: Noise | None = None,
-) -> dict[str, NDArray]:
+) -> dict[str, np.ndarray]:
     """NUTS inference of a **constant** emission rate from puff observations.
 
     Parameters
@@ -609,13 +608,13 @@ def infer_emission_rate(
 
 
 def infer_emission_timeseries(
-    observations: NDArray,
-    observation_coords: tuple[NDArray, NDArray, NDArray],
-    observation_times: NDArray,
+    observations: np.ndarray,
+    observation_coords: tuple[np.ndarray, np.ndarray, np.ndarray],
+    observation_times: np.ndarray,
     source_location: tuple[float, float, float],
-    wind_times: NDArray,
-    wind_speed: NDArray,
-    wind_direction: NDArray,
+    wind_times: np.ndarray,
+    wind_speed: np.ndarray,
+    wind_direction: np.ndarray,
     release_frequency: float,
     t_start: float,
     t_end: float,
@@ -632,7 +631,7 @@ def infer_emission_timeseries(
     progress_bar: bool = False,
     print_summary: bool = False,
     noise: Noise | None = None,
-) -> dict[str, NDArray]:
+) -> dict[str, np.ndarray]:
     """NUTS inference of a **time-varying** emission rate series Q_i.
 
     Uses a Gaussian random-walk prior on ``ln Q`` along puff indices, anchored
