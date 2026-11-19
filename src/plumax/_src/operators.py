@@ -36,6 +36,7 @@ class GaussianPlume(Operator):
 
     def __init__(
         self,
+        *,
         stability_class: str,
         domain_x: tuple[float, float, int],
         domain_y: tuple[float, float, int],
@@ -91,6 +92,7 @@ class GaussianPuff(Operator):
 
     def __init__(
         self,
+        *,
         stability_class: str,
         domain_x: tuple[float, float, int],
         domain_y: tuple[float, float, int],
@@ -191,6 +193,7 @@ class LagrangianDispersion(Operator):
 
     def __init__(
         self,
+        *,
         turbulence: Any,
         domain_x: tuple[float, float, int],
         domain_y: tuple[float, float, int],
