@@ -112,9 +112,9 @@ assim = ["argminax", "vardax"]
 # grain, orbax). Imported lazily, so the base install stays trainer-free.
 emulate = ["pipekit-train[equinox,cache]"]
 # Tier V point-process layer: plumax.population builds its generative and
-# likelihood machinery on xtremax.point_processes (Poisson, marked and thinned
-# processes), imported lazily so `import plumax.population` stays light.
-population = ["numpyro>=0.21", "pyyaml>=6", "xtremax>=0.0.4"]
+# likelihood machinery on pyrox_xtreme.point_processes (Poisson, marked and
+# thinned processes), imported lazily so `import plumax.population` stays light.
+population = ["numpyro>=0.21", "pyyaml>=6", "pyrox-xtreme>=0.0.4"]
 # Plume post-processing on GeoArrays (plumax.geo): the ten plume operators
 # ported from geotoolz's `plume` (#134) and the vetting operator (#157), as
 # pipekit Operators built with geoops's public carrier helpers; geoops's
@@ -163,8 +163,9 @@ override-dependencies = [
 # `plumax.vetting` needs; radtrax is not on PyPI).
 # geonnax is radtrax's own git dependency, which uv does not read from
 # radtrax's sources.
-# xtremax (the `population` extra) is not on PyPI; it is pinned to the v0.0.4
-# release commit (its `__version__` string is not reliable, so pin by rev).
+# pyrox-xtreme (the `population` extra) is not on PyPI and has no release tag
+# in the pyrox workspace yet; it is pinned to the pyrox main commit that holds
+# it (xtremax, its archived predecessor, moved there in jejjohnson/pyrox#463).
 [tool.uv.sources]
 # Every pipekit package is pinned to the one tag pipekit-ops-v0.2.1 (8e357a1),
 # which carries each package's current release; per-package tags make uv
@@ -181,7 +182,7 @@ gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.6" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
-xtremax = { git = "https://github.com/jejjohnson/xtremax", rev = "eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
+pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 # vardax v0.3.5 (on pipekit-ops since v0.3.4), which keeps
 # MinimiseResult.converged (FourDVarResult.converged reports it) and the
@@ -226,8 +227,8 @@ dev = [
     "vardax",
     # The `emulate` extra, so the footprint-emulator training tests run in CI.
     "pipekit-train[equinox,cache]",
-    # The `population` extra, so the xtremax-backed Tier V tests run in CI.
-    "xtremax",
+    # The `population` extra, so the pyrox-xtreme-backed Tier V tests run in CI.
+    "pyrox-xtreme",
     # The `geo` extra, so the plumax.geo tests run in CI.
     "georeader-spaceml>=2.4.1",
     "geotoolz-ops[morph]",

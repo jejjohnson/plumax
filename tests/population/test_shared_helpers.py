@@ -21,7 +21,7 @@ from plumax.population.pod import LogisticPOD
 from plumax.population.processes import padded_event_buffer
 
 
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 WINDOW = (0.0, 10.0)
 

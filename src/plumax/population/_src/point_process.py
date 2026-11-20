@@ -27,7 +27,7 @@ from scipy import stats
 
 from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require_positive
-from plumax.population._src._xtremax import require_xtremax
+from plumax.population._src._pyrox_xtreme import require_pyrox_xtreme
 
 
 if TYPE_CHECKING:
@@ -172,14 +172,14 @@ def _inhomogeneous_log_likelihood(
 ) -> Any:
     """Log-likelihood ``sum_i log lambda(x_i) - sum_q w_q lambda(x_q)``.
 
-    The event term and the compensator are combined by xtremax's
+    The event term and the compensator are combined by pyrox-xtreme's
     ``ipp_spatial_log_prob`` over an all-true event mask; the compensator is
     the caller's quadrature, since the intensity is over covariates rather
     than a rectangular domain.
     """
-    require_xtremax("fit_inhomogeneous_intensity")
+    require_pyrox_xtreme("fit_inhomogeneous_intensity")
     import jax.numpy as jnp
-    from xtremax.point_processes.primitives.ipp_spatial import ipp_spatial_log_prob
+    from pyrox_xtreme.point_processes.primitives.ipp_spatial import ipp_spatial_log_prob
 
     def log_intensity(covariates: Any) -> Any:
         # log lambda(x) = beta0 + x . beta
@@ -221,8 +221,8 @@ def fit_inhomogeneous_intensity(
     every observed covariate and the fit cannot estimate an event rate over a
     region / time window. The quadrature weights carry the domain measure
     (area * duration), so the recovered ``beta0`` is a true log-rate density.
-    NumPyro and xtremax are imported lazily; the two-term log-likelihood is
-    xtremax's ``ipp_spatial_log_prob``.
+    NumPyro and pyrox-xtreme are imported lazily; the two-term log-likelihood is
+    pyrox-xtreme's ``ipp_spatial_log_prob``.
 
     Args:
         covariates: Detected-event covariate matrix ``(n_events, n_covariates)``.
@@ -246,7 +246,7 @@ def fit_inhomogeneous_intensity(
         ValueError: If ``covariates`` / ``quadrature_covariates`` are not 2-D
             with a matching covariate dimension, if either has zero rows, or if
             the quadrature weights are mis-shaped or non-positive.
-        ImportError: Without the ``population`` extra (xtremax).
+        ImportError: Without the ``population`` extra (pyrox-xtreme).
     """
     cov = np.asarray(covariates, dtype=float)
     if cov.ndim != 2 or cov.shape[0] == 0:

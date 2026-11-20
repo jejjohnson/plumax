@@ -1,12 +1,12 @@
-"""Registry intensities and POD curves as xtremax point processes.
+"""Registry intensities and POD curves as pyrox-xtreme point processes.
 
-The Tier V generative layer runs on ``xtremax.point_processes``: plumax owns the
+The Tier V generative layer runs on ``pyrox_xtreme.point_processes``: plumax owns the
 methane-domain pieces (the λ(t) kernels of :mod:`plumax.population.intensity`
 and the P_d(Q) curves of :mod:`plumax.population.pod`) and this module adapts
-them to xtremax's protocols, so the Poisson log-likelihood, the thinning
-sampler, the marked process and the detection-thinned process are xtremax's.
+them to pyrox-xtreme's protocols, so the Poisson log-likelihood, the thinning
+sampler, the marked process and the detection-thinned process are pyrox-xtreme's.
 
-* :class:`LogIntensity` is a registry kernel as an xtremax log-intensity:
+* :class:`LogIntensity` is a registry kernel as a pyrox-xtreme log-intensity:
   log λ(t₀ + s) on window time s, with the compensator Λ(b) − Λ(a) and the
   thinning envelope λ_max.
 * :func:`make_process` builds the ``InhomogeneousPoissonProcess`` on a window.
@@ -14,10 +14,10 @@ sampler, the marked process and the detection-thinned process are xtremax's.
   p(t, H, Q) = P_d(Q).
 * :func:`detection_process` composes the ground process, a mark distribution
   and the retention into ``ThinningProcess(MarkedTemporalPointProcess(...))``.
-* :func:`padded_event_buffer` lays detection times out in xtremax's padded
+* :func:`padded_event_buffer` lays detection times out in pyrox-xtreme's padded
   buffer: a contiguous mask prefix, padding at the window length T.
 
-xtremax is the ``population`` extra and is imported only when a process is
+pyrox-xtreme is the ``population`` extra and is imported only when a process is
 built or integrated numerically.
 """
 
@@ -34,7 +34,7 @@ import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Float
 
-from plumax.population._src._xtremax import require_xtremax
+from plumax.population._src._pyrox_xtreme import require_pyrox_xtreme
 from plumax.population.intensity import INTENSITY_REGISTRY, WeibullRenewalIntensity
 
 
@@ -47,7 +47,7 @@ NODES_PER_DAY = 1440
 
 
 class LogIntensity(eqx.Module):
-    """A registry intensity as an xtremax log-intensity on window time.
+    """A registry intensity as a pyrox-xtreme log-intensity on window time.
 
     log λ̃(s) = log λ(t₀ + s), with s ∈ [0, T] the time since the window start
     t₀ in days, so the seasonal and diurnal phases of the kernel stay tied to
@@ -96,7 +96,7 @@ class LogIntensity(eqx.Module):
         """Compensator Λ̃(b) − Λ̃(a) = ∫ₐᵇ λ(t₀ + s) ds.
 
         The kernel's own ``integrate`` when it has one (exact), else composite
-        Simpson quadrature through ``xtremax.point_processes``.
+        Simpson quadrature through ``pyrox_xtreme.point_processes``.
 
         Args:
             start: Lower limit a [days since t₀].
@@ -112,7 +112,7 @@ class LogIntensity(eqx.Module):
         closed_form = getattr(self.intensity, "integrate", None)
         if closed_form is not None:
             return closed_form(self.origin + start, self.origin + stop)
-        point_processes = require_xtremax("LogIntensity.integrate")
+        point_processes = require_pyrox_xtreme("LogIntensity.integrate")
         return point_processes.integrate_log_intensity(
             self,
             jnp.asarray(start, dtype=float),
@@ -233,7 +233,7 @@ def poisson_kernel(
         raise ValueError(
             f"{caller}: the Weibull renewal hazard depends on the time since "
             "the last event, so it is a renewal process, not a Poisson intensity; "
-            "use xtremax.point_processes.operators.RenewalProcess."
+            "use pyrox_xtreme.point_processes.operators.RenewalProcess."
         )
     return kernel
 
@@ -245,7 +245,7 @@ def make_process(
     nodes_per_day: int = NODES_PER_DAY,
     **params: Any,
 ) -> Any:
-    """An xtremax inhomogeneous Poisson process for a registry intensity.
+    """A pyrox-xtreme inhomogeneous Poisson process for a registry intensity.
 
     N(t) on s ∈ [0, T], T = t₁ − t₀, with log-intensity log λ(t₀ + s).
 
@@ -259,7 +259,7 @@ def make_process(
         **params: Kernel parameters, when ``intensity`` is a name.
 
     Returns:
-        ``xtremax.point_processes.operators.InhomogeneousPoissonProcess`` over
+        ``pyrox_xtreme.point_processes.operators.InhomogeneousPoissonProcess`` over
         :class:`LogIntensity`; its ``log_prob(times, mask)`` takes times since
         t₀ (see :func:`padded_event_buffer`).
 
@@ -267,7 +267,7 @@ def make_process(
         KeyError: For an unknown registry name.
         ValueError: For an empty window, parameters passed with an instance,
             or the Weibull renewal hazard (a renewal process, not a Poisson
-            intensity: use ``xtremax.point_processes.operators.RenewalProcess``).
+            intensity: use ``pyrox_xtreme.point_processes.operators.RenewalProcess``).
         ImportError: Without the ``population`` extra.
 
     Examples:
@@ -278,7 +278,7 @@ def make_process(
         >>> bool(jnp.allclose(process.log_prob(times, mask), 2 * jnp.log(0.5) - 5.0))
         True
     """
-    point_processes = require_xtremax("make_process")
+    point_processes = require_pyrox_xtreme("make_process")
     kernel = poisson_kernel(intensity, params, caller="make_process")
     start, stop = (float(edge) for edge in window)
     if not stop > start:
@@ -294,7 +294,7 @@ def make_process(
 
 
 class PODRetention(eqx.Module):
-    """A probability-of-detection curve as an xtremax retention callable.
+    """A probability-of-detection curve as a pyrox-xtreme retention callable.
 
     p(t, H, Q) = P_d(c · Q; covariates), with c converting the mark units to
     the POD's flux units (the registry PODs take kg/h, so c = 3600 for marks in
@@ -368,15 +368,15 @@ def detection_process(
             Default: the ground process's own.
 
     Returns:
-        ``xtremax.point_processes.operators.ThinningProcess``. Its
+        ``pyrox_xtreme.point_processes.operators.ThinningProcess``. Its
         ``log_prob(times, mask, marks, mark_sample_key=key)`` averages the
-        retention over f by Monte Carlo inside the compensator (xtremax's
+        retention over f by Monte Carlo inside the compensator (pyrox-xtreme's
         ``n_mark_samples``, see jejjohnson/xtremax#103).
 
     Raises:
         ImportError: Without the ``population`` extra.
     """
-    point_processes = require_xtremax("detection_process")
+    point_processes = require_pyrox_xtreme("detection_process")
     operators = point_processes.operators
     marked = operators.MarkedTemporalPointProcess(
         ground, point_processes.constant_mark_distribution(mark_distribution)
@@ -393,7 +393,7 @@ def padded_event_buffer(
     *,
     max_events: int | None = None,
 ) -> tuple[Float[Array, " event"], Bool[Array, " event"]]:
-    """Detection times as xtremax's padded buffer on window time.
+    """Detection times as pyrox-xtreme's padded buffer on window time.
 
     Sorts s_i = t_i − t₀, pads to ``max_events`` with T = t₁ − t₀ and returns
     the mask, which is a contiguous prefix of ``True``.
@@ -404,7 +404,7 @@ def padded_event_buffer(
         max_events: Buffer length. Default: the number of events.
 
     Returns:
-        ``(event_times, mask)`` for xtremax ``log_prob`` calls.
+        ``(event_times, mask)`` for pyrox-xtreme ``log_prob`` calls.
 
     Raises:
         ValueError: If a time lies outside the window or the buffer is too

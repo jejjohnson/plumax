@@ -1,4 +1,4 @@
-"""The intensity and POD registries as xtremax point processes."""
+"""The intensity and POD registries as pyrox-xtreme point processes."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from plumax.population.processes import (
 )
 
 
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 POISSON_KERNELS = sorted(
     name for name in INTENSITY_REGISTRY if name != "weibull_renewal"

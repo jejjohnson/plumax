@@ -27,7 +27,7 @@ from plumax.population.validation import (
 
 
 pytest.importorskip("numpyro")
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 from numpyro.infer import MCMC, NUTS
 

@@ -1,4 +1,4 @@
-"""Registry intensities and POD curves as xtremax point processes (implementation in ``plumax.population._src.processes``)."""
+"""Registry intensities and POD curves as pyrox-xtreme point processes (implementation in ``plumax.population._src.processes``)."""
 
 from __future__ import annotations
 
