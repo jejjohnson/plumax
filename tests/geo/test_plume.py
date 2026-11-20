@@ -15,6 +15,7 @@ import pytest
 import rasterio
 from geoarray import GeoArray
 from geoops.segment import resolve_threshold
+from geophysix.constants import CO2
 from pipekit_ops import Operator
 
 from plumax import geo
@@ -550,7 +551,7 @@ def test_column_to_mass_operator_preserves_metadata() -> None:
 
     out = geo.ColumnToMass(gas="CO2", units_in="mol_m2")(gt)
 
-    assert np.allclose(np.asarray(out), np.array([[0.04401, 0.08802]]))
+    assert np.allclose(np.asarray(out), np.array([[1.0, 2.0]]) * CO2.molar_mass)
     np.testing.assert_array_equal(out.transform, gt.transform)
     assert str(out.crs) == "EPSG:32629"
 

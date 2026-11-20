@@ -72,6 +72,9 @@ dependencies = [
     # boundaries rule 2: plumax imports radtrax, never the reverse). 0.1.0 is
     # the first release with `radtrax.retrieval.absorption` (plumax.vetting).
     "radtrax>=0.1.0",
+    # geophysix owns the physical constants and the closed-form gas maths
+    # (ideal-gas number density, column-unit conversions) plumax used to copy.
+    "geophysix>=0.0.2",
     # einx writes reductions, gathers and rearranges with named axes (the
     # house style's replacement for axis= / reshape / indexing tricks).
     "einx>=0.4",
@@ -180,6 +183,7 @@ pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = 
 pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-ops-v0.2.1" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix.git", tag = "v0.0.2" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.6" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }

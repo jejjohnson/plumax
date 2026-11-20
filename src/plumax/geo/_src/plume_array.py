@@ -246,7 +246,7 @@ def convert_column_units(
     where ``X`` is the enhancement in ppm m, :math:`p` and :math:`T` the
     pressure and temperature of the layer, :math:`k_B` the Boltzmann constant,
     :math:`N_A` Avogadro's number and :math:`M_{\mathrm{gas}}` the molar mass
-    (CH4: 0.0160425 kg/mol; CO2: 0.04401 kg/mol). It is the same relation as
+    (CH4: 0.0160425 kg/mol; CO2: 0.0440095 kg/mol). It is the same relation as
     :func:`plumax.obs.ppm_m_to_column_mass`, and both default to the ISA
     sea-level 101 325 Pa and 288.15 K; pass the scene's values when known.
 
