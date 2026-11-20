@@ -12,7 +12,7 @@ with the thinned rate p̄(θ) = ∫ P_d(q) f(q | θ) dq in log space
   Σᵢ mᵢ(θ) − N log p̄(θ), the λ-free part of the likelihood.
 * :func:`tmtpp_iw_model`: the full TMTPP,
   Σᵢ [log λ(tᵢ) + mᵢ(θ)] − Λ(T) p̄(θ), with the ground intensity from the
-  intensity registry on xtremax (:func:`~plumax.population.processes.make_process`).
+  intensity registry on pyrox-xtreme (:func:`~plumax.population.processes.make_process`).
 * :func:`fit_size_distribution_iw`: NUTS on :func:`mark_iw_model`, with the
   per-event ESS and Pareto k̂ at the posterior-mean θ and a collapse warning.
 * :class:`TMTPPPosterior`: the draws of :func:`tmtpp_iw_model`, as the intensity
@@ -37,7 +37,7 @@ from jaxtyping import Array, Bool, Float
 
 from plumax._src.nuts import run_nuts
 from plumax._src.tracing import require
-from plumax.population._src._xtremax import require_xtremax
+from plumax.population._src._pyrox_xtreme import require_pyrox_xtreme
 from plumax.population._src.importance import (
     EventEvidence,
     Measure,
@@ -172,7 +172,7 @@ def tmtpp_iw_model(
     """NumPyro model of the full importance-corrected TMTPP likelihood.
 
     log L = Σᵢ [log λ(tᵢ) + mᵢ(θ)] − Λ(T) p̄(θ), with λ a registry intensity
-    under its ``sample_priors`` on the xtremax Poisson process of the window.
+    under its ``sample_priors`` on the pyrox-xtreme Poisson process of the window.
 
     With ``pods``, P_d is the union P_d^∪ under :func:`calibration_prior`. With
     ``coverage``, event i is thinned by the instruments that overpassed it and the
@@ -183,7 +183,7 @@ def tmtpp_iw_model(
     compensator sums over the hours too: Σ_w Σ_b Λ_w,b p̄_w,b(θ).
 
     Args:
-        event_times: Detection times since t₀ in xtremax's padded buffer
+        event_times: Detection times since t₀ in pyrox-xtreme's padded buffer
             (:func:`~plumax.population.processes.padded_event_buffer`) [days].
         mask: Its mask.
         evidence: Stacked per-event evidence, one row per detection in the
@@ -309,7 +309,7 @@ def tmtpp_iw_model(
             kernel, mark, params, pods, calibration, intervals, support, n_nodes
         )
     # Σᵢ log λ(tᵢ) − Λ(T) p̄ over the real events, the thinned Poisson log-likelihood
-    ground = require_xtremax("tmtpp_iw_model").primitives.ipp_log_prob(
+    ground = require_pyrox_xtreme("tmtpp_iw_model").primitives.ipp_log_prob(
         event_times, mask, process.log_intensity_fn, thinned
     )
     # Σᵢ [log λ(tᵢ) + mᵢ] − Λ(T) p̄

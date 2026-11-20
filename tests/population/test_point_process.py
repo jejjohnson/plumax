@@ -133,7 +133,7 @@ def test_inhomogeneous_intensity_recovers_slope() -> None:
 
 
 def test_inhomogeneous_log_likelihood_matches_hand_formula() -> None:
-    pytest.importorskip("xtremax")
+    pytest.importorskip("pyrox_xtreme")
     import jax
 
     from plumax.population._src.point_process import _inhomogeneous_log_likelihood

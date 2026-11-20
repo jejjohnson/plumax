@@ -34,7 +34,7 @@ from plumax.population.totals import total_emission
 
 
 pytest.importorskip("numpyro")
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 from numpyro import handlers
 from numpyro.infer import MCMC, NUTS

@@ -171,15 +171,15 @@ def test_geo_operator_without_extra_names_it():
 
 
 @pytest.mark.slow
-def test_population_without_xtremax():
-    # xtremax (the `population` extra) is imported only when a process is
+def test_population_without_pyrox_xtreme():
+    # pyrox-xtreme (the `population` extra) is imported only when a process is
     # built, and its absence is reported with the extra's name.
     result = _run(
         """
         import sys
         import plumax.population
-        assert "xtremax" not in sys.modules
-        block("xtremax")
+        assert "pyrox_xtreme" not in sys.modules
+        block("pyrox_xtreme")
         from plumax.population import make_process
         try:
             make_process("constant", (0.0, 1.0), lambda_0=1.0)

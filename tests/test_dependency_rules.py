@@ -68,9 +68,12 @@ ALLOWED: dict[str, str] = {
     "pipekit_train": "pipekit-train",
     "plumax": "plumax",
     "pyrox": "pyrox",
+    "pyrox_gauss": "pyrox-gauss",
     "pyrox_gp": "pyrox-gp",
     "pyrox_lgm": "pyrox-lgm",
     "pyrox_nn": "pyrox-nn",
+    "pyrox_ssm": "pyrox-ssm",
+    "pyrox_xtreme": "pyrox-xtreme",
     "radtrax": "radtrax",
     "sesmax": "sesmax",
     "sesmax_core": "sesmax-core",
@@ -80,7 +83,6 @@ ALLOWED: dict[str, str] = {
     "xrops": "xrtoolz-ops",
     "xrproducts": "xrtoolz-products",
     "xrtoolz": "xrtoolz",
-    "xtremax": "xtremax",
 }
 
 #: imports left undeclared on purpose, kept in step with geostack:

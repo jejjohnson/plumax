@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 
 @pytest.mark.slow

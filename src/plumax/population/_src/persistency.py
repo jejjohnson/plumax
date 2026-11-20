@@ -5,7 +5,7 @@ event, the probability of an event in a horizon and the expected count, each as 
 point value of one kernel or as posterior samples through :func:`posterior_metric`.
 All three rest on one compensator, Λ(a, b) = ∫ₐᵇ λ(t) dt, from
 :class:`~plumax.population.processes.LogIntensity`: the kernel's closed form when it
-has one, Simpson quadrature through xtremax otherwise.
+has one, Simpson quadrature through pyrox-xtreme otherwise.
 
 Time is in days and λ in events day⁻¹, as in
 :mod:`plumax.population.intensity`.

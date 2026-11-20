@@ -29,7 +29,7 @@ from plumax.population.importance import (
 from plumax.population.marks import LognormalMark
 
 
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 TRUTH = {"mu": 0.5, "sigma": 0.8}
 MARK = LognormalMark()

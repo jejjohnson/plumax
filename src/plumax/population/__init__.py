@@ -17,7 +17,7 @@ products:
 * :mod:`~plumax.population.marks` — V.B mark registry, the size distribution
   ``f(Q | θ)`` (power law, lognormal, lognormal-Pareto, mixture of lognormals).
 * :mod:`~plumax.population.processes` — the intensity and POD registries as
-  ``xtremax.point_processes`` Poisson, marked and detection-thinned processes
+  ``pyrox_xtreme.point_processes`` Poisson, marked and detection-thinned processes
   (the ``population`` extra).
 * :mod:`~plumax.population.persistency` — V.C wait time, occurrence probability
   and expected count of a fitted intensity, with their posterior samples.
@@ -33,7 +33,7 @@ products:
 
 Importing this package is cheap: the NumPyro-dependent fit functions and
 result types are bound lazily (PEP 562), so ``import plumax.population``
-never pulls in NumPyro. xtremax (the ``population`` extra) is imported only
+never pulls in NumPyro. pyrox-xtreme (the ``population`` extra) is imported only
 when a process is built.
 """
 

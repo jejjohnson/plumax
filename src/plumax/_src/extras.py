@@ -20,7 +20,7 @@ def require_extra(
 
     Args:
         module: The module to import, dotted (``"pyproj"``,
-            ``"xtremax.point_processes"``).
+            ``"pyrox_xtreme.point_processes"``).
         extra: The plumax extra that installs it (``"io"``, ``"assim"``).
         caller: The public function or class that needs it, for the message.
         purpose: What the caller does with it, completing the sentence

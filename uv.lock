@@ -3441,8 +3441,8 @@ notebooks = [
 ]
 population = [
     { name = "numpyro" },
+    { name = "pyrox-xtreme" },
     { name = "pyyaml" },
-    { name = "xtremax" },
 ]
 
 [package.dev-dependencies]
@@ -3456,6 +3456,7 @@ dev = [
     { name = "pipekit-cycle" },
     { name = "pipekit-train", extra = ["cache", "equinox"] },
     { name = "pre-commit" },
+    { name = "pyrox-xtreme" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
@@ -3464,7 +3465,6 @@ dev = [
     { name = "vardax" },
     { name = "xrtoolz-ops" },
     { name = "xrtoolz-products" },
-    { name = "xtremax" },
 ]
 docs = [
     { name = "ipykernel" },
@@ -3510,6 +3510,7 @@ requires-dist = [
     { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-ops-v0.2.1" },
     { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-ops-v0.2.1" },
     { name = "pyproj", marker = "extra == 'io'" },
+    { name = "pyrox-xtreme", marker = "extra == 'population'", git = "https://github.com/jejjohnson/pyrox?subdirectory=packages%2Fpyrox-xtreme&rev=05e38f84305374a68700c06c834b99546bddc64c" },
     { name = "pyyaml", marker = "extra == 'population'", specifier = ">=6" },
     { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
@@ -3520,7 +3521,6 @@ requires-dist = [
     { name = "xarray" },
     { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
-    { name = "xtremax", marker = "extra == 'population'", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 provides-extras = ["inference", "io", "notebooks", "assim", "emulate", "population", "geo"]
 
@@ -3535,6 +3535,7 @@ dev = [
     { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-ops-v0.2.1" },
     { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-ops-v0.2.1" },
     { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pyrox-xtreme", git = "https://github.com/jejjohnson/pyrox?subdirectory=packages%2Fpyrox-xtreme&rev=05e38f84305374a68700c06c834b99546bddc64c" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-xdist", specifier = ">=3.5" },
@@ -3543,7 +3544,6 @@ dev = [
     { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
     { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
-    { name = "xtremax", git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" },
 ]
 docs = [
     { name = "ipykernel", specifier = ">=7.2.0" },
@@ -3968,6 +3968,23 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ed/7a/faad58c948947b217fcf06f80d308fff27bab5730ad6c9cd4c35bcf8bc90/pyproj-3.8.0-cp315-cp315t-win32.whl", hash = "sha256:0ff22ad49d1f59e18a57384926aabcb0ee8bbe9213e5abe375fd18b1b6ace194", size = 6471511, upload-time = "2026-09-05T20:05:04.113Z" },
     { url = "https://files.pythonhosted.org/packages/cf/a8/5ed4f4042031e13a0fede12e81af1e4143102221c373f966a24f38b0d284/pyproj-3.8.0-cp315-cp315t-win_amd64.whl", hash = "sha256:d5a408b215ef98c9ae19e58ec512360b8ad9b25f8792138f983a58d159ac7157", size = 6940114, upload-time = "2026-09-05T20:05:05.737Z" },
     { url = "https://files.pythonhosted.org/packages/12/14/9c291ad92b565629cf4eacee72cbc8071ca8d93c9d719b47f304b1b2ea76/pyproj-3.8.0-cp315-cp315t-win_arm64.whl", hash = "sha256:bbf8a786ebfa9a904802dfde0e95e1325df8efbb573a19686c1937499a8f04e8", size = 6843958, upload-time = "2026-09-05T20:05:07.527Z" },
+]
+
+[[package]]
+name = "pyrox-xtreme"
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/pyrox?subdirectory=packages%2Fpyrox-xtreme&rev=05e38f84305374a68700c06c834b99546bddc64c#05e38f84305374a68700c06c834b99546bddc64c" }
+dependencies = [
+    { name = "einops" },
+    { name = "equinox" },
+    { name = "jax" },
+    { name = "jaxlib" },
+    { name = "jaxtyping" },
+    { name = "numpy" },
+    { name = "numpyro" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "xarray" },
 ]
 
 [[package]]
@@ -5359,23 +5376,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/31/8a/97da0fda5c642afec1ff5974b16830bc07b3a8eb1ec6e43eabfe88e5c157/xskillscore-0.0.29.tar.gz", hash = "sha256:34375e86ea5e2ac710e52b8eb8e77c7acb5b2782aa6c67e863c71e4ae202dd74", size = 219113, upload-time = "2026-02-18T14:05:36.362Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f0/8d/4f78ecff7c6ae42312d20bbff1df1587e14fec198a9091381ebda6ae678b/xskillscore-0.0.29-py3-none-any.whl", hash = "sha256:d021e2fc035fad3fc1341bb9353150117a2eda57439caa671032605ceb9d2358", size = 80466, upload-time = "2026-02-18T14:05:31.907Z" },
-]
-
-[[package]]
-name = "xtremax"
-version = "0.0.4"
-source = { git = "https://github.com/jejjohnson/xtremax?rev=eeec71e732c5aaee63f57934ce9f7e1226b9dc6a#eeec71e732c5aaee63f57934ce9f7e1226b9dc6a" }
-dependencies = [
-    { name = "einops" },
-    { name = "equinox" },
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "jaxtyping" },
-    { name = "numpy" },
-    { name = "numpyro" },
-    { name = "pandas" },
-    { name = "scipy" },
-    { name = "xarray" },
 ]
 
 [[package]]

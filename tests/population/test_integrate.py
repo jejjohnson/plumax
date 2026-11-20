@@ -13,7 +13,7 @@ from plumax.population.integrate import (
 from plumax.population.marks import LognormalParetoMark
 
 
-pytest.importorskip("xtremax")
+pytest.importorskip("pyrox_xtreme")
 
 
 def _log_hill(q, q50=1.0, steepness=2.0):
