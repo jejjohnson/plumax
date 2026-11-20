@@ -52,6 +52,7 @@ ALLOWED: dict[str, str] = {
     "geonnax": "geonnax",
     "geoops": "geotoolz-ops",
     "geopatcher": "geotoolz-patcher",
+    "geophysix": "geophysix",
     "geoproducts": "geotoolz-products",
     "georeader": "georeader-spaceml",
     "geotoolz": "geotoolz",

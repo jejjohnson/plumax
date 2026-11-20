@@ -51,11 +51,11 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
+from geophysix.thermo import number_density
 from jax.typing import ArrayLike
 from jaxtyping import Float
 from radtrax.slab import (
     ATM_TO_PA,
-    BOLTZMANN_J_PER_K,
     CM3_PER_M3,
     forward_nonlinear_normalized,
 )
@@ -153,13 +153,14 @@ def column_mass_to_delta_vmr(
         column_mass * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
     )
     # Air number density [molecules/cm³] — the ideal-gas relation inlined with
-    # ``jnp`` (rather than the NumPy ``radtrax.slab.number_density_cm3``) so a
-    # traced ``p_atm`` / ``T_K`` flows through differentiably, honouring the
-    # pure-JAX contract; identical formula and constants.
+    # ``jnp`` arrays through ``geophysix.thermo.number_density`` (rather than
+    # the NumPy ``radtrax.slab.number_density_cm3``) so a traced ``p_atm`` /
+    # ``T_K`` flows through differentiably, honouring the pure-JAX contract;
+    # identical formula and constants.
     p_atm_j = jnp.asarray(p_atm, dtype=float)
     T_K_j = jnp.asarray(T_K, dtype=float)
     # n_air = p / (k_B T) / 1e6
-    air_density_cm3 = (p_atm_j * ATM_TO_PA) / (BOLTZMANN_J_PER_K * T_K_j) / CM3_PER_M3
+    air_density_cm3 = number_density(p_atm_j * ATM_TO_PA, T_K_j) / CM3_PER_M3
     # Air column number density [molecules/cm²].
     # N_air = n_air L
     air_column_cm2 = air_density_cm3 * jnp.asarray(path_length_cm, dtype=float)

@@ -116,7 +116,9 @@ def ppb_to_column_mass(
         1 ppb over a 1013.25 hPa dry column is about 5.7 mg m⁻²:
 
         >>> import numpy as np
-        >>> dry_air = 101_325.0 * 6.02214076e23 / (9.80665 * 0.0289644)
+        >>> from geophysix.columns import dry_air_column
+        >>> from geophysix.constants import STANDARD
+        >>> dry_air = dry_air_column(101_325.0) * STANDARD.avogadro
         >>> bool(np.isclose(ppb_to_column_mass(1.0, dry_air), 5.72e-6, rtol=1e-3))
         True
 

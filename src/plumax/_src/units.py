@@ -11,9 +11,11 @@ path, n = p / (k_B T) (the ideal-gas law):
 from __future__ import annotations
 
 import numpy as np
+from geophysix.columns import convert
+from geophysix.constants import Gas
 from jaxtyping import Float
 
-from plumax._src.constants import AVOGADRO, BOLTZMANN, M_CH4
+from plumax._src.constants import M_CH4
 
 
 def ppm_m_to_column_moles(
@@ -42,10 +44,16 @@ def ppm_m_to_column_moles(
         >>> bool(np.isclose(moles, 42.29e-3, rtol=1e-3))
         True
     """
-    # n = p / (k_B T)  [molecules m⁻³]
-    number_density = pressure_pa / (BOLTZMANN * temperature_k)
-    # ΔΩ_mol = E · 10⁻⁶ · n / N_A
-    return np.asarray(enhancement_ppm_m * 1.0e-6 * number_density / AVOGADRO)
+    # ΔΩ_mol = E · 10⁻⁶ · p / (k_B T N_A)
+    return np.asarray(
+        convert(
+            enhancement_ppm_m,
+            "ppm_m",
+            "mol_m2",
+            pressure=pressure_pa,
+            temperature=temperature_k,
+        )
+    )
 
 
 def ppm_m_to_column_mass(
@@ -86,8 +94,14 @@ def ppm_m_to_column_mass(
         >>> bool(high < mass)
         True
     """
-    moles = ppm_m_to_column_moles(
-        enhancement_ppm_m, pressure_pa=pressure_pa, temperature_k=temperature_k
+    # ΔΩ = M · E · 10⁻⁶ · p / (k_B T N_A)
+    return np.asarray(
+        convert(
+            enhancement_ppm_m,
+            "ppm_m",
+            "kg_m2",
+            gas=Gas("gas", molar_mass),
+            pressure=pressure_pa,
+            temperature=temperature_k,
+        )
     )
-    # ΔΩ = M ΔΩ_mol
-    return np.asarray(moles * molar_mass)
