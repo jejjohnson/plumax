@@ -18,6 +18,7 @@ import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from geophysix.thermo import dry_air_density
 from jaxtyping import Array, Float
 
 from plumax._src.constants import (
@@ -356,7 +357,7 @@ class MoninObukhov(eqx.Module):
         temperature = field.temperature[:, 0]
         pressure = field.pressure[:, 0]
         # ρ = p / (R_d T)
-        density = pressure / (R_DRY * temperature)
+        density = dry_air_density(pressure, temperature)
         heat_flux = jnp.broadcast_to(
             jnp.asarray(sensible_heat_flux, dtype=wind_speed.dtype), wind_speed.shape
         )

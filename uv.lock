@@ -1242,8 +1242,8 @@ wheels = [
 
 [[package]]
 name = "geophysix"
-version = "0.0.2"
-source = { git = "https://github.com/jejjohnson/geophysix.git?tag=v0.0.2#b6b0ba2e73ce4533595b07f2877e6948e47c6f01" }
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/geophysix.git?tag=v0.0.4#aed2dab2815a32fb24be446ba4a570aab746935a" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -3503,7 +3503,7 @@ requires-dist = [
     { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
-    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix.git?tag=v0.0.2" },
+    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix.git?tag=v0.0.4" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=5742376a6b00acffd6761a8b1a70115e8eb4d3f9" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.6" },

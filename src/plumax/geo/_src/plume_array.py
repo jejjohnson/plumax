@@ -42,7 +42,6 @@ except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
 
 __all__ = [
     "MOLAR_MASS_KG_PER_MOL",
-    "STANDARD_MOLAR_VOLUME_M3_PER_MOL",
     "ColumnUnit",
     "Connectivity",
     "ThresholdMode",
@@ -63,10 +62,6 @@ MOLAR_MASS_KG_PER_MOL = {
     "CH4": M_CH4,
     "CO2": M_CO2,
 }
-# Deprecated: the molar volume of an ideal gas at 298.15 K and 1 atm (m^3/mol).
-# ``convert_column_units`` no longer uses it (it converts at the scene's
-# pressure and temperature); kept for one release, then removed.
-STANDARD_MOLAR_VOLUME_M3_PER_MOL = 0.024465
 
 
 def squeeze_single_band(

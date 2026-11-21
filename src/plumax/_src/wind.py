@@ -6,6 +6,7 @@ from types import ModuleType
 from typing import Any
 
 import jax.numpy as jnp
+from geophysix.wind import wind_components as geophysix_wind_components
 
 
 def wind_components(
@@ -36,10 +37,5 @@ def wind_components(
         >>> bool(np.isclose(u, 5.0)), bool(np.isclose(v, 0.0, atol=1e-12))
         (True, True)
     """
-    # θ = direction in radians
-    direction_rad = xp.deg2rad(direction_deg)
-    # u = −U sin θ
-    wind_east = -speed * xp.sin(direction_rad)
-    # v = −U cos θ
-    wind_north = -speed * xp.cos(direction_rad)
-    return wind_east, wind_north
+    # u = −U sin θ,  v = −U cos θ  (geophysix.wind, in xp's namespace)
+    return geophysix_wind_components(xp.asarray(speed), xp.asarray(direction_deg))
