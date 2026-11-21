@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/jejjohnson/plumax/compare/v0.3.0...v0.3.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **gauss_puff:** annotate with np.ndarray so the inference modules import under the type-check hook in any order ([#383](https://github.com/jejjohnson/plumax/issues/383)) ([9a54001](https://github.com/jejjohnson/plumax/commit/9a540015d9bdc1f1b552088243ee71097648e281))
+* **tests:** the gauss_puff float32 test gives the suite its x64 back ([#382](https://github.com/jejjohnson/plumax/issues/382)) ([9bc51a2](https://github.com/jejjohnson/plumax/commit/9bc51a2649885cc2c7ec71d713d858ad0e12556a))
+
 ## [0.3.0](https://github.com/jejjohnson/plumax/compare/v0.2.6...v0.3.0) (2026-11-19)
 
 
