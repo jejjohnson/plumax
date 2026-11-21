@@ -15,9 +15,11 @@ trace-gas plume literature cited per function:
 
 from __future__ import annotations
 
+import warnings
+from typing import Any
+
 from plumax.geo._src.plume_array import (
     MOLAR_MASS_KG_PER_MOL,
-    STANDARD_MOLAR_VOLUME_M3_PER_MOL,
     ColumnUnit,
     Connectivity,
     ThresholdMode,
@@ -34,7 +36,6 @@ from plumax.geo._src.plume_array import (
 
 __all__ = [
     "MOLAR_MASS_KG_PER_MOL",
-    "STANDARD_MOLAR_VOLUME_M3_PER_MOL",
     "ColumnUnit",
     "Connectivity",
     "ThresholdMode",
@@ -46,3 +47,23 @@ __all__ = [
     "squeeze_single_band",
     "wind_advection_cone",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """``STANDARD_MOLAR_VOLUME_M3_PER_MOL``, deprecated for one release.
+
+    It was the molar volume of an ideal gas at 298.15 K and 1 atm (m³ mol⁻¹).
+    ``convert_column_units`` converts at the scene's pressure and temperature
+    instead, through ``geophysix.columns.convert``.
+    """
+    if name == "STANDARD_MOLAR_VOLUME_M3_PER_MOL":
+        warnings.warn(
+            "plumax.geo.plume_array.STANDARD_MOLAR_VOLUME_M3_PER_MOL is deprecated "
+            "and will be removed; use geophysix.columns.convert with the scene's "
+            "pressure and temperature",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return 0.024465
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)

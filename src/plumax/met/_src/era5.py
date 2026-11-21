@@ -48,6 +48,7 @@ from pathlib import Path
 import einx
 import numpy as np
 import xarray as xr
+from geophysix.thermo import vertical_velocity
 from jaxtyping import Float, Int
 
 from plumax._src.constants import GRAVITY as GRAVITY, R_DRY as R_DRY
@@ -192,10 +193,8 @@ def load_era5(
     pbl_height = reorder(pbl_height)
 
     # --- vertical velocity ---
-    # ρ = p / (R_d T)
-    density = pressure_pa / (R_DRY * temperature)
-    # w = −ω / (ρ g)
-    wind_up = -pressure_velocity / (density * GRAVITY)
+    # w = −ω / (ρ g),  ρ = p / (R_d T)
+    wind_up = vertical_velocity(pressure_velocity, pressure_pa, temperature)
 
     # --- longitude seam ---
     if _is_periodic(lon):

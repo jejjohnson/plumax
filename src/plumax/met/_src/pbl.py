@@ -10,9 +10,10 @@ from __future__ import annotations
 import einx
 import numpy as np
 import xarray as xr
+from geophysix.thermo import potential_temperature as theta_of
 from jaxtyping import Float
 
-from plumax._src.constants import CP_DRY, P_REFERENCE, R_DRY
+from plumax._src.constants import P_REFERENCE
 from plumax._src.extras import require_extra
 from plumax.lagrangian.turbulence import DEFAULT_CORIOLIS_PARAMETER, HannaTurbulence
 from plumax.met._src.surface_layer import SurfaceLayer
@@ -101,7 +102,9 @@ def pbl_height_bulk_richardson(
     temperature = np.asarray(field.temperature, dtype=np.float64)
     pressure = np.asarray(field.pressure, dtype=np.float64)
     # θ = T (p_ref / p)^{R_d / c_p}
-    potential_temperature = temperature * (P_REFERENCE / pressure) ** (R_DRY / CP_DRY)
+    potential_temperature = theta_of(
+        temperature, pressure, reference_pressure=P_REFERENCE
+    )
     dims = ("time", "level", "y", "x")
     profiles = xr.Dataset(
         {

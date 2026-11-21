@@ -23,7 +23,7 @@ BOLTZMANN = STANDARD.boltzmann
 #: Standard surface pressure [Pa] (ISA sea level), for products that report none.
 P_STANDARD = STANDARD.standard_pressure
 #: Near-surface temperature [K] (ISA sea level), when a scene gives none.
-T_STANDARD = 288.15
+T_STANDARD = STANDARD.standard_temperature
 
 #: von Kármán constant κ.
 KARMAN = 0.4

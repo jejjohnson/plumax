@@ -39,6 +39,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
+from geophysix.columns import column_from_mixing_ratio
 from jaxtyping import Array, Float, Shaped
 
 from plumax._src.constants import (
@@ -127,10 +128,12 @@ def ppb_to_column_mass(
         >>> ppb_to_column_mass(np.array([0.0, 10.0, -10.0]), dry_air).shape
         (3,)
     """
-    # mol of CH₄ per molecule of air per ppb: 10⁻⁹ / N_A
-    per_molecule = 1.0e-9 / AVOGADRO
-    # ΔΩ = Δχ · 10⁻⁹ · N_dry · M / N_A
-    return np.asarray(delta_ppb * per_molecule * dry_air_molecules * M_CH4)
+    # dry-air column in mol m⁻²: N_dry / N_A
+    dry_air_moles = np.asarray(dry_air_molecules) / AVOGADRO
+    # ΔΩ = M · Δχ · 10⁻⁹ · N_dry / N_A
+    return np.asarray(
+        M_CH4 * column_from_mixing_ratio(np.asarray(delta_ppb) * 1.0e-9, dry_air_moles)
+    )
 
 
 def load_tropomi_l2(
