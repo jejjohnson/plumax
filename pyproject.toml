@@ -65,7 +65,7 @@ dependencies = [
     # pipekit-ops (import pipekit_ops) supplies the carrier-agnostic Operator
     # primitives, and pipekit_cycle the ForwardModel / ObservationOperator
     # protocols that the plumax operator + adapter layer plug into.
-    "pipekit-ops>=0.2.1",
+    "pipekit-ops>=0.2.3",
     # radtrax owns the radiative transfer (the single-slab forward model, the
     # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
     # and the radiance adapter compose with the plume models (package
@@ -74,7 +74,7 @@ dependencies = [
     "radtrax>=0.1.0",
     # geophysix owns the physical constants and the closed-form gas maths
     # (ideal-gas number density, column-unit conversions) plumax used to copy.
-    "geophysix>=0.0.4",
+    "geophysix>=0.0.7",
     # einx writes reductions, gathers and rearranges with named axes (the
     # house style's replacement for axis= / reshape / indexing tricks).
     "einx>=0.4",
@@ -148,9 +148,10 @@ override-dependencies = [
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
-    # vardax sources pipekit-cycle at its own tag; hold it on plumax's
-    # pipekit tag.
-    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@pipekit-ops-v0.2.1#subdirectory=packages/pipekit-cycle",
+    # vardax v0.3.5 sources pipekit-ops and pipekit-cycle at pipekit-ops-v0.2.1;
+    # hold them on plumax's pipekit tag.
+    "pipekit-ops @ git+https://github.com/jejjohnson/pipekit@pipekit-array-v0.1.4#subdirectory=packages/pipekit-ops",
+    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@pipekit-array-v0.1.4#subdirectory=packages/pipekit-cycle",
     # vardax v0.3.5 sources integrix v0.0.3; hold the graph on plumax's v0.0.6.
     "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.6",
     # geoarray sources functax v0.0.6; hold the graph on integrix's v0.0.11.
@@ -170,20 +171,22 @@ override-dependencies = [
 # in the pyrox workspace yet; it is pinned to the pyrox main commit that holds
 # it (xtremax, its archived predecessor, moved there in jejjohnson/pyrox#463).
 [tool.uv.sources]
-# Every pipekit package is pinned to the one tag pipekit-ops-v0.2.1 (8e357a1),
+# Every pipekit package is pinned to the one tag pipekit-array-v0.1.4 (30a6c19),
 # which carries each package's current release; per-package tags make uv
-# report conflicting URLs for pipekit-ops, which they all reference.
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-ops-v0.2.1" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-ops-v0.2.1" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-ops-v0.2.1" }
-pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-ops-v0.2.1" }
+# report conflicting URLs for pipekit-ops, which they all reference. geophysix
+# and geotoolz pin that tag too, and geotoolz this geophysix tag, so the three
+# move together.
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.1.4" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.4" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.4" }
+pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-array-v0.1.4" }
 finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-ops-v0.2.1" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.4" }
 # pipekit-train (the `emulate` extra) is not on PyPI.
-pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-ops-v0.2.1" }
+pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-array-v0.1.4" }
 gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
-geophysix = { git = "https://github.com/jejjohnson/geophysix.git", tag = "v0.0.4" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.7" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.6" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
@@ -197,16 +200,16 @@ vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.5" }
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
 # The geotoolz packages (the `geo` and `io` extras) are pinned to one geotoolz
-# commit, 5742376 on main: geoops 0.18.1 on pipekit-ops and the GeoArray
+# commit, a02cebc on main: geoops 0.18.1 on pipekit-ops and the GeoArray
 # carrier, geoarray beside it, and the xarray lane moved in from xrtoolz
 # (xrops 0.5.1, xrproducts 0.5.0), which has no release from geotoolz yet. The
 # commit carries the plume-product openers (geotoolz#744) and the EMIT QA
 # presets (geotoolz#747) that `obs.load_emit_plume_complex` uses. functax is geoarray's own git dependency; plumax
 # holds it on v0.0.11, the tag integrix v0.0.6 pins.
-geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
-geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
-xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
-xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "5742376a6b00acffd6761a8b1a70115e8eb4d3f9" }
+geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" }
+geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" }
+xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" }
+xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" }
 functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.11" }
 
 [dependency-groups]
