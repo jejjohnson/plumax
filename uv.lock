@@ -22,8 +22,6 @@ overrides = [
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.6" },
-    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.1.4" },
-    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.1.4" },
 ]
 
 [[package]]
@@ -3546,7 +3544,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490" },
     { name = "xarray" },
     { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
     { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
@@ -3570,7 +3568,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.5" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490" },
     { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
     { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
 ]
@@ -5144,8 +5142,8 @@ wheels = [
 
 [[package]]
 name = "vardax"
-version = "0.3.5"
-source = { git = "https://github.com/jejjohnson/vardax?tag=v0.3.5#d87878b593cd6f86ee065cdb40cf9a3fc8279dd9" }
+version = "0.3.6"
+source = { git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490#3bc3457bd285d8a68311eca5ba0926559546f490" }
 dependencies = [
     { name = "argminax" },
     { name = "diffrax" },
