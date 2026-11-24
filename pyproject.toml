@@ -148,11 +148,7 @@ override-dependencies = [
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
-    # vardax v0.3.5 sources pipekit-ops and pipekit-cycle at pipekit-ops-v0.2.1;
-    # hold them on plumax's pipekit tag.
-    "pipekit-ops @ git+https://github.com/jejjohnson/pipekit@pipekit-array-v0.1.4#subdirectory=packages/pipekit-ops",
-    "pipekit-cycle @ git+https://github.com/jejjohnson/pipekit@pipekit-array-v0.1.4#subdirectory=packages/pipekit-cycle",
-    # vardax v0.3.5 sources integrix v0.0.3; hold the graph on plumax's v0.0.6.
+    # vardax sources integrix v0.0.3; hold the graph on plumax's v0.0.6.
     "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.6",
     # geoarray sources functax v0.0.6; hold the graph on integrix's v0.0.11.
     "functax @ git+https://github.com/jejjohnson/functax@v0.0.11",
@@ -191,11 +187,12 @@ integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.6" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# vardax v0.3.5 (on pipekit-ops since v0.3.4), which keeps
+# vardax v0.3.6 and vardax#307 (main at 3bc3457, not in a release yet), which
+# pins pipekit at the tag above. It keeps
 # MinimiseResult.converged (FourDVarResult.converged reports it) and the
 # state-space form of OptimalInterpolation (coupled.fuse_observations solves
 # with it).
-vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.5" }
+vardax = { git = "https://github.com/jejjohnson/vardax", rev = "3bc3457bd285d8a68311eca5ba0926559546f490" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
