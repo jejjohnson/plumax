@@ -274,8 +274,8 @@ cd plumax
 make install      # uv sync --all-groups + pre-commit hooks
 ```
 
-- The core install pulls JAX, xarray, diffrax/Equinox, einx, gridax, gaussx, optimistix, pipekit and radtrax.
-- gridax, gaussx, pipekit and radtrax are not yet on PyPI, and neither are most packages behind the extras; from a checkout they resolve from git via `[tool.uv.sources]`.
+- The core install pulls JAX, xarray, diffrax/Equinox, einx, gridax, diagnostix, gaussx, optimistix, pipekit and radtrax.
+- gridax, diagnostix, gaussx, pipekit and radtrax are not yet on PyPI, and neither are most packages behind the extras; from a checkout they resolve from git via `[tool.uv.sources]`.
 - Extras: `inference` (NumPyro), `assim` (vardax and argminax: the Tier II and Tier III source inversions and the Tier IV nonlinear inversion), `population` (NumPyro and pyrox-xtreme), `geo` (the plume operators on GeoArrays), `emulate` (pipekit-train, for the footprint emulator), `io` (readers) and `notebooks` (matplotlib, IPython): `uv add "plumax[inference,assim]"`.
 
 ## Development

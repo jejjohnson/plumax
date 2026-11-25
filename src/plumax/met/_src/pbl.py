@@ -1,20 +1,19 @@
 """Boundary-layer diagnostics on a ``MetField``, and the Hanna turbulence factory.
 
-The bulk-Richardson PBL height runs through xrops at load time (NumPy, the
-``io`` extra); the Hanna factory turns a :class:`SurfaceLayer` into Tier II's
+The bulk-Richardson PBL height is diagnostix's, on the arrays of the field, so
+it traces; the Hanna factory turns a :class:`SurfaceLayer` into Tier II's
 turbulence model at one column.
 """
 
 from __future__ import annotations
 
 import einx
-import numpy as np
-import xarray as xr
+import jax.numpy as jnp
+from diagnostix.columns import boundary_layer_height
 from geophysix.thermo import potential_temperature as theta_of
-from jaxtyping import Float
+from jaxtyping import Array, Float
 
 from plumax._src.constants import P_REFERENCE
-from plumax._src.extras import require_extra
 from plumax.lagrangian.turbulence import DEFAULT_CORIOLIS_PARAMETER, HannaTurbulence
 from plumax.met._src.surface_layer import SurfaceLayer
 from plumax.met.field import MetField
@@ -22,7 +21,7 @@ from plumax.met.field import MetField
 
 def pbl_height_bulk_richardson(
     field: MetField, *, ri_crit: float = 0.25
-) -> Float[np.ndarray, "time y x"]:
+) -> Float[Array, "time y x"]:
     """PBL height h from the bulk Richardson number of the analysis profiles.
 
     Ri_b(z) = g (θ(z) − θ_s)(z − z_s) / (θ_s |𝐮(z) − 𝐮_s|²),  h: first Ri_b = Ri_c,
@@ -32,18 +31,17 @@ def pbl_height_bulk_richardson(
 
     Algorithm:
         1. Build θ, the T-point wind and the heights above the grid's surface.
-        2. Hand them to :func:`xrops.atm.pbl_height_bulk_richardson`, which
-           finds the first crossing and interpolates between levels.
+        2. Hand the columns to :func:`diagnostix.columns.boundary_layer_height`,
+           which finds the first crossing and interpolates between levels.
 
     Args:
         field: Met on the analysis grid.
         ri_crit: Critical bulk Richardson number Ri_c.
 
     Returns:
-        h [m]; NaN where no level reaches Ri_c inside the grid.
-
-    Raises:
-        MissingExtraError: If the ``io`` extra (xrops) is not installed.
+        h [m]; NaN where no level reaches Ri_c inside the grid, and where a
+        level at or below h is NaN. Under autodiff the level of the crossing is
+        piecewise constant, and the gradient flows through the interpolation.
 
     Examples:
         A neutral layer under an inversion at 400 m, with shear:
@@ -69,20 +67,12 @@ def pbl_height_bulk_richardson(
         >>> bool(((height > 350.0) & (height < 1000.0)).all())
         True
     """
-    xrops_atm = require_extra(
-        "xrops.atm",
-        extra="io",
-        caller="pbl_height_bulk_richardson",
-        purpose="runs through xrops",
-    )
     grid = field.plume_grid
-    grid_z = np.asarray(grid.z, dtype=np.float64)
     # z_surface = z₀ − Δz/2
-    grid_surface = grid_z[0] - 0.5 * grid.dz
+    grid_surface = grid.z[0] - 0.5 * grid.dz
     # h_k = z_k − z_surface
-    heights = grid_z - grid_surface
-    wind_x = np.asarray(field.u, dtype=np.float64)
-    wind_y = np.asarray(field.v, dtype=np.float64)
+    heights = grid.z - grid_surface
+    wind_x, wind_y = jnp.asarray(field.u), jnp.asarray(field.v)
     # each U-point's western neighbour, the edge column repeating itself
     wind_x_west = einx.id(
         "t z y first, t z y rest -> t z y (first + rest)",
@@ -99,25 +89,18 @@ def pbl_height_bulk_richardson(
     wind_x_centre = 0.5 * (wind_x + wind_x_west)
     # v_T = (v_{j−1/2} + v_{j+1/2}) / 2
     wind_y_centre = 0.5 * (wind_y + wind_y_south)
-    temperature = np.asarray(field.temperature, dtype=np.float64)
-    pressure = np.asarray(field.pressure, dtype=np.float64)
     # θ = T (p_ref / p)^{R_d / c_p}
     potential_temperature = theta_of(
-        temperature, pressure, reference_pressure=P_REFERENCE
+        jnp.asarray(field.temperature),
+        jnp.asarray(field.pressure),
+        reference_pressure=P_REFERENCE,
     )
-    dims = ("time", "level", "y", "x")
-    profiles = xr.Dataset(
-        {
-            "theta_v": (dims, potential_temperature),
-            "u": (dims, wind_x_centre),
-            "v": (dims, wind_y_centre),
-        },
-        coords={"z_agl": ("level", heights)},
+    # the levels last, as the column kernel reads them
+    theta, u, v = (
+        einx.id("t z y x -> t y x z", profile)
+        for profile in (potential_temperature, wind_x_centre, wind_y_centre)
     )
-    result = xrops_atm.pbl_height_bulk_richardson(
-        profiles, theta_v="theta_v", ri_crit=ri_crit, height="z_agl"
-    )
-    return result["pbl_height"].transpose("time", "y", "x").values
+    return boundary_layer_height(theta, u, v, heights, critical=ri_crit)
 
 
 def hanna_turbulence_from(
