@@ -178,6 +178,7 @@ def test_wind_from_speed_direction_west_wind_flows_east():
     np.testing.assert_allclose(velocity, [[5.0, 0.0, 0.0]] * 2, atol=1e-6)
 
 
+@pytest.mark.slow
 def test_integer_times_are_taken():
     field = wind_field_from_callable(GRID, lambda t, x, y, z: (t + x, y, 0.0 * x))
     wind = gridded_wind_from_prescribed(field, jnp.array([0, 60]))
