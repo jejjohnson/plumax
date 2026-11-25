@@ -15,12 +15,11 @@ Submodules
 - ``grid``          : CartesianCGrid3D wrapper + coordinate helpers.
 - ``wind``          : prescribed 3-D wind fields (uniform, sheared, time-varying).
 - ``source``        : Gaussian point-source and per-cell surface-flux terms.
-- ``advection``     : horizontal WENO advection (gridax) + vertical upwind.
+- ``advection``     : horizontal WENO advection + vertical upwind (gridax).
 - ``diffusion``     : K-theory eddy diffusivity + anisotropic Laplacian.
 - ``boundary``      : BC application for 3-D fields (horizontal + vertical).
 - ``dynamics``      : diffrax-compatible RHS for the scalar transport equation.
 - ``simulate``      : high-level xarray-returning runner.
-- ``_vertical_ops`` : private — vertical ∂_z / flux / Laplacian helpers.
 """
 
 from __future__ import annotations

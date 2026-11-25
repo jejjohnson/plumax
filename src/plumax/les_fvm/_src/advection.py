@@ -3,8 +3,8 @@
 The horizontal contribution ``-∇_h · (u_h C)`` is delegated to
 :func:`gridax.advect`, which applies a WENO/TVD reconstruction
 at U- and V-faces for every z-level.  The vertical contribution
-``-∂_z(w C)`` is assembled by :func:`_vertical_ops.vertical_advection_tendency`
-with a first-order upwind reconstruction at k-faces.
+``-∂_z(w C)`` is :func:`gridax.advect_vertical` with a first-order upwind
+reconstruction at k-faces.
 
 Available reconstruction methods for the horizontal term are the schemes of
 :mod:`gridax.schemes`, by name: ``upwind1``, ``weno3``, ``weno5``,
@@ -18,11 +18,12 @@ monotone by construction, which matters for a non-negative tracer.
 from __future__ import annotations
 
 import equinox as eqx
-from gridax import advect
+import jax.numpy as jnp
+from gridax import advect, advect_vertical
 from gridax.schemes import TVD, WENO, Centred, Scheme, Upwind
 from jaxtyping import Array, Float
 
-from plumax.les_fvm._src.vertical_ops import vertical_advection_tendency
+from plumax.les_fvm._src.boundary import wrap_periodic
 from plumax.les_fvm.grid import PlumeGrid3D
 
 
@@ -108,14 +109,17 @@ def advection_tendency(
     This is what makes horizontal transport honor ``bc_x`` / ``bc_y``.
     """
     x_periodic, y_periodic = periodic
-    if x_periodic:
-        # Wrap the x-normal velocity seam: west wall face (u[..., 0]) and east
-        # wall face (u[..., -2]) are the same periodic seam and must match.
-        u = u.at[:, :, 0].set(u[:, :, -2]).at[:, :, -1].set(u[:, :, 1])
-    if y_periodic:
-        v = v.at[:, 0, :].set(v[:, -2, :]).at[:, -1, :].set(v[:, 1, :])
+    # Wrap the normal velocity seam: the west wall face (u[..., 0]) and the east
+    # wall face (u[..., -2]) are the same periodic seam and must match.
+    u = wrap_periodic(u, plume_grid, (x_periodic, False), stagger="U")
+    v = wrap_periodic(v, plume_grid, (False, y_periodic), stagger="V")
     horizontal = advect(
         concentration, u, v, plume_grid.grid, scheme=_scheme(method), wall="open"
     )
-    vertical = vertical_advection_tendency(concentration, w, plume_grid.dz)
+    # w_{k+1/2} = ½ (w_k + w_{k+1}) on the top face of each cell; the last one is
+    # outside the domain and not read
+    w_face = jnp.pad(0.5 * (w[:-1] + w[1:]), ((0, 1), (0, 0), (0, 0)))
+    vertical = advect_vertical(
+        concentration, w_face, plume_grid.grid, scheme=Upwind(1), wall="open"
+    )
     return horizontal + vertical

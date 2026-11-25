@@ -12,8 +12,8 @@ in (x, y) while the vertical component is smaller in a stable boundary
 layer.
 
 Horizontal diffusion is assembled via :func:`gridax.diffuse`
-(one 2-D Laplacian per z-level) and vertical diffusion by the local
-:func:`_vertical_ops.vertical_diffusion_tendency` helper.
+(one 2-D Laplacian per z-level) and vertical diffusion by
+:func:`gridax.diffuse_vertical`.
 
 The :func:`pg_eddy_diffusivity` helper converts Pasquill-Gifford σ rates
 into an effective ``(K_h, K_z)`` using the standard Taylor relation

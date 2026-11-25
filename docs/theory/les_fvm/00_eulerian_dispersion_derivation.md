@@ -43,7 +43,7 @@ $$
 \nabla \cdot (\vec u C) \;=\; \partial_x(u C) + \partial_y(v C) + \partial_z(w C).
 $$
 
-The horizontal part (two terms per z-level, always acting in the (y, x) plane) is delegated to `gridax.advect`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is built by `les_fvm._vertical_ops.vertical_advection_tendency` as a first-order upwind flux at k-faces:
+The horizontal part (two terms per z-level, always acting in the (y, x) plane) is delegated to `gridax.advect`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is `gridax.advect_vertical`, with a first-order upwind flux at k-faces:
 
 $$
 \widehat{F}_{k+1/2} \;=\; \begin{cases} w_{k+1/2}\, C_k, & w_{k+1/2} > 0, \\ w_{k+1/2}\, C_{k+1}, & w_{k+1/2} \leq 0, \end{cases}
@@ -59,7 +59,7 @@ $$
 \nabla \cdot (\mathbf K \nabla C) \;=\; \partial_x(K_h \partial_x C) + \partial_y(K_h \partial_y C) + \partial_z(K_z \partial_z C).
 $$
 
-The horizontal Laplacian (first two terms) is computed per z-level by `gridax.diffuse`, with a field $K_h$ averaged to the faces. The vertical part is assembled by `_vertical_ops.vertical_diffusion_tendency` with face-averaged diffusivity and central finite differences on a uniform grid:
+The horizontal Laplacian (first two terms) is computed per z-level by `gridax.diffuse`, with a field $K_h$ averaged to the faces. The vertical part is `gridax.diffuse_vertical`, with face-averaged diffusivity and central finite differences on a uniform grid:
 
 $$
 \partial_z(K_z \partial_z C)\big|_k \approx \frac{\tfrac12(K_{z,k} + K_{z,k+1})\,(C_{k+1} - C_k)/\Delta z \;-\; \tfrac12(K_{z,k-1} + K_{z,k})\,(C_k - C_{k-1})/\Delta z}{\Delta z}.
@@ -82,7 +82,7 @@ with $Z$ chosen so that $\int \rho_s\, \mathrm d V = 1$ over the interior (discr
 The ghost ring of a 3-D field is filled by two composable helpers that live in `les_fvm.boundary`:
 
 1. `HorizontalBC`: holds a `gridax.BC` with the condition of each lateral face (`Dirichlet`, `Neumann`, `Outflow`, `Periodic`) and fills every z-slice with `gridax.fill_ghosts`.
-2. `VerticalBC`: directly updates the `[0, :, :]` and `[-1, :, :]` ghost slices with `{Dirichlet, Neumann, Outflow, Periodic}` flavours.
+2. `VerticalBC`: holds the kind and the value of the bottom and the top face and fills the `[0, :, :]` and `[-1, :, :]` ghost slices with the same conditions and the same function.
 
 The default concentration BCs are:
 

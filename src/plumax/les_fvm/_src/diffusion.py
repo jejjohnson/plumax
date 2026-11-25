@@ -12,8 +12,8 @@ in (x, y) while the vertical component is smaller in a stable boundary
 layer.
 
 Horizontal diffusion is assembled via :func:`gridax.diffuse`
-(one 2-D Laplacian per z-level) and vertical diffusion by the local
-:func:`_vertical_ops.vertical_diffusion_tendency` helper.
+(one 2-D Laplacian per z-level) and vertical diffusion by
+:func:`gridax.diffuse_vertical`.
 
 The :func:`pg_eddy_diffusivity` helper converts Pasquill-Gifford σ rates
 into an effective ``(K_h, K_z)`` using the standard Taylor relation
@@ -42,6 +42,7 @@ from gridax import (
     diff_x_fwd_2d,
     diff_y_fwd_2d,
     diffuse,
+    diffuse_vertical,
     interior,
     tensor_strain,
 )
@@ -53,7 +54,7 @@ from plumax.gauss_puff.dispersion import (
     calculate_pg_dispersion,
     get_pg_params,
 )
-from plumax.les_fvm._src.vertical_ops import vertical_diffusion_tendency
+from plumax.les_fvm._src.boundary import wrap_periodic
 from plumax.les_fvm.grid import PlumeGrid3D
 
 
@@ -137,29 +138,17 @@ def diffusion_tendency(
     makes horizontal diffusion honor ``bc_x`` / ``bc_y``.
     """
     horizontal_diffusivity, vertical_diffusivity = eddy_diffusivity.as_arrays()
-    x_periodic, y_periodic = periodic
     if jnp.ndim(horizontal_diffusivity) > 0:
         # Field K_h: wrap the coefficient ghost on periodic axes so a periodic
         # seam uses one shared face diffusivity (scalar K_h needs nothing).
-        if x_periodic:
-            wrapped = horizontal_diffusivity.at[:, :, 0].set(
-                horizontal_diffusivity[:, :, -2]
-            )
-            horizontal_diffusivity = wrapped.at[:, :, -1].set(
-                horizontal_diffusivity[:, :, 1]
-            )
-        if y_periodic:
-            wrapped = horizontal_diffusivity.at[:, 0, :].set(
-                horizontal_diffusivity[:, -2, :]
-            )
-            horizontal_diffusivity = wrapped.at[:, -1, :].set(
-                horizontal_diffusivity[:, 1, :]
-            )
+        horizontal_diffusivity = wrap_periodic(
+            horizontal_diffusivity, plume_grid, periodic
+        )
     horizontal = diffuse(
         concentration, plume_grid.grid, kappa=horizontal_diffusivity, wall="open"
     )
-    vertical = vertical_diffusion_tendency(
-        concentration, vertical_diffusivity, plume_grid.dz
+    vertical = diffuse_vertical(
+        concentration, plume_grid.grid, kappa=vertical_diffusivity, wall="open"
     )
     return horizontal + vertical
 

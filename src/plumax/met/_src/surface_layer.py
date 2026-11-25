@@ -14,11 +14,11 @@ from __future__ import annotations
 import dataclasses
 from typing import Any
 
-import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
 from geophysix.thermo import dry_air_density
+from gridax import avg_x_bwd_2d, avg_y_bwd_2d
 from jaxtyping import Array, Float
 
 from plumax._src.constants import (
@@ -331,22 +331,13 @@ class MoninObukhov(eqx.Module):
         reference_height = 0.5 * field.plume_grid.dz
         u_lowest = field.u[:, 0]
         v_lowest = field.v[:, 0]
-        # U-points sit at x + Δx/2: pair each with its western neighbour (the
-        # edge column repeats itself), and V-points likewise along y
-        u_west = einx.id(
-            "t y first, t y rest -> t y (first + rest)",
-            u_lowest[..., :1],
-            u_lowest[..., :-1],
-        )
-        v_south = einx.id(
-            "t first x, t rest x -> t (first + rest) x",
-            v_lowest[..., :1, :],
-            v_lowest[..., :-1, :],
-        )
+        # U-points sit at x + Δx/2 and V-points at y + Δy/2. The ghost ring
+        # repeats the edge, so the first column and row keep their own value
+        ring = ((0, 0), (1, 1), (1, 1))
         # u_T = (u_{i−1/2} + u_{i+1/2}) / 2
-        u_centre = 0.5 * (u_lowest + u_west)
+        u_centre = avg_x_bwd_2d(jnp.pad(u_lowest, ring, mode="edge"))
         # v_T = (v_{j−1/2} + v_{j+1/2}) / 2
-        v_centre = 0.5 * (v_lowest + v_south)
+        v_centre = avg_y_bwd_2d(jnp.pad(v_lowest, ring, mode="edge"))
         # U² = u_T² + v_T²
         speed_squared = u_centre**2 + v_centre**2
         # U = √(U²), with ∂U/∂u_T = ∂U/∂v_T = 0 at calm: √ has an infinite

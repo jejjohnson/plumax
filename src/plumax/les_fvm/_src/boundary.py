@@ -5,9 +5,9 @@ The ghost rings of a ``[Nz, Ny, Nx]`` field are filled in two steps:
 1. A :class:`HorizontalBC` holds a :class:`gridax.BC` with the condition of
    each lateral face and fills the x and y ghosts of every z-level with
    :func:`gridax.fill_ghosts`.
-2. A :class:`VerticalBC` holds two ``(bc_type, value)`` pairs for the
-   top and bottom faces, filled here (Dirichlet / Neumann / outflow /
-   periodic).
+2. A :class:`VerticalBC` holds the kind and the value of the bottom and the
+   top face (Dirichlet / Neumann / outflow / periodic) and fills the z ghosts
+   with the same function.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from gridax import (
     Sponge,
     fill_ghosts,
 )
+from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
 from plumax.les_fvm.grid import PlumeGrid3D
@@ -47,6 +48,9 @@ _FACE_SIDES: dict[HorizontalFace, tuple[str, int]] = {
     "south": ("y", 0),
     "north": ("y", 1),
 }
+
+#: The low face of each axis, whose outward normal points down the axis.
+_LOW_FACES = ("west", "south", "bottom")
 
 
 def _to_cell_dirichlet(atom):
@@ -121,44 +125,40 @@ class VerticalBC(eqx.Module):
         the face equals ``value``. Ignored for ``outflow`` / ``periodic``.
     top_kind, top_value : same, with the Neumann ``value`` again the
         coordinate gradient ``∂C/∂z`` along ``+z`` (same convention on
-        both faces; see the sign note in :func:`_apply_vertical_face`).
+        both faces; see the sign note in :func:`_face_condition`).
+
+    Raises
+    ------
+    ValueError
+        If a kind is unknown, or exactly one of the two faces is periodic.
     """
 
     bottom_kind: VerticalBCKind = eqx.field(static=True)
     top_kind: VerticalBCKind = eqx.field(static=True)
-    bottom_value: float = 0.0
-    top_value: float = 0.0
+    bottom_value: Float[ArrayLike, ""] = 0.0
+    top_value: Float[ArrayLike, ""] = 0.0
     # When True, a Dirichlet face writes ghost = value (a cell value) instead
     # of the face reflection ``2*value - interior`` — the advection convention.
     dirichlet_cell: bool = eqx.field(static=True, default=False)
 
-    def __call__(
-        self,
-        field: Float[Array, "Nz Ny Nx"],
-        dz: float,
-    ) -> Float[Array, "Nz Ny Nx"]:
-        """Return ``field`` with top and bottom ghost slices updated.
+    def __check_init__(self) -> None:
+        self.conditions()
 
-        ``dz`` is required to translate a Neumann coordinate gradient
-        ``∂C/∂z`` into the half-cell ghost offset ``sign · gradient · dz``.
-        """
-        out = _apply_vertical_face(
-            field,
-            face="bottom",
-            kind=self.bottom_kind,
-            value=self.bottom_value,
-            spacing_z=dz,
-            dirichlet_cell=self.dirichlet_cell,
+    def conditions(self) -> BC:
+        """Return the gridax conditions of the bottom and the top face."""
+        faces = (
+            _face_condition(self.bottom_kind, self.bottom_value, "bottom"),
+            _face_condition(self.top_kind, self.top_value, "top"),
         )
-        out = _apply_vertical_face(
-            out,
-            face="top",
-            kind=self.top_kind,
-            value=self.top_value,
-            spacing_z=dz,
-            dirichlet_cell=self.dirichlet_cell,
-        )
-        return out
+        if self.dirichlet_cell:
+            faces = tuple(_to_cell_dirichlet(face) for face in faces)
+        return BC(z=faces)
+
+    def __call__(
+        self, field: Float[Array, "Nz Ny Nx"], plume_grid: PlumeGrid3D
+    ) -> Float[Array, "Nz Ny Nx"]:
+        """Return ``field`` with top and bottom ghost slices updated."""
+        return fill_ghosts(field, plume_grid.grid, self.conditions())
 
     def advection_variant(self) -> VerticalBC:
         """Return a copy whose Dirichlet faces use a cell-value ghost.
@@ -176,56 +176,6 @@ class VerticalBC(eqx.Module):
         )
 
 
-def _apply_vertical_face(
-    field: Float[Array, "Nz Ny Nx"],
-    face: Literal["bottom", "top"],
-    kind: VerticalBCKind,
-    value: float,
-    spacing_z: float,
-    dirichlet_cell: bool = False,
-) -> Float[Array, "Nz Ny Nx"]:
-    """Update one vertical ghost slice using the requested BC flavour.
-
-    Neumann convention: ``value`` is the coordinate gradient ``∂C/∂z``
-    along ``+z``, applied identically on both faces — the ghost cell is
-    set so the finite-difference ``∂C/∂z`` across the face equals
-    ``value``. The ``outward_sign`` factor (``-1`` at the bottom, ``+1``
-    at the top) is what makes the *same* ``value`` mean ``∂C/∂z`` at
-    both faces despite the ghost sitting below the interior at the
-    bottom and above it at the top. The lateral faces follow the same
-    convention (see :func:`_build_1d_bc`).
-    """
-    if face == "bottom":
-        interior_slice = field[1, :, :]
-        opposite_slice = field[-2, :, :]
-        outward_sign = -1.0
-        ghost_index = 0
-    else:
-        interior_slice = field[-2, :, :]
-        opposite_slice = field[1, :, :]
-        outward_sign = 1.0
-        ghost_index = -1
-
-    if kind == "dirichlet":
-        # Advection wants the boundary value as a cell value (ghost = value);
-        # diffusion wants the face reflection so the centred gradient sees it.
-        ghost = value if dirichlet_cell else (2.0 * value - interior_slice)
-    elif kind == "neumann":
-        # Ghost value so that the finite-difference coordinate gradient
-        # ``∂C/∂z`` (along +z) across the face equals ``value``. The
-        # outward_sign flip keeps that meaning identical on both faces.
-        # g = C_int + s ∂C/∂z Δz
-        ghost = interior_slice + outward_sign * value * spacing_z
-    elif kind == "outflow":
-        ghost = interior_slice
-    elif kind == "periodic":
-        ghost = opposite_slice
-    else:
-        raise ValueError(f"Unknown vertical BC kind: {kind!r}")
-
-    return field.at[ghost_index, :, :].set(ghost)
-
-
 def apply_boundary_conditions(
     field: Float[Array, "Nz Ny Nx"],
     horizontal_bc: HorizontalBC,
@@ -234,8 +184,7 @@ def apply_boundary_conditions(
 ) -> Float[Array, "Nz Ny Nx"]:
     """Apply horizontal then vertical BCs to a 3-D tracer field."""
     out = horizontal_bc(field, plume_grid)
-    out = vertical_bc(out, dz=plume_grid.dz)
-    return out
+    return vertical_bc(out, plume_grid)
 
 
 def scale_dirichlet_faces(
@@ -286,6 +235,30 @@ def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
     )
 
 
+def wrap_periodic(
+    field: Float[Array, "Nz Ny Nx"],
+    plume_grid: PlumeGrid3D,
+    periodic: tuple[bool, bool],
+    *,
+    stagger: str = "T",
+) -> Float[Array, "Nz Ny Nx"]:
+    """Wrap the lateral ghosts of a coefficient on the periodic axes.
+
+    Args:
+        field: The wind component or diffusivity, with its ghost ring.
+        plume_grid: The grid it lives on.
+        periodic: ``(x_periodic, y_periodic)``.
+        stagger: The point of the field, ``"T"``, ``"U"`` or ``"V"``.
+
+    Returns:
+        ``field`` with the ghosts of each periodic axis one period away, and
+        the others as they were.
+    """
+    axes = {axis: Periodic() for axis, on in zip("xy", periodic, strict=True) if on}
+    wrapping = BC(corners="priority", **axes)
+    return fill_ghosts(field, plume_grid.grid, wrapping, stagger=stagger)
+
+
 def build_default_concentration_bc(
     bc_x: AxisBCSpec = (
         "dirichlet",
@@ -316,8 +289,8 @@ def build_default_concentration_bc(
     Raises
     ------
     ValueError
-        If a spec or a kind is unknown, or exactly one lateral face of an axis
-        is periodic: the seam couples both faces.
+        If a spec or a kind is unknown, or exactly one face of an axis is
+        periodic: the seam couples both faces.
     """
     west_bc, east_bc = _split_horizontal_spec(bc_x, faces=("west", "east"))
     south_bc, north_bc = _split_horizontal_spec(bc_y, faces=("south", "north"))
@@ -358,8 +331,8 @@ def _split_horizontal_spec(
         lower_kind, lower_val = _as_kind_value(spec[0])
         upper_kind, upper_val = _as_kind_value(spec[1])
         return (
-            _build_1d_bc(lower_kind, lower_val, faces[0]),
-            _build_1d_bc(upper_kind, upper_val, faces[1]),
+            _face_condition(lower_kind, lower_val, faces[0]),
+            _face_condition(upper_kind, upper_val, faces[1]),
         )
     raise ValueError(
         "horizontal BC spec must be 'periodic' or a 2-tuple "
@@ -367,24 +340,25 @@ def _split_horizontal_spec(
     )
 
 
-def _build_1d_bc(kind: str, value: float, face: str):
-    """Return the gridax condition of one lateral face.
+def _face_condition(kind: str, value: Float[ArrayLike, ""], face: str):
+    """Return the gridax condition of one face.
 
-    A Neumann ``value`` is the coordinate gradient, as on the vertical faces.
-    :class:`gridax.Neumann` takes the gradient along the outward normal, which
-    points down the axis on the low (west, south) faces.
+    A Neumann ``value`` is the coordinate gradient, along the positive axis on
+    both faces. :class:`gridax.Neumann` takes the gradient along the outward
+    normal, which points down the axis on the low (west, south, bottom) faces.
     """
     kind_l = kind.lower()
     if kind_l == "dirichlet":
         return Dirichlet(value)
     if kind_l == "neumann":
-        return Neumann(-value if face in ("west", "south") else value)
+        return Neumann(-value if face in _LOW_FACES else value)
     if kind_l == "outflow":
         return Outflow()
     if kind_l == "periodic":
         return Periodic()
+    direction = "vertical" if face in ("bottom", "top") else "horizontal"
     raise ValueError(
-        f"horizontal BC kind must be one of 'dirichlet', 'neumann', "
+        f"{direction} BC kind must be one of 'dirichlet', 'neumann', "
         f"'outflow', 'periodic'; got {kind!r}"
     )
 
