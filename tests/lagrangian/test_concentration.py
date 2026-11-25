@@ -6,8 +6,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+from tracerax.velocity import uniform
 
-from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
+from plumax.lagrangian.concentration import simulate_lagrangian
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
 
 
@@ -40,7 +41,7 @@ def test_total_residence_tracks_horizon_for_partial_step():
         emission_rate=1.0,
         source_location=(0.0, 0.0, 200.0),
         turbulence=turb,
-        wind=lambda t: jnp.zeros(3),
+        wind=uniform(jnp.zeros(3)),
         n_particles=3000,
         dt=1.0,
         seed=0,
@@ -53,14 +54,6 @@ def test_total_residence_tracks_horizon_for_partial_step():
     ds = simulate_lagrangian(t_end=10.5, **common)
     total_residence = float(ds["concentration"].sum()) * cell_v  # /Q, Q=1
     assert total_residence == pytest.approx(10.5, rel=1e-3)
-
-
-def test_bin_positions_counts():
-    pos = jnp.array([[0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [9.9, 9.9, 9.9]])
-    edges = jnp.linspace(0.0, 10.0, 11)
-    hist = bin_positions(pos, edges, edges, edges)
-    assert hist.sum() == 3
-    assert hist[0, 0, 0] == 2
 
 
 @pytest.mark.slow

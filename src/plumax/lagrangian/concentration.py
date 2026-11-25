@@ -15,17 +15,7 @@ factor performs the ensemble average.
 
 from __future__ import annotations
 
-from plumax.lagrangian._src.concentration import (
-    bin_positions,
-    simulate_lagrangian,
-    uniform_wind,
-    wind_from_speed_direction,
-)
+from plumax.lagrangian._src.concentration import simulate_lagrangian
 
 
-__all__ = [
-    "bin_positions",
-    "simulate_lagrangian",
-    "uniform_wind",
-    "wind_from_speed_direction",
-]
+__all__ = ["simulate_lagrangian"]

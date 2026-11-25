@@ -1,6 +1,6 @@
 """Turbulence parameterisations for the Lagrangian particle model.
 
-The Markov-1 Langevin model (see :mod:`plumax.lagrangian.particles`) needs two
+The Markov-1 Langevin model (``tracerax.advect.Langevin``) needs two
 fields at every particle location: the turbulent velocity standard deviations
 ``σ = (σ_u, σ_v, σ_w)`` [m/s] and the Lagrangian decorrelation timescales
 ``τ_L = (τ_u, τ_v, τ_w)`` [s]. Together they define the Ornstein–Uhlenbeck
@@ -27,11 +27,11 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import einx
+import equinox as eqx
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array, Float
 
 from plumax._src.tracing import require_positive
 
@@ -43,9 +43,11 @@ _SIGMA_FLOOR: float = 1e-12
 #: value FLEXPART's ``hanna.f90`` hard-codes (latitude ≈ 43°).
 DEFAULT_CORIOLIS_PARAMETER: float = 1e-4
 
+#: One parameter of a closure: a number, or an array that a gradient reaches.
+Parameter = float | Float[Array, ""]
 
-@dataclass(frozen=True)
-class HomogeneousTurbulence:
+
+class HomogeneousTurbulence(eqx.Module):
     """Spatially uniform, well-mixed-exact turbulence statistics.
 
     Attributes:
@@ -57,14 +59,14 @@ class HomogeneousTurbulence:
         tau_w: Vertical Lagrangian timescale [s].
     """
 
-    sigma_u: float
-    sigma_v: float
-    sigma_w: float
-    tau_u: float
-    tau_v: float
-    tau_w: float
+    sigma_u: Parameter
+    sigma_v: Parameter
+    sigma_w: Parameter
+    tau_u: Parameter
+    tau_v: Parameter
+    tau_w: Parameter
 
-    def __post_init__(self) -> None:
+    def __check_init__(self) -> None:
         for name in ("sigma_u", "sigma_v", "sigma_w"):
             require_positive(
                 name,
@@ -105,11 +107,11 @@ class HomogeneousTurbulence:
 def hanna_profiles(
     z: jax.Array,
     *,
-    u_star: float,
-    pbl_height: float,
-    obukhov_length: float,
-    w_star: float = 0.0,
-    coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER,
+    u_star: Parameter,
+    pbl_height: Parameter,
+    obukhov_length: Parameter,
+    w_star: Parameter = 0.0,
+    coriolis_parameter: Parameter = DEFAULT_CORIOLIS_PARAMETER,
 ) -> tuple[jax.Array, jax.Array]:
     """Hanna (1982) Monin–Obukhov-similarity turbulence profiles.
 
@@ -263,15 +265,12 @@ def hanna_profiles(
     return std, timescale
 
 
-@dataclass(frozen=True)
-class HannaTurbulence:
+class HannaTurbulence(eqx.Module):
     """Height-dependent Hanna (1982) turbulence as a ``TurbulenceModel``.
 
     Thin adapter that binds the surface-layer scales required by
     :func:`hanna_profiles` and exposes the ``at(z) -> (sigma, tau)`` interface
-    the integrator (:func:`plumax.lagrangian.langevin_step`,
-    :func:`~plumax.lagrangian.integrate_particles`,
-    :func:`~plumax.lagrangian.compute_footprint`) expects. Because ``σ_w`` varies
+    tracerax's Langevin step (``tracerax.advect.Langevin``) expects. Because ``σ_w`` varies
     with height, the well-mixed vertical drift correction ``½(1+v_w²/σ_w²)
     ∂σ_w²/∂z`` is non-zero — the inhomogeneous path that
     :class:`HomogeneousTurbulence` never exercises.
@@ -298,14 +297,14 @@ class HannaTurbulence:
             profiles; defaults to FLEXPART's ``1e-4`` (see :func:`hanna_profiles`).
     """
 
-    u_star: float
-    pbl_height: float
-    obukhov_length: float
-    w_star: float = 0.0
-    z_floor: float = 0.1
-    coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER
+    u_star: Parameter
+    pbl_height: Parameter
+    obukhov_length: Parameter
+    w_star: Parameter = 0.0
+    z_floor: Parameter = 0.1
+    coriolis_parameter: Parameter = DEFAULT_CORIOLIS_PARAMETER
 
-    def __post_init__(self) -> None:
+    def __check_init__(self) -> None:
         require_positive("z_floor", self.z_floor, caller="HannaTurbulence")
 
     def at(self, z: jax.Array) -> tuple[jax.Array, jax.Array]:

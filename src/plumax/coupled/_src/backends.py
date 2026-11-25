@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import einx
@@ -48,9 +48,10 @@ from plumax.lagrangian.met_ensemble import ensemble_footprints
 
 
 if TYPE_CHECKING:
+    from tracerax.advect import TurbulenceModel
+    from tracerax.velocity import Velocity
+
     from plumax.coupled.instrument import Instrument
-    from plumax.lagrangian.particles import TurbulenceModel
-    from plumax.lagrangian.wind_interp import GriddedWind
     from plumax.les_fvm.fourdvar import EulerianForward4DVar
     from plumax.les_fvm.grid import PlumeGrid3D
 
@@ -98,12 +99,14 @@ class LagrangianSource:
         emission_pattern: Surface flux per unit emission q [m⁻²] on the
             footprint grid, cells flattened row-major over ``(x, y)``. A
             second axis holds one pattern per emission parameter.
-        winds: One mean wind per met-ensemble member (a ``GriddedWind`` or a
-            ``t -> (u, v, w)`` callable). One member is a deterministic run.
+        winds: One mean wind per met-ensemble member, a tracerax velocity
+            (gridded or uniform). One member is a deterministic run.
         turbulence: Turbulence model shared by the members.
         domain_x: ``(start, stop, n_cells)`` of the footprint grid along x.
         domain_y: ``(start, stop, n_cells)`` of the footprint grid along y.
-        column_z: Receptor levels z_k [m] of the column, strictly increasing.
+        column_z: Receptor levels z_k [m] of the column, strictly increasing and
+            inside the layer, ``0 ≤ z_k ≤ pbl_height``: the model has no
+            particles above its lid.
         n_particles: Particles per receptor level and member.
         t_back: Backward integration time [s].
         dt: Particle time step [s].
@@ -115,7 +118,7 @@ class LagrangianSource:
     """
 
     emission_pattern: Float[Array, " cell"] | Float[Array, "cell param"]
-    winds: tuple[GriddedWind | Callable[[jax.Array], jax.Array], ...]
+    winds: tuple[Velocity, ...]
     turbulence: TurbulenceModel
     domain_x: tuple[float, float, int]
     domain_y: tuple[float, float, int]
@@ -145,7 +148,7 @@ class LagrangianSource:
         cls,
         location: tuple[float, float],
         *,
-        winds: Sequence[GriddedWind | Callable[[jax.Array], jax.Array]],
+        winds: Sequence[Velocity],
         turbulence: TurbulenceModel,
         domain_x: tuple[float, float, int],
         domain_y: tuple[float, float, int],
@@ -162,7 +165,7 @@ class LagrangianSource:
             turbulence: Turbulence model.
             domain_x: ``(start, stop, n_cells)`` along x.
             domain_y: ``(start, stop, n_cells)`` along y.
-            column_z: Receptor levels z_k [m].
+            column_z: Receptor levels z_k [m], inside the layer.
             **settings: Any other field of :class:`LagrangianSource`.
 
         Returns:

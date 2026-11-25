@@ -224,8 +224,8 @@ def test_inversion_with_real_footprint_matrix():
     # receptor), synthesise observations from a known surface source, and
     # recover it. Exercises the full footprint → inversion handoff.
     from plumax.lagrangian.footprint import compute_footprint
-    from plumax.lagrangian.particles import wind_from_speed_direction
     from plumax.lagrangian.turbulence import HomogeneousTurbulence
+    from plumax.lagrangian.wind_interp import wind_from_speed_direction
 
     turb = HomogeneousTurbulence.isotropic(sigma=0.6, tau=30.0)
     wind = wind_from_speed_direction(4.0, 270.0)  # from west → flows east

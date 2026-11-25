@@ -236,7 +236,7 @@ Either extend `gauss_flows` to 2D coupling layers (multi-month effort) or fall b
 
 | Step | Concern | Module | Status |
 | --- | --- | --- | --- |
-| 1 | Particle integrator (Markov-1) | `plumax.lagrangian.particles` | ✓ |
+| 1 | Particle integrator (Markov-1) | [`tracerax.advect`](https://github.com/jejjohnson/tracerax) (`Langevin`, `integrate`) | dependency |
 | 1 | Turbulence parameterisation ($\sigma_{ij}, \tau_L$) | `plumax.lagrangian.turbulence` | ✓ |
 | 1 | Forward concentration (residence-time binning) | `plumax.lagrangian.concentration` | ✓ |
 | 1 | Backward footprint | `plumax.lagrangian.footprint` | ✓ |

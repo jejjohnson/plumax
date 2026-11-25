@@ -15,12 +15,11 @@ F̄ (v1 of the Tier II design, Step 6):
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import einx
 import gaussx
-import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
@@ -31,12 +30,12 @@ from plumax.lagrangian.inversion import GaussianPosterior
 
 
 if TYPE_CHECKING:
-    from plumax.lagrangian.particles import TurbulenceModel
-    from plumax.lagrangian.wind_interp import GriddedWind
+    from tracerax.advect import TurbulenceModel
+    from tracerax.velocity import Velocity
 
 
 def ensemble_footprints(
-    winds: Sequence[GriddedWind | Callable[[jax.Array], jax.Array]],
+    winds: Sequence[Velocity],
     receptors: Float[Array, "obs 3"],
     turbulence: TurbulenceModel,
     domain_x: tuple[float, float, int],
@@ -63,11 +62,9 @@ def ensemble_footprints(
     as transport error.
 
     Args:
-        winds: One mean wind per member: a
-            :class:`~plumax.lagrangian.wind_interp.GriddedWind` (e.g.
-            ``gridded_wind_from_met`` of each member's ``MetField``) or a
-            uniform ``t -> (u, v, w)`` callable.
-        receptors: Receptor positions (x, y, z) [m].
+        winds: One mean wind per member, a tracerax velocity: gridded (e.g.
+            ``gridded_wind_from_met`` of each member's ``MetField``) or uniform.
+        receptors: Receptor positions (x, y, z) [m], inside the layer.
         turbulence: Turbulence model, shared by the members.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
         domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
@@ -85,6 +82,7 @@ def ensemble_footprints(
 
     Raises:
         ValueError: If ``winds`` is empty.
+        DomainError: If a receptor is below the ground or above the lid.
     """
     if len(winds) == 0:
         raise ValueError("ensemble_footprints: need at least one member wind.")

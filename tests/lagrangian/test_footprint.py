@@ -6,16 +6,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from tracerax.advect import Langevin, integrate
+from tracerax.particles import at_point
+from tracerax.velocity import uniform, uniform_in_space
 
 from plumax.lagrangian.footprint import compute_footprint
-from plumax.lagrangian.particles import (
-    ParticleState,
-    integrate_particles,
-    n_steps_for_horizon,
-    step_durations,
-    wind_from_speed_direction,
-)
 from plumax.lagrangian.turbulence import HomogeneousTurbulence
+from plumax.lagrangian.wind_interp import wind_from_speed_direction
 
 
 def _turb():
@@ -37,7 +34,7 @@ def test_footprint_integrates_requested_horizon_for_partial_step():
         HomogeneousTurbulence.isotropic(sigma=0.5, tau=30.0),
         domain_x=(-500.0, 500.0, 40),
         domain_y=(-500.0, 500.0, 40),
-        wind=lambda t: jnp.zeros(3),  # calm → cloud stays near the receptor
+        wind=uniform(jnp.zeros(3)),  # calm → cloud stays near the receptor
         n_particles=3000,
         t_back=t_back,
         dt=1.0,
@@ -61,7 +58,7 @@ def test_footprint_units_convention():
     base = dict(
         receptor_location=(0.0, 0.0, 20.0),
         turbulence=turb,
-        wind=lambda t: jnp.zeros(3),
+        wind=uniform(jnp.zeros(3)),
         n_particles=3000,
         t_back=60.0,
         dt=1.0,
@@ -147,30 +144,26 @@ def test_time_varying_wind_clock(t_back):
     # and that a wrong receptor clock (receptor_time=0) does not.
     calm = HomogeneousTurbulence(0.0, 0.0, 0.0, 100.0, 100.0, 100.0)
 
-    def wind(t):
-        # Accelerating along +x: u sweeps 1 → 7 m/s over [0, T].
-        return jnp.array([1.0 + 0.1 * t, 0.0, 0.0])
+    # Accelerating along +x: u sweeps 1 → 7 m/s over [0, T].
+    wind = uniform_in_space(lambda t: jnp.array([1.0 + 0.1 * t, 0.0, 0.0]))
 
     # Forward reference: a particle from the source lands at the receptor at T.
     src = (0.0, 0.0, 20.0)
-    state0 = ParticleState(position=jnp.array([[*src]]), velocity=jnp.zeros((1, 3)))
-    final, traj = integrate_particles(
-        state0,
-        wind,
-        calm,
+    result = integrate(
+        at_point(jnp.array([*src]), 1),
+        Langevin(wind, calm),
         t0=0.0,
-        t1=t_back,
-        dt=1.0,
+        duration=t_back,
+        step_size=1.0,
         key=jax.random.PRNGKey(0),
-        save_trajectory=True,
+        save_every=1,
     )
-    receptor_x = float(final.position[0, 0])
+    receptor_x = float(result.state.position[0, 0])
     # The backward run bins (in reverse) the forward positions p₀…pₙ₋₁, each
     # weighted by its forward step duration. Compare against that duration-
     # weighted x-centroid of the forward path.
-    n = n_steps_for_horizon(t_back, 1.0)
-    dts = np.asarray(step_durations(t_back, 1.0, n))
-    x_ref = float((dts * np.asarray(traj[:-1, 0, 0])).sum() / dts.sum())
+    dts = np.diff(np.asarray(result.offsets))
+    x_ref = float((dts * np.asarray(result.trajectory[:-1, 0, 0])).sum() / dts.sum())
 
     common = dict(
         receptor_location=(receptor_x, 0.0, 20.0),

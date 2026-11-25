@@ -6,16 +6,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from tracerax.velocity import GriddedVelocity, cgrid_grids, uniform
 
 from plumax.lagrangian import (
-    GriddedWind,
     HomogeneousTurbulence,
     ensemble_footprints,
     ensemble_inversion,
     linear_gaussian_inversion,
     matern32_covariance,
     transport_covariance,
-    uniform_wind,
 )
 from plumax.les_fvm import make_grid
 
@@ -35,15 +34,12 @@ FOOTPRINT_KWARGS = {
 }
 
 
-def _gridded(u: float, v: float) -> GriddedWind:
+def _gridded(u: float, v: float) -> GriddedVelocity:
     nz, ny, nx = GRID.interior_shape
     shape = (2, nz, ny, nx)
-    return GriddedWind.from_grid(
-        GRID,
-        jnp.array([-3600.0, 0.0]),
-        jnp.full(shape, u),
-        jnp.full(shape, v),
-        jnp.zeros(shape),
+    grids = cgrid_grids(jnp.array([-3600.0, 0.0]), GRID.x, GRID.y, GRID.z)
+    return GriddedVelocity.fit(
+        grids, (jnp.full(shape, u), jnp.full(shape, v), jnp.zeros(shape))
     )
 
 
@@ -60,7 +56,11 @@ def _toy_problem():
 
 @pytest.mark.slow
 def test_ensemble_footprints_shape_and_common_draws():
-    winds = [_gridded(3.0, 0.0), _gridded(3.0, 0.0), uniform_wind(3.0, 0.0)]
+    winds = [
+        _gridded(3.0, 0.0),
+        _gridded(3.0, 0.0),
+        uniform(jnp.array([3.0, 0.0, 0.0])),
+    ]
     footprints = ensemble_footprints(
         winds,
         RECEPTORS,
