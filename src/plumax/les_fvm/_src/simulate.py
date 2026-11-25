@@ -7,6 +7,7 @@ after ``gauss_puff.simulate_puff`` for cross-model consistency.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Literal
 
@@ -126,7 +127,9 @@ def simulate_eulerian_dispersion(
         See :func:`boundary.build_default_concentration_bc`.
     solver : {"tsit5", "dopri5", "ssprk3", "heun"}, default "tsit5"
         diffrax time integrator.  ``"ssprk3"`` and ``"heun"`` are
-        explicit-fixed-step and ignore ``rtol``/``atol``.
+        explicit-fixed-step and ignore ``rtol``/``atol``.  ``"tsit5"`` and
+        ``"dopri5"`` are adaptive, with a step of at most
+        :func:`stable_step_bound`.
     dt0 : float
         Initial / fixed step size [s].
     rtol, atol : float
@@ -497,19 +500,17 @@ def _max_diffusivity(eddy: EddyDiffusivity) -> tuple[float, float]:
     return float(jnp.max(horizontal_diffusivity)), float(jnp.max(vertical_diffusivity))
 
 
-def _check_fixed_step_stability(
+def _stable_step(
     *,
     plume_grid: PlumeGrid3D,
     wind: PrescribedWindField,
     eddy: EddyDiffusivity,
-    initial_time_step: float,
     t_start: float,
     end_time: float,
-    solver_name: str,
     extra_sample_times: tuple[float, ...] = (),
     max_wind_speed: float | None = None,
-) -> None:
-    """Raise if ``initial_time_step`` exceeds the stable step for a fixed-step solver.
+) -> float:
+    """Return :func:`stable_step_bound` for a run, infinite for still air and K = 0.
 
     The field is always sampled on a dense time grid over ``[t_start, end_time]``
     unioned with ``extra_sample_times`` (e.g. the in-window ``WindSchedule``
@@ -534,7 +535,7 @@ def _check_fixed_step_stability(
     else:
         max_u, max_v, max_w = sampled_u, sampled_v, sampled_w
     horizontal_diffusivity, vertical_diffusivity = _max_diffusivity(eddy)
-    bound = stable_step_bound(
+    return stable_step_bound(
         dx=plume_grid.dx,
         dy=plume_grid.dy,
         dz=plume_grid.dz,
@@ -544,6 +545,12 @@ def _check_fixed_step_stability(
         k_h=horizontal_diffusivity,
         k_z=vertical_diffusivity,
     )
+
+
+def _check_fixed_step_stability(
+    initial_time_step: float, bound: float, solver_name: str
+) -> None:
+    """Raise if ``initial_time_step`` exceeds the stable step ``bound``."""
     if initial_time_step > bound:
         raise ValueError(
             f"simulate_eulerian_dispersion: dt0={initial_time_step:g} s exceeds the stable "
@@ -610,23 +617,27 @@ def _solve(
     max_wind_speed: float | None = None,
 ):
     solver, adaptive = _pick_solver(solver_name)
+    bound = _stable_step(
+        plume_grid=rhs.plume_grid,
+        wind=rhs.wind_field,
+        eddy=rhs.eddy_diffusivity,
+        t_start=t_start,
+        end_time=end_time,
+        extra_sample_times=extra_sample_times,
+        max_wind_speed=max_wind_speed,
+    )
     if adaptive:
-        stepsize_controller = diffrax.PIDController(rtol=rtol, atol=atol)
+        # The error control alone does not keep the step stable: ``atol`` is in
+        # kg/m³, and a plume below it has no error to control. Cap the step.
+        initial_time_step = min(initial_time_step, bound)
+        stepsize_controller = diffrax.PIDController(
+            rtol=rtol, atol=atol, dtmax=bound if math.isfinite(bound) else None
+        )
     else:
         # Fixed-step solvers integrate at exactly the initial step with no error control,
         # so guard the CFL / explicit-diffusion stability limit up front —
         # otherwise an over-large step silently blows up mid-solve.
-        _check_fixed_step_stability(
-            plume_grid=rhs.plume_grid,
-            wind=rhs.wind_field,
-            eddy=rhs.eddy_diffusivity,
-            initial_time_step=initial_time_step,
-            t_start=t_start,
-            end_time=end_time,
-            solver_name=solver_name,
-            extra_sample_times=extra_sample_times,
-            max_wind_speed=max_wind_speed,
-        )
+        _check_fixed_step_stability(initial_time_step, bound, solver_name)
         stepsize_controller = diffrax.ConstantStepSize()
     return _solve_jit(
         rhs=rhs,
