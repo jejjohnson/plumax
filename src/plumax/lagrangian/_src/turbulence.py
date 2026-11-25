@@ -31,6 +31,7 @@ import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from jaxtyping import Array, Float
 
 from plumax._src.tracing import require_positive
 
@@ -41,6 +42,9 @@ _SIGMA_FLOOR: float = 1e-12
 #: Default Coriolis parameter f [1/s] for the neutral Hanna profiles: the
 #: value FLEXPART's ``hanna.f90`` hard-codes (latitude ≈ 43°).
 DEFAULT_CORIOLIS_PARAMETER: float = 1e-4
+
+#: One parameter of a closure: a number, or an array that a gradient reaches.
+Parameter = float | Float[Array, ""]
 
 
 class HomogeneousTurbulence(eqx.Module):
@@ -55,12 +59,12 @@ class HomogeneousTurbulence(eqx.Module):
         tau_w: Vertical Lagrangian timescale [s].
     """
 
-    sigma_u: float
-    sigma_v: float
-    sigma_w: float
-    tau_u: float
-    tau_v: float
-    tau_w: float
+    sigma_u: Parameter
+    sigma_v: Parameter
+    sigma_w: Parameter
+    tau_u: Parameter
+    tau_v: Parameter
+    tau_w: Parameter
 
     def __check_init__(self) -> None:
         for name in ("sigma_u", "sigma_v", "sigma_w"):
@@ -103,11 +107,11 @@ class HomogeneousTurbulence(eqx.Module):
 def hanna_profiles(
     z: jax.Array,
     *,
-    u_star: float,
-    pbl_height: float,
-    obukhov_length: float,
-    w_star: float = 0.0,
-    coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER,
+    u_star: Parameter,
+    pbl_height: Parameter,
+    obukhov_length: Parameter,
+    w_star: Parameter = 0.0,
+    coriolis_parameter: Parameter = DEFAULT_CORIOLIS_PARAMETER,
 ) -> tuple[jax.Array, jax.Array]:
     """Hanna (1982) Monin–Obukhov-similarity turbulence profiles.
 
@@ -293,12 +297,12 @@ class HannaTurbulence(eqx.Module):
             profiles; defaults to FLEXPART's ``1e-4`` (see :func:`hanna_profiles`).
     """
 
-    u_star: float
-    pbl_height: float
-    obukhov_length: float
-    w_star: float = 0.0
-    z_floor: float = 0.1
-    coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER
+    u_star: Parameter
+    pbl_height: Parameter
+    obukhov_length: Parameter
+    w_star: Parameter = 0.0
+    z_floor: Parameter = 0.1
+    coriolis_parameter: Parameter = DEFAULT_CORIOLIS_PARAMETER
 
     def __check_init__(self) -> None:
         require_positive("z_floor", self.z_floor, caller="HannaTurbulence")
