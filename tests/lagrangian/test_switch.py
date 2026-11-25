@@ -13,7 +13,9 @@ from tracerax.advect import Langevin, Walls, integrate, langevin_step
 from tracerax.particles import at_point, with_turbulent_velocity
 from tracerax.velocity import uniform, uniform_in_space
 
+from plumax._src.errors import DomainError, ParameterError
 from plumax.lagrangian import (
+    FootprintSimulator,
     HannaTurbulence,
     HomogeneousTurbulence,
     compute_footprint,
@@ -68,7 +70,7 @@ def _stored(name: str) -> np.ndarray:
         ),
     ],
 )
-def test_the_column_equals_the_one_before_the_switch(name, changes):
+def test_the_concentration_equals_the_one_before_the_switch(name, changes):
     settings = {
         "emission_rate": 0.1,
         "source_location": (0.0, 0.0, 20.0),
@@ -85,13 +87,12 @@ def test_the_column_equals_the_one_before_the_switch(name, changes):
     if settings.get("wind") == "gridded":
         settings["wind"] = _gridded()
     dataset = simulate_lagrangian(**settings)
-    expected = _stored(f"col_{name}")
-    np.testing.assert_allclose(
-        dataset["column_concentration"].values,
-        expected,
-        rtol=0.0,
-        atol=1e-12 * expected.max(),
-    )
+    summed = dataset["concentration"].sum("y")
+    for field, key in ((dataset["column_concentration"], "col"), (summed, "xz")):
+        expected = _stored(f"{key}_{name}")
+        np.testing.assert_allclose(
+            field.values, expected, rtol=0.0, atol=1e-12 * expected.max()
+        )
 
 
 @pytest.mark.slow
@@ -166,6 +167,100 @@ def test_a_negative_horizon_is_refused():
             wind=STEADY,
             t_end=-60.0,
         )
+
+
+@pytest.mark.slow
+def test_an_infinite_lid_is_no_lid():
+    settings = {
+        "emission_rate": 1.0,
+        "source_location": (0.0, 0.0, 2.0),
+        "turbulence": TURBULENCE,
+        "domain_x": (-10.0, 100.0, 11),
+        "domain_y": (-20.0, 20.0, 4),
+        "domain_z": (0.0, 20.0, 4),
+        "wind": STEADY,
+        "n_particles": 50,
+        "t_end": 20.0,
+    }
+    infinite = simulate_lagrangian(**settings, pbl_height=np.inf)
+    np.testing.assert_array_equal(
+        infinite["concentration"], simulate_lagrangian(**settings)["concentration"]
+    )
+
+
+@pytest.mark.slow
+def test_the_results_are_writable():
+    dataset = simulate_lagrangian(
+        1.0,
+        (0.0, 0.0, 2.0),
+        TURBULENCE,
+        (-10.0, 100.0, 11),
+        (-20.0, 20.0, 4),
+        (0.0, 20.0, 4),
+        wind=STEADY,
+        n_particles=10,
+        t_end=2.0,
+    )
+    dataset["concentration"] *= 1e9
+    dataset["column_concentration"].values[0, 0] = 0.0
+    footprint, _, _ = _small_footprint()
+    footprint /= 2.0
+
+
+def _small_footprint(**changes):
+    settings = {
+        "receptor_location": (0.0, 0.0, 10.0),
+        "turbulence": TURBULENCE,
+        "domain_x": (-100.0, 10.0, 11),
+        "domain_y": (-20.0, 20.0, 4),
+        "wind": STEADY,
+        "n_particles": 10,
+        "t_back": 5.0,
+        **changes,
+    }
+    return compute_footprint(**settings)
+
+
+@pytest.mark.parametrize("height", [-1.0, 1000.5])
+def test_a_receptor_outside_the_layer_is_refused(height):
+    with pytest.raises(DomainError, match="between the ground and the lid"):
+        _small_footprint(receptor_location=(0.0, 0.0, height))
+    with pytest.raises(DomainError, match="FootprintSimulator"):
+        FootprintSimulator(
+            wind_from_context=lambda context: uniform(context),
+            receptors=jnp.array([[0.0, 0.0, height]]),
+            turbulence=TURBULENCE,
+            domain_x=(-100.0, 10.0, 11),
+            domain_y=(-20.0, 20.0, 4),
+        )
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("n_particles", 0),
+        ("t_back", 0.0),
+        ("dt", -1.0),
+        ("pbl_height", 0.0),
+        ("pbl_fraction", 0.0),
+        ("air_density", 0.0),
+    ],
+)
+def test_a_footprint_names_the_argument_it_refuses(name, value):
+    with pytest.raises(ParameterError, match=name):
+        _small_footprint(**{name: value})
+
+
+@pytest.mark.slow
+def test_a_receptor_time_may_be_far_from_zero():
+    """In single precision, the run has steps of 1 s, whatever the epoch."""
+    with jax.enable_x64(False):
+        near, _, _ = _small_footprint(wind=uniform(jnp.array([4.0, 1.0, 0.0])))
+        far, _, _ = _small_footprint(
+            wind=uniform(jnp.array([4.0, 1.0, 0.0])), receptor_time=172_800.0
+        )
+    assert near.dtype == np.float32
+    np.testing.assert_array_equal(near, far)
 
 
 # --- the closures -------------------------------------------------------------

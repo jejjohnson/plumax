@@ -176,3 +176,10 @@ def test_wind_from_speed_direction_west_wind_flows_east():
     wind = wind_from_speed_direction(5.0, 270.0)
     velocity = np.asarray(wind(0.0, jnp.zeros((2, 3))))
     np.testing.assert_allclose(velocity, [[5.0, 0.0, 0.0]] * 2, atol=1e-6)
+
+
+def test_integer_times_are_taken():
+    field = wind_field_from_callable(GRID, lambda t, x, y, z: (t + x, y, 0.0 * x))
+    wind = gridded_wind_from_prescribed(field, jnp.array([0, 60]))
+    moved = wind(30.0, jnp.array([[GRID.x[2], GRID.y[2], GRID.z[1]]]))
+    np.testing.assert_allclose(moved[0, 0], 30.0 + GRID.x[2], rtol=1e-12)

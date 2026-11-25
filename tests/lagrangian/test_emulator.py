@@ -515,3 +515,37 @@ def test_step4_matches_step2_posterior(trained):
             tolerance_sigma=1.0,
         )
         np.testing.assert_allclose(fast.std, oracle.std, rtol=0.1)
+
+
+class _Closure(eqx.Module):
+    first: float | None = None
+    second: float | None = None
+    kind: str = eqx.field(static=True, default="a")
+
+    def at(self, z):
+        raise NotImplementedError
+
+
+@pytest.mark.parametrize(
+    ("one", "other"),
+    [
+        (_Closure(1.0), _Closure(2.0)),
+        (_Closure(1.0), _Closure(None, 1.0)),
+        (_Closure(1.0), _Closure(1.0, kind="b")),
+        (_Closure(_Closure(1.0)), _Closure(HomogeneousTurbulence(*[1.0] * 6))),
+        (_Closure(jnp.array(1.0)), _Closure(jnp.array(2.0))),
+        (TURBULENCE, HomogeneousTurbulence(0.5, 0.5, 0.3, 30.0, 30.0, 11.0)),
+    ],
+)
+def test_the_cache_key_tells_closures_apart(one, other):
+    def signature(turbulence):
+        return FootprintSimulator(
+            wind_from_context=_wind,
+            receptors=RECEPTORS[:1],
+            turbulence=turbulence,
+            domain_x=DOMAIN_X,
+            domain_y=DOMAIN_Y,
+        ).state_signature
+
+    assert signature(one) != signature(other)
+    assert signature(one) == signature(jax.tree.map(lambda leaf: leaf, one))

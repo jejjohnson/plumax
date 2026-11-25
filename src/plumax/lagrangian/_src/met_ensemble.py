@@ -64,7 +64,7 @@ def ensemble_footprints(
     Args:
         winds: One mean wind per member, a tracerax velocity: gridded (e.g.
             ``gridded_wind_from_met`` of each member's ``MetField``) or uniform.
-        receptors: Receptor positions (x, y, z) [m].
+        receptors: Receptor positions (x, y, z) [m], inside the layer.
         turbulence: Turbulence model, shared by the members.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
         domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
@@ -82,6 +82,7 @@ def ensemble_footprints(
 
     Raises:
         ValueError: If ``winds`` is empty.
+        DomainError: If a receptor is below the ground or above the lid.
     """
     if len(winds) == 0:
         raise ValueError("ensemble_footprints: need at least one member wind.")

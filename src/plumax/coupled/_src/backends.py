@@ -104,7 +104,9 @@ class LagrangianSource:
         turbulence: Turbulence model shared by the members.
         domain_x: ``(start, stop, n_cells)`` of the footprint grid along x.
         domain_y: ``(start, stop, n_cells)`` of the footprint grid along y.
-        column_z: Receptor levels z_k [m] of the column, strictly increasing.
+        column_z: Receptor levels z_k [m] of the column, strictly increasing and
+            inside the layer, ``0 ≤ z_k ≤ pbl_height``: the model has no
+            particles above its lid.
         n_particles: Particles per receptor level and member.
         t_back: Backward integration time [s].
         dt: Particle time step [s].
@@ -163,7 +165,7 @@ class LagrangianSource:
             turbulence: Turbulence model.
             domain_x: ``(start, stop, n_cells)`` along x.
             domain_y: ``(start, stop, n_cells)`` along y.
-            column_z: Receptor levels z_k [m].
+            column_z: Receptor levels z_k [m], inside the layer.
             **settings: Any other field of :class:`LagrangianSource`.
 
         Returns:

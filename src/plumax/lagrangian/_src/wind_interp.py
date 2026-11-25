@@ -31,7 +31,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
-from jaxtyping import Array, Float
+from jaxtyping import Array, ArrayLike, Float, Num
 from tracerax.velocity import GriddedVelocity, Velocity, cgrid_grids, uniform
 
 from plumax._src.wind import wind_components
@@ -71,7 +71,7 @@ def gridded_wind_from_met(field: MetField) -> GriddedVelocity:
 
 
 def gridded_wind_from_prescribed(
-    wind_field: PrescribedWindField, times: Float[Array, " time"]
+    wind_field: PrescribedWindField, times: Num[ArrayLike, " time"]
 ) -> GriddedVelocity:
     """Sample a ``les_fvm`` :class:`~plumax.les_fvm.wind.PrescribedWindField`.
 
@@ -86,7 +86,7 @@ def gridded_wind_from_prescribed(
     Returns:
         The wind on ``wind_field.plume_grid``.
     """
-    times = jnp.asarray(times)
+    times = jnp.asarray(times, dtype=float)
     samples = [wind_field(time) for time in times]
     # interior points: drop the one-cell ghost ring the solver pads with
     wind_east, wind_north, wind_up = (

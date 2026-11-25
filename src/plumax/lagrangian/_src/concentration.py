@@ -116,6 +116,8 @@ def simulate_lagrangian(
     z_centers = cell_centres(z_edges)
     cells = Cells((x_edges, y_edges, z_edges))
 
+    # no lid is None, and so is an infinite one
+    top = None if pbl_height is None or np.isinf(pbl_height) else pbl_height
     run_key, velocity_key = jax.random.split(jax.random.PRNGKey(seed))
     source = jnp.asarray(source_location, dtype=float)
     state = at_point(source, n_particles)
@@ -123,7 +125,7 @@ def simulate_lagrangian(
     # R_j = Σ_particles Σ_steps Δt 1[in cell j]
     result = integrate(
         state,
-        Langevin(wind, turbulence, Walls(bottom=0.0, top=pbl_height)),
+        Langevin(wind, turbulence, Walls(bottom=0.0, top=top)),
         t0=0.0,
         duration=float(t_end),
         step_size=float(dt),
@@ -133,9 +135,10 @@ def simulate_lagrangian(
     # C = Q R / (N V_cell) + C_bg
     steady = steady_concentration(result.accumulated, emission_rate, n_particles, cells)
     steady = steady + background_conc
-    conc = np.asarray(steady)
+    # copies, because a view of a JAX array is read-only
+    conc = np.array(steady)
     # C_col(x, y) = Σ_z C(x, y, z) Δz
-    column_conc = np.asarray(column(steady, cells))
+    column_conc = np.array(column(steady, cells))
 
     dataset = xr.Dataset(
         data_vars={

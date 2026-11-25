@@ -45,7 +45,7 @@ from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 from plumax._src.errors import ParameterError
 from plumax._src.extras import require_extra
 from plumax._src.vardax import require_vardax
-from plumax.lagrangian._src.footprint import _surface_sensitivity
+from plumax.lagrangian._src.footprint import _surface_sensitivity, require_inside_layer
 
 
 if TYPE_CHECKING:
@@ -64,15 +64,16 @@ def _require_pipekit_train(caller: str) -> ModuleType:
 
 
 def _signature(turbulence: TurbulenceModel) -> tuple[Any, ...]:
-    """What identifies a closure in a cache key: its type and its parameters.
+    """What identifies a closure in a cache key: its type, structure and parameters.
 
     An Equinox module hides the values of its arrays in its ``repr``.
     """
     name = f"{type(turbulence).__module__}.{type(turbulence).__qualname__}"
     if not isinstance(turbulence, eqx.Module):
         return (name, repr(turbulence))
-    leaves = jax.tree.leaves(turbulence)
-    return (name, [np.asarray(leaf).tolist() for leaf in leaves])
+    # the structure holds the static fields and the types inside
+    leaves, structure = jax.tree.flatten(turbulence)
+    return (name, str(structure), [np.asarray(leaf).tolist() for leaf in leaves])
 
 
 class FootprintSimulator:
@@ -91,7 +92,8 @@ class FootprintSimulator:
 
     The particle scan is compiled once per simulator, with the context and
     the receptors as traced arguments and ``jax.vmap`` over the receptors, so
-    only the first case of a simulator pays for compilation.
+    only the first case of a simulator pays for compilation. The settings are
+    compiled in too: make another simulator for other settings.
 
     Args:
         wind_from_context: Mean wind for a context, a tracerax velocity. It must
@@ -99,7 +101,7 @@ class FootprintSimulator:
             the scan compiles: build the wind with JAX operations, as
             ``tracerax.velocity.uniform(u)``, and never call ``float()`` on the
             context or branch on its value.
-        receptors: Receptor positions (x, y, z) [m].
+        receptors: Receptor positions (x, y, z) [m], inside the layer.
         turbulence: Turbulence model.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
         domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
@@ -112,6 +114,7 @@ class FootprintSimulator:
 
     Raises:
         ParameterError: If ``n_particles`` is below one.
+        DomainError: If a receptor is below the ground or above the lid.
     """
 
     def __init__(
@@ -131,6 +134,9 @@ class FootprintSimulator:
     ) -> None:
         if n_particles < 1:
             raise ParameterError(f"n_particles must be ≥ 1, got {n_particles}")
+        require_inside_layer(
+            np.asarray(receptors)[:, 2], pbl_height, caller="FootprintSimulator"
+        )
         self.wind_from_context = wind_from_context
         self.receptors = jnp.asarray(receptors)
         self.turbulence = turbulence

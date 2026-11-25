@@ -30,20 +30,57 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Float, PRNGKeyArray, UInt32
+from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray, UInt32
 from tracerax.advect import Walls
 from tracerax.bin import Cells
 from tracerax.footprint import surface
 
 from plumax._src.domain import cell_centres, edge_axis
+from plumax._src.errors import DomainError
+from plumax._src.tracing import require_positive
 
 
 if TYPE_CHECKING:
     from tracerax.advect import TurbulenceModel
     from tracerax.velocity import Velocity
+
+
+class _ReceptorClock(eqx.Module):
+    """A wind read ``offset`` seconds later: u(T + t, x).
+
+    The run then starts at t = 0, so that its steps keep their length in single
+    precision however far ``offset`` is from zero.
+    """
+
+    wind: Velocity
+    offset: Float[ArrayLike, ""]
+
+    def __call__(
+        self,
+        t: Float[Array, "#particle"] | Float[ArrayLike, ""],
+        position: Float[Array, "particle 3"],
+    ) -> Float[Array, "particle 3"]:
+        return self.wind(self.offset + t, position)
+
+
+def require_inside_layer(heights: ArrayLike, pbl_height: float, *, caller: str) -> None:
+    """Refuse a receptor below the ground or above the lid.
+
+    Raises:
+        DomainError: A height is outside ``[0, pbl_height]``.
+    """
+    # in the dtype of the run, so that a level at the lid stays inside
+    dtype = jnp.result_type(float)
+    levels = np.asarray(heights, dtype=dtype)
+    if not ((levels >= 0.0) & (levels <= np.asarray(pbl_height, dtype=dtype))).all():
+        raise DomainError(
+            f"{caller}: a receptor must be between the ground and the lid, "
+            f"0 ≤ z ≤ pbl_height = {pbl_height} (got z = {levels})"
+        )
 
 
 def _surface_sensitivity(
@@ -73,11 +110,11 @@ def _surface_sensitivity(
     # F = H / (N ρ_air f_pbl·h), H(s) = Σ_particles Σ_steps 1[in s, z < f_pbl·h] Δt
     footprint = surface(
         receptor,
-        wind,
+        _ReceptorClock(wind, receptor_time),
         turbulence,
         cells,
         n_particles=n_particles,
-        receptor_time=receptor_time,
+        receptor_time=0.0,
         duration=float(t_back),
         step_size=float(dt),
         surface_depth=pbl_fraction * pbl_height,
@@ -107,7 +144,8 @@ def compute_footprint(
     """Compute a single receptor's surface footprint by backward integration.
 
     Args:
-        receptor_location: ``(x, y, z)`` receptor coordinates [m].
+        receptor_location: ``(x, y, z)`` receptor coordinates [m], with z inside
+            the layer, ``0 ≤ z ≤ pbl_height``.
         turbulence: Turbulence model.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
         domain_y: ``(start, stop, n_cells)`` along y for the surface grid.
@@ -135,7 +173,22 @@ def compute_footprint(
         ``(footprint, x_centers, y_centers)`` where ``footprint`` has shape
         ``(nx, ny)`` and units ``s·m²·kg⁻¹`` (flux sensitivity; see the module
         docstring).
+
+    Raises:
+        DomainError: The receptor is below the ground or above the lid.
+        ParameterError: A count, a time, a depth or the density is not positive.
     """
+    caller = "compute_footprint"
+    for name, value in (
+        ("n_particles", n_particles),
+        ("t_back", t_back),
+        ("dt", dt),
+        ("pbl_height", pbl_height),
+        ("pbl_fraction", pbl_fraction),
+        ("air_density", air_density),
+    ):
+        require_positive(name, value, caller=caller)
+    require_inside_layer(receptor_location[2], pbl_height, caller=caller)
     sensitivity = _surface_sensitivity(
         jnp.asarray(receptor_location, dtype=float),
         wind,
@@ -153,7 +206,8 @@ def compute_footprint(
     )
     x_centers = cell_centres(edge_axis(domain_x))
     y_centers = cell_centres(edge_axis(domain_y))
-    return np.asarray(sensitivity), x_centers, y_centers
+    # a copy, because a view of a JAX array is read-only
+    return np.array(sensitivity), x_centers, y_centers
 
 
 __all__ = ["compute_footprint"]
