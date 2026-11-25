@@ -187,12 +187,11 @@ integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.6" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# vardax v0.3.6 and vardax#307 (main at 3bc3457, not in a release yet), which
-# pins pipekit at the tag above. It keeps
+# vardax v0.3.7 pins pipekit at the tag above. It keeps
 # MinimiseResult.converged (FourDVarResult.converged reports it) and the
 # state-space form of OptimalInterpolation (coupled.fuse_observations solves
 # with it).
-vardax = { git = "https://github.com/jejjohnson/vardax", rev = "3bc3457bd285d8a68311eca5ba0926559546f490" }
+vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.7" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
 argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
