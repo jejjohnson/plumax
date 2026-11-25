@@ -3481,7 +3481,7 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "tracerax", git = "https://github.com/jejjohnson/tracerax?tag=v0.0.5" },
+    { name = "tracerax", git = "https://github.com/jejjohnson/tracerax?tag=v0.0.6" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.9" },
     { name = "xarray" },
@@ -4890,8 +4890,8 @@ wheels = [
 
 [[package]]
 name = "tracerax"
-version = "0.0.5"
-source = { git = "https://github.com/jejjohnson/tracerax?tag=v0.0.5#1ddaa3d044ec7d8496d792ef1c244239fe37fd77" }
+version = "0.0.6"
+source = { git = "https://github.com/jejjohnson/tracerax?tag=v0.0.6#de86d4def90e0fdec8ea098db330109b154b974f" }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
