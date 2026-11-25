@@ -72,7 +72,7 @@ def _signature(turbulence: TurbulenceModel) -> tuple[Any, ...]:
     if not isinstance(turbulence, eqx.Module):
         return (name, repr(turbulence))
     # the structure holds the static fields and the types inside
-    leaves, structure = jax.tree.flatten(turbulence)
+    leaves, structure = jax.tree.leaves(turbulence), jax.tree.structure(turbulence)
     return (name, str(structure), [np.asarray(leaf).tolist() for leaf in leaves])
 
 
