@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/jejjohnson/plumax/compare/v0.4.0...v0.4.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **les_fvm:** the adaptive solvers never step past the stability limit ([#406](https://github.com/jejjohnson/plumax/issues/406)) ([fe10bc5](https://github.com/jejjohnson/plumax/commit/fe10bc5f6335f069fce7c86d189a817a2171a983))
+
 ## [0.4.0](https://github.com/jejjohnson/plumax/compare/v0.3.1...v0.4.0) (2026-11-25)
 
 
