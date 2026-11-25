@@ -76,7 +76,6 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
         "`.T` of a lineax operator, which keeps its own methods",
     ),
     ("met/_src/era5.py", "load_era5", "transpose"): (7, _XARRAY),
-    ("met/_src/pbl.py", "pbl_height_bulk_richardson", "transpose"): (1, _XARRAY),
     ("met/_src/time.py", "from_datetimes", "atleast_1d"): (
         1,
         "coerces a scalar or a sequence of timestamps on the host",

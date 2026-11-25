@@ -844,6 +844,19 @@ wheels = [
 ]
 
 [[package]]
+name = "diagnostix"
+version = "0.0.4"
+source = { git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.4#363927dedc4df58062a38c94f750d6349deb74fb" }
+dependencies = [
+    { name = "geophysix" },
+    { name = "gridax" },
+    { name = "jaxtyping" },
+    { name = "numpy" },
+    { name = "pipekit-array", extra = ["compat", "numpy"] },
+    { name = "pipekit-ops" },
+]
+
+[[package]]
 name = "diffrax"
 version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3388,6 +3401,7 @@ name = "plumax"
 version = "0.3.1"
 source = { editable = "." }
 dependencies = [
+    { name = "diagnostix" },
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
@@ -3484,6 +3498,7 @@ typecheck = [
 [package.metadata]
 requires-dist = [
     { name = "argminax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
+    { name = "diagnostix", git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.4" },
     { name = "diffrax", specifier = ">=0.6" },
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },

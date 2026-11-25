@@ -145,7 +145,6 @@ def test_hanna_factory_regimes():
 
 
 def test_bulk_richardson_matches_direct_profile():
-    pytest.importorskip("xrops")
     inversion = 400.0
 
     def theta(z):
@@ -168,6 +167,79 @@ def test_bulk_richardson_matches_direct_profile():
     # the crossing is interpolated from the last level below the inversion
     assert inversion - GRID.dz < expected < z[-1]
     np.testing.assert_allclose(h, expected, rtol=1e-9)
+
+
+def inversion_field(
+    top: float, *, shear: float = 0.005, calm: bool = False
+) -> MetField:
+    """A neutral layer under an inversion that starts at `top` (m)."""
+    return make_field(
+        u_of_z=lambda z: 2.0 + (0.0 if calm else shear) * z,
+        temperature_of_z=lambda z: 300.0 + 0.01 * np.maximum(z - top, 0.0),
+    )
+
+
+def test_bulk_richardson_equals_the_xrops_diagnostic():
+    """The function it replaces, on columns of different winds and times."""
+    xrops_atm = pytest.importorskip("xrops.atm")
+    import xarray as xr
+
+    field = inversion_field(400.0)
+    rng = np.random.default_rng(0)
+    noise = 0.3 * rng.standard_normal(field.u.shape)
+    field = eqx.tree_at(lambda f: (f.u, f.v), field, (field.u + noise, field.v + noise))
+    u, v = np.asarray(field.u), np.asarray(field.v)
+    west = np.concatenate([u[..., :1], u[..., :-1]], axis=-1)
+    south = np.concatenate([v[..., :1, :], v[..., :-1, :]], axis=-2)
+    dims = ("time", "level", "y", "x")
+    profiles = xr.Dataset(
+        {
+            "theta_v": (dims, np.asarray(field.temperature)),  # p = p_ref
+            "u": (dims, 0.5 * (u + west)),
+            "v": (dims, 0.5 * (v + south)),
+        },
+        coords={"z_agl": ("level", heights())},
+    )
+    expected = xrops_atm.pbl_height_bulk_richardson(profiles, theta_v="theta_v")
+    np.testing.assert_allclose(
+        pbl_height_bulk_richardson(field), expected["pbl_height"], rtol=1e-12
+    )
+
+
+def test_bulk_richardson_is_nan_where_no_level_is_critical():
+    neutral = make_field(
+        u_of_z=lambda z: 2.0 + 0.005 * z, temperature_of_z=lambda z: 300.0 + 0.0 * z
+    )
+    assert np.isnan(pbl_height_bulk_richardson(neutral)).all()
+
+
+def test_bulk_richardson_of_calm_air_is_the_level_under_the_inversion():
+    """No shear: Ri_b is +∞ at the first stable level."""
+    h = pbl_height_bulk_richardson(inversion_field(400.0, calm=True))
+    below = heights()[heights() <= 400.0].max()
+    np.testing.assert_allclose(h, below)
+
+
+def test_bulk_richardson_under_jit_and_grad():
+    field = inversion_field(400.0)
+    expected = pbl_height_bulk_richardson(field)
+    np.testing.assert_allclose(
+        eqx.filter_jit(pbl_height_bulk_richardson)(field), expected
+    )
+
+    def mean_height(shift):
+        warmer = field.temperature + shift * jnp.linspace(0.0, 1.0, 20)[:, None, None]
+        return jnp.mean(
+            pbl_height_bulk_richardson(
+                eqx.tree_at(lambda f: f.temperature, field, warmer)
+            )
+        )
+
+    slope = float(jax.grad(mean_height)(0.05))
+    step = 1e-5
+    centred = (mean_height(0.05 + step) - mean_height(0.05 - step)) / (2 * step)
+    assert slope < 0.0  # a more stable column has a lower boundary layer
+    np.testing.assert_allclose(slope, centred, rtol=1e-6)
 
 
 @pytest.mark.slow
