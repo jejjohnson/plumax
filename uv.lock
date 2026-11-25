@@ -3414,7 +3414,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "diffrax" },
@@ -3544,7 +3544,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.7" },
     { name = "xarray" },
     { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
     { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
@@ -3568,7 +3568,7 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.7" },
     { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
     { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
 ]
@@ -5142,13 +5142,14 @@ wheels = [
 
 [[package]]
 name = "vardax"
-version = "0.3.6"
-source = { git = "https://github.com/jejjohnson/vardax?rev=3bc3457bd285d8a68311eca5ba0926559546f490#3bc3457bd285d8a68311eca5ba0926559546f490" }
+version = "0.3.7"
+source = { git = "https://github.com/jejjohnson/vardax?tag=v0.3.7#051812ec8918ad26530ea86043a4acfc4f278cc2" }
 dependencies = [
     { name = "argminax" },
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
+    { name = "functax" },
     { name = "gaussx" },
     { name = "geonnax" },
     { name = "integrix" },
