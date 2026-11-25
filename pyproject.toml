@@ -33,9 +33,8 @@ classifiers = [
 # Core runtime deps — only what the forward models need. The NumPyro-based
 # Bayesian inference modules are imported lazily; consumers who only want the
 # xarray forward models do not pay for them. jax/jaxlib >= 0.10 tracks
-# finitevolx (>= 0.0.42) and gaussx (>= 0.0.17), which moved to the jaxlib
-# 0.10 line; numpyro >= 0.21 dropped the removed `xla_pmap_p` import and is
-# compatible.
+# gaussx (>= 0.0.17), which moved to the jaxlib 0.10 line; numpyro >= 0.21
+# dropped the removed `xla_pmap_p` import and is compatible.
 dependencies = [
     "jax>=0.10",
     "jaxlib>=0.10",
@@ -49,14 +48,13 @@ dependencies = [
     # diffrax + equinox drive the gauss_puff time-varying wind solves.
     "diffrax>=0.6",
     "equinox>=0.11",
-    # finitevolx powers the Arakawa C-grid FVM operators used by les_fvm.
-    # >= 0.0.44 for the wall="open" lateral-BC mode (les_fvm needs it);
-    # 0.0.45 is additive (masked reductions, spherical cell widths).
-    "finitevolx>=0.0.45",
+    # gridax holds the Arakawa C-grid, the ghost fills and the finite-volume
+    # operators of les_fvm. Its base install is enough: the `jax` extra (gaussx
+    # >= 0.8.1, spectraldiffx) is for its elliptic solvers.
+    "gridax>=0.3.1",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
-    # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.17
-    # for solve_tridiagonal, which the finitevolx >= 0.0.44 stack requires;
-    # >= 0.0.25 for `symmetrize`, a reverse-mode-differentiable `safe_cholesky`,
+    # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.25
+    # for `symmetrize`, a reverse-mode-differentiable `safe_cholesky`,
     # and the state-space layer (MaternSDE / MarkovGaussian) Tier IV builds on.
     "gaussx>=0.6.5",
     # optimistix powers the variational retrieval module (assimilation):
@@ -139,10 +137,9 @@ Repository = "https://github.com/jejjohnson/plumax"
 Documentation = "https://jejjohnson.github.io/plumax"
 
 [tool.uv]
-# finitevolx and spectraldiffx carry their own `gaussx = { tag = "v0.0.17" }`
-# source, which uv sees as a conflicting direct URL once plumax pins a newer
-# rev. Force the whole graph onto plumax's gaussx (the pattern somax uses);
-# every symbol those two packages import still exists at this rev.
+# integrix and the other siblings carry their own gaussx source, which uv sees
+# as a conflicting direct URL even where it names the same version. Force the
+# whole graph onto plumax's gaussx (the pattern somax uses).
 override-dependencies = [
     "gaussx @ git+https://github.com/jejjohnson/gaussx@v0.6.12",
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
@@ -176,7 +173,7 @@ pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "p
 pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.1.4" }
 pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.1.4" }
 pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-array-v0.1.4" }
-finitevolx = { git = "https://github.com/jejjohnson/finitevolX", tag = "v0.0.45" }
+gridax = { git = "https://github.com/jejjohnson/gridax", subdirectory = "packages/gridax", tag = "gridax-v0.3.1" }
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.1.4" }
 # pipekit-train (the `emulate` extra) is not on PyPI.
 pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-array-v0.1.4" }

@@ -1,18 +1,13 @@
 """Boundary-condition application for 3-D tracer fields.
 
-finitevolX ships 2-D BC atoms (:class:`finitevolx.Dirichlet1D`, etc.)
-that expect a ``[Ny, Nx]`` field.  For the Eulerian dispersion solver
-we need to update ghost rings on a ``[Nz, Ny, Nx]`` field.  The pattern
-used here is:
+The ghost rings of a ``[Nz, Ny, Nx]`` field are filled in two steps:
 
-1. A :class:`HorizontalBC` bundles a :class:`finitevolx.BoundaryConditionSet`
-   and applies it per z-slice via ``eqx.filter_vmap`` — keeping the
-   per-face semantics of finitevolX but vectorising over the vertical
-   axis.
+1. A :class:`HorizontalBC` holds a :class:`gridax.BC` with the condition of
+   each lateral face and fills the x and y ghosts of every z-level with
+   :func:`gridax.fill_ghosts`.
 2. A :class:`VerticalBC` holds two ``(bc_type, value)`` pairs for the
-   top and bottom faces.  We implement these directly (Dirichlet /
-   Neumann / outflow / periodic) because the 2-D BC atoms assume the
-   modified axis is horizontal.
+   top and bottom faces, filled here (Dirichlet / Neumann / outflow /
+   periodic).
 """
 
 from __future__ import annotations
@@ -20,14 +15,15 @@ from __future__ import annotations
 from typing import Literal
 
 import equinox as eqx
-from finitevolx import (
-    BoundaryConditionSet,
-    Dirichlet1D,
-    Neumann1D,
-    Outflow1D,
-    Periodic1D,
+from gridax import (
+    BC,
+    Dirichlet,
+    Neumann,
+    Outflow,
+    Periodic,
+    Sponge,
+    fill_ghosts,
 )
-from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
 from plumax.les_fvm.grid import PlumeGrid3D
@@ -44,72 +40,58 @@ AxisBCSpec = str | tuple[FaceBCSpec, FaceBCSpec]
 #: The order of the per-face lateral boundary scaling factors.
 LATERAL_FACES: tuple[HorizontalFace, ...] = ("west", "east", "south", "north")
 
-
-class CellDirichlet1D(eqx.Module):
-    """Advective (cell-value) Dirichlet ghost for one horizontal face.
-
-    Writes ``ghost = value`` — the boundary concentration as an exterior
-    *cell* value — so a first-order upwind advective flux at an inflow wall
-    carries the prescribed ``value``.  This differs from
-    :class:`finitevolx.Dirichlet1D`, which writes the *face* reflection
-    ``2*value - interior`` (the correct convention for the centred diffusion
-    gradient, but wrong as the upwind cell value for advection — see
-    jejjohnson/finitevolX#235).
-
-    Parameters
-    ----------
-    face : {"south", "north", "west", "east"}
-        Domain face to update.
-    value : float
-        Boundary concentration written into the ghost cells.
-    """
-
-    face: HorizontalFace = eqx.field(static=True)
-    value: Float[ArrayLike, ""]
-
-    def __call__(
-        self, field: Float[Array, "Ny Nx"], dx: float, dy: float
-    ) -> Float[Array, "Ny Nx"]:
-        """Return ``field`` with one face's ghost set to ``value`` (cell value)."""
-        del dx, dy
-        if self.face == "south":
-            return field.at[0, :].set(self.value)
-        if self.face == "north":
-            return field.at[-1, :].set(self.value)
-        if self.face == "west":
-            return field.at[:, 0].set(self.value)
-        return field.at[:, -1].set(self.value)
+#: The axis of each lateral face, and its side (0 low, 1 high).
+_FACE_SIDES: dict[HorizontalFace, tuple[str, int]] = {
+    "west": ("x", 0),
+    "east": ("x", 1),
+    "south": ("y", 0),
+    "north": ("y", 1),
+}
 
 
 def _to_cell_dirichlet(atom):
-    """Swap a face-Dirichlet atom for its cell-value advective counterpart.
+    """Swap a face-Dirichlet condition for its cell-value advective counterpart.
 
-    All other atoms (outflow / periodic / Neumann / ``None``) are returned
-    unchanged — only Dirichlet needs a different ghost convention for
-    advection versus diffusion.
+    :class:`gridax.Dirichlet` writes the *face* reflection
+    ``2*value - interior``, which is right for the centred diffusion gradient
+    and wrong as the upwind cell value of an inflow. A :class:`gridax.Sponge`
+    of weight 1 writes ``ghost = value``. All other conditions (outflow /
+    periodic / Neumann / ``None``) are returned unchanged.
     """
-    if isinstance(atom, Dirichlet1D):
-        return CellDirichlet1D(face=atom.face, value=atom.value)
+    if isinstance(atom, Dirichlet):
+        return Sponge(background=atom.value, weight=1.0)
     return atom
 
 
-class HorizontalBC(eqx.Module):
-    """Apply a :class:`BoundaryConditionSet` to every z-slice of a 3-D field."""
+def _horizontal_bc(
+    west: object, east: object, south: object, north: object
+) -> HorizontalBC:
+    """Return the :class:`HorizontalBC` of four lateral conditions."""
+    # the x condition owns the corners, which no tendency reads
+    return HorizontalBC(bc_set=BC(x=(west, east), y=(south, north), corners="priority"))
 
-    bc_set: BoundaryConditionSet
+
+class HorizontalBC(eqx.Module):
+    """Fill the lateral ghosts of every z-slice of a 3-D field.
+
+    Parameters
+    ----------
+    bc_set : gridax.BC
+        The condition of each lateral face.
+    """
+
+    bc_set: BC
 
     def __call__(
-        self,
-        field: Float[Array, "Nz Ny Nx"],
-        dx: float,
-        dy: float,
+        self, field: Float[Array, "Nz Ny Nx"], plume_grid: PlumeGrid3D
     ) -> Float[Array, "Nz Ny Nx"]:
         """Return ``field`` with horizontal ghost rings updated on each slice."""
+        return fill_ghosts(field, plume_grid.grid, self.bc_set)
 
-        def apply_slice(slab: Float[Array, "Ny Nx"]) -> Float[Array, "Ny Nx"]:
-            return self.bc_set(slab, dx=dx, dy=dy)
-
-        return eqx.filter_vmap(apply_slice)(field)
+    def face(self, name: HorizontalFace) -> object:
+        """Return the condition of one lateral face, ``None`` for none."""
+        axis, side = _FACE_SIDES[name]
+        return self.bc_set.faces.get(axis, (None, None))[side]
 
     def advection_variant(self) -> HorizontalBC:
         """Return a copy whose Dirichlet faces use a cell-value ghost.
@@ -119,15 +101,8 @@ class HorizontalBC(eqx.Module):
         carry the wrong state.  Outflow / periodic / Neumann faces are
         unchanged, so this is a no-op unless a Dirichlet face is present.
         """
-        boundary_set = self.bc_set
-        return HorizontalBC(
-            bc_set=BoundaryConditionSet(
-                south=_to_cell_dirichlet(boundary_set.south),
-                north=_to_cell_dirichlet(boundary_set.north),
-                west=_to_cell_dirichlet(boundary_set.west),
-                east=_to_cell_dirichlet(boundary_set.east),
-                mask=boundary_set.mask,
-            )
+        return _horizontal_bc(
+            *(_to_cell_dirichlet(self.face(name)) for name in LATERAL_FACES)
         )
 
 
@@ -217,8 +192,8 @@ def _apply_vertical_face(
     ``value``. The ``outward_sign`` factor (``-1`` at the bottom, ``+1``
     at the top) is what makes the *same* ``value`` mean ``∂C/∂z`` at
     both faces despite the ghost sitting below the interior at the
-    bottom and above it at the top; this matches the ghost sign of
-    :class:`finitevolx.Neumann1D`.
+    bottom and above it at the top. The lateral faces follow the same
+    convention (see :func:`_build_1d_bc`).
     """
     if face == "bottom":
         interior_slice = field[1, :, :]
@@ -258,7 +233,7 @@ def apply_boundary_conditions(
     plume_grid: PlumeGrid3D,
 ) -> Float[Array, "Nz Ny Nx"]:
     """Apply horizontal then vertical BCs to a 3-D tracer field."""
-    out = horizontal_bc(field, dx=plume_grid.dx, dy=plume_grid.dy)
+    out = horizontal_bc(field, plume_grid)
     out = vertical_bc(out, dz=plume_grid.dz)
     return out
 
@@ -282,18 +257,14 @@ def scale_dirichlet_faces(
     """
 
     def scaled(atom, factor: Float[Array, ""]):
-        if isinstance(atom, Dirichlet1D):
-            return Dirichlet1D(face=atom.face, value=factor * atom.value)
+        if isinstance(atom, Dirichlet):
+            return Dirichlet(factor * atom.value)
         return atom
 
-    boundary_set = horizontal_bc.bc_set
-    west, east, south, north = (
-        scaled(getattr(boundary_set, face), scale[index])
-        for index, face in enumerate(LATERAL_FACES)
-    )
-    return HorizontalBC(
-        bc_set=BoundaryConditionSet(
-            south=south, north=north, west=west, east=east, mask=boundary_set.mask
+    return _horizontal_bc(
+        *(
+            scaled(horizontal_bc.face(name), scale[index])
+            for index, name in enumerate(LATERAL_FACES)
         )
     )
 
@@ -306,30 +277,13 @@ def periodic_axes(horizontal_bc: HorizontalBC) -> tuple[bool, bool]:
     wrapped (rather than edge-padded), keeping the two representations of a
     periodic seam face consistent and the open-wall fluxes cancelling.
 
-    Raises
-    ------
-    ValueError
-        If exactly one face of an axis is :class:`finitevolx.Periodic1D`.  A
-        half-periodic axis is ill-defined (the seam couples both faces), and
-        wrapping the axis' halos would corrupt the non-periodic face's
-        wall coefficient; require periodic on both faces or neither.
+    :class:`gridax.BC` refuses an axis with one periodic face, so the west and
+    the south face speak for their axes.
     """
-    boundary_set = horizontal_bc.bc_set
-    west_p = isinstance(boundary_set.west, Periodic1D)
-    east_p = isinstance(boundary_set.east, Periodic1D)
-    south_p = isinstance(boundary_set.south, Periodic1D)
-    north_p = isinstance(boundary_set.north, Periodic1D)
-    if west_p != east_p:
-        raise ValueError(
-            "periodic BC on only one x-face (west/east); periodicity couples "
-            "both faces of an axis — set it on both faces or neither."
-        )
-    if south_p != north_p:
-        raise ValueError(
-            "periodic BC on only one y-face (south/north); periodicity couples "
-            "both faces of an axis — set it on both faces or neither."
-        )
-    return west_p, south_p
+    return (
+        isinstance(horizontal_bc.face("west"), Periodic),
+        isinstance(horizontal_bc.face("south"), Periodic),
+    )
 
 
 def build_default_concentration_bc(
@@ -351,21 +305,26 @@ def build_default_concentration_bc(
     - ``(west, east)`` (for ``bc_x``) / ``(south, north)`` (``bc_y``) /
       ``(bottom, top)`` (``bc_z``) where each entry is either a BC-kind
       string (``"dirichlet"``, ``"neumann"``, ``"outflow"``) or a
-      ``(kind, value)`` tuple giving the Dirichlet / Neumann target.
+      ``(kind, value)`` tuple giving the Dirichlet / Neumann target. A Neumann
+      target is the coordinate gradient (``∂C/∂x``, ``∂C/∂y``, ``∂C/∂z``) on
+      both faces of its axis.
 
     Returns
     -------
     tuple[HorizontalBC, VerticalBC]
+
+    Raises
+    ------
+    ValueError
+        If a spec or a kind is unknown, or exactly one lateral face of an axis
+        is periodic: the seam couples both faces.
     """
     west_bc, east_bc = _split_horizontal_spec(bc_x, faces=("west", "east"))
     south_bc, north_bc = _split_horizontal_spec(bc_y, faces=("south", "north"))
 
-    boundary_set = BoundaryConditionSet(
-        south=south_bc, north=north_bc, west=west_bc, east=east_bc
-    )
     bot_kind, bot_val, top_kind, top_val = _split_vertical_spec(bc_z)
     return (
-        HorizontalBC(bc_set=boundary_set),
+        _horizontal_bc(west_bc, east_bc, south_bc, north_bc),
         VerticalBC(
             bottom_kind=bot_kind,
             bottom_value=bot_val,
@@ -394,7 +353,7 @@ def _split_horizontal_spec(
     ``("west", "east")`` or ``("south", "north")``.
     """
     if isinstance(spec, str) and spec.lower() == "periodic":
-        return Periodic1D(faces[0]), Periodic1D(faces[1])
+        return Periodic(), Periodic()
     if isinstance(spec, tuple) and len(spec) == 2:
         lower_kind, lower_val = _as_kind_value(spec[0])
         upper_kind, upper_val = _as_kind_value(spec[1])
@@ -409,15 +368,21 @@ def _split_horizontal_spec(
 
 
 def _build_1d_bc(kind: str, value: float, face: str):
+    """Return the gridax condition of one lateral face.
+
+    A Neumann ``value`` is the coordinate gradient, as on the vertical faces.
+    :class:`gridax.Neumann` takes the gradient along the outward normal, which
+    points down the axis on the low (west, south) faces.
+    """
     kind_l = kind.lower()
     if kind_l == "dirichlet":
-        return Dirichlet1D(face=face, value=value)
+        return Dirichlet(value)
     if kind_l == "neumann":
-        return Neumann1D(face=face, value=value)
+        return Neumann(-value if face in ("west", "south") else value)
     if kind_l == "outflow":
-        return Outflow1D(face=face)
+        return Outflow()
     if kind_l == "periodic":
-        return Periodic1D(face=face)
+        return Periodic()
     raise ValueError(
         f"horizontal BC kind must be one of 'dirichlet', 'neumann', "
         f"'outflow', 'periodic'; got {kind!r}"

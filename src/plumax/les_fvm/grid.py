@@ -1,13 +1,13 @@
 """3-D Cartesian Arakawa C-grid wrapper for the Eulerian dispersion model.
 
-The underlying :class:`finitevolx.CartesianGrid3D` stores fields with shape
+The underlying :class:`gridax.CartesianCGrid3D` stores fields with shape
 ``[Nz, Ny, Nx]`` where every axis carries a one-cell ghost ring, so the
 interior indices span ``[1:-1, 1:-1, 1:-1]``.  This module wraps the
 construction + coordinate generation so the rest of ``les_fvm`` can treat
 the grid as a single pytree leaf with convenient ``x``, ``y``, ``z``
 coordinate arrays (interior cell centres only).
 
-Stagger convention (see :class:`finitevolx.CartesianGrid3D`)
+Stagger convention (see :class:`gridax.CartesianCGrid3D`)
 -----------------------------------------------------------
     T[k, j, i]  cell centre  at  ( i        * dx,  j        * dy,  k * dz )
     U[k, j, i]  east face    at  ((i + 1/2) * dx,  j        * dy,  k * dz )

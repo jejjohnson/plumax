@@ -11,7 +11,7 @@ anisotropic diagonal diffusivity — horizontal eddies are taken isotropic
 in (x, y) while the vertical component is smaller in a stable boundary
 layer.
 
-Horizontal diffusion is assembled via :class:`finitevolx.Diffusion3D`
+Horizontal diffusion is assembled via :func:`gridax.diffuse`
 (one 2-D Laplacian per z-level) and vertical diffusion by the local
 :func:`_vertical_ops.vertical_diffusion_tendency` helper.
 

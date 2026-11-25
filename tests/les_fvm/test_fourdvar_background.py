@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 import pytest
-from finitevolx import Dirichlet1D, Outflow1D
+from gridax import Dirichlet, Outflow
 
 from plumax._src.errors import PayloadError
 from plumax.lagrangian.inversion import matern32_covariance
@@ -80,12 +80,11 @@ def test_scale_acts_on_dirichlet_faces_only():
     )
     # (west, east, south, north)
     scaled = scale_dirichlet_faces(horizontal, jnp.array([1.5, 7.0, 0.5, 7.0]))
-    bc_set = scaled.bc_set
-    assert isinstance(bc_set.west, Dirichlet1D)
-    assert float(bc_set.west.value) == 3.0
-    assert float(bc_set.south.value) == 1.5
-    assert isinstance(bc_set.east, Outflow1D)
-    assert isinstance(bc_set.north, Outflow1D)
+    assert isinstance(scaled.face("west"), Dirichlet)
+    assert float(scaled.face("west").value) == 3.0
+    assert float(scaled.face("south").value) == 1.5
+    assert isinstance(scaled.face("east"), Outflow)
+    assert isinstance(scaled.face("north"), Outflow)
 
 
 @pytest.mark.slow

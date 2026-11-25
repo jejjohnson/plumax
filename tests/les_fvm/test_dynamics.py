@@ -1,6 +1,6 @@
 """Tests that horizontal lateral BCs actually drive transport (issues #25/#26).
 
-Since finitevolX gained the ``wall="open"`` lateral-boundary mode, the
+Since gridax gained the ``wall="open"`` lateral-boundary mode, the
 ``les_fvm`` horizontal advection / diffusion operators read the BC-updated
 ghost ring at the domain walls.  These integration tests exercise the real
 code path used by :class:`~plumax.les_fvm.dynamics.EulerianDispersionRHS`:

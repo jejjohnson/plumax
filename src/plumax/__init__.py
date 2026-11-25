@@ -11,7 +11,7 @@ Sub-packages
                      (masks, footprints, IME, cross-sectional flux), behind
                      the ``[geo]`` extra; loaded on first use.
 - ``les_fvm``      : Eulerian 3-D advection-diffusion on an Arakawa C-grid
-                     (JAX + diffrax + finitevolX) for spatially-varying
+                     (JAX + diffrax + gridax) for spatially-varying
                      wind fields and K-theory eddy diffusivity.
 - ``lagrangian``   : Markov-1 Langevin particle dispersion with forward
                      concentrations, backward footprints and the Gaussian /

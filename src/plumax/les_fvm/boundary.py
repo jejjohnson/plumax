@@ -1,25 +1,19 @@
 """Boundary-condition application for 3-D tracer fields.
 
-finitevolX ships 2-D BC atoms (:class:`finitevolx.Dirichlet1D`, etc.)
-that expect a ``[Ny, Nx]`` field.  For the Eulerian dispersion solver
-we need to update ghost rings on a ``[Nz, Ny, Nx]`` field.  The pattern
-used here is:
+The ghost rings of a ``[Nz, Ny, Nx]`` field are filled in two steps:
 
-1. A :class:`HorizontalBC` bundles a :class:`finitevolx.BoundaryConditionSet`
-   and applies it per z-slice via ``eqx.filter_vmap`` — keeping the
-   per-face semantics of finitevolX but vectorising over the vertical
-   axis.
+1. A :class:`HorizontalBC` holds a :class:`gridax.BC` with the condition of
+   each lateral face and fills the x and y ghosts of every z-level with
+   :func:`gridax.fill_ghosts`.
 2. A :class:`VerticalBC` holds two ``(bc_type, value)`` pairs for the
-   top and bottom faces.  We implement these directly (Dirichlet /
-   Neumann / outflow / periodic) because the 2-D BC atoms assume the
-   modified axis is horizontal.
+   top and bottom faces, filled here (Dirichlet / Neumann / outflow /
+   periodic).
 """
 
 from __future__ import annotations
 
 from plumax.les_fvm._src.boundary import (
     LATERAL_FACES as LATERAL_FACES,
-    CellDirichlet1D,
     HorizontalBC,
     HorizontalFace as HorizontalFace,
     VerticalBC,
@@ -32,7 +26,6 @@ from plumax.les_fvm._src.boundary import (
 
 
 __all__ = [
-    "CellDirichlet1D",
     "HorizontalBC",
     "VerticalBC",
     "apply_boundary_conditions",

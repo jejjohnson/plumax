@@ -1,13 +1,13 @@
 """3-D Cartesian Arakawa C-grid wrapper for the Eulerian dispersion model.
 
-The underlying :class:`finitevolx.CartesianGrid3D` stores fields with shape
+The underlying :class:`gridax.CartesianCGrid3D` stores fields with shape
 ``[Nz, Ny, Nx]`` where every axis carries a one-cell ghost ring, so the
 interior indices span ``[1:-1, 1:-1, 1:-1]``.  This module wraps the
 construction + coordinate generation so the rest of ``les_fvm`` can treat
 the grid as a single pytree leaf with convenient ``x``, ``y``, ``z``
 coordinate arrays (interior cell centres only).
 
-Stagger convention (see :class:`finitevolx.CartesianGrid3D`)
+Stagger convention (see :class:`gridax.CartesianCGrid3D`)
 -----------------------------------------------------------
     T[k, j, i]  cell centre  at  ( i        * dx,  j        * dy,  k * dz )
     U[k, j, i]  east face    at  ((i + 1/2) * dx,  j        * dy,  k * dz )
@@ -27,7 +27,7 @@ from typing import TYPE_CHECKING
 import einx
 import equinox as eqx
 import jax.numpy as jnp
-from finitevolx import CartesianGrid3D
+from gridax import CartesianCGrid3D
 from jax.typing import DTypeLike
 from jaxtyping import Array, Float
 
@@ -41,8 +41,8 @@ class PlumeGrid3D(eqx.Module):
 
     Attributes
     ----------
-    grid : CartesianGrid3D
-        Underlying finitevolX grid.  All field operators (advection,
+    grid : CartesianCGrid3D
+        Underlying gridax grid.  All field operators (advection,
         diffusion, interpolation, difference) take this as input.
     x : Float[Array, "nx_interior"]
         Interior T-point x-coordinates [m].
@@ -50,6 +50,8 @@ class PlumeGrid3D(eqx.Module):
         Interior T-point y-coordinates [m].
     z : Float[Array, "nz_interior"]
         Interior T-point z-coordinates [m].
+    dx, dy, dz : float
+        Cell spacing along each axis [m], static under a JAX transformation.
 
     Notes
     -----
@@ -59,27 +61,18 @@ class PlumeGrid3D(eqx.Module):
     diffusion operators, not the raw field-array shapes.
     """
 
-    grid: CartesianGrid3D
+    grid: CartesianCGrid3D
     x: Float[Array, " nx_interior"]
     y: Float[Array, " ny_interior"]
     z: Float[Array, " nz_interior"]
-
-    @property
-    def dx(self) -> float:
-        return float(self.grid.dx)
-
-    @property
-    def dy(self) -> float:
-        return float(self.grid.dy)
-
-    @property
-    def dz(self) -> float:
-        return float(self.grid.dz)
+    dx: float = eqx.field(static=True)
+    dy: float = eqx.field(static=True)
+    dz: float = eqx.field(static=True)
 
     @property
     def shape(self) -> tuple[int, int, int]:
         """Full field shape ``(Nz, Ny, Nx)`` including ghost rings."""
-        return (int(self.grid.Nz), int(self.grid.Ny), int(self.grid.Nx))
+        return (self.grid.Nz, self.grid.Ny, self.grid.Nx)
 
     @property
     def interior_shape(self) -> tuple[int, int, int]:
@@ -142,7 +135,7 @@ def make_grid(
                 f"make_grid: {label}-extent must be positive (got {expr} = {extent})"
             )
 
-    grid = CartesianGrid3D.from_interior(
+    grid = CartesianCGrid3D.from_interior(
         nx_interior=int(num_cells_x),
         ny_interior=int(num_cells_y),
         nz_interior=int(num_cells_z),
@@ -151,7 +144,7 @@ def make_grid(
         Lz=extent_z,
     )
     # Interior cell centres — offset by half a cell from the lower edge,
-    # matching the finitevolX convention of co-locating T-points at
+    # matching the gridax convention of co-locating T-points at
     # cell centres and drop ghost cells at i = 0 and i = Nx - 1.
     # x_c = x_min + (i + ½) Lx / nx
     cell_index_x = jnp.arange(num_cells_x, dtype=dtype)
@@ -162,7 +155,15 @@ def make_grid(
     # z_c = z_min + (k + ½) Lz / nz
     cell_index_z = jnp.arange(num_cells_z, dtype=dtype)
     centres_z = jnp.asarray(lower_z + (cell_index_z + 0.5) * (extent_z / num_cells_z))
-    return PlumeGrid3D(grid=grid, x=centres_x, y=centres_y, z=centres_z)
+    return PlumeGrid3D(
+        grid=grid,
+        x=centres_x,
+        y=centres_y,
+        z=centres_z,
+        dx=extent_x / int(num_cells_x),
+        dy=extent_y / int(num_cells_y),
+        dz=extent_z / int(num_cells_z),
+    )
 
 
 def coord_arrays_from_grid(

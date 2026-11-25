@@ -241,7 +241,7 @@ def simulate_eulerian_dispersion(
         times=np.asarray(solution.ts),
         concentration_history=np.asarray(solution.ys),
         attrs={
-            "title": "Eulerian 3-D methane dispersion (finitevolX)",
+            "title": "Eulerian 3-D methane dispersion (gridax)",
             "model": "L2: prescribed wind + K-theory diffusivity",
             "advection_scheme": advection_scheme,
             "solver": solver,
