@@ -3,8 +3,8 @@
 The horizontal contribution ``-∇_h · (u_h C)`` is delegated to
 :func:`gridax.advect`, which applies a WENO/TVD reconstruction
 at U- and V-faces for every z-level.  The vertical contribution
-``-∂_z(w C)`` is assembled by :func:`_vertical_ops.vertical_advection_tendency`
-with a first-order upwind reconstruction at k-faces.
+``-∂_z(w C)`` is :func:`gridax.advect_vertical` with a first-order upwind
+reconstruction at k-faces.
 
 Available reconstruction methods for the horizontal term are the schemes of
 :mod:`gridax.schemes`, by name: ``upwind1``, ``weno3``, ``weno5``,

@@ -5,9 +5,9 @@ The ghost rings of a ``[Nz, Ny, Nx]`` field are filled in two steps:
 1. A :class:`HorizontalBC` holds a :class:`gridax.BC` with the condition of
    each lateral face and fills the x and y ghosts of every z-level with
    :func:`gridax.fill_ghosts`.
-2. A :class:`VerticalBC` holds two ``(bc_type, value)`` pairs for the
-   top and bottom faces, filled here (Dirichlet / Neumann / outflow /
-   periodic).
+2. A :class:`VerticalBC` holds the kind and the value of the bottom and the
+   top face (Dirichlet / Neumann / outflow / periodic) and fills the z ghosts
+   with the same function.
 """
 
 from __future__ import annotations
