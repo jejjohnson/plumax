@@ -53,7 +53,6 @@ _XARRAY = "xarray `transpose` by dim names, which already names every axis"
 _PYTREE = "pytree `flatten()` of a prior, not an array operation"
 _VARIADIC = "a list of variable length; einx takes a fixed number of arrays"
 _TRAPEZOID = "the trapezoid sum moves to integrix in #247"
-_PLAN_244 = "rewritten on functax plans in #244"
 _PLAN_245 = "rewritten on functax plans in #245"
 
 #: (module, enclosing function, kind) -> (count, why the sites stay)
@@ -69,8 +68,6 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
         1,
         "`integrix.rule.integrate` takes the axis as its own API",
     ),
-    ("lagrangian/_src/concentration.py", "bin_positions", "reshape"): (1, _PLAN_244),
-    ("lagrangian/_src/footprint.py", "_bin_surface", "reshape"): (1, _PLAN_244),
     ("les_fvm/_src/fourdvar.py", "incremental_analysis", ".T"): (
         1,
         "`.T` of a lineax operator, which keeps its own methods",

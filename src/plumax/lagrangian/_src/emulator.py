@@ -45,17 +45,12 @@ from jaxtyping import Array, Float, PRNGKeyArray, UInt32
 from plumax._src.errors import ParameterError
 from plumax._src.extras import require_extra
 from plumax._src.vardax import require_vardax
-from plumax.lagrangian._src.footprint import (
-    _backward_steps,
-    _flux_sensitivity,
-    _surface_edges,
-    _surface_residence,
-)
+from plumax.lagrangian._src.footprint import _surface_sensitivity
 
 
 if TYPE_CHECKING:
-    from plumax.lagrangian.particles import TurbulenceModel
-    from plumax.lagrangian.wind_interp import GriddedWind
+    from tracerax.advect import TurbulenceModel
+    from tracerax.velocity import Velocity
 
 
 def _require_pipekit_train(caller: str) -> ModuleType:
@@ -66,6 +61,18 @@ def _require_pipekit_train(caller: str) -> ModuleType:
         caller=caller,
         purpose="trains the emulator with pipekit-train",
     )
+
+
+def _signature(turbulence: TurbulenceModel) -> tuple[Any, ...]:
+    """What identifies a closure in a cache key: its type and its parameters.
+
+    An Equinox module hides the values of its arrays in its ``repr``.
+    """
+    name = f"{type(turbulence).__module__}.{type(turbulence).__qualname__}"
+    if not isinstance(turbulence, eqx.Module):
+        return (name, repr(turbulence))
+    leaves = jax.tree.leaves(turbulence)
+    return (name, [np.asarray(leaf).tolist() for leaf in leaves])
 
 
 class FootprintSimulator:
@@ -87,11 +94,11 @@ class FootprintSimulator:
     only the first case of a simulator pays for compilation.
 
     Args:
-        wind_from_context: Mean wind for a context, a ``GriddedWind`` or a
-            ``t -> (u, v, w)`` callable. It must be traceable, because it is
-            called once with a traced context while the scan compiles: build
-            the wind with JAX operations, as ``uniform_wind(u[0], u[1])``, and
-            never call ``float()`` on the context or branch on its value.
+        wind_from_context: Mean wind for a context, a tracerax velocity. It must
+            be traceable, because it is called once with a traced context while
+            the scan compiles: build the wind with JAX operations, as
+            ``tracerax.velocity.uniform(u)``, and never call ``float()`` on the
+            context or branch on its value.
         receptors: Receptor positions (x, y, z) [m].
         turbulence: Turbulence model.
         domain_x: ``(start, stop, n_cells)`` along x for the surface grid.
@@ -110,10 +117,7 @@ class FootprintSimulator:
     def __init__(
         self,
         *,
-        wind_from_context: Callable[
-            [Float[Array, " feature"]],
-            GriddedWind | Callable[[jax.Array], jax.Array],
-        ],
+        wind_from_context: Callable[[Float[Array, " feature"]], Velocity],
         receptors: Float[Array, "obs 3"],
         turbulence: TurbulenceModel,
         domain_x: tuple[float, float, int],
@@ -138,38 +142,40 @@ class FootprintSimulator:
         self.pbl_height = float(pbl_height)
         self.pbl_fraction = float(pbl_fraction)
         self.air_density = float(air_density)
-        self._compiled_residence = jax.jit(self._case_residence)
+        # dt sets the number of steps, so it is static
+        self._compiled_footprints = jax.jit(self._case_footprints, static_argnames="dt")
 
-    def _case_residence(
+    def _case_footprints(
         self,
         context: Float[Array, " feature"],
         receptors: Float[Array, "obs 3"],
         keys: UInt32[Array, "obs key"],
-        durations: Float[Array, " time"],
-        wind_starts: Float[Array, " time"],
+        dt: float,
     ) -> Float[Array, "obs nx ny"]:
-        """Surface residence of every receptor of one case, as a traceable map."""
+        """The footprint of every receptor of one case, as a traceable map."""
         wind = self.wind_from_context(context)
-        x_edges, y_edges = _surface_edges(self.domain_x, self.domain_y)
 
-        def receptor_residence(
-            receptor: Float[Array, " 3"], key: PRNGKeyArray
+        def receptor_footprint(
+            receptor: Float[Array, " 3"], key: PRNGKeyArray | UInt32[Array, " key"]
         ) -> Float[Array, "nx ny"]:
-            return _surface_residence(
-                wind,
+            # the wind clock ends at the receptor, receptor_time = 0, in every case
+            return _surface_sensitivity(
                 receptor,
-                key,
+                wind,
                 self.turbulence,
-                jnp.asarray(x_edges),
-                jnp.asarray(y_edges),
-                durations,
-                wind_starts,
-                num_particles=self.n_particles,
+                self.domain_x,
+                self.domain_y,
+                n_particles=self.n_particles,
+                t_back=self.t_back,
+                dt=dt,
                 pbl_height=self.pbl_height,
-                mix_height=self.pbl_fraction * self.pbl_height,
+                pbl_fraction=self.pbl_fraction,
+                air_density=self.air_density,
+                receptor_time=0.0,
+                key=key,
             )
 
-        return jax.vmap(receptor_residence)(receptors, keys)
+        return jax.vmap(receptor_footprint)(receptors, keys)
 
     @property
     def state_signature(self) -> tuple[Any, ...]:
@@ -178,7 +184,7 @@ class FootprintSimulator:
         return (
             f"{wind.__module__}.{wind.__qualname__}",
             np.asarray(self.receptors).tolist(),
-            repr(self.turbulence),
+            _signature(self.turbulence),
             self.domain_x,
             self.domain_y,
             self.n_particles,
@@ -199,23 +205,14 @@ class FootprintSimulator:
         keys = jnp.stack(
             [jax.random.PRNGKey(seed + index) for index in range(len(receptors))]
         )
-        # the wind clock ends at the receptor, receptor_time = 0, in every case
-        durations, wind_starts = _backward_steps(self.t_back, dt, 0.0)
-        residence = self._compiled_residence(
+        footprint = self._compiled_footprints(
             jnp.asarray(context),
             jnp.asarray(receptors, dtype=float),
             keys,
-            durations,
-            wind_starts,
-        )
-        footprint = _flux_sensitivity(
-            residence,
-            self.n_particles,
-            self.air_density,
-            self.pbl_fraction * self.pbl_height,
+            dt=float(dt),
         )
         # F[i, s]: cells flattened row-major over (x, y)
-        return einx.id("obs x y -> obs (x y)", jnp.asarray(footprint))
+        return einx.id("obs x y -> obs (x y)", footprint)
 
 
 class MetContextPrior(pipekit_ops.Operator):

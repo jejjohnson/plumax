@@ -14,11 +14,12 @@ from hypothesis import given, settings, strategies as st
 
 pipekit_train = pytest.importorskip("pipekit_train")
 
+from tracerax.velocity import GriddedVelocity, cgrid_grids, uniform
+
 from plumax._src.errors import ParameterError
 from plumax.lagrangian import (
     FootprintEmulator,
     FootprintSimulator,
-    GriddedWind,
     HomogeneousTurbulence,
     MetContextPrior,
     assert_emulator_calibrated,
@@ -31,7 +32,6 @@ from plumax.lagrangian import (
     linear_gaussian_inversion,
     matern32_covariance,
     train_footprint_emulator,
-    uniform_wind,
 )
 
 
@@ -53,7 +53,7 @@ def _operational_met(key: jax.Array) -> jax.Array:
 
 def _wind(context: jax.Array):
     # traceable: FootprintSimulator compiles once over a traced context
-    return uniform_wind(context[0], context[1])
+    return uniform(jnp.array([context[0], context[1], 0.0]))
 
 
 def _untrained(n_cells: int = 5) -> FootprintEmulator:
@@ -223,14 +223,15 @@ def test_simulator_keeps_common_random_numbers_over_receptors():
 def test_simulator_matches_the_particle_model_on_a_gridded_wind():
     axis = jnp.arange(4.0) * 200.0 - 400.0
 
-    def gridded(context: jax.Array) -> GriddedWind:
+    def gridded(context: jax.Array) -> GriddedVelocity:
         # u varies along x, so every particle samples its own wind
         u = context[0] * (1.0 + axis / 2000.0)
         u_field = jnp.broadcast_to(u, (2, 4, 4, 4))
         v_field = context[1] * jnp.ones((2, 4, 4, 4))
         w_field = jnp.zeros((2, 4, 4, 4))
         times = jnp.array([-300.0, 0.0])
-        return GriddedWind(axis, axis, axis, times, u_field, v_field, w_field)
+        grids = cgrid_grids(times, axis, axis, axis)
+        return GriddedVelocity.fit(grids, (u_field, v_field, w_field))
 
     domain_x, domain_y = (-600.0, 0.0, 3), (-200.0, 200.0, 2)
     simulator = FootprintSimulator(
@@ -258,7 +259,7 @@ def test_simulator_matches_the_particle_model_on_a_gridded_wind():
 
 def test_simulator_rejects_a_wind_that_cannot_be_traced():
     def concrete_wind(context: jax.Array):
-        return uniform_wind(float(context[0]), float(context[1]))
+        return uniform(jnp.array([float(context[0]), float(context[1]), 0.0]))
 
     simulator = FootprintSimulator(
         wind_from_context=concrete_wind,

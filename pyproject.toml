@@ -90,6 +90,9 @@ dependencies = [
     # integrals sum with on integrix (plumax#247); 0.0.13 is the release
     # integrix 0.0.11 pins.
     "functax>=0.0.13",
+    # tracerax owns the particles of Tier II: the state, the loop and its steps,
+    # the gridded wind, the deposits and the footprint (plumax#410).
+    "tracerax>=0.0.5",
     # kernellib supplies the Matérn-3/2 kernel of the Tier II and Tier III
     # spatial priors and of the centreline prior (plumax#350). 0.0.22 is the
     # release with kernellib.functional.matern_kernel at nu = 1.5.
@@ -186,6 +189,7 @@ radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
 diagnostix = { git = "https://github.com/jejjohnson/diagnostix", tag = "v0.0.7" }
 geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.9" }
 integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.11" }
+tracerax = { git = "https://github.com/jejjohnson/tracerax", tag = "v0.0.5" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }

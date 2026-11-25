@@ -1,6 +1,6 @@
 """Turbulence parameterisations for the Lagrangian particle model.
 
-The Markov-1 Langevin model (see :mod:`plumax.lagrangian.particles`) needs two
+The Markov-1 Langevin model (``tracerax.advect.Langevin``) needs two
 fields at every particle location: the turbulent velocity standard deviations
 ``σ = (σ_u, σ_v, σ_w)`` [m/s] and the Lagrangian decorrelation timescales
 ``τ_L = (τ_u, τ_v, τ_w)`` [s]. Together they define the Ornstein–Uhlenbeck
@@ -27,9 +27,8 @@ References:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import einx
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 
@@ -44,8 +43,7 @@ _SIGMA_FLOOR: float = 1e-12
 DEFAULT_CORIOLIS_PARAMETER: float = 1e-4
 
 
-@dataclass(frozen=True)
-class HomogeneousTurbulence:
+class HomogeneousTurbulence(eqx.Module):
     """Spatially uniform, well-mixed-exact turbulence statistics.
 
     Attributes:
@@ -64,7 +62,7 @@ class HomogeneousTurbulence:
     tau_v: float
     tau_w: float
 
-    def __post_init__(self) -> None:
+    def __check_init__(self) -> None:
         for name in ("sigma_u", "sigma_v", "sigma_w"):
             require_positive(
                 name,
@@ -263,15 +261,12 @@ def hanna_profiles(
     return std, timescale
 
 
-@dataclass(frozen=True)
-class HannaTurbulence:
+class HannaTurbulence(eqx.Module):
     """Height-dependent Hanna (1982) turbulence as a ``TurbulenceModel``.
 
     Thin adapter that binds the surface-layer scales required by
     :func:`hanna_profiles` and exposes the ``at(z) -> (sigma, tau)`` interface
-    the integrator (:func:`plumax.lagrangian.langevin_step`,
-    :func:`~plumax.lagrangian.integrate_particles`,
-    :func:`~plumax.lagrangian.compute_footprint`) expects. Because ``σ_w`` varies
+    tracerax's Langevin step (``tracerax.advect.Langevin``) expects. Because ``σ_w`` varies
     with height, the well-mixed vertical drift correction ``½(1+v_w²/σ_w²)
     ∂σ_w²/∂z`` is non-zero — the inhomogeneous path that
     :class:`HomogeneousTurbulence` never exercises.
@@ -305,7 +300,7 @@ class HannaTurbulence:
     z_floor: float = 0.1
     coriolis_parameter: float = DEFAULT_CORIOLIS_PARAMETER
 
-    def __post_init__(self) -> None:
+    def __check_init__(self) -> None:
         require_positive("z_floor", self.z_floor, caller="HannaTurbulence")
 
     def at(self, z: jax.Array) -> tuple[jax.Array, jax.Array]:

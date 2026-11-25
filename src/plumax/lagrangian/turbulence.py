@@ -1,6 +1,6 @@
 """Turbulence parameterisations for the Lagrangian particle model.
 
-The Markov-1 Langevin model (see :mod:`plumax.lagrangian.particles`) needs two
+The Markov-1 Langevin model (``tracerax.advect.Langevin``) needs two
 fields at every particle location: the turbulent velocity standard deviations
 ``σ = (σ_u, σ_v, σ_w)`` [m/s] and the Lagrangian decorrelation timescales
 ``τ_L = (τ_u, τ_v, τ_w)`` [s]. Together they define the Ornstein–Uhlenbeck

@@ -11,6 +11,7 @@ import dataclasses
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from tracerax.velocity import uniform
 
 from plumax._src.errors import DomainError, GridMismatchError
 from plumax.coupled import (
@@ -25,7 +26,7 @@ from plumax.coupled import (
 from plumax.gauss_plume.dispersion import get_dispersion_params
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.gauss_plume.plume import plume_concentration_vmap
-from plumax.lagrangian import HomogeneousTurbulence, compute_footprint, uniform_wind
+from plumax.lagrangian import HomogeneousTurbulence, compute_footprint
 from plumax.les_fvm.fourdvar import build_forward
 
 
@@ -40,7 +41,7 @@ RECEPTORS = np.array([[150.0, 0.0], [250.0, 50.0]])
 def _lagrangian(**settings) -> LagrangianSource:
     return LagrangianSource.point(
         (50.0, 0.0),
-        winds=[uniform_wind(4.0, 0.0)],
+        winds=[uniform(jnp.array([4.0, 0.0, 0.0]))],
         turbulence=TURBULENCE,
         domain_x=DOMAIN_X,
         domain_y=DOMAIN_Y,
@@ -107,7 +108,7 @@ def test_identity_composition_all_tiers():
             TURBULENCE,
             DOMAIN_X,
             DOMAIN_Y,
-            wind=uniform_wind(4.0, 0.0),
+            wind=uniform(jnp.array([4.0, 0.0, 0.0])),
             seed=index,
             **PARTICLES,
         )
@@ -203,7 +204,7 @@ def test_backend_errors():
     with pytest.raises(DomainError):
         LagrangianSource.point(
             (5_000.0, 0.0),
-            winds=[uniform_wind(4.0, 0.0)],
+            winds=[uniform(jnp.array([4.0, 0.0, 0.0]))],
             turbulence=TURBULENCE,
             domain_x=DOMAIN_X,
             domain_y=DOMAIN_Y,
@@ -212,7 +213,7 @@ def test_backend_errors():
     with pytest.raises(GridMismatchError):
         LagrangianSource(
             emission_pattern=jnp.ones(3),
-            winds=(uniform_wind(4.0, 0.0),),
+            winds=(uniform(jnp.array([4.0, 0.0, 0.0])),),
             turbulence=TURBULENCE,
             domain_x=DOMAIN_X,
             domain_y=DOMAIN_Y,

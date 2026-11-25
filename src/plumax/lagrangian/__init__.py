@@ -1,7 +1,9 @@
 """Tier II — Lagrangian particle dispersion (JAX).
 
 A Markov-1 Langevin particle model: stochastic trajectories driven by mean wind
-plus an Ornstein–Uhlenbeck turbulent-velocity process. The bridge between the
+plus an Ornstein–Uhlenbeck turbulent-velocity process. The particles, the loop that
+moves them, the gridded wind, the deposits and the backward run are tracerax's; the
+closures, the plume and the inversions are here. The bridge between the
 analytical Tier I (no real wind variability) and the Eulerian Tier III. See the
 [Tier II design doc](https://github.com/jejjohnson/plumax/blob/main/docs/design/02_tier2_lagrangian.md).
 
@@ -10,14 +12,12 @@ inference)** and **Steps 3–4 (the footprint emulator and inference on it)**:
 
 - ``turbulence`` — ``HomogeneousTurbulence`` (well-mixed-exact) and Hanna (1982)
   Monin–Obukhov-similarity profiles.
-- ``particles`` — the Markov-1 integrator with the Thomson (1987) well-mixed
-  vertical drift correction and ground / PBL reflection.
 - ``concentration`` — forward steady concentration field via residence-time
   binning (``simulate_lagrangian``).
 - ``footprint`` — backward source–receptor sensitivity (``compute_footprint``).
-- ``wind_interp`` — ``GriddedWind``, the ``les_fvm`` C-grid wind (from a
-  ``MetField`` or a ``PrescribedWindField``) sampled at each particle; accepted
-  wherever a wind callable is.
+- ``wind_interp`` — the winds as ``tracerax.velocity`` velocities: the ``les_fvm``
+  C-grid wind of a ``MetField`` or a ``PrescribedWindField``, sampled at each
+  particle, and a uniform one from its speed and direction.
 - ``met_ensemble`` — one footprint per met-ensemble member
   (``ensemble_footprints``) and the Gaussian inversion that adds their spread
   as a transport-error covariance (``ensemble_inversion``).
@@ -44,11 +44,10 @@ from plumax.lagrangian import (
     footprint,
     inversion,
     met_ensemble,
-    particles,
     turbulence,
     wind_interp,
 )
-from plumax.lagrangian.concentration import bin_positions, simulate_lagrangian
+from plumax.lagrangian.concentration import simulate_lagrangian
 from plumax.lagrangian.emulator import (
     EmulatedFootprint,
     FootprintEmulator,
@@ -76,24 +75,15 @@ from plumax.lagrangian.met_ensemble import (
     ensemble_inversion,
     transport_covariance,
 )
-from plumax.lagrangian.particles import (
-    ParticleState,
-    integrate_particles,
-    langevin_step,
-    n_steps_for_horizon,
-    step_durations,
-    uniform_wind,
-    wind_from_speed_direction,
-)
 from plumax.lagrangian.turbulence import (
     HannaTurbulence,
     HomogeneousTurbulence,
     hanna_profiles,
 )
 from plumax.lagrangian.wind_interp import (
-    GriddedWind,
     gridded_wind_from_met,
     gridded_wind_from_prescribed,
+    wind_from_speed_direction,
 )
 
 
@@ -102,14 +92,11 @@ __all__ = [
     "FootprintEmulator",
     "FootprintSimulator",
     "GaussianPosterior",
-    "GriddedWind",
     "HannaTurbulence",
     "HomogeneousTurbulence",
     "LognormalPosterior",
     "MetContextPrior",
-    "ParticleState",
     "assert_emulator_calibrated",
-    "bin_positions",
     "compute_footprint",
     "concentration",
     "emulated_footprint",
@@ -124,22 +111,16 @@ __all__ = [
     "gridded_wind_from_prescribed",
     "hanna_profiles",
     "init_footprint_emulator",
-    "integrate_particles",
     "inversion",
-    "langevin_step",
     "linear_gaussian_inversion",
     "lognormal_inversion",
     "matern32_covariance",
     "met_ensemble",
-    "n_steps_for_horizon",
     "observation_covariance",
-    "particles",
     "simulate_lagrangian",
-    "step_durations",
     "train_footprint_emulator",
     "transport_covariance",
     "turbulence",
-    "uniform_wind",
     "wind_from_speed_direction",
     "wind_interp",
 ]

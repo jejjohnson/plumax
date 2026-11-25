@@ -3370,6 +3370,7 @@ dependencies = [
     { name = "pipekit-ops" },
     { name = "radtrax" },
     { name = "scipy" },
+    { name = "tracerax" },
     { name = "xarray" },
 ]
 
@@ -3480,6 +3481,7 @@ requires-dist = [
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
+    { name = "tracerax", git = "https://github.com/jejjohnson/tracerax?tag=v0.0.5" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
     { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.9" },
     { name = "xarray" },
@@ -4884,6 +4886,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/09/a9/6ba95a270c6f1fbcd8dac228323f2777d886cb206987444e4bce66338dd4/tqdm-4.67.3.tar.gz", hash = "sha256:7d825f03f89244ef73f1d4ce193cb1774a8179fd96f31d7e1dcde62092b960bb", size = 169598, upload-time = "2026-02-03T17:35:53.048Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/e1/3079a9ff9b8e11b846c6ac5c8b5bfb7ff225eee721825310c91b3b50304f/tqdm-4.67.3-py3-none-any.whl", hash = "sha256:ee1e4c0e59148062281c49d80b25b67771a127c85fc9676d3be5f243206826bf", size = 78374, upload-time = "2026-02-03T17:35:50.982Z" },
+]
+
+[[package]]
+name = "tracerax"
+version = "0.0.5"
+source = { git = "https://github.com/jejjohnson/tracerax?tag=v0.0.5#1ddaa3d044ec7d8496d792ef1c244239fe37fd77" }
+dependencies = [
+    { name = "diffrax" },
+    { name = "einx" },
+    { name = "equinox" },
+    { name = "functax" },
+    { name = "geophysix" },
+    { name = "integrix" },
+    { name = "jax" },
+    { name = "jaxtyping" },
 ]
 
 [[package]]
