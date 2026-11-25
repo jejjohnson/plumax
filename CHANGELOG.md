@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/jejjohnson/plumax/compare/v0.3.1...v0.4.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **les_fvm:** take the vertical conditions, the periodic wraps and the vertical terms from gridax ([#402](https://github.com/jejjohnson/plumax/issues/402))
+* **les_fvm:** build the Eulerian model on gridax in place of finitevolx ([#399](https://github.com/jejjohnson/plumax/issues/399))
+
+### Code Refactoring
+
+* **les_fvm:** build the Eulerian model on gridax in place of finitevolx ([#399](https://github.com/jejjohnson/plumax/issues/399)) ([dfd9ee4](https://github.com/jejjohnson/plumax/commit/dfd9ee4a65c4e4a222c9badf933583960dc06dab))
+* **les_fvm:** take the vertical conditions, the periodic wraps and the vertical terms from gridax ([#402](https://github.com/jejjohnson/plumax/issues/402)) ([c3e692d](https://github.com/jejjohnson/plumax/commit/c3e692d40c0799c1352071db3421e90fd5b23a51))
+
 ## [0.3.1](https://github.com/jejjohnson/plumax/compare/v0.3.0...v0.3.1) (2026-11-24)
 
 
