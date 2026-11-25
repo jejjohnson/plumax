@@ -339,6 +339,26 @@ def test_fixed_step_solver_runs_within_stability_bound():
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("solver", ["tsit5", "dopri5"])
+def test_adaptive_solver_is_linear_in_the_emission_rate(solver):
+    # atol is in kg/m³: a plume below it has no error to control, and only the
+    # cap on the step keeps the solve stable
+    def concentration(rate: float):
+        ds = simulate_eulerian_dispersion(
+            **_common_kwargs(
+                solver=solver, emission_rate=rate, t_end=100.0, save_interval=50.0
+            )
+        )
+        return ds["concentration"].values / rate
+
+    strong, weak = concentration(0.1), concentration(1e-5)
+    peak = strong.max()
+    np.testing.assert_allclose(weak, strong, rtol=0.0, atol=1e-3 * peak)
+    assert strong.min() > -1e-6 * peak
+    assert weak.min() > -1e-6 * peak
+
+
+@pytest.mark.slow
 def test_adaptive_solver_skips_stability_guard():
     # The guard only applies to fixed-step solvers; an adaptive solver with a
     # large dt0 (used only as the initial step) is not rejected.
