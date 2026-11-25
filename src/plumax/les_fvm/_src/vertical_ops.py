@@ -1,15 +1,14 @@
 """Vertical ∂z / flux / Laplacian helpers.
 
-finitevolX's 3-D operators are staggered only in the horizontal plane —
-``Advection3D``/``Diffusion3D``/``Difference3D`` treat the vertical axis as a
-batch dimension.  To close the passive-tracer transport equation
+The operators ``les_fvm`` takes from gridax, :func:`gridax.advect` and
+:func:`gridax.diffuse`, are horizontal, level by level.  To close the passive-tracer transport equation
 
     ∂C/∂t + ∇·(u C) = ∇·(K ∇C) + S,
 
 we need the vertical flux ``∂_z(w C)`` and the vertical diffusion
 ``∂_z(K_z ∂_z C)``.  These tiny wrappers live here rather than inside
 ``advection.py`` / ``diffusion.py`` so the boundaries between "horizontal
-operators provided by finitevolX" and "vertical operators provided by us"
+operators provided by gridax" and "vertical operators provided by us"
 stay visible.
 
 Conventions

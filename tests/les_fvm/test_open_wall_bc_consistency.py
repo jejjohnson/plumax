@@ -206,16 +206,13 @@ def test_rhs_runs_and_is_interior_only():
     assert float(jnp.max(jnp.abs(out[:, :, 0]))) == 0.0
 
 
-def test_periodic_axes_rejects_half_periodic_axis():
-    import pytest
-
+def test_half_periodic_axis_is_rejected():
     # west periodic, east Dirichlet — a half-periodic x-axis is ill-defined.
-    hbc, _ = build_default_concentration_bc(
-        bc_x=(("periodic", 0.0), ("dirichlet", 0.0)),
-        bc_y=("neumann", "neumann"),
-    )
-    with pytest.raises(ValueError, match=r"only one x-face"):
-        periodic_axes(hbc)
+    with pytest.raises(ValueError, match=r"both x faces must be periodic"):
+        build_default_concentration_bc(
+            bc_x=(("periodic", 0.0), ("dirichlet", 0.0)),
+            bc_y=("neumann", "neumann"),
+        )
 
 
 def test_periodic_axes_detection():

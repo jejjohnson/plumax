@@ -9,7 +9,7 @@ single pytree leaf that diffrax can JIT as ``term = ODETerm(rhs)``.
 from __future__ import annotations
 
 import equinox as eqx
-import finitevolx as fvx
+from gridax import embed, interior
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
 
@@ -63,7 +63,7 @@ class EulerianDispersionRHS(eqx.Module):
         del args
         # Enforce BCs before reading neighbours in the advection/diffusion
         # stencils so ghost cells reflect the current physical BC state. The
-        # horizontal operators run in finitevolX ``wall="open"`` mode, so these
+        # horizontal operators run in gridax ``wall="open"`` mode, so these
         # ghost values drive the lateral wall fluxes; the vertical operators
         # read the top/bottom ghost slices directly.
         #
@@ -106,9 +106,8 @@ class EulerianDispersionRHS(eqx.Module):
             periodic=periodic,
         )
         src = self.source(t)
-        # Keep ghost-cell entries of the tendency zero (finitevolX `interior`
-        # idiom, no materialised mask): the integrator writes only to the
-        # interior, and the BC pass above already updated the ghost ring of the
-        # state.
-        rhs = adv + diff + src
-        return fvx.interior(rhs[1:-1, 1:-1, 1:-1], rhs)
+        # Keep ghost-cell entries of the tendency zero: the integrator writes
+        # only to the interior, and the BC pass above already updated the ghost
+        # ring of the state.
+        grid = self.plume_grid.grid
+        return embed(interior(adv + diff + src, grid), grid)

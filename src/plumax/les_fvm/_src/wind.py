@@ -78,9 +78,9 @@ def _embed_interior(
     values are copied outward.  This is a safe default because the
     advection/diffusion operators only read from ghost cells via
     first-order stencils, and edge-padding is consistent with both
-    ``Outflow1D`` and a zero-gradient ``Neumann1D`` BC on the wind.
+    ``Outflow`` and a zero-gradient ``Neumann`` BC on the wind.
     """
-    del full_shape  # Every axis gets exactly one ghost ring in finitevolX.
+    del full_shape  # Every axis gets exactly one ghost ring in gridax.
     return jnp.pad(interior, ((1, 1), (1, 1), (1, 1)), mode="edge")
 
 

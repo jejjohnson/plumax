@@ -1,13 +1,13 @@
 """3-D flux-form advection of a passive tracer.
 
 The horizontal contribution ``-∇_h · (u_h C)`` is delegated to
-:class:`finitevolx.Advection3D`, which applies a WENO/TVD reconstruction
+:func:`gridax.advect`, which applies a WENO/TVD reconstruction
 at U- and V-faces for every z-level.  The vertical contribution
 ``-∂_z(w C)`` is assembled by :func:`_vertical_ops.vertical_advection_tendency`
 with a first-order upwind reconstruction at k-faces.
 
-Available reconstruction methods for the horizontal term mirror
-finitevolX's 3-D advection dispatch: ``upwind1``, ``weno3``, ``weno5``,
+Available reconstruction methods for the horizontal term are the schemes of
+:mod:`gridax.schemes`, by name: ``upwind1``, ``weno3``, ``weno5``,
 ``weno7``, ``weno9``, ``minmod``, ``van_leer``, ``superbee``, ``mc``,
 ``naive``.  The vertical term is always
 first-order upwind — vertical resolution is typically too coarse for a
@@ -18,11 +18,36 @@ monotone by construction, which matters for a non-negative tracer.
 from __future__ import annotations
 
 import equinox as eqx
-from finitevolx import Advection3D
+from gridax import advect
+from gridax.schemes import TVD, WENO, Centred, Scheme, Upwind
 from jaxtyping import Array, Float
 
 from plumax.les_fvm._src.vertical_ops import vertical_advection_tendency
 from plumax.les_fvm.grid import PlumeGrid3D
+
+
+#: The horizontal reconstruction of each ``method`` name.
+_SCHEMES: dict[str, Scheme] = {
+    "upwind1": Upwind(1),
+    "weno3": WENO(3),
+    "weno5": WENO(5),
+    "weno7": WENO(7),
+    "weno9": WENO(9),
+    "minmod": TVD("minmod"),
+    "van_leer": TVD("van_leer"),
+    "superbee": TVD("superbee"),
+    "mc": TVD("mc"),
+    "naive": Centred(2),
+}
+
+
+def _scheme(method: str) -> Scheme:
+    """Return the gridax scheme of a ``method`` name."""
+    if method not in _SCHEMES:
+        raise ValueError(
+            f"Unknown method: {method!r}; choose one of {sorted(_SCHEMES)}."
+        )
+    return _SCHEMES[method]
 
 
 @eqx.filter_jit
@@ -51,7 +76,8 @@ def advection_tendency(
         Grid the fields live on.
     method : str, default ``"weno5"``
         Horizontal reconstruction scheme.  Passed through to
-        :class:`finitevolx.Advection3D`.
+        :func:`gridax.advect`, one of the names listed in the module
+        docstring.
     periodic : tuple[bool, bool], default ``(False, False)``
         ``(x_periodic, y_periodic)``.  On a periodic axis the normal-velocity
         ghost face is *wrapped* (rather than left edge-padded) so the two
@@ -65,9 +91,14 @@ def advection_tendency(
     Float[Array, "Nz Ny Nx"]
         Advective tendency at T-points, zero on every ghost face.
 
+    Raises
+    ------
+    ValueError
+        If ``method`` is unknown.
+
     Notes
     -----
-    The horizontal operator runs in finitevolX ``wall="open"`` mode, so the
+    The horizontal operator runs in gridax ``wall="open"`` mode, so the
     lateral domain-wall face fluxes are assembled from the ghost ring
     (first-order upwind against the wall, high-order ``method`` in the
     interior).  The caller must fill the ghost cells with the desired lateral
@@ -83,7 +114,8 @@ def advection_tendency(
         u = u.at[:, :, 0].set(u[:, :, -2]).at[:, :, -1].set(u[:, :, 1])
     if y_periodic:
         v = v.at[:, 0, :].set(v[:, -2, :]).at[:, -1, :].set(v[:, 1, :])
-    horizontal_op = Advection3D(grid=plume_grid.grid)
-    horizontal = horizontal_op(concentration, u, v, method=method, wall="open")
+    horizontal = advect(
+        concentration, u, v, plume_grid.grid, scheme=_scheme(method), wall="open"
+    )
     vertical = vertical_advection_tendency(concentration, w, plume_grid.dz)
     return horizontal + vertical

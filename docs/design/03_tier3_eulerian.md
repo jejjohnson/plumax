@@ -1,6 +1,6 @@
 # Tier III: Eulerian finite-volume transport
 
-**Forward model:** full PDE solved on a grid. Uses [`finitevolX`](https://github.com/jejjohnson/finitevolX) for spatial discretisation and [`spectraldiffx`](https://github.com/jejjohnson/spectraldiffx) for spectral / periodic-domain operators.
+**Forward model:** full PDE solved on a grid. Uses [`gridax`](https://github.com/jejjohnson/gridax) for spatial discretisation and [`spectraldiffx`](https://github.com/jejjohnson/spectraldiffx) for spectral / periodic-domain operators.
 
 This is the gold-standard physics tier, with full mass conservation, arbitrary wind fields and support for chemistry and deposition. It is also the most expensive, so emulators (Step 3) are essential, not optional.
 
@@ -42,7 +42,7 @@ Inflow from a coarser global model (CAMS, GEOS-Chem) is uncertain. Lateral-BC er
 
 ### Spatial / temporal discretisation
 
-Cell-centred FV with flux-limited advection via `finitevolX`; explicit RK or IMEX for stiff diffusion; `spectraldiffx` for periodic / global domains.
+Cell-centred FV with flux-limited advection via `gridax`; explicit RK or IMEX for stiff diffusion; `spectraldiffx` for periodic / global domains.
 
 ### Build order within Tier III
 
@@ -231,7 +231,7 @@ Conditional flow over images vs. score-based diffusion, the same trade-off as Ti
 ## (6) Improve
 
 - **Multi-species coupling.** Add CO and CO₂ tracers; their source ratios constrain CH₄ source attribution (e.g. fossil vs. agricultural).
-- **Adaptive grid refinement.** Refine near sources, coarsen elsewhere. `finitevolX` may need primitives for this.
+- **Adaptive grid refinement.** Refine near sources, coarsen elsewhere. `gridax` may need primitives for this.
 - **Online DA.** Assimilate observations as they arrive (rolling-window 4D-Var, or `filterax`'s ensemble Kalman smoother).
 - **Sub-grid plume reconstruction.** When a source is sub-grid, the FV solver smears it; pair Tier III with a Tier I plume in the near-field for better point-source representation.
 - **Hierarchical Matérn length-scale.** Promote $\ell$ to a hyperparameter with its own posterior, so the data choose the regularisation scale (mirrors Tier II).

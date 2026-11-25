@@ -4,7 +4,7 @@ title: "Eulerian 3-D dispersion (L2): derivation and numerical scheme"
 
 # Eulerian 3-D dispersion: derivation and finite-volume discretisation
 
-This note derives the equations solved by `plumax.les_fvm` and explains how the terms map onto the `finitevolX` Arakawa C-grid operators. The L2 model sits between the analytic Gaussian puff (L1, `plumax.gauss_puff`) and a full resolved-flow LES (L3, future port): it evolves a passive methane tracer on a 3-D Cartesian grid under a prescribed wind field with a K-theory (gradient-diffusion) closure. No turbulence is resolved, but we get full 3-D transport with spatially varying wind and physically realistic boundaries (ground, inlet, outlet) that the Gaussian puff cannot represent.
+This note derives the equations solved by `plumax.les_fvm` and explains how the terms map onto the `gridax` Arakawa C-grid operators. The L2 model sits between the analytic Gaussian puff (L1, `plumax.gauss_puff`) and a full resolved-flow LES (L3, future port): it evolves a passive methane tracer on a 3-D Cartesian grid under a prescribed wind field with a K-theory (gradient-diffusion) closure. No turbulence is resolved, but we get full 3-D transport with spatially varying wind and physically realistic boundaries (ground, inlet, outlet) that the Gaussian puff cannot represent.
 
 ## 1. Governing equation
 
@@ -27,13 +27,13 @@ with prescribed 3-D wind $\vec u(\vec x, t) = (u, v, w)$, diagonal eddy diffusiv
 
 ### 3.1 Arakawa C-grid
 
-Fields live on a Cartesian 3-D Arakawa C-grid (`finitevolx.CartesianGrid3D`). The horizontal stagger is classical:
+Fields live on a Cartesian 3-D Arakawa C-grid (`gridax.CartesianCGrid3D`). The horizontal stagger is classical:
 
 - $C, w, K$ at T-points (cell centres);
 - $u$ at U-points (east faces);
 - $v$ at V-points (north faces).
 
-The vertical is collocated at T-points, as finitevolX's 3-D operators treat $z$ as a batch axis and so there is no vertical staggering inside a field array. Arrays have shape ``[Nz, Ny, Nx]`` with one ghost cell per axis for boundary conditions; the interior spans `[1:-1, 1:-1, 1:-1]`.
+The vertical is collocated at T-points, as the gridax operators used here are horizontal, level by level, and so there is no vertical staggering inside a field array. Arrays have shape ``[Nz, Ny, Nx]`` with one ghost cell per axis for boundary conditions; the interior spans `[1:-1, 1:-1, 1:-1]`.
 
 ### 3.2 Advection term
 
@@ -43,7 +43,7 @@ $$
 \nabla \cdot (\vec u C) \;=\; \partial_x(u C) + \partial_y(v C) + \partial_z(w C).
 $$
 
-The horizontal part (two terms per z-level, always acting in the (y, x) plane) is delegated to `finitevolx.Advection3D`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is built by `les_fvm._vertical_ops.vertical_advection_tendency` as a first-order upwind flux at k-faces:
+The horizontal part (two terms per z-level, always acting in the (y, x) plane) is delegated to `gridax.advect`, which applies a WENO5 (default) or user-chosen reconstruction at U- and V-faces for every z-level. The vertical part is built by `les_fvm._vertical_ops.vertical_advection_tendency` as a first-order upwind flux at k-faces:
 
 $$
 \widehat{F}_{k+1/2} \;=\; \begin{cases} w_{k+1/2}\, C_k, & w_{k+1/2} > 0, \\ w_{k+1/2}\, C_{k+1}, & w_{k+1/2} \leq 0, \end{cases}
@@ -59,7 +59,7 @@ $$
 \nabla \cdot (\mathbf K \nabla C) \;=\; \partial_x(K_h \partial_x C) + \partial_y(K_h \partial_y C) + \partial_z(K_z \partial_z C).
 $$
 
-The horizontal Laplacian (first two terms) is computed per z-level by `finitevolx.Diffusion3D`. The vertical part is assembled by `_vertical_ops.vertical_diffusion_tendency` with face-averaged diffusivity and central finite differences on a uniform grid:
+The horizontal Laplacian (first two terms) is computed per z-level by `gridax.diffuse`, with a field $K_h$ averaged to the faces. The vertical part is assembled by `_vertical_ops.vertical_diffusion_tendency` with face-averaged diffusivity and central finite differences on a uniform grid:
 
 $$
 \partial_z(K_z \partial_z C)\big|_k \approx \frac{\tfrac12(K_{z,k} + K_{z,k+1})\,(C_{k+1} - C_k)/\Delta z \;-\; \tfrac12(K_{z,k-1} + K_{z,k})\,(C_k - C_{k-1})/\Delta z}{\Delta z}.
@@ -79,9 +79,9 @@ with $Z$ chosen so that $\int \rho_s\, \mathrm d V = 1$ over the interior (discr
 
 ## 4. Boundary conditions
 
-finitevolX ships 2-D BC atoms (`Dirichlet1D`, `Neumann1D`, `Outflow1D`, `Periodic1D`, ...) that update a ghost ring on a `[Ny, Nx]` field. Applying them to a 3-D field needs two composable helpers that live in `les_fvm.boundary`:
+The ghost ring of a 3-D field is filled by two composable helpers that live in `les_fvm.boundary`:
 
-1. `HorizontalBC`: wraps a `finitevolx.BoundaryConditionSet` and vectorises it with `eqx.filter_vmap` over the z-axis, so every z-slice receives the same per-face BC update.
+1. `HorizontalBC`: holds a `gridax.BC` with the condition of each lateral face (`Dirichlet`, `Neumann`, `Outflow`, `Periodic`) and fills every z-slice with `gridax.fill_ghosts`.
 2. `VerticalBC`: directly updates the `[0, :, :]` and `[-1, :, :]` ghost slices with `{Dirichlet, Neumann, Outflow, Periodic}` flavours.
 
 The default concentration BCs are:
@@ -94,7 +94,7 @@ These are all overridable at the `simulate_eulerian_dispersion` call site.
 
 ## 5. Time integration
 
-The tendency is assembled in `les_fvm.dynamics.EulerianDispersionRHS` and wrapped in a `diffrax.ODETerm`. The default solver is `diffrax.Tsit5` (adaptive 5th-order Runge-Kutta) with PID step control; fixed-step alternatives (`diffrax.Heun`, `finitevolx.RK3SSP`) are available for benchmarking. Because the RHS is pure, monolithically JIT-compiled, and operates entirely on JAX arrays, the entire simulation (grid construction, wind evaluation, advection-diffusion tendencies, BC application and source injection) runs inside a single compiled graph.
+The tendency is assembled in `les_fvm.dynamics.EulerianDispersionRHS` and wrapped in a `diffrax.ODETerm`. The default solver is `diffrax.Tsit5` (adaptive 5th-order Runge-Kutta) with PID step control; fixed-step alternatives (`solver="heun"`, `solver="ssprk3"`) are available for benchmarking. Because the RHS is pure, monolithically JIT-compiled, and operates entirely on JAX arrays, the entire simulation (grid construction, wind evaluation, advection-diffusion tendencies, BC application and source injection) runs inside a single compiled graph.
 
 ## 6. CFL and stability
 

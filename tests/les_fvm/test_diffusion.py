@@ -53,6 +53,28 @@ def test_quadratic_z_field_matches_expected_tendency():
     np.testing.assert_allclose(t_int, 4.0, atol=1e-3)
 
 
+def test_field_diffusivity_is_second_order():
+    # ∂x(K ∂x C) for C = sin 2πx and K = 1 + ½ sin(2πx + 1)
+    def error(num_cells: int) -> float:
+        g = make_grid(
+            (0.0, 1.0, num_cells), (0.0, 1.0, 4), (0.0, 1.0, 4), dtype=jnp.float64
+        )
+        x = (np.arange(num_cells + 2) - 0.5) / num_cells
+        k = 2.0 * np.pi
+        kappa = 1.0 + 0.5 * np.sin(k * x + 1.0)
+        exact = 0.5 * k * np.cos(k * x + 1.0) * k * np.cos(k * x)
+        exact = exact - kappa * k**2 * np.sin(k * x)
+        eddy = EddyDiffusivity(
+            horizontal=jnp.broadcast_to(jnp.asarray(kappa[1:-1]), g.interior_shape),
+            vertical=0.0,
+        )
+        c = jnp.broadcast_to(jnp.asarray(np.sin(k * x)), g.shape)
+        tendency = diffusion_tendency(c, eddy, g, periodic=(True, True))
+        return float(np.abs(tendency[2, 2, 1:-1] - exact[1:-1]).max())
+
+    assert error(16) / error(32) > 3.5
+
+
 def test_pg_eddy_diffusivity_positive_values():
     eddy = pg_eddy_diffusivity(
         stability_class="C", wind_speed=5.0, reference_distance=200.0

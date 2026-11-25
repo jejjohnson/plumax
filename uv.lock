@@ -982,36 +982,6 @@ wheels = [
 ]
 
 [[package]]
-name = "finitediffx"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jax" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/59/7d/24398c0b011bc473a763c830e757d270f14327e64cf8ac27313a57e84f0a/finitediffx-0.1.0.tar.gz", hash = "sha256:52d9e67e551f5cad2b555ddf0ef84ab3f61011172b30b738a07c4776e6f3afbc", size = 20007, upload-time = "2023-07-27T14:07:10.346Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/0d/d3/818f9d6ca330f4aa78e618f24dac8a79c5d0825b00e9927c461a23539bb4/finitediffx-0.1.0-py3-none-any.whl", hash = "sha256:0b4a900453d8c7317f5e6668e47371cfe27020f075dd9890182561ab19e11572", size = 17714, upload-time = "2023-07-27T14:07:08.806Z" },
-]
-
-[[package]]
-name = "finitevolx"
-version = "0.0.45"
-source = { git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45#f3db7de46917af7c2f74b808a19e221be278d4f4" }
-dependencies = [
-    { name = "beartype" },
-    { name = "diffrax" },
-    { name = "equinox" },
-    { name = "gaussx" },
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "jaxtyping" },
-    { name = "lineax" },
-    { name = "scipy" },
-    { name = "spectraldiffx" },
-]
-
-[[package]]
 name = "fonttools"
 version = "4.63.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1501,6 +1471,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0f/31/07c861e8b0a782d2b17b3e8a7b9191420d30d4a9ce86a9882502d4d883eb/grain-0.2.18-cp314-cp314-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:09bef4e8290d06e79cfddc71e777d0b5f60316e5a43af61f8a3d0e6a2d9feccc", size = 610928, upload-time = "2026-06-17T20:57:58.901Z" },
     { url = "https://files.pythonhosted.org/packages/b7/60/b257f1173a6c71c67a1de81798427a7e73ceb71cd6573ccccf7f528018f5/grain-0.2.18-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fc7204490aff21620fbdbd69e088991a4ae1ebc31586456191c11f9f61a8c0e6", size = 610179, upload-time = "2026-06-17T20:58:00.154Z" },
     { url = "https://files.pythonhosted.org/packages/a2/c8/d3f559b3691559054d57779ce9e9dbb832c7631b622e94c8c092ce26ca18/grain-0.2.18-cp314-cp314-win_amd64.whl", hash = "sha256:fe83461d55e81c9c9cdba3d9d9ed0185db7b41cddb8e28223aa495ca3516877c", size = 547828, upload-time = "2026-06-17T20:58:01.419Z" },
+]
+
+[[package]]
+name = "gridax"
+version = "0.3.1"
+source = { git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.1#7c266f4d0ce192e1e732b09b95781f937fbedea5" }
+dependencies = [
+    { name = "geophysix" },
+    { name = "jaxtyping" },
+    { name = "numpy" },
+    { name = "pipekit-array", extra = ["compat", "numpy"] },
+    { name = "pipekit-ops" },
+    { name = "scipy" },
 ]
 
 [[package]]
@@ -1998,18 +1981,6 @@ dependencies = [
     { name = "jaxlib" },
     { name = "jaxtyping" },
     { name = "lineax" },
-]
-
-[[package]]
-name = "kernex"
-version = "0.2.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jax" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a0/de/8a338586754fe77efef4d45d2adeee1a8389b433a8b03fee8ba6bf3a04e6/kernex-0.2.1.tar.gz", hash = "sha256:102814a1f35879b1b6f57f2c113768266c566e2e2eed9dc96d4c25a90d5fbed7", size = 26955, upload-time = "2025-11-15T12:08:20.43Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/ff/108214af06b6b1259bdd66a7ccb49e370395c648cd2fbfe7872f705d9e40/kernex-0.2.1-py3-none-any.whl", hash = "sha256:5f02f70209765f4c6c01ef9ee80f5d739ee6cc0dda31a5f3a603a53c8081a53d", size = 30819, upload-time = "2025-11-15T12:08:19.187Z" },
 ]
 
 [[package]]
@@ -3420,10 +3391,10 @@ dependencies = [
     { name = "diffrax" },
     { name = "einx" },
     { name = "equinox" },
-    { name = "finitevolx" },
     { name = "functax" },
     { name = "gaussx" },
     { name = "geophysix" },
+    { name = "gridax" },
     { name = "integrix" },
     { name = "jax" },
     { name = "jaxlib" },
@@ -3516,13 +3487,13 @@ requires-dist = [
     { name = "diffrax", specifier = ">=0.6" },
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },
-    { name = "finitevolx", git = "https://github.com/jejjohnson/finitevolX?tag=v0.0.45" },
     { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.11" },
     { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
     { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.7" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
     { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=a02cebcbf1e57ff205507b8bd0f9687f6fc4184c" },
+    { name = "gridax", git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.1" },
     { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.6" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
@@ -4799,21 +4770,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/69/99/a6ca3beb3ccacb41fb3321d8a60e5566f9e6467601ef8eba6a17e1b89778/soupsieve-2.9.2.tar.gz", hash = "sha256:4a55d8cf158a9c2e587fa4922f1bbb91d68ac829e2d6f25403a85747c71daf74", size = 122445, upload-time = "2026-08-07T00:57:24.801Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/dc/ad025c1ee131eba60c69f4dd5779b18fcf1e6b21a343e2162a84d5d133c7/soupsieve-2.9.2-py3-none-any.whl", hash = "sha256:8089a26fd974ca7a1f30276d3d8492ab266ab15af581642dfe8aa162e0c1c823", size = 37370, upload-time = "2026-08-07T00:57:23.524Z" },
-]
-
-[[package]]
-name = "spectraldiffx"
-version = "0.0.13"
-source = { git = "https://github.com/jejjohnson/spectraldiffx.git?tag=0.0.13#a71d28697f1d22f2504d0f213c1d762a0ea3eb2c" }
-dependencies = [
-    { name = "beartype" },
-    { name = "equinox" },
-    { name = "finitediffx" },
-    { name = "gaussx" },
-    { name = "jax" },
-    { name = "jaxlib" },
-    { name = "jaxtyping" },
-    { name = "kernex" },
 ]
 
 [[package]]

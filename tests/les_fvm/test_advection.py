@@ -71,6 +71,20 @@ def test_advection_jit_compiles_and_is_deterministic():
     np.testing.assert_array_equal(np.asarray(t1), np.asarray(t2))
 
 
+@pytest.mark.parametrize("method", ["weno5", "van_leer"])
+def test_tendency_scales_with_the_field(method):
+    # a methane concentration is far below 1 kg/m³: the reconstruction must not
+    # hold a floor in the units of the field
+    g = _build_grid()
+    rng = np.random.default_rng(0)
+    c = jnp.asarray(rng.random(g.shape))
+    u, v, w = (jnp.asarray(rng.normal(size=g.shape)) for _ in range(3))
+    unit = advection_tendency(c, u, v, w, g, method=method)
+    small = advection_tendency(1e-7 * c, u, v, w, g, method=method)
+    scale = float(jnp.max(jnp.abs(unit)))
+    np.testing.assert_allclose(1e7 * np.asarray(small), unit, atol=1e-5 * scale)
+
+
 def test_unknown_advection_scheme_raises():
     g = _build_grid()
     c = jnp.ones(g.shape)

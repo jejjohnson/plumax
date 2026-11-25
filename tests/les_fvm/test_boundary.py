@@ -31,7 +31,7 @@ def test_default_periodic_y_horizontal_bc_wraps_edges():
     field = jnp.zeros(g.shape)
     # Place a marker at the southernmost interior row.
     field = field.at[2, 1, 2].set(7.0)
-    out = hbc(field, dx=g.dx, dy=g.dy)
+    out = hbc(field, g)
     # Periodic y: the north ghost row copies the southernmost interior row.
     np.testing.assert_allclose(float(out[2, -1, 2]), 7.0)
 
@@ -44,7 +44,7 @@ def test_default_dirichlet_west_sets_ghost_to_enforce_boundary_value():
         bc_z=("neumann", "neumann"),
     )
     field = jnp.full(g.shape, 5.0)
-    out = hbc(field, dx=g.dx, dy=g.dy)
+    out = hbc(field, g)
     # Dirichlet ghost is ``2 * value - interior`` so the half-cell average
     # of (ghost, interior) equals ``value``.
     np.testing.assert_allclose(float(out[2, 2, 0]), 2.0 * 3.0 - 5.0)
@@ -75,6 +75,32 @@ def test_vertical_neumann_nonzero_gradient_applies_offset():
     np.testing.assert_allclose(float(out[0, 3, 3]), 5.0 - 0.25 * g.dz, rtol=1e-6)
     # Top: outward sign is +1, ghost = 5 + (+1) * (-0.1) * dz.
     np.testing.assert_allclose(float(out[-1, 3, 3]), 5.0 - 0.1 * g.dz, rtol=1e-6)
+
+
+@pytest.mark.parametrize(
+    ("face", "axis", "side"),
+    [
+        ("west", 2, 0),
+        ("east", 2, -1),
+        ("south", 1, 0),
+        ("north", 1, -1),
+        ("bottom", 0, 0),
+        ("top", 0, -1),
+    ],
+)
+def test_neumann_value_is_the_coordinate_gradient_on_every_face(face, axis, side):
+    g = _build_grid()
+    hbc, vbc = build_default_concentration_bc(
+        bc_x=(("neumann", 0.25), ("neumann", 0.25)),
+        bc_y=(("neumann", 0.25), ("neumann", 0.25)),
+        bc_z=(("neumann", 0.25), ("neumann", 0.25)),
+    )
+    out = apply_boundary_conditions(jnp.full(g.shape, 5.0), hbc, vbc, g)
+    line = np.moveaxis(np.asarray(out), axis, 0)[:, 3, 3]
+    spacing = (g.dz, g.dy, g.dx)[axis]
+    # (C[k+1] − C[k]) / Δ across the face, along the positive axis
+    low, high = (line[0], line[1]) if side == 0 else (line[-2], line[-1])
+    np.testing.assert_allclose((high - low) / spacing, 0.25, rtol=1e-6)
 
 
 def test_vertical_dirichlet_sets_correct_ghost():

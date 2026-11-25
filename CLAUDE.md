@@ -70,7 +70,7 @@ public API is re-exported through `src/plumax/__init__.py`.
 |--------------------|---------|
 | `gauss_plume`      | Steady-state Gaussian plume (Briggs dispersion) + NumPyro emission-rate inference. **Tier I.** |
 | `gauss_puff`       | Time-resolved Gaussian puff (Pasquill–Gifford), diffrax wind integration, OU sub-grid turbulence. **Tier I.** |
-| `les_fvm`          | Eulerian 3-D advection–diffusion on an Arakawa C-grid via `finitevolX`. **Tier III.** |
+| `les_fvm`          | Eulerian 3-D advection–diffusion on an Arakawa C-grid via `gridax`. **Tier III.** |
 | `met`              | `MetField` gridded meteorology on the `les_fvm` analysis grid + `wrfout` / ERA5 loaders (`load_wrf`, `load_era5`), `LocalFrame` / `TimeAxis` + `to_prescribed_wind` adapter. **Tier 0.** |
 | `obs`              | L2 methane products (TROPOMI, EMIT, GHGSat) → `coupled.Instrument` + observed column-mass enhancement, via xrproducts. **Tier 0.** |
 | `priors`           | Inventory prior mean (area-mean flux on the analysis T-cells, via xrproducts) and the per-tile observation background. **Tier 0.** |

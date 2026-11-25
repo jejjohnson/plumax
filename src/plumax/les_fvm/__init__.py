@@ -5,19 +5,19 @@ transport equation
 
     ∂C/∂t + ∇·(u C) = ∇·(K ∇C) + S(x, t)
 
-on an Arakawa C-grid (via finitevolX), with a *prescribed* wind field
+on an Arakawa C-grid (via gridax), with a *prescribed* wind field
 ``u = (u, v, w)`` and K-theory (possibly anisotropic) eddy diffusivity
 ``K = diag(K_h, K_h, K_z)``.  No turbulence is resolved — this model sits
 between the analytic Gaussian puff (L1) and a full resolved-flow LES (L3).
 
 Submodules
 ----------
-- ``grid``          : CartesianGrid3D wrapper + coordinate helpers.
+- ``grid``          : CartesianCGrid3D wrapper + coordinate helpers.
 - ``wind``          : prescribed 3-D wind fields (uniform, sheared, time-varying).
 - ``source``        : Gaussian point-source and per-cell surface-flux terms.
-- ``advection``     : horizontal WENO advection (finitevolX) + vertical upwind.
+- ``advection``     : horizontal WENO advection (gridax) + vertical upwind.
 - ``diffusion``     : K-theory eddy diffusivity + anisotropic Laplacian.
-- ``boundary``      : BC application for 3-D fields (horizontal vmap + vertical).
+- ``boundary``      : BC application for 3-D fields (horizontal + vertical).
 - ``dynamics``      : diffrax-compatible RHS for the scalar transport equation.
 - ``simulate``      : high-level xarray-returning runner.
 - ``_vertical_ops`` : private — vertical ∂_z / flux / Laplacian helpers.

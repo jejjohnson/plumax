@@ -42,7 +42,6 @@ FORBIDDEN: dict[str, str] = {}
 ALLOWED: dict[str, str] = {
     "argminax": "argminax",
     "filterax": "filterax",
-    "finitevolx": "finitevolx",
     "functax": "functax",
     "gauss_flows": "gauss-flows",
     "gaussx": "gaussx",
@@ -56,16 +55,17 @@ ALLOWED: dict[str, str] = {
     "geoproducts": "geotoolz-products",
     "georeader": "georeader-spaceml",
     "geotoolz": "geotoolz",
+    "gridax": "gridax",
     "integrix": "integrix",
     "kernellib": "kernellib",
     "manipy": "manipy-jax",
-    "optax_bayes": "optax-bayes",
     "pipekit": "pipekit",
     "pipekit_array": "pipekit-array",
     "pipekit_cycle": "pipekit-cycle",
     "pipekit_evaluate": "pipekit-evaluate",
     "pipekit_experiment": "pipekit-experiment",
     "pipekit_jax": "pipekit-jax",
+    "pipekit_ops": "pipekit-ops",
     "pipekit_train": "pipekit-train",
     "plumax": "plumax",
     "pyrox": "pyrox",
@@ -75,16 +75,20 @@ ALLOWED: dict[str, str] = {
     "pyrox_nn": "pyrox-nn",
     "pyrox_ssm": "pyrox-ssm",
     "pyrox_xtreme": "pyrox-xtreme",
+    "radiomax": "radiomax",
     "radtrax": "radtrax",
     "sesmax": "sesmax",
     "sesmax_core": "sesmax-core",
-    "somax": "somax",
     "spectraldiffx": "spectraldiffx",
     "vardax": "vardax",
     "xrops": "xrtoolz-ops",
     "xrproducts": "xrtoolz-products",
     "xrtoolz": "xrtoolz",
 }
+
+#: packages of plumax that one of its packages may not use, because they sit in
+#: a higher package tier: distribution -> {import name: distribution}
+FORBIDDEN_INSIDE: dict[str, dict[str, str]] = {}
 
 #: imports left undeclared on purpose, kept in step with geostack:
 #: distribution -> reason
@@ -300,12 +304,13 @@ def test_packages_are_current() -> None:
 
 @pytest.mark.parametrize("dist", sorted(PACKAGES))
 def test_no_import_points_up(dist: str) -> None:
+    forbidden = FORBIDDEN | FORBIDDEN_INSIDE.get(dist, {})
     found = sorted(
         {
-            f"{f.relative_to(ROOT)}:{line} imports {top} ({FORBIDDEN[top]})"
+            f"{f.relative_to(ROOT)}:{line} imports {top} ({forbidden[top]})"
             for f, imports in _modules(PACKAGES[dist][1]).values()
             for name, _, line in imports
-            if (top := name.split(".")[0]) in FORBIDDEN
+            if (top := name.split(".")[0]) in forbidden
         }
     )
     assert not found, "\n".join(found)
@@ -314,7 +319,8 @@ def test_no_import_points_up(dist: str) -> None:
 @pytest.mark.parametrize("dist", sorted(PACKAGES))
 def test_no_dependency_points_up(dist: str) -> None:
     base, extras = _declared(PACKAGES[dist][0])
-    found = sorted((base | extras) & set(FORBIDDEN.values()))
+    forbidden = FORBIDDEN | FORBIDDEN_INSIDE.get(dist, {})
+    found = sorted((base | extras) & set(forbidden.values()))
     assert not found, f"{dist} declares {found}"
 
 

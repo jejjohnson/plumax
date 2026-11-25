@@ -11,7 +11,7 @@ anisotropic diagonal diffusivity — horizontal eddies are taken isotropic
 in (x, y) while the vertical component is smaller in a stable boundary
 layer.
 
-Horizontal diffusion is assembled via :class:`finitevolx.Diffusion3D`
+Horizontal diffusion is assembled via :func:`gridax.diffuse`
 (one 2-D Laplacian per z-level) and vertical diffusion by the local
 :func:`_vertical_ops.vertical_diffusion_tendency` helper.
 
@@ -36,12 +36,13 @@ from typing import TYPE_CHECKING
 
 import einx
 import equinox as eqx
-import jax
 import jax.numpy as jnp
-from finitevolx import (
-    Diffusion3D,
-    avg_xy_bwd,
-    shear_strain,
+from gridax import (
+    avg_xbwd_ybwd_2d,
+    diff_x_fwd_2d,
+    diff_y_fwd_2d,
+    diffuse,
+    interior,
     tensor_strain,
 )
 from jax.typing import ArrayLike
@@ -128,7 +129,7 @@ def diffusion_tendency(
 
     Notes
     -----
-    The horizontal operator runs in finitevolX ``wall="open"`` mode, so the
+    The horizontal operator runs in gridax ``wall="open"`` mode, so the
     lateral wall diffusive fluxes ``K_h·(C_edge − C_ghost)/dx`` are assembled
     from the ghost ring.  The caller must fill the ghost cells with the
     desired lateral BC (Dirichlet / periodic) *before* calling — see
@@ -154,8 +155,9 @@ def diffusion_tendency(
             horizontal_diffusivity = wrapped.at[:, -1, :].set(
                 horizontal_diffusivity[:, 1, :]
             )
-    horizontal_op = Diffusion3D(grid=plume_grid.grid)
-    horizontal = horizontal_op(concentration, horizontal_diffusivity, wall="open")
+    horizontal = diffuse(
+        concentration, plume_grid.grid, kappa=horizontal_diffusivity, wall="open"
+    )
     vertical = vertical_diffusion_tendency(
         concentration, vertical_diffusivity, plume_grid.dz
     )
@@ -380,26 +382,20 @@ def smagorinsky_k_h(
     spacing_x, spacing_y = grid.dx, grid.dy
     wind_east, wind_north, _ = wind(jnp.asarray(t, dtype=grid.x.dtype))
 
-    def squared_deformation(
-        u_level: Float[Array, "Ny Nx"], v_level: Float[Array, "Ny Nx"]
-    ) -> Float[Array, "ny nx"]:
-        # D_T = ∂u/∂x − ∂v/∂y at T-points
-        tension = tensor_strain(u_level, v_level, spacing_x, spacing_y)[1:-1, 1:-1]
-        # D_S = ∂v/∂x + ∂u/∂y at corners. ``shear_strain`` zeroes its ghost
-        # ring, but corner row 0 and column 0 sit on the south and west walls,
-        # between the wind's ghost and first interior cells; pad one cell on
-        # those sides so they are computed from the wind's ghost ring too
-        padded_u = jnp.pad(u_level, ((1, 0), (1, 0)), mode="edge")
-        padded_v = jnp.pad(v_level, ((1, 0), (1, 0)), mode="edge")
-        shear = shear_strain(padded_u, padded_v, spacing_x, spacing_y)[1:, 1:]
-        # ⟨D_S²⟩ at T-points
-        shear_squared = avg_xy_bwd(shear**2)
-        # |D|² = D_T² + ⟨D_S²⟩
-        return tension**2 + shear_squared
-
-    deformation_squared = jax.vmap(squared_deformation)(
-        wind_east[1:-1], wind_north[1:-1]
-    )
+    # D_T = ∂u/∂x − ∂v/∂y at T-points
+    tension = interior(tensor_strain(wind_east, wind_north, grid.grid), grid.grid)
+    # D_S = ∂v/∂x + ∂u/∂y at corners. Corner row 0 and column 0 sit on the south
+    # and west walls, between the wind's ghost and first interior cells, and the
+    # stencils drop the outermost row and column of their input; pad one cell on
+    # those sides so these corners are computed from the wind's ghost ring
+    sides = ((0, 0), (1, 0), (1, 0))
+    padded_u = jnp.pad(wind_east[1:-1], sides, mode="edge")
+    padded_v = jnp.pad(wind_north[1:-1], sides, mode="edge")
+    shear = diff_x_fwd_2d(padded_v) / spacing_x + diff_y_fwd_2d(padded_u) / spacing_y
+    # ⟨D_S²⟩ at T-points; the average drops a last row and column
+    shear_squared = avg_xbwd_ybwd_2d(jnp.pad(shear**2, ((0, 0), (0, 1), (0, 1))))
+    # |D|² = D_T² + ⟨D_S²⟩
+    deformation_squared = tension**2 + shear_squared
     # |D| with a zero gradient at rest: √ has an infinite slope at 0, so take it of
     # 1 there (the double-where trick), keeping uniform-wind adjoints finite
     is_at_rest = deformation_squared == 0.0
