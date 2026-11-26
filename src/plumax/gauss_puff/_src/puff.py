@@ -28,6 +28,7 @@ Public surface
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -45,6 +46,7 @@ from plumax._src.dataset import label_concentrations
 from plumax._src.domain import check_domain, check_source, flat_mesh, node_axis
 from plumax._src.tracing import require_positive
 from plumax.gauss_plume._src.dispersion import check_stability
+from plumax.gauss_puff._src.wind import _check_time_resolution
 from plumax.gauss_puff.dispersion import (
     get_dispersion_scheme,
 )
@@ -83,6 +85,27 @@ def frequency_to_release_interval(release_frequency: float) -> float:
     return 1.0 / release_frequency
 
 
+def _count_steps(span: float, step: float) -> int:
+    """K = ⌈T/Δt⌉, snapped to the nearest integer within 1e-9 relative.
+
+    Plain ⌈T/Δt⌉ adds a step of zero length when the quotient is an integer that
+    floating point rounds just above: 2.1 / 0.15 is 14 steps and not 15. This is
+    tracerax's ``n_steps_for_horizon``; its future home is jejjohnson/integrix#110.
+
+    Examples:
+        >>> _count_steps(2.1, 0.15), _count_steps(10.5, 1.0), _count_steps(0.0, 5.0)
+        (14, 11, 0)
+    """
+    # q = T / Δt
+    quotient = span / step
+    nearest = round(quotient)
+    if abs(quotient - nearest) <= 1e-9 * max(1.0, nearest):
+        # a span much shorter than the step is still one step
+        return nearest if span == 0.0 else max(nearest, 1)
+    # K = ⌈q⌉
+    return math.ceil(quotient)
+
+
 def make_release_times(
     t_start: float,
     t_end: float,
@@ -101,13 +124,22 @@ def make_release_times(
     -------
     release_times : jnp.ndarray, shape (N,)
         Times ``[t_start, t_start + Δt, t_start + 2Δt, ...]`` with
-        ``Δt = 1 / release_frequency``, all strictly less than ``t_end``.
+        ``Δt = 1 / release_frequency``, all strictly less than ``t_end``, in
+        the default float dtype (float64 with 64-bit JAX).
+
+    Raises
+    ------
+    ValueError
+        If the window is empty, or the times are too far from their epoch for
+        the dtype to resolve a hundredth of ``Δt`` (float32 at a Unix time).
 
     Notes
     -----
-    The count is ``ceil((t_end − t_start) / Δt)``, so when the window is not an
-    exact multiple of ``Δt`` the **final, partial interval still gets a
-    release** (e.g. ``[0, 0.5)`` at 1 Hz yields one puff at ``t = 0``, and
+    The count is ``ceil((t_end − t_start) / Δt)``, snapped to the nearest
+    integer within 1e-9 relative, so a window of K whole intervals gets K
+    releases even where floating point rounds the quotient just above K. When
+    the window is not an exact multiple of ``Δt`` the **final, partial interval
+    still gets a release** (e.g. ``[0, 0.5)`` at 1 Hz yields one puff at ``t = 0``, and
     ``[0, 10.5)`` yields eleven). That trailing puff represents a shorter slice
     of the continuous source, so its emitted mass must be weighted by its actual
     interval duration — see :func:`release_durations` and how ``simulate_puff``
@@ -119,12 +151,15 @@ def make_release_times(
             f"(got t_start={t_start!r}, t_end={t_end!r})"
         )
     release_interval = frequency_to_release_interval(release_frequency)
-    # N = ⌈(t_end − t_start) / Δt⌉
-    num_puffs = int(np.ceil((t_end - t_start) / release_interval))
+    # N = ⌈(t_end − t_start) / Δt⌉, snapped within 1e-9 relative
+    num_puffs = _count_steps(t_end - t_start, release_interval)
     # t_i = t_start + i Δt
-    return jnp.asarray(
-        t_start + np.arange(num_puffs) * release_interval, dtype=jnp.float32
+    times = t_start + np.arange(num_puffs) * release_interval
+    release_times = jnp.asarray(times, dtype=float)
+    _check_time_resolution(
+        times, release_interval, release_times.dtype, caller="make_release_times"
     )
+    return release_times
 
 
 def release_durations(
@@ -150,13 +185,14 @@ def release_durations(
     Returns
     -------
     durations : jnp.ndarray, shape (N,)
-        Per-puff interval durations [s], all > 0.
+        Per-puff interval durations [s], all > 0, in the default float dtype.
     """
     rel = np.asarray(release_times, dtype=np.float64)
     if rel.size == 0:
-        return jnp.zeros((0,), dtype=jnp.float32)
+        return jnp.zeros((0,), dtype=float)
     edges = np.append(rel, float(t_end))
-    return jnp.asarray(np.diff(edges), dtype=jnp.float32)
+    # Δt_i = t_{i+1} − t_i, with t_N = t_end
+    return jnp.asarray(np.diff(edges), dtype=float)
 
 
 # ── Puff state container ─────────────────────────────────────────────────────
@@ -507,9 +543,11 @@ def simulate_puff(
 
     check_stability(stability_class, caller="simulate_puff", table=scheme_params_dict)
     check_source(source_location, caller="simulate_puff")
-    time_array = np.asarray(time_array, dtype=np.float32)
-    wind_speed = np.asarray(wind_speed, dtype=np.float32)
-    wind_direction = np.asarray(wind_direction, dtype=np.float32)
+    # the default float dtype: float64 with 64-bit JAX, else float32
+    dtype = jnp.result_type(float)
+    time_array = np.asarray(time_array, dtype=dtype)
+    wind_speed = np.asarray(wind_speed, dtype=dtype)
+    wind_direction = np.asarray(wind_direction, dtype=dtype)
     if time_array.ndim != 1 or time_array.size < 2:
         raise ValueError("simulate_puff: `time_array` must be 1-D with ≥ 2 entries")
     if wind_speed.shape != time_array.shape:
@@ -538,9 +576,9 @@ def simulate_puff(
     num_times = len(time_array)
 
     mesh_x_flat, mesh_y_flat, mesh_z_flat = flat_mesh(x_grid, y_grid, z_grid)
-    x_flat = jnp.asarray(mesh_x_flat, dtype=jnp.float32)
-    y_flat = jnp.asarray(mesh_y_flat, dtype=jnp.float32)
-    z_flat = jnp.asarray(mesh_z_flat, dtype=jnp.float32)
+    x_flat = jnp.asarray(mesh_x_flat, dtype=dtype)
+    y_flat = jnp.asarray(mesh_y_flat, dtype=dtype)
+    z_flat = jnp.asarray(mesh_z_flat, dtype=dtype)
 
     release_interval = frequency_to_release_interval(release_frequency)
     release_times = make_release_times(
@@ -559,9 +597,9 @@ def simulate_puff(
             "emission_rate", q_scalar, caller="simulate_puff", allow_zero=True
         )
         # m_i = Q Δt_i
-        puff_mass = jnp.asarray(q_scalar * durations, dtype=jnp.float32)
+        puff_mass = jnp.asarray(q_scalar * durations, dtype=dtype)
     else:
-        emission_array = np.asarray(emission_rate, dtype=np.float32)
+        emission_array = np.asarray(emission_rate, dtype=dtype)
         if emission_array.shape != (num_puffs,):
             raise ValueError(
                 f"simulate_puff: array `emission_rate` must have shape "
@@ -573,9 +611,7 @@ def simulate_puff(
             "emission_rate", emission_array, caller="simulate_puff", allow_zero=True
         )
         # m_i = Q_i Δt_i
-        puff_mass = jnp.asarray(
-            emission_array * np.asarray(durations), dtype=jnp.float32
-        )
+        puff_mass = jnp.asarray(emission_array * np.asarray(durations), dtype=dtype)
 
     schedule = WindSchedule.from_speed_direction(time_array, wind_speed, wind_direction)
 
@@ -588,15 +624,15 @@ def simulate_puff(
             seed=turbulence_seed,
         )
         position_disturbance = (
-            jnp.asarray(offset_x_np, dtype=jnp.float32),
-            jnp.asarray(offset_y_np, dtype=jnp.float32),
+            jnp.asarray(offset_x_np, dtype=dtype),
+            jnp.asarray(offset_y_np, dtype=dtype),
         )
     else:
         position_disturbance = None
 
     # (I_u, I_v, S) at every release and every output time, in one call; the
     # xarray entry point compiles its per-time field once
-    output_times = jnp.asarray(time_array, dtype=jnp.float32)
+    output_times = jnp.asarray(time_array, dtype=dtype)
     save_at = jnp.concatenate([release_times, output_times])
     east, north, travel = cumulative_wind_integrals(schedule, save_at)
     at_release = (east[:num_puffs], north[:num_puffs], travel[:num_puffs])
@@ -619,7 +655,7 @@ def simulate_puff(
             dispersion_fn,
         )
 
-    concentration = np.zeros((num_times, num_x, num_y, num_levels), dtype=np.float32)
+    concentration = np.zeros((num_times, num_x, num_y, num_levels), dtype=dtype)
     for time_index in range(num_times):
         output_index = num_puffs + time_index
         field_flat = field_at(

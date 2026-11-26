@@ -154,6 +154,9 @@ def wind_field_from_schedule(
 
     def interior_fn(time):
         east_at_time, north_at_time = schedule.wind_at(time)
+        # the grid's dtype: a float64 schedule on a float32 grid stays float32
+        east_at_time = jnp.asarray(east_at_time, dtype=ones.dtype)
+        north_at_time = jnp.asarray(north_at_time, dtype=ones.dtype)
         return east_at_time * ones, north_at_time * ones, up_field
 
     return PrescribedWindField(plume_grid=plume_grid, interior_fn=interior_fn)
