@@ -476,3 +476,47 @@ def test_simulate_puff_rejects_wrong_length_emission_series():
             time_array=time_array,
             release_frequency=1.0,
         )
+
+
+@pytest.mark.slow
+def test_evolve_puffs_equals_the_observation_path_of_the_model():
+    # #419: evolve_puffs and the model's observation path share one position rule
+    from plumax.gauss_puff._src.inference import _predict_observations
+    from plumax.gauss_puff.dispersion import get_dispersion_scheme
+
+    schedule = WindSchedule(
+        times=jnp.array([0.0, 60.0, 120.0, 180.0]),
+        u_wind=jnp.array([4.0, 5.0, 3.0, 2.0]),
+        v_wind=jnp.array([0.5, -1.0, 1.0, 0.0]),
+    )
+    release_times = jnp.arange(0.0, 150.0, 10.0)
+    mass = jnp.linspace(0.5, 1.5, release_times.shape[0])
+    source = (0.0, 0.0, 5.0)
+    params_table, dispersion_fn = get_dispersion_scheme("pg")
+    params = params_table["D"]
+    receptors = (
+        jnp.array([200.0, 400.0, 600.0]),
+        jnp.array([0.0, 20.0, -30.0]),
+        jnp.array([2.0, 5.0, 10.0]),
+    )
+    observation_times = jnp.array([90.0, 130.0, 175.0])
+    predicted = _predict_observations(
+        mass,
+        release_times,
+        receptors,
+        observation_times,
+        source,
+        schedule,
+        params,
+        dispersion_fn,
+    )
+    one_by_one = []
+    for index in range(3):
+        state = evolve_puffs(
+            schedule, release_times, observation_times[index], source, mass
+        )
+        receptor = tuple(axis[index : index + 1] for axis in receptors)
+        one_by_one.append(
+            simulate_puff_field(receptor, state, params, dispersion_fn)[0]
+        )
+    np.testing.assert_allclose(predicted, jnp.stack(one_by_one), rtol=1e-12, atol=0.0)

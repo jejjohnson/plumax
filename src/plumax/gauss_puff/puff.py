@@ -1,4 +1,4 @@
-"""Gaussian puff forward model (JAX + diffrax).
+"""Gaussian puff forward model (JAX).
 
 A continuous source releasing at rate ``Q(t)`` is represented by a sequence
 of instantaneous puffs at release times ``t_r^{(i)}`` carrying mass
@@ -21,7 +21,7 @@ Public surface
 - ``make_release_times``                 : build evenly spaced release times
 - ``PuffState``                           : eqx.Module bundling puff positions/mass
 - ``puff_concentration`` / ``puff_concentration_vmap`` : single-puff kernel
-- ``evolve_puffs``                        : release_times + wind → PuffState via diffrax
+- ``evolve_puffs``                        : release_times + wind → PuffState via the wind integrals
 - ``simulate_puff_field``                : JIT orchestrator, field at one time
 - ``simulate_puff``                       : xarray wrapper with ``time`` axis
 """

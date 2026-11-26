@@ -5,7 +5,7 @@ Sub-packages
 - ``coupled``      : multi-instrument coupled source inversion that composes
                      a transport tier with the observation operator (Tier IV).
 - ``gauss_plume``  : steady-state Gaussian plume (JAX + NumPyro).
-- ``gauss_puff``   : time-resolved Gaussian puff (JAX + diffrax + NumPyro),
+- ``gauss_puff``   : time-resolved Gaussian puff (JAX + integrix + NumPyro),
                      with optional Ornstein-Uhlenbeck sub-grid turbulence.
 - ``geo``          : plume operators on GeoArrays ported from geotoolz
                      (masks, footprints, IME, cross-sectional flux), behind

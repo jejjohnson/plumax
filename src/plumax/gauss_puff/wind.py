@@ -1,4 +1,4 @@
-"""Time-varying wind schedules with diffrax-based cumulative integrals.
+"""Time-varying wind schedules and their cumulative integrals.
 
 A Gaussian puff released at time ``t_r`` under a time-varying wind field
 ``V(t) = (u(t), v(t))`` satisfies the trivial ODE ``dX/dt = V(t)``, whose
@@ -14,15 +14,15 @@ current simulation time:
     I_v(t) = ∫_{t_0}^{t} v(τ) dτ                          [m]
     S(t)   = ∫_{t_0}^{t} √(u(τ)² + v(τ)²) dτ              [m]   (travel distance)
 
-We compute these with :func:`diffrax.diffeqsolve` driven by a piecewise
--linear wind interpolation, so the result is exact for piecewise-linear
-winds up to the solver tolerance, and handles arbitrary continuous winds
-with adaptive stepping.
+The wind is linear between its knots, so I_u and I_v are exact running
+trapezoid sums on the knots and the save times, and S is integrated per
+interval by adaptive Gauss–Kronrod (both from integrix). Both are
+differentiable in reverse mode.
 
 Public surface
 --------------
 - ``WindSchedule``              : equinox.Module wrapping (t, u, v) arrays
-- ``cumulative_wind_integrals`` : diffrax solve returning ``(I_u, I_v, S)``
+- ``cumulative_wind_integrals`` : running integrals ``(I_u, I_v, S)``
 """
 
 from __future__ import annotations

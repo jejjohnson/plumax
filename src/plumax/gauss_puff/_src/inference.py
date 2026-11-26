@@ -33,11 +33,11 @@ from plumax._src.scalar_emission import LognormalEmission
 from plumax._src.tracing import require_positive
 from plumax.gauss_plume._src.dispersion import check_stability
 from plumax.gauss_plume.likelihoods import GaussianNoise, Noise
+from plumax.gauss_puff._src.puff import _puffs_at
 from plumax.gauss_puff.dispersion import (
     get_dispersion_scheme,
 )
 from plumax.gauss_puff.puff import (
-    PuffState,
     frequency_to_release_interval,
     make_release_times,
     release_durations,
@@ -121,63 +121,29 @@ def _predict_observations(
 
     The wind integrals ``(I_u, I_v, S)`` at the release times are identical for
     every observation, so — unlike a per-observation :func:`evolve_puffs` call —
-    the cumulative integrals are solved **once** over ``release_times ∪
-    observation_times`` and then gathered per observation. This turns ``N_obs``
-    adaptive ODE solves per likelihood evaluation into one, without changing the
-    result (same integrals, to solver tolerance).
+    they are computed **once** over ``release_times ∪ observation_times`` and
+    then gathered per observation, where :func:`evolve_puffs`' own position
+    rule (``_puffs_at``) rebuilds the ensemble. The result equals one
+    :func:`evolve_puffs` per observation.
     """
     receptor_x, receptor_y, receptor_z = receptor_coords
-    src_x, src_y, src_z = source_location
 
-    # One diffrax solve over the union of release + observation times. SaveAt
-    # needs monotone times, so sort and unshuffle with the double-argsort trick.
+    # (I_u, I_v, S) at the releases, then at the observations, in one call
     all_times = jnp.concatenate([release_times, observation_times])
-    order = jnp.argsort(all_times)
-    east_sorted, north_sorted, travel_sorted = cumulative_wind_integrals(
-        schedule, all_times[order]
-    )
-    inv = jnp.argsort(order)
-    east_integral = east_sorted[inv]
-    north_integral = north_sorted[inv]
-    travel_integral = travel_sorted[inv]
-
+    east, north, travel = cumulative_wind_integrals(schedule, all_times)
     num_releases = release_times.shape[0]
-    east_release = east_integral[:num_releases]
-    north_release = north_integral[:num_releases]
-    travel_release = travel_integral[:num_releases]
-    east_obs = east_integral[num_releases:]
-    north_obs = north_integral[num_releases:]
-    travel_obs = travel_integral[num_releases:]
-
-    mass_arr = jnp.broadcast_to(jnp.asarray(emission_per_puff), release_times.shape)
+    at_release = (east[:num_releases], north[:num_releases], travel[:num_releases])
 
     def predict_one(
-        point_x,
-        point_y,
-        point_z,
-        point_time,
-        east_now,
-        north_now,
-        travel_now,
+        point_x, point_y, point_z, point_time, east_now, north_now, travel_now
     ):
-        # Rebuild the puff ensemble at point_time from the shared release-time
-        # integrals (mirrors evolve_puffs, but with no per-observation ODE solve).
-        active = release_times <= point_time
-        # x_i = x_src + I_u(t) − I_u(t_i)
-        position_x = src_x + jnp.where(active, east_now - east_release, 0.0)
-        # y_i = y_src + I_v(t) − I_v(t_i)
-        position_y = src_y + jnp.where(active, north_now - north_release, 0.0)
-        position_z = jnp.full_like(release_times, src_z)
-        # s_i = S(t) − S(t_i)
-        travel = jnp.where(active, travel_now - travel_release, 0.0)
-        mass = jnp.where(active, mass_arr, 0.0)
-        puff_state = PuffState(
-            release_times=release_times,
-            x=position_x,
-            y=position_y,
-            z=position_z,
-            travel_distance=travel,
-            mass=mass,
+        puff_state = _puffs_at(
+            point_time,
+            release_times,
+            at_release,
+            (east_now, north_now, travel_now),
+            source_location,
+            emission_per_puff,
         )
         single = simulate_puff_field(
             (
@@ -196,9 +162,9 @@ def _predict_observations(
         receptor_y,
         receptor_z,
         observation_times,
-        east_obs,
-        north_obs,
-        travel_obs,
+        east[num_releases:],
+        north[num_releases:],
+        travel[num_releases:],
     )
 
 
@@ -462,10 +428,9 @@ def _validate_inference_inputs(
             f"{func_name}: `wind_direction` shape {wind_direction_np.shape} must "
             f"match `wind_times` shape {wind_times_np.shape}"
         )
-    # The cumulative wind integrals are solved from schedule.times[0], so any
-    # release or observation time earlier than the first wind knot lands before
-    # the ODE's t0 and raises an opaque diffrax error deep inside the trace.
-    # Catch it here with a clear message. (Extrapolation past wind_times[-1] is
+    # The cumulative wind integrals start at schedule.times[0] and refuse an
+    # earlier time inside the trace; catch it here, before NUTS, with a message
+    # that names the argument. (Extrapolation past wind_times[-1] is
     # supported — see `cumulative_wind_integrals`.)
     wind_start = float(wind_times_np[0])
     if t_start < wind_start:

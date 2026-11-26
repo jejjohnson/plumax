@@ -1,4 +1,4 @@
-"""Gaussian puff forward model (JAX + diffrax).
+"""Gaussian puff forward model (JAX).
 
 A continuous source releasing at rate ``Q(t)`` is represented by a sequence
 of instantaneous puffs at release times ``t_r^{(i)}`` carrying mass
@@ -21,7 +21,7 @@ Public surface
 - ``make_release_times``                 : build evenly spaced release times
 - ``PuffState``                           : eqx.Module bundling puff positions/mass
 - ``puff_concentration`` / ``puff_concentration_vmap`` : single-puff kernel
-- ``evolve_puffs``                        : release_times + wind → PuffState via diffrax
+- ``evolve_puffs``                        : release_times + wind → PuffState via the wind integrals
 - ``simulate_puff_field``                : JIT orchestrator, field at one time
 - ``simulate_puff``                       : xarray wrapper with ``time`` axis
 """
@@ -258,6 +258,62 @@ puff_concentration_vmap = vmap(
 # ── Diffrax-driven puff evolution ────────────────────────────────────────────
 
 
+def _puffs_at(
+    current_time: Float[Array, ""],
+    release_times: Float[Array, " N"],
+    at_release: tuple[Float[Array, " N"], Float[Array, " N"], Float[Array, " N"]],
+    now: tuple[Float[Array, ""], Float[Array, ""], Float[Array, ""]],
+    source_location: tuple[float, float, float],
+    puff_mass: Float[Array, " N"] | float,
+    position_disturbance: tuple[Float[Array, " N"], Float[Array, " N"]] | None = None,
+) -> PuffState:
+    """The puff ensemble at ``current_time`` from the wind integrals.
+
+    x_i = x_s + I_u(t) − I_u(t_i) + Δx_i,  y_i = y_s + I_v(t) − I_v(t_i) + Δy_i,
+    s_i = S(t) − S(t_i), for released puffs (t_i ≤ t); a puff not yet released
+    sits at the source with no mass and no travel.
+
+    Args:
+        current_time: Evaluation time t [s].
+        release_times: Release times t_i [s].
+        at_release: ``(I_u, I_v, S)`` at the release times [m].
+        now: ``(I_u, I_v, S)`` at ``current_time`` [m].
+        source_location: ``(x, y, z)`` of the source [m].
+        puff_mass: Per-puff mass [kg], or one mass for all puffs.
+        position_disturbance: Per-puff ``(Δx, Δy)`` offsets [m], or ``None``.
+
+    Returns:
+        The puff state at ``current_time``.
+    """
+    src_x, src_y, src_z = source_location
+    east_release, north_release, travel_release = at_release
+    east_now, north_now, travel_now = now
+    active = release_times <= current_time
+    # x_i = x_src + I_u(t) − I_u(t_i)
+    position_x = src_x + jnp.where(active, east_now - east_release, 0.0)
+    # y_i = y_src + I_v(t) − I_v(t_i)
+    position_y = src_y + jnp.where(active, north_now - north_release, 0.0)
+    if position_disturbance is not None:
+        offset_x, offset_y = position_disturbance
+        # x_i = x_i + Δx_i
+        position_x = position_x + jnp.where(active, offset_x, 0.0)
+        # y_i = y_i + Δy_i
+        position_y = position_y + jnp.where(active, offset_y, 0.0)
+    position_z = jnp.full_like(release_times, src_z)
+    # s_i = S(t) − S(t_i)
+    travel = jnp.where(active, travel_now - travel_release, 0.0)
+    mass_arr = jnp.broadcast_to(jnp.asarray(puff_mass), release_times.shape)
+    mass = jnp.where(active, mass_arr, 0.0)
+    return PuffState(
+        release_times=release_times,
+        x=position_x,
+        y=position_y,
+        z=position_z,
+        travel_distance=travel,
+        mass=mass,
+    )
+
+
 @eqx.filter_jit
 def evolve_puffs(
     schedule: WindSchedule,
@@ -270,8 +326,8 @@ def evolve_puffs(
     """Advance a puff ensemble to ``current_time`` under a time-varying wind.
 
     Uses :func:`cumulative_wind_integrals` to compute ``(I_u, I_v, S)`` at the
-    release times and at ``current_time`` in a single diffrax solve, then
-    derives per-puff positions and travel distances as differences.
+    release times and at ``current_time`` in one call, then derives per-puff
+    positions and travel distances as differences.
 
     Puffs with ``release_times > current_time`` are "not yet released" — their
     mass is set to 0 and position is placed at the source, so they contribute
@@ -282,7 +338,7 @@ def evolve_puffs(
     schedule : WindSchedule
         Time-varying wind field.
     release_times : Float[Array, "N"]
-        Monotone increasing puff release times [s].
+        Puff release times [s], none before the schedule's first knot.
     current_time : Float[Array, ""]
         Evaluation time [s].
     source_location : tuple of float, (3,)
@@ -301,58 +357,20 @@ def evolve_puffs(
     puff_state : PuffState
         Puff positions, travel distances, and masses at ``current_time``.
     """
-    src_x, src_y, src_z = source_location
-
     current_time_array = jnp.asarray(current_time)
-    if release_times.shape[0] == 0:
-        # einx rejects a zero-size axis; with no releases only t is saved
-        save_at = einx.id(" -> 1", current_time_array)
-    else:
-        save_at = einx.id("N, -> (N + 1)", release_times, current_time_array)
-    sort_idx = jnp.argsort(save_at)
-    save_at_sorted = save_at[sort_idx]
-
-    east_sorted, north_sorted, travel_sorted = cumulative_wind_integrals(
-        schedule, save_at_sorted
-    )
-
-    unsort_idx = jnp.argsort(sort_idx)
-    east_integral = east_sorted[unsort_idx]
-    north_integral = north_sorted[unsort_idx]
-    travel_integral = travel_sorted[unsort_idx]
-
-    east_release = east_integral[:-1]
-    north_release = north_integral[:-1]
-    travel_release = travel_integral[:-1]
-    east_now = east_integral[-1]
-    north_now = north_integral[-1]
-    travel_now = travel_integral[-1]
-
-    active = release_times <= current_time
-    # x_i = x_src + I_u(t) − I_u(t_i)
-    position_x = src_x + jnp.where(active, east_now - east_release, 0.0)
-    # y_i = y_src + I_v(t) − I_v(t_i)
-    position_y = src_y + jnp.where(active, north_now - north_release, 0.0)
-    if position_disturbance is not None:
-        offset_x, offset_y = position_disturbance
-        # x_i = x_i + Δx_i
-        position_x = position_x + jnp.where(active, offset_x, 0.0)
-        # y_i = y_i + Δy_i
-        position_y = position_y + jnp.where(active, offset_y, 0.0)
-    position_z = jnp.full_like(release_times, src_z)
-    # s_i = S(t) − S(t_i)
-    travel = jnp.where(active, travel_now - travel_release, 0.0)
-
-    mass_arr = jnp.broadcast_to(jnp.asarray(puff_mass), release_times.shape)
-    mass = jnp.where(active, mass_arr, 0.0)
-
-    return PuffState(
-        release_times=release_times,
-        x=position_x,
-        y=position_y,
-        z=position_z,
-        travel_distance=travel,
-        mass=mass,
+    # the release times, then t
+    save_at = jnp.concatenate([release_times, einx.id(" -> 1", current_time_array)])
+    east, north, travel = cumulative_wind_integrals(schedule, save_at)
+    at_release = (east[:-1], north[:-1], travel[:-1])
+    now = (east[-1], north[-1], travel[-1])
+    return _puffs_at(
+        current_time_array,
+        release_times,
+        at_release,
+        now,
+        source_location,
+        puff_mass,
+        position_disturbance,
     )
 
 
@@ -432,7 +450,7 @@ def simulate_puff(
     """Simulate a time-resolved Gaussian-puff dispersion field on a 3-D grid.
 
     Wraps :func:`evolve_puffs` + :func:`simulate_puff_field` with grid
-    construction, a diffrax-driven time-varying wind solve, and optional
+    construction, the cumulative integrals of a time-varying wind, and optional
     column integration. Returns an :class:`xarray.Dataset` with variables
     on a ``(time, x, y, z)`` grid.
 
@@ -576,21 +594,39 @@ def simulate_puff(
     else:
         position_disturbance = None
 
-    concentration = np.zeros((num_times, num_x, num_y, num_levels), dtype=np.float32)
-    for time_index, t_current in enumerate(time_array):
-        puff_state = evolve_puffs(
-            schedule,
+    # (I_u, I_v, S) at every release and every output time, in one call; the
+    # xarray entry point compiles its per-time field once
+    output_times = jnp.asarray(time_array, dtype=jnp.float32)
+    save_at = jnp.concatenate([release_times, output_times])
+    east, north, travel = cumulative_wind_integrals(schedule, save_at)
+    at_release = (east[:num_puffs], north[:num_puffs], travel[:num_puffs])
+
+    @eqx.filter_jit
+    def field_at(current_time, east_now, north_now, travel_now):
+        puff_state = _puffs_at(
+            current_time,
             release_times,
-            jnp.asarray(float(t_current), dtype=jnp.float32),
+            at_release,
+            (east_now, north_now, travel_now),
             source_location,
             puff_mass,
-            position_disturbance=position_disturbance,
+            position_disturbance,
         )
-        field_flat = simulate_puff_field(
+        return simulate_puff_field(
             (x_flat, y_flat, z_flat),
             puff_state,
             dispersion_params,
             dispersion_fn,
+        )
+
+    concentration = np.zeros((num_times, num_x, num_y, num_levels), dtype=np.float32)
+    for time_index in range(num_times):
+        output_index = num_puffs + time_index
+        field_flat = field_at(
+            output_times[time_index],
+            east[output_index],
+            north[output_index],
+            travel[output_index],
         )
         field_np = np.asarray(field_flat)
         concentration[time_index] = einx.id(
@@ -623,7 +659,7 @@ def simulate_puff(
             "z": z_grid,
         },
         attrs={
-            "title": "Gaussian puff dispersion (JAX + diffrax)",
+            "title": "Gaussian puff dispersion (JAX)",
             "source_x": float(source_location[0]),
             "source_y": float(source_location[1]),
             "source_z": float(source_location[2]),
