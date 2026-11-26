@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
 import numpyro
 import pytest
 
@@ -142,3 +144,36 @@ def test_priors_sample_and_evaluate(cls_name):
         trace = numpyro.handlers.trace(model).get_trace()
     assert bool(trace["y_finite"]["value"])
     assert bool(trace["y_in_unit"]["value"])
+
+
+def test_probit_pod_keeps_its_lower_tail():
+    # ½ (1 + erf) returned exactly 0 at the prior medians, so log P_d was −∞
+    from scipy.special import ndtr
+
+    Q, U, p = jnp.array(100.0), jnp.array(10.0), jnp.array(7000.0)
+    expected = ndtr(-2.0 + np.log(100.0 / (10.0 * 7000.0)))
+    value = pf.ProbitPOD(beta_0=-2.0, beta_1=1.0)(Q, U, p)
+    np.testing.assert_allclose(float(value), expected, rtol=1e-12)
+
+    def log_pod(beta_0):
+        return jnp.log(pf.ProbitPOD(beta_0=beta_0, beta_1=1.0)(Q, U, p))
+
+    assert bool(jnp.isfinite(jax.grad(log_pod)(-2.0)))
+
+
+def test_cloglog_pod_keeps_its_lower_tail():
+    # 1 − exp(−e^η) was 37 % high at η = −37
+    eta = -12.0 + 5.0 * np.log(1.0 / (5.0 * 30.0))
+    value = pf.CloglogPOD(beta_0=-12.0, beta_1=5.0)(
+        jnp.array(1.0), jnp.array(5.0), jnp.array(30.0)
+    )
+    np.testing.assert_allclose(float(value), -np.expm1(-np.exp(eta)), rtol=1e-12)
+
+
+def test_lognorm_cdf_keeps_its_lower_tail():
+    from scipy.special import ndtr
+
+    from plumax.population.fitting import lognorm_cdf
+
+    value = lognorm_cdf(np.array([1.0]), 1e4, 1.0)[0]
+    np.testing.assert_allclose(value, ndtr(np.log(1.0 / 1e4)), rtol=1e-12)

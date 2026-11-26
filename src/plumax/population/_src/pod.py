@@ -41,7 +41,7 @@ from typing import ClassVar
 import equinox as eqx
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import erf as _jax_erf
+from jax.scipy.special import ndtr as _jax_ndtr
 from jax.typing import ArrayLike
 from jaxtyping import Float
 
@@ -893,8 +893,8 @@ class ProbitPOD(PriorTableMixin, eqx.Module):
         log_proxy = log_concentration_proxy(Q, U, p)
         # z = β₀ + β₁ x
         probit_score = self.beta_0 + self.beta_1 * log_proxy
-        # Φ(z) via the error function: Φ(z) = 0.5 · (1 + erf(z / √2))
-        return 0.5 * (1.0 + _jax_erf(probit_score / jnp.sqrt(2.0)))
+        # Φ(z), which keeps its lower tail (½ (1 + erf) rounds it to 0)
+        return _jax_ndtr(probit_score)
 
     _PRIORS: ClassVar[PriorTable] = {
         "beta_0": ("beta_0", lambda dist: dist.Normal(-2.0, 2.0)),
@@ -957,8 +957,8 @@ class CloglogPOD(PriorTableMixin, eqx.Module):
         log_proxy = log_concentration_proxy(Q, U, p)
         # η = β₀ + β₁ x
         linear_predictor = self.beta_0 + self.beta_1 * log_proxy
-        # P_d = 1 − exp(−e^η)
-        return 1.0 - jnp.exp(-jnp.exp(linear_predictor))
+        # P_d = 1 − exp(−e^η), as −expm1(−e^η) so a small P_d keeps its digits
+        return -jnp.expm1(-jnp.exp(linear_predictor))
 
     _PRIORS: ClassVar[PriorTable] = {
         "beta_0": ("beta_0", lambda dist: dist.Normal(-3.0, 2.0)),

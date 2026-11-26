@@ -166,3 +166,24 @@ def test_posterior_mean_and_standard_error_come_from_integrix() -> None:
         expected_error = np.std(draws, ddof=1) / np.sqrt(draws.size)
         np.testing.assert_allclose(errors[name], expected_error, rtol=1e-12)
         assert np.ndim(means[name]) == 0
+
+
+@pytest.mark.slow
+def test_the_pod_powerlaw_normaliser_keeps_its_tail_in_float32():
+    # 1 − ½ erfc rounded q(ξ) in float32, which put 1.4e-2 into log I(θ) at
+    # θ = (4.5, 20000, 1.0), multiplied by N in the likelihood
+    from numpyro.infer.util import log_density
+
+    from plumax.population.fitting import pod_powerlaw_model
+
+    params = {"alpha": 4.5, "x0": 20000.0, "sk": 1.0}
+
+    def log_likelihood():
+        fluxes = jnp.array([30000.0])
+        value, _ = log_density(pod_powerlaw_model, (fluxes, 10.0, 1e6), {}, params)
+        return float(value)
+
+    reference = log_likelihood()
+    with jax.enable_x64(False):
+        single = log_likelihood()
+    assert abs(single - reference) < 1e-3

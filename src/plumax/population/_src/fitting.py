@@ -37,7 +37,7 @@ import numpyro.distributions as dist
 import scipy.special
 from functax import quad as functax_quad
 from integrix import rule as integrix_rule
-from jax.scipy.special import erfc
+from jax.scipy.special import ndtr
 from jax.scipy.stats import norm as jax_norm
 from jax.typing import ArrayLike
 
@@ -85,7 +85,7 @@ X_MAX_DEFAULT = 1e6  # kg/hr — upper bound of power-law domain
 def lognorm_cdf(x: ArrayLike, x50: float, s: float) -> np.ndarray:
     """Lognormal CDF used as the probability-of-detection curve.
 
-    ``POD(x) = 1 − ½ · erfc((ln x − ln x₅₀) / (√2 · σ))``.
+    ``POD(x) = Φ((ln x − ln x₅₀) / σ)``, with Φ the standard normal CDF.
 
     Args:
         x: Emission rate [kg/hr]. Must be strictly positive. Shape ``(N,)``.
@@ -102,10 +102,8 @@ def lognorm_cdf(x: ArrayLike, x50: float, s: float) -> np.ndarray:
     require_positive("x", rates, caller="lognorm_cdf")
     require_positive("x50", x50, caller="lognorm_cdf")
     require_positive("s", s, caller="lognorm_cdf")
-    # P_d = 1 − ½ erfc((ln x − ln x₅₀) / (√2 s))
-    return 1.0 - 0.5 * scipy.special.erfc(
-        (np.log(rates) - np.log(x50)) / (np.sqrt(2.0) * s)
-    )
+    # P_d = Φ((ln x − ln x₅₀) / s), which keeps its lower tail
+    return scipy.special.ndtr((np.log(rates) - np.log(x50)) / s)
 
 
 def power_law(x: ArrayLike, alpha: float) -> np.ndarray:
@@ -155,10 +153,9 @@ def pod_powerlaw_model(
     sum_log_q = jnp.sum(jax_norm.logcdf(standardized_rate))
 
     log_grid = jnp.linspace(jnp.log(x_min), jnp.log(x_max), num_integration_points)
-    # q(ξ) = 1 − ½ erfc((ξ − ln x₀) / (√2 sk))
-    pod_on_grid = 1.0 - 0.5 * erfc(
-        (log_grid - jnp.log(pod_median)) / (pod_width * jnp.sqrt(2.0))
-    )
+    # q(ξ) = Φ((ξ − ln x₀) / sk), which keeps its lower tail (1 − ½ erfc
+    # lost it: 1.4e-2 in log I(θ) in float32)
+    pod_on_grid = ndtr((log_grid - jnp.log(pod_median)) / pod_width)
     # q(ξ) e^{(1 − α) ξ}
     integrand = pod_on_grid * jnp.exp(-exponent * log_grid + log_grid)
     # I(θ) = ∫ q(ξ) e^{(1 − α) ξ} dξ, trapezoid weights on the ξ grid
