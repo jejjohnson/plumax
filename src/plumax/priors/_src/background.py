@@ -37,7 +37,8 @@ def per_tile_background(
         Background b_n per receptor, in the units of ``columns``.
 
     Raises:
-        GridMismatchError: If ``receptors`` does not match ``columns``.
+        GridMismatchError: If ``receptors`` does not match ``columns``, or a
+            receptor's position is not finite.
         PlumaxError: If ``tile_m`` is not positive.
 
     Examples:
@@ -64,6 +65,14 @@ def per_tile_background(
             f"got {positions.shape}"
         )
     require_positive("tile_m", tile_m, caller="per_tile_background", error=PlumaxError)
+    placed = np.isfinite(positions).all(axis=1)
+    if not placed.all():
+        unplaced = np.flatnonzero(~placed)
+        raise GridMismatchError(
+            f"per_tile_background: {unplaced.size} receptor(s) have no finite "
+            f"position, the first at index {int(unplaced[0])}; a NaN position "
+            "would be cast into tile (0, 0)"
+        )
     # tile(𝐱) = (⌊x / ℓ⌋, ⌊y / ℓ⌋)
     tiles = np.floor(positions / tile_m).astype(np.int64)
     tile_x, tile_y = einx.id("obs c -> c obs", tiles)
