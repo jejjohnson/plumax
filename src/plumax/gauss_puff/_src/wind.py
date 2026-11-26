@@ -294,7 +294,14 @@ def _integrals(
         return speed_of(wind_east, wind_north)
 
     # S(t_n) = Σ_{m ≤ n} ∫_{t_{m−1}}^{t_m} |û(τ)| dτ
-    travel = integrix_adapt.cumulative_adaptive(rule, speed, nodes).value
+    travel_integral = integrix_adapt.cumulative_adaptive(rule, speed, nodes)
+    # an interval that ran out of subintervals would come back less accurate
+    travel = eqx.error_if(
+        travel_integral.value,
+        ~travel_integral.converged,
+        "cumulative_wind_integrals: the travel distance did not converge to "
+        "rtol and atol; loosen them or add knots",
+    )
     # n(s): the last node at or before the save time s
     where = jnp.searchsorted(nodes, save_at, side="right") - 1
     east, north = drift[0], drift[1]

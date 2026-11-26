@@ -124,7 +124,7 @@ $$
 \frac{\mathrm d}{\mathrm d t} \begin{pmatrix} I_u \\ I_v \\ s \end{pmatrix} \;=\; \begin{pmatrix} u(t) \\ v(t) \\ \sqrt{u(t)^2 + v(t)^2} \end{pmatrix}, \qquad \begin{pmatrix} I_u(t_0) \\ I_v(t_0) \\ s(t_0) \end{pmatrix} = \begin{pmatrix} 0 \\ 0 \\ 0 \end{pmatrix},
 $$ (eq-wind-ode)
 
-which is solved once with `diffrax.diffeqsolve` in `plumax.gauss_puff.wind.cumulative_wind_integrals`, evaluating at all release times and the current evaluation time in a single adaptive sweep. Puff-$i$ positions are then elementwise differences: $x_c^{(i)}(t) = x_0 + I_u(t) - I_u(t_0^{(i)})$, and likewise for $y_c^{(i)}, s^{(i)}$. This avoids any Python-level per-puff loop and keeps the forward model differentiable for NUTS.
+which `plumax.gauss_puff.wind.cumulative_wind_integrals` integrates at all release times and the current evaluation time together: $I_u$ and $I_v$ by the trapezoid rule on the knots and those times, which is exact for a piecewise-linear wind, and $s$ by adaptive Gauss–Kronrod on each interval, which resolves the kink where the wind passes through zero. Puff-$i$ positions are then elementwise differences: $x_c^{(i)}(t) = x_0 + I_u(t) - I_u(t_0^{(i)})$, and likewise for $y_c^{(i)}, s^{(i)}$. This avoids any Python-level per-puff loop and keeps the forward model differentiable for NUTS.
 
 ## 8. Continuous source as a superposition of puffs
 
