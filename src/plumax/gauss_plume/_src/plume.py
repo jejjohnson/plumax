@@ -31,6 +31,7 @@ from integrix import rule as integrix_rule
 from jax import jit, vmap
 from jax.typing import ArrayLike
 from jaxtyping import Float
+from pipekit_array.arrays import safe_atan2, safe_sqrt
 
 from plumax._src.dataset import label_concentrations
 from plumax._src.domain import (
@@ -96,8 +97,8 @@ def rotate_to_wind_frame(
     # Δy = y − y_s
     spacing_y = y - source_y
 
-    # θ = atan2(v, u)
-    angle = jnp.arctan2(wind_v, wind_u)
+    # θ = atan2(v, u), 0 with a zero gradient in calm air
+    angle = safe_atan2(jnp.asarray(wind_v), jnp.asarray(wind_u), jnp)
     cos_theta = jnp.cos(angle)
     sin_theta = jnp.sin(angle)
 
@@ -114,7 +115,8 @@ def rotate_to_wind_frame(
 # Minimum wind speed (below which the plume model is not physically valid — a
 # puff model should be used instead). The model clamps to this value rather
 # than raising so that upstream Bayesian inference remains differentiable
-# when wind draws dip into a calm regime.
+# when wind draws dip into a calm regime; in calm air itself the gradient in
+# the wind is 0 (the speed is clamped and the direction undefined).
 MIN_WIND_SPEED: float = 0.5  # m/s
 
 
@@ -167,7 +169,8 @@ def plume_concentration(
         Mass concentration [kg/m³], same shape as the broadcast of the
         input coordinates. Zero at upwind locations (x' ≤ 0).
     """
-    wind_speed = jnp.sqrt(wind_u**2 + wind_v**2)
+    # U = √(u² + v²), with a zero gradient in calm air, clamped below
+    wind_speed = safe_sqrt(jnp.asarray(wind_u**2 + wind_v**2), jnp)
     wind_speed = jnp.maximum(wind_speed, MIN_WIND_SPEED)
 
     x_downwind, y_crosswind = rotate_to_wind_frame(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -341,3 +342,30 @@ def test_simulate_plume_background_column_uses_trapezoid():
     )
     col = ds["column_concentration"].values
     np.testing.assert_allclose(col, background * (z1 - z0), rtol=1e-6)
+
+
+def test_the_gradient_in_the_wind_is_finite_in_calm_air():
+    # √(u² + v²) and atan2(v, u) have infinite or undefined slopes at 0; the
+    # speed is clamped there and the direction undefined, so 0 is the gradient
+    params = jnp.asarray(BRIGGS_DISPERSION_PARAMS["D"])
+
+    def concentration(wind_u, wind_v):
+        return plume_concentration(
+            jnp.array(100.0),
+            jnp.array(5.0),
+            jnp.array(1.0),
+            0.0,
+            0.0,
+            2.0,
+            wind_u,
+            wind_v,
+            1.0,
+            params,
+        )
+
+    gradient = jax.grad(concentration, argnums=(0, 1))(0.0, 0.0)
+    assert all(bool(jnp.isfinite(g)) for g in gradient)
+    # away from calm air nothing changes: the gradient is the finite difference
+    step = 1e-6
+    du = (concentration(3.0 + step, 1.0) - concentration(3.0 - step, 1.0)) / (2 * step)
+    np.testing.assert_allclose(jax.grad(concentration)(3.0, 1.0), du, rtol=1e-6)

@@ -20,6 +20,7 @@ import jax.numpy as jnp
 from geophysix.thermo import dry_air_density
 from gridax import avg_x_bwd_2d, avg_y_bwd_2d
 from jaxtyping import Array, Float
+from pipekit_array.arrays import safe_sqrt
 
 from plumax._src.constants import (
     CP_DRY as CP_DRY,
@@ -340,11 +341,8 @@ class MoninObukhov(eqx.Module):
         v_centre = avg_y_bwd_2d(jnp.pad(v_lowest, ring, mode="edge"))
         # U² = u_T² + v_T²
         speed_squared = u_centre**2 + v_centre**2
-        # U = √(U²), with ∂U/∂u_T = ∂U/∂v_T = 0 at calm: √ has an infinite
-        # slope at 0, so take it of 1 there (the double-where trick)
-        is_calm = speed_squared == 0.0
-        safe_squared = jnp.where(is_calm, 1.0, speed_squared)
-        wind_speed = jnp.where(is_calm, 0.0, jnp.sqrt(safe_squared))
+        # U = √(U²), with ∂U/∂u_T = ∂U/∂v_T = 0 at calm
+        wind_speed = safe_sqrt(speed_squared, jnp)
         temperature = field.temperature[:, 0]
         pressure = field.pressure[:, 0]
         # ρ = p / (R_d T)

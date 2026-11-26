@@ -64,6 +64,9 @@ dependencies = [
     # primitives, and pipekit_cycle the ForwardModel / ObservationOperator
     # protocols that the plumax operator + adapter layer plug into.
     "pipekit-ops>=0.3.0",
+    # pipekit-array supplies the safe square root, power and angle that keep
+    # calm-wind gradients finite and NaN inputs NaN (gauss_plume, met).
+    "pipekit-array>=0.2.0",
     # radtrax owns the radiative transfer (the single-slab forward model, the
     # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
     # and the radiance adapter compose with the plume models (package
