@@ -187,7 +187,7 @@ gridax = { git = "https://github.com/jejjohnson/gridax", subdirectory = "package
 pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.3.0" }
 # pipekit-train (the `emulate` extra) is not on PyPI.
 pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-array-v0.3.0" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.2.1" }
 diagnostix = { git = "https://github.com/jejjohnson/diagnostix", tag = "v0.0.8" }
 geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.10" }
@@ -203,7 +203,9 @@ geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
 vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.10" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
-argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
+# It and gaussx are pinned by `rev =`, as radtrax v0.2.1 pins them: uv reads
+# `tag =` and `rev =` of one tag as two URLs.
+argminax = { git = "https://github.com/jejjohnson/argminax", rev = "v0.0.4" }
 # The geotoolz packages (the `geo` and `io` extras) are pinned to one geotoolz
 # commit, 543ad57 on main, the releases geotoolz-ops 0.20.1, geotoolz-array
 # 0.6.1, xrtoolz-ops 0.7.2 and xrtoolz-products 0.5.1, which are on the pipekit
