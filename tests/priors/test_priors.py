@@ -116,6 +116,34 @@ def test_grid_beyond_the_raster_raises(tmp_path, frame):
         load_inventory(write_inventory(tmp_path / "e.nc"), frame=frame, grid=huge)
 
 
+@pytest.mark.parametrize(
+    "drop", [None, 10], ids=["uneven latitudes", "a missing latitude row"]
+)
+def test_an_uneven_latitude_axis_raises(tmp_path, frame, grid, drop):
+    # the edges are built from one step: a row 0.2° away, or a missing row,
+    # used to be read from the wrong cells (up to 93 % off), where a missing
+    # longitude column already raised
+    lat = np.arange(31.05, 32.96, STEP)
+    if drop is None:
+        # one step of 0.2° among steps of 0.1°
+        lat = np.concatenate([lat[:10], lat[10:] + 0.1])
+    else:
+        lat = np.delete(lat, drop)
+    lon = np.arange(-102.95, -101.04, STEP)
+    xr.Dataset(
+        {
+            "fluxes": (
+                ("lat", "lon"),
+                np.full((lat.size, lon.size), F_BASIN),
+                {"units": "kg m-2 s-1"},
+            )
+        },
+        coords={"lat": lat, "lon": lon},
+    ).to_netcdf(tmp_path / "uneven.nc")
+    with pytest.raises(ValueError, match="latitudes are not evenly spaced"):
+        load_inventory(tmp_path / "uneven.nc", frame=frame, grid=grid)
+
+
 def test_global_raster_wraps_at_the_antimeridian(tmp_path, grid):
     # centres -180 … 179: edges [-180.5, 179.5], so 179.75°E sits in the
     # cell centred at -180°, past the last edge
