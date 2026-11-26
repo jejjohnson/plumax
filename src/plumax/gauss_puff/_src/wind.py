@@ -28,26 +28,62 @@ Public surface
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from functax import quad as functax_quad
 from functax.interp import Linear, Policies
 from geophysix.wind import wind_speed as speed_of
 from integrix import adapt as integrix_adapt, scan as integrix_scan
 from integrix.march import SampledPath
 from jaxtyping import Array, Float
+from numpy.typing import DTypeLike
 
 from plumax._src.errors import ParameterError
 from plumax._src.tracing import require
 from plumax._src.wind import wind_components
 
 
-if TYPE_CHECKING:  # NumPy arrays are accepted as factory inputs only.
-    import numpy as np
+def _check_time_resolution(
+    times: object, step: float, dtype: DTypeLike, *, caller: str
+) -> None:
+    """Refuse times too far from their epoch for ``dtype`` to resolve a step.
+
+    ε_t = spacing of ``dtype`` at max |t|; raise when ε_t > Δt / 100, the rule of
+    tracerax's ``check_epoch``.
+
+    Args:
+        times: Times [s], counted from some epoch.
+        step: Δt, the step the times must resolve [s].
+        dtype: The dtype the times are kept in.
+        caller: The public function the check guards, for the message.
+
+    Raises:
+        ValueError: If the dtype's spacing at the largest |t| exceeds Δt / 100.
+
+    Examples:
+        >>> import numpy as np
+        >>> _check_time_resolution(np.array([0.0, 60.0]), 1.0, np.float32, caller="f")
+        >>> _check_time_resolution(  # doctest: +ELLIPSIS
+        ...     np.array([1.7e9]), 1.0, np.float32, caller="f"
+        ... )
+        Traceback (most recent call last):
+        ...
+        ValueError: f: the times reach 1.7e+09 s from their epoch, where float32 ...
+    """
+    # max |t|
+    largest = float(np.max(np.abs(np.asarray(times, dtype=np.float64)), initial=0.0))
+    # ε_t = spacing of the dtype at max |t|
+    spacing = float(np.spacing(np.asarray(largest, dtype=dtype)))
+    if spacing > step / 100.0:
+        raise ValueError(
+            f"{caller}: the times reach {largest:.6g} s from their epoch, where "
+            f"{np.dtype(dtype).name} resolves {spacing:.3g} s, more than a "
+            f"hundredth of the {step:g} s step; count times from an epoch near "
+            "the run, or enable 64-bit JAX"
+        )
 
 
 class WindSchedule(eqx.Module):
@@ -100,12 +136,27 @@ class WindSchedule(eqx.Module):
         Returns
         -------
         WindSchedule
+            In the default float dtype (float64 with 64-bit JAX).
+
+        Raises
+        ------
+        ValueError
+            If the knot times are too far from their epoch for the dtype to
+            resolve a hundredth of their finest spacing.
         """
-        times_j = jnp.asarray(times, dtype=jnp.float32)
-        speed_j = jnp.asarray(wind_speed, dtype=jnp.float32)
+        # the default float dtype: float64 with 64-bit JAX, else float32
+        times_j = jnp.asarray(times, dtype=float)
+        speed_j = jnp.asarray(wind_speed, dtype=float)
         wind_east, wind_north = wind_components(
-            speed_j, jnp.asarray(wind_direction, dtype=jnp.float32)
+            speed_j, jnp.asarray(wind_direction, dtype=float)
         )
+        knots = np.asarray(times, dtype=np.float64)
+        if knots.size > 1:
+            # Δt_min = min_k (t_{k+1} − t_k), the finest knot spacing
+            finest = float(np.min(np.abs(np.diff(knots))))
+            _check_time_resolution(
+                knots, finest, times_j.dtype, caller="WindSchedule.from_speed_direction"
+            )
         return cls(times=times_j, u_wind=wind_east, v_wind=wind_north)
 
     def _path(self) -> SampledPath:

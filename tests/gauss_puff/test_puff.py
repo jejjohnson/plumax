@@ -520,3 +520,68 @@ def test_evolve_puffs_equals_the_observation_path_of_the_model():
             simulate_puff_field(receptor, state, params, dispersion_fn)[0]
         )
     np.testing.assert_allclose(predicted, jnp.stack(one_by_one), rtol=1e-12, atol=0.0)
+
+
+# ── #425: release counts and the dtype of absolute times ──────────────────────
+
+
+@pytest.fixture
+def float32_jax():
+    """Run one test with 64-bit JAX switched off, then switch it back on."""
+    jax.config.update("jax_enable_x64", False)
+    try:
+        yield
+    finally:
+        jax.config.update("jax_enable_x64", True)
+
+
+def test_a_whole_number_of_intervals_gets_no_extra_release():
+    # 2.1 / 0.15 rounds to 14.000000000000002, so a plain ceiling gave 15
+    times = make_release_times(0.0, 2.1, 1.0 / 0.15)
+    assert times.shape == (14,)
+    np.testing.assert_allclose(float(release_durations(times, 2.1)[-1]), 0.15)
+
+
+def test_release_counts_over_the_audit_sweep():
+    frequencies = (10.0, 5.0, 2.5, 20.0, 1.0 / 3.0, 0.1, 1.0 / 0.15)
+    wrong = []
+    for frequency in frequencies:
+        for count in range(1, 400):
+            window = count / frequency
+            for t_end in (window, round(window, 6)):
+                got = make_release_times(0.0, t_end, frequency).shape[0]
+                if got != count:
+                    wrong.append((frequency, count, t_end, got))
+    assert wrong == []
+
+
+def test_release_times_at_a_unix_epoch_keep_float64():
+    epoch = 1.7e9
+    times = make_release_times(epoch, epoch + 60.0, 1.0)
+    assert times.dtype == jnp.float64
+    assert np.unique(np.asarray(times)).size == 60
+    np.testing.assert_allclose(
+        float(release_durations(times, epoch + 60.0).sum()), 60.0
+    )
+
+
+def test_release_times_at_a_unix_epoch_are_refused_in_float32(float32_jax):
+    epoch = 1.7e9
+    with pytest.raises(ValueError, match="from their epoch"):
+        make_release_times(epoch, epoch + 60.0, 1.0)
+
+
+def test_wind_schedule_refuses_coarse_float32_knots(float32_jax):
+    epoch = 1.7e9
+    with pytest.raises(ValueError, match="from their epoch"):
+        WindSchedule.from_speed_direction(
+            epoch + np.arange(5) * 60.0, np.ones(5), np.zeros(5)
+        )
+
+
+def test_wind_schedule_is_float64_with_64_bit_jax():
+    schedule = WindSchedule.from_speed_direction(
+        1.7e9 + np.arange(5) * 60.0, np.ones(5), np.zeros(5)
+    )
+    assert schedule.times.dtype == jnp.float64
+    np.testing.assert_allclose(np.diff(np.asarray(schedule.times)), 60.0)
