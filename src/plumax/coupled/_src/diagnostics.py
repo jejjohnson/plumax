@@ -29,9 +29,11 @@ from plumax._src.vardax import PSD_TAGS
 from plumax.coupled._src.inversion import CoupledProblem, CoupledResult
 
 
-#: An eigenvalue of F below this fraction of the largest carries no information.
+#: An eigenvalue of F scaled to unit diagonal below this fraction of the largest
+#: carries no information.
 _NULL_EIGENVALUE = 1e-10
-#: A parameter with more than this weight on the null space of F has no bound.
+#: A parameter with more than this weight on the null space of the scaled F has
+#: no bound.
 _NULL_WEIGHT = 1e-8
 
 
@@ -42,7 +44,8 @@ class FitDiagnostics:
     Attributes:
         fisher_information: F = J_hᵀ Σ_ε⁻¹ J_h at θ*, in the prior's layout.
         cramer_rao_std: Prior-free bound √[F⁻¹]_aa by block; ``inf`` where F
-            is singular along the parameter.
+            is singular along the parameter. The null space is found on F
+            scaled to unit diagonal, so it does not depend on the blocks' units.
         data_fraction: 1 − [Σ_θ|y]_aa / [Σ_θ]_aa by block: 0 when the prior
             set the parameter, near 1 when the data did.
         dofs: Degrees of freedom for signal d_s = tr A, with A the averaging
@@ -146,19 +149,29 @@ def fit_diagnostics(problem: CoupledProblem, result: CoupledResult) -> FitDiagno
     fisher = 0.5 * (fisher + transposed)
 
     # --- prior-free bound ---
-    # F = V Λ Vᵀ
-    eigenvalues, eigenvectors = jnp.linalg.eigh(fisher)
+    # The blocks carry their own units, so F is scaled to unit diagonal before
+    # its null space is found: C = D F D, with D = diag(F_aa^(-1/2)). A
+    # parameter the data do not touch (F_aa = 0) keeps a zero row in C, and so
+    # falls in the null space.
+    diagonal = jnp.diagonal(fisher)
+    touched = diagonal > 0.0
+    scale = jnp.where(touched, 1.0 / jnp.sqrt(jnp.where(touched, diagonal, 1.0)), 1.0)
+    # C = D F D
+    scaled = einx.multiply("row col, row, col -> row col", fisher, scale, scale)
+    # C = W M Wᵀ
+    eigenvalues, eigenvectors = jnp.linalg.eigh(scaled)
     largest = jnp.maximum(jnp.max(eigenvalues), 0.0)
     informative = eigenvalues > _NULL_EIGENVALUE * largest
     safe_eigenvalues = jnp.where(informative, eigenvalues, 1.0)
-    # 1 / λ_k on the informative eigenvalues, 0 elsewhere
+    # 1 / μ_k on the informative eigenvalues, 0 elsewhere
     inverse_eigenvalues = jnp.where(informative, 1.0 / safe_eigenvalues, 0.0)
-    # [F⁻¹]_aa = Σ_k V_ak² / λ_k
+    # [F⁻¹]_aa = D_aa² Σ_k W_ak² / μ_k
     squared_loadings = jnp.square(eigenvectors)
-    bound_variance = einx.dot(
+    scaled_variance = einx.dot(
         "param k, k -> param", squared_loadings, inverse_eigenvalues
     )
-    # Σ_k V_ak² over λ_k ≈ 0: the share of parameter a the data cannot see
+    bound_variance = jnp.square(scale) * scaled_variance
+    # Σ_k W_ak² over μ_k ≈ 0: the share of parameter a the data cannot see
     null_weight = einx.dot(
         "param k, k -> param", squared_loadings, (~informative).astype(fisher.dtype)
     )

@@ -51,6 +51,25 @@ def test_require_positive_skips_traced_values() -> None:
     assert float(halve(jnp.asarray(-2.0))) == -1.0
 
 
+@pytest.mark.parametrize(
+    "pack",
+    [lambda v: (v, 2.0), lambda v: [1.0, v], lambda v: {"x": v}],
+    ids=["tuple", "list", "dict"],
+)
+def test_require_positive_skips_a_container_that_holds_a_tracer(pack) -> None:
+    @jax.jit
+    def halve(value: jax.Array) -> jax.Array:
+        require_positive("value", pack(value))
+        return value / 2.0
+
+    assert float(halve(jnp.asarray(-2.0))) == -1.0
+
+
+def test_require_positive_still_checks_a_concrete_container() -> None:
+    with pytest.raises(ParameterError):
+        require_positive("pair", (1.0, -2.0))
+
+
 def test_require_raises_eagerly_on_a_concrete_condition() -> None:
     with pytest.raises(ParameterError, match="z0 must be > 0"):
         require(jnp.asarray(-1.0) > 0.0, "z0 must be > 0")
