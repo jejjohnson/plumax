@@ -348,6 +348,7 @@ def _mixed_unit_problem():
     )
 
 
+@pytest.mark.slow
 def test_cramer_rao_bound_does_not_depend_on_the_units_of_a_block():
     """A background in kg m⁻² must not hide a position in metres.
 
