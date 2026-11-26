@@ -23,7 +23,7 @@ from gridax import advect, advect_vertical
 from gridax.schemes import TVD, WENO, Centred, Scheme, Upwind
 from jaxtyping import Array, Float
 
-from plumax.les_fvm._src.boundary import wrap_periodic
+from plumax.les_fvm._src.boundary import HorizontalBC
 from plumax.les_fvm.grid import PlumeGrid3D
 
 
@@ -59,7 +59,7 @@ def advection_tendency(
     w: Float[Array, "Nz Ny Nx"],
     plume_grid: PlumeGrid3D,
     method: str = "weno5",
-    periodic: tuple[bool, bool] = (False, False),
+    horizontal_bc: HorizontalBC | None = None,
 ) -> Float[Array, "Nz Ny Nx"]:
     """Flux-form advective tendency ``-∇·(u C)`` at interior T-points.
 
@@ -79,13 +79,14 @@ def advection_tendency(
         Horizontal reconstruction scheme.  Passed through to
         :func:`gridax.advect`, one of the names listed in the module
         docstring.
-    periodic : tuple[bool, bool], default ``(False, False)``
-        ``(x_periodic, y_periodic)``.  On a periodic axis the normal-velocity
-        ghost face is *wrapped* (rather than left edge-padded) so the two
-        representations of the periodic seam share one velocity and the
-        open-wall fluxes cancel — otherwise a spatially-varying normal wind
-        breaks exact mass conservation at the seam.  See
-        :func:`~plumax.les_fvm.boundary.periodic_axes`.
+    horizontal_bc : HorizontalBC, optional
+        The lateral condition of the tracer. gridax fills as many ghost layers
+        as ``method`` reads from it, so every interior cell gets the full
+        scheme, and on a periodic axis the tracer and the normal wind wrap, so
+        the seam is a face like any other. A Dirichlet face is read as a cell
+        value (:meth:`~plumax.les_fvm.boundary.HorizontalBC.advection_variant`).
+        Without it the lateral faces are open: their fluxes are first-order
+        upwind of the ghost ring, which the caller fills.
 
     Returns
     -------
@@ -99,23 +100,21 @@ def advection_tendency(
 
     Notes
     -----
-    The horizontal operator runs in gridax ``wall="open"`` mode, so the
-    lateral domain-wall face fluxes are assembled from the ghost ring
-    (first-order upwind against the wall, high-order ``method`` in the
-    interior).  The caller must fill the ghost cells with the desired lateral
-    BC (Dirichlet / outflow / periodic) *before* calling — see
-    :func:`~plumax.les_fvm.boundary.apply_boundary_conditions`, which
-    :class:`~plumax.les_fvm.dynamics.EulerianDispersionRHS` runs every step.
-    This is what makes horizontal transport honor ``bc_x`` / ``bc_y``.
+    With ``horizontal_bc`` the horizontal operator is :func:`gridax.advect`
+    with ``bc=``; without it, ``wall="open"``, which reads the one ghost ring
+    the caller filled. :class:`~plumax.les_fvm.dynamics.EulerianDispersionRHS`
+    passes its own conditions.
     """
-    x_periodic, y_periodic = periodic
-    # Wrap the normal velocity seam: the west wall face (u[..., 0]) and the east
-    # wall face (u[..., -2]) are the same periodic seam and must match.
-    u = wrap_periodic(u, plume_grid, (x_periodic, False), stagger="U")
-    v = wrap_periodic(v, plume_grid, (False, y_periodic), stagger="V")
-    horizontal = advect(
-        concentration, u, v, plume_grid.grid, scheme=_scheme(method), wall="open"
-    )
+    scheme = _scheme(method)
+    if horizontal_bc is None:
+        horizontal = advect(
+            concentration, u, v, plume_grid.grid, scheme=scheme, wall="open"
+        )
+    else:
+        conditions = horizontal_bc.advection_variant().bc_set
+        horizontal = advect(
+            concentration, u, v, plume_grid.grid, scheme=scheme, bc=conditions
+        )
     # w_{k+1/2} = ½ (w_k + w_{k+1}) on the top face of each cell; the last one is
     # outside the domain and not read
     w_face = jnp.pad(0.5 * (w[:-1] + w[1:]), ((0, 1), (0, 0), (0, 0)))
