@@ -54,7 +54,8 @@ def require_argminax(caller: str) -> ModuleType:
         caller: The public function that needs argminax, for the message.
 
     Returns:
-        The ``argminax`` module, with ``argminax.curvature`` loaded.
+        The ``argminax`` module, with ``argminax.curvature`` and
+        ``argminax.solve`` loaded.
 
     Raises:
         MissingExtraError: If argminax is not installed.
@@ -63,8 +64,8 @@ def require_argminax(caller: str) -> ModuleType:
         "argminax",
         extra="assim",
         caller=caller,
-        purpose="builds the Laplace posterior with argminax",
-        submodules=("curvature",),
+        purpose="builds the Laplace posterior and the Gauss–Newton solver with argminax",
+        submodules=("curvature", "solve"),
     )
 
 
