@@ -74,3 +74,60 @@ def test_priors_sample_and_evaluate(cls_name):
     with numpyro.handlers.seed(rng_seed=jr.PRNGKey(0)):
         trace = numpyro.handlers.trace(model).get_trace()
     assert bool(trace["lam_finite"]["value"])
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [
+        intensity.DiurnalSinusoidalIntensity(
+            lambda_0=4.0, amplitude=3.0, phase_hours=14.0
+        ),
+        intensity.DiurnalSeasonalIntensity(
+            lambda_0=4.0, amp_diurnal=3.0, amp_seasonal=0.0, phase_hours=14.0
+        ),
+        intensity.SeasonallyModulatedDiurnalIntensity(
+            lambda_0=4.0, amp_summer=3.0, amp_winter=3.0, phase_hours=14.0
+        ),
+        intensity.LandfillIntensity(
+            lambda_0=4.0,
+            amp_seasonal=0.0,
+            amp_diurnal=3.0,
+            amp_barometric=0.0,
+            phase_hours=14.0,
+        ),
+    ],
+    ids=lambda kernel: type(kernel).__name__,
+)
+def test_the_daily_peak_is_at_phase_hours(kernel):
+    # A sin(2πt − φ) peaked six hours after phase_hours; A cos(2πt − φ) peaks on it
+    minutes = jnp.arange(24 * 60) / (24 * 60)
+    peak_hour = float(minutes[jnp.argmax(kernel(minutes))] * 24)
+    assert abs(peak_hour - 14.0) <= 1.0 / 60.0
+
+
+@pytest.mark.parametrize(
+    "kernel",
+    [
+        intensity.SeasonalSinusoidalIntensity(
+            lambda_0=4.0, amplitude=3.0, peak_day=196.0
+        ),
+        intensity.DiurnalSeasonalIntensity(
+            lambda_0=4.0, amp_diurnal=0.0, amp_seasonal=3.0, peak_day=196.0
+        ),
+        intensity.LandfillIntensity(
+            lambda_0=4.0,
+            amp_seasonal=3.0,
+            amp_diurnal=0.0,
+            amp_barometric=0.0,
+            peak_day=196.0,
+        ),
+        intensity.LivestockFeedlotIntensity(
+            lambda_0=4.0, amp_feeding=0.0, amp_seasonal=3.0, peak_day=196.0
+        ),
+    ],
+    ids=lambda kernel: type(kernel).__name__,
+)
+def test_the_seasonal_peak_is_on_peak_day(kernel):
+    # A sin(ω_s (t − t_peak)) peaked a quarter year (91 days) after peak_day
+    days = jnp.arange(0.0, 365.25, 0.01)
+    assert abs(float(days[jnp.argmax(kernel(days))]) - 196.0) <= 0.01

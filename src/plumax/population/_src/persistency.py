@@ -188,7 +188,7 @@ def expected_wait_time(
 
         A diurnal source is quicker to emit near its 14:00 peak than at 02:00:
 
-        >>> diurnal = dict(lambda_0=4.0, amplitude=3.6, phase_hours=8.0)
+        >>> diurnal = dict(lambda_0=4.0, amplitude=3.6, phase_hours=14.0)
         >>> at_peak = expected_wait_time("diurnal", 14.0 / 24.0, **diurnal)
         >>> at_trough = expected_wait_time("diurnal", 2.0 / 24.0, **diurnal)
         >>> bool(at_peak < at_trough)
