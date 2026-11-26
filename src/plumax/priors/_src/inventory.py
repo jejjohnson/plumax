@@ -20,7 +20,8 @@ from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 
 
-#: Relative deviation of a longitude step from the median step taken as a gap.
+#: Relative deviation of a latitude or longitude step from the median step taken
+#: as a gap.
 GAP_TOLERANCE: float = 1e-2
 
 
@@ -68,7 +69,8 @@ def load_inventory(
     Raises:
         MissingExtraError: If the ``io`` extra (xrproducts) is not installed.
         DomainError: If a lattice point falls outside the inventory raster,
-            or the raster's longitudes are unevenly spaced.
+            or the raster's latitudes or longitudes are unevenly spaced (a
+            missing row or column among them).
     """
     xrproducts = require_extra(
         "xrproducts",
@@ -83,7 +85,9 @@ def load_inventory(
     if "time" in flux.dims:
         flux = flux.isel(time=time_index)
     flux = flux.transpose("lat", "lon")
-    lat_edges = _edges(flux["lat"].values)
+    lat_centres = flux["lat"].values
+    _require_even(np.diff(lat_centres), "latitudes")
+    lat_edges = _edges(lat_centres)
     lon_centres, flux_values = _unwrap_longitudes(flux["lon"].values, flux.values)
     lon_edges = _edges(lon_centres)
 
@@ -145,16 +149,29 @@ def _unwrap_longitudes(
     rotated = centres[order]
     # c'_k = c'_0 + ((c'_k − c'_0) mod 360°), increasing
     unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
-    steps = np.diff(unwrapped)
+    _require_even(np.diff(unwrapped), "longitudes")
+    reordered = einx.get_at("lat [lon], k -> lat k", values, order)
+    return unwrapped, reordered
+
+
+def _require_even(steps: Float[np.ndarray, " n_steps"], axis: str) -> None:
+    """Refuse an axis whose steps are not all its median step.
+
+    The edges are built from one step, so an uneven axis, or a missing row or
+    column (which doubles a step), would be read from the wrong cells.
+
+    Raises:
+        DomainError: If a step differs from the median by more than 1 %.
+    """
+    if steps.size == 0:
+        return
     # a missing cell doubles a step; 1 % absorbs float32 coordinate roundoff
     # (≈ 1e-5° at 180°, 1e-3 of a 0.01° step) and still catches it
     if not np.allclose(steps, np.median(steps), rtol=GAP_TOLERANCE, atol=0.0):
         raise DomainError(
-            "load_inventory: the inventory's longitudes are not evenly spaced "
+            f"load_inventory: the inventory's {axis} are not evenly spaced "
             "(a gap inside the raster)"
         )
-    reordered = einx.get_at("lat [lon], k -> lat k", values, order)
-    return unwrapped, reordered
 
 
 def _edges(centres: Float[np.ndarray, " n"]) -> Float[np.ndarray, " n_edges"]:
