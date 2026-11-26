@@ -257,8 +257,8 @@ def cumulative_wind_integrals(
     ...     v_wind=jnp.zeros(2),
     ... )
     >>> east, north, travel = cumulative_wind_integrals(schedule, jnp.array([5.0, 10.0]))
-    >>> [round(float(value), 6) for value in east]
-    [22.5, 40.0]
+    >>> tuple(round(float(value), 6) for value in east)
+    (22.5, 40.0)
     >>> bool(jnp.allclose(travel, east))
     True
     """

@@ -168,6 +168,7 @@ def test_posterior_mean_and_standard_error_come_from_integrix() -> None:
         assert np.ndim(means[name]) == 0
 
 
+@pytest.mark.slow
 def test_the_pod_powerlaw_normaliser_keeps_its_tail_in_float32():
     # 1 − ½ erfc rounded q(ξ) in float32, which put 1.4e-2 into log I(θ) at
     # θ = (4.5, 20000, 1.0), multiplied by N in the likelihood
