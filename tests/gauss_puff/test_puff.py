@@ -585,3 +585,37 @@ def test_wind_schedule_is_float64_with_64_bit_jax():
     )
     assert schedule.times.dtype == jnp.float64
     np.testing.assert_allclose(np.diff(np.asarray(schedule.times)), 60.0)
+
+
+def test_a_float64_schedule_drives_a_float32_eulerian_grid():
+    # with 64-bit JAX the schedule is float64; les_fvm's default grid is float32,
+    # and the solver's buffer refused the promoted wind
+    from plumax.les_fvm import make_grid
+    from plumax.les_fvm.wind import wind_field_from_schedule
+
+    grid = make_grid((0.0, 100.0, 4), (0.0, 100.0, 4), (0.0, 40.0, 4))
+    schedule = WindSchedule.from_speed_direction(
+        jnp.linspace(0.0, 30.0, 7), jnp.linspace(3.0, 7.0, 7), jnp.full(7, 270.0)
+    )
+    east, north, _ = wind_field_from_schedule(grid, schedule)(jnp.asarray(5.0))
+    assert east.dtype == north.dtype == grid.x.dtype
+
+
+def test_wind_schedule_takes_traced_knot_times():
+    knots = jnp.linspace(0.0, 60.0, 4)
+
+    @jax.jit
+    def build(times):
+        return WindSchedule.from_speed_direction(
+            times, jnp.full(4, 5.0), jnp.full(4, 270.0)
+        ).wind_at(jnp.asarray(10.0))
+
+    east, _ = build(knots)
+    assert bool(jnp.isfinite(east))
+
+
+def test_a_repeated_knot_is_not_a_zero_step():
+    schedule = WindSchedule.from_speed_direction(
+        jnp.array([0.0, 60.0, 60.0, 120.0]), jnp.full(4, 5.0), jnp.full(4, 270.0)
+    )
+    assert schedule.times.shape == (4,)

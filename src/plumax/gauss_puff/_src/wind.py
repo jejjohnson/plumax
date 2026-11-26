@@ -42,7 +42,7 @@ from jaxtyping import Array, Float
 from numpy.typing import DTypeLike
 
 from plumax._src.errors import ParameterError
-from plumax._src.tracing import require
+from plumax._src.tracing import _is_traced, require
 from plumax._src.wind import wind_components
 
 
@@ -150,13 +150,19 @@ class WindSchedule(eqx.Module):
         wind_east, wind_north = wind_components(
             speed_j, jnp.asarray(wind_direction, dtype=float)
         )
-        knots = np.asarray(times, dtype=np.float64)
-        if knots.size > 1:
-            # Δt_min = min_k (t_{k+1} − t_k), the finest knot spacing
-            finest = float(np.min(np.abs(np.diff(knots))))
-            _check_time_resolution(
-                knots, finest, times_j.dtype, caller="WindSchedule.from_speed_direction"
-            )
+        # traced knot times cannot be read on the host, so their check is skipped
+        if not _is_traced(times):
+            knots = np.asarray(times, dtype=np.float64)
+            gaps = np.abs(np.diff(knots))
+            # Δt_min = min_k (t_{k+1} − t_k) over distinct knots, the finest spacing
+            finest = float(np.min(np.where(gaps > 0.0, gaps, np.inf), initial=np.inf))
+            if np.isfinite(finest):
+                _check_time_resolution(
+                    knots,
+                    finest,
+                    times_j.dtype,
+                    caller="WindSchedule.from_speed_direction",
+                )
         return cls(times=times_j, u_wind=wind_east, v_wind=wind_north)
 
     def _path(self) -> SampledPath:
