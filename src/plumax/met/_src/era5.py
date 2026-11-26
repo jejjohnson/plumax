@@ -112,7 +112,7 @@ def load_era5(
         MissingExtraError: If the ``io`` extra (xrops) is not installed.
         MissingVariableError: If a required variable is missing.
         GridMismatchError: If the two files' times or lat/lon grids differ,
-            or the longitudes are unevenly spaced.
+            or the latitudes or longitudes are unevenly spaced.
         TimeAxisError: If ``times`` selects nothing.
         DomainError: If an analysis point falls outside the ERA5 domain.
     """
@@ -169,6 +169,7 @@ def load_era5(
         height_agl = height.transpose(*dims).values
         pbl_height = surface["blh"].transpose("time", "lat", "lon").values
         lat = levels["lat"].values
+        _require_even_latitudes(lat)
         lon, lon_order = _unwrap_longitudes(levels["lon"].values)
         clock = TimeAxis.from_datetimes(levels["time"].values)
 
@@ -294,6 +295,23 @@ def _unwrap_longitudes(
             "load_era5: the longitudes are not evenly spaced (a gap in the subset)"
         )
     return unwrapped, order
+
+
+def _require_even_latitudes(lat: Float[np.ndarray, " lat"]) -> None:
+    """Refuse a latitude axis whose steps are not all its median step.
+
+    The index map divides by the first step, so a missing row (which doubles a
+    step) would be read from the wrong place.
+
+    Raises:
+        GridMismatchError: If a step differs from the median by more than 1 %.
+    """
+    steps = np.diff(lat)
+    # a missing row doubles a step; 1 % absorbs float32 coordinate roundoff
+    if steps.size and not np.allclose(steps, np.median(steps), rtol=1e-2, atol=0.0):
+        raise GridMismatchError(
+            "load_era5: the latitudes are not evenly spaced (a gap in the subset)"
+        )
 
 
 def _close_seam(

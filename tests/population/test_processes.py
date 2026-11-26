@@ -69,10 +69,10 @@ def test_log_prob_is_the_poisson_likelihood():
     # Σ log λ(tᵢ) − Λ(T); Λ in closed form for an unclipped sinusoid
     phase = 2.0 * np.pi * 14.0 / 24.0
     times = np.array([10.3, 10.9, 11.6])
-    log_rates = np.log(3.0 + np.sin(2.0 * np.pi * times - phase))
+    log_rates = np.log(3.0 + np.cos(2.0 * np.pi * times - phase))
 
     def antiderivative(t):
-        return 3.0 * t - np.cos(2.0 * np.pi * t - phase) / (2.0 * np.pi)
+        return 3.0 * t + np.sin(2.0 * np.pi * t - phase) / (2.0 * np.pi)
 
     expected = log_rates.sum() - (antiderivative(12.0) - antiderivative(10.0))
     np.testing.assert_allclose(float(process.log_prob(event_times, mask)), expected)

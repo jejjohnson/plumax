@@ -294,6 +294,14 @@ def test_the_index_map_refuses_the_hull_sliver_outside_a_lambert_grid():
     index_x, index_y = to_index(x[None], y[None])
     assert np.isnan(index_x).all() and np.isnan(index_y).all()
 
+    # the mass points themselves, the edge rows and columns among them, are inside
+    edge = np.concatenate([np.arange(n), np.full(n, n - 1), np.zeros(n, int)])
+    rows = np.concatenate([np.zeros(n, int), np.arange(n), np.arange(n)])
+    edge_x, edge_y = frame.to_xy(lat[rows, edge], lon[rows, edge])
+    index_x, index_y = to_index(edge_x[None], edge_y[None])
+    np.testing.assert_allclose(index_x[0], edge, atol=1e-6)
+    np.testing.assert_allclose(index_y[0], rows, atol=1e-6)
+
     # inside, the index is the projection's own
     inner = np.linspace(-2e4, 2e4, 8)
     query_x, query_y = np.meshgrid(inner, inner)
