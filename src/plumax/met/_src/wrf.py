@@ -21,8 +21,8 @@ Passing a :class:`~plumax.met.LocalFrame` as ``origin`` places the
 analysis grid by lat/lon instead, so its axes are the frame's (UTM) axes
 rather than WRF's. Each analysis point is mapped to WRF fractional
 indices through the file's ``XLAT`` / ``XLONG``: the mass points are
-projected into the frame and a piecewise-linear interpolant (Delaunay)
-inverts them, so WRF's own projection is never rebuilt and any
+projected into the frame and the bilinear map of each cell of them is
+inverted, so WRF's own projection is never rebuilt and any
 ``MAP_PROJ`` works. The earth-relative wind (which needs ``COSALPHA`` /
 ``SINALPHA``) is projected onto the frame's axes at each point.
 
@@ -56,6 +56,8 @@ import einx
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
+from functax.geometry import CurvilinearGrid
+from functax.interp import locate_curvilinear
 from jaxtyping import Float
 
 from plumax._src.constants import (
@@ -71,6 +73,7 @@ from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import (
+    IndexMap,
     analysis_heights,
     interpolate_vertical,
     onto_analysis_grid,
@@ -261,42 +264,54 @@ def _latlon(
     return lat.values, lon.values
 
 
+#: Index slack [cells] within which a target counts as on the edge of the WRF
+#: mass points: the inverse of an edge cell's bilinear map returns about −1e-14
+#: on its first row or column in float64, and −5e-6 in float32.
+_EDGE_SLACK: float = 1e-4
+
+
 def _wrf_index_map(
     lat: Float[np.ndarray, "src_y src_x"],
     lon: Float[np.ndarray, "src_y src_x"],
     frame: LocalFrame,
-):
+) -> IndexMap:
     """Frame metres → WRF fractional mass-point indices ``(i, j)``.
 
-    (i, j) = 𝓘(x, y),  𝓘 piecewise linear on the Delaunay triangulation of the
-    mass points' frame coordinates.
+    (i, j) = 𝓘(x, y), the inverse of the bilinear map of each cell of mass
+    points in frame coordinates (`functax.interp.locate_curvilinear`).
 
-    WRF's own projection is never rebuilt, so any ``MAP_PROJ`` works. 𝓘 is
-    exact where the WRF-to-frame map is affine and second-order accurate in
-    the grid spacing elsewhere; points outside the WRF domain come back NaN.
+    WRF's own projection is never rebuilt, so any ``MAP_PROJ`` works. The
+    index is exact where the WRF-to-frame map is affine and second-order
+    accurate in the grid spacing elsewhere. A point outside the quadrilateral
+    domain of the mass points comes back NaN; a triangulation of the points
+    would also have accepted the sliver of their convex hull beyond an edge.
     """
-    import scipy.interpolate
-
     # (x, y) of every mass point in the frame
     mass_x, mass_y = frame.to_xy(lat, lon)
-    num_rows, num_cols = lat.shape
-    rows, cols = np.meshgrid(
-        np.arange(num_rows, dtype=float),
-        np.arange(num_cols, dtype=float),
-        indexing="ij",
-    )
-    nodes = einx.id("y x, y x -> (y x) (1 + 1)", mass_x, mass_y)
-    node_indices = einx.id("y x, y x -> (y x) (1 + 1)", cols, rows)
-    interpolant = scipy.interpolate.LinearNDInterpolator(nodes, node_indices)
+    grid = CurvilinearGrid(x=jnp.asarray(mass_x), y=jnp.asarray(mass_y))
+    # the largest row and column index of a mass point
+    last_index = np.array(lat.shape, dtype=float) - 1.0
 
     def to_index(
         frame_x: Float[np.ndarray, "y x"], frame_y: Float[np.ndarray, "y x"]
     ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
-        queries = einx.id("y x, y x -> (y x) (1 + 1)", frame_x, frame_y)
-        # (i, j) = 𝓘(x, y)
-        indices = interpolant(queries)
+        targets = einx.id("y x, y x -> (y x) (1 + 1)", frame_x, frame_y)
+        # u = (r + s, c + t), with x(s, t) = x_* in cell (r, c)
+        cell, offset, _ = locate_curvilinear(grid, jnp.asarray(targets))
+        position = np.asarray(cell + offset)
+        # inside the mass points, with a slack of _EDGE_SLACK cells: a target on
+        # the first row or column comes back at about −1e-14 (−5e-6 in float32)
+        inside = einx.all(
+            "t c -> t",
+            (position >= -_EDGE_SLACK) & (position <= last_index + _EDGE_SLACK),
+        )
+        # NaN where the target is outside, and the edge targets onto the edge
+        position = einx.where(
+            "t, t c, -> t c", inside, np.clip(position, 0.0, last_index), np.nan
+        )
         num_y, num_x = frame_x.shape
-        index_x, index_y = einx.id("(y x) c -> c y x", indices, y=num_y, x=num_x)
+        # j along the rows of mass points, i along the columns
+        index_y, index_x = einx.id("(y x) c -> c y x", position, y=num_y, x=num_x)
         return index_x, index_y
 
     return to_index

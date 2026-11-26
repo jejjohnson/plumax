@@ -259,3 +259,54 @@ def test_frame_outside_wrf_domain_raises(latlon_wrf):
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     with pytest.raises(ValueError, match="outside the source domain"):
         load_wrf(spec.path, plume_grid=grid, origin=far)
+
+
+@pytest.mark.slow
+def test_the_index_map_refuses_the_hull_sliver_outside_a_lambert_grid():
+    """Points a quarter cell outside the mass points have no index.
+
+    A Delaunay interpolant of the mass points filled their convex hull, so on a
+    Lambert grid, whose southern row bows in the frame, it gave such points
+    row 0 instead of NaN.
+    """
+    pyproj = pytest.importorskip("pyproj")
+    from plumax.met import LocalFrame
+    from plumax.met._src.wrf import _wrf_index_map
+
+    lambert = pyproj.Proj(
+        proj="lcc", lat_1=30, lat_2=60, lat_0=40, lon_0=-98, R=6_370_000
+    )
+    n, spacing = 200, 3000.0
+    offsets = (np.arange(n) - n / 2) * spacing
+    mass_x, mass_y = np.meshgrid(offsets, offsets)
+    lon, lat = lambert(mass_x, mass_y, inverse=True)
+    frame = LocalFrame.at(float(lat[n // 2, n // 2]), float(lon[n // 2, n // 2]))
+    to_index = _wrf_index_map(lat, lon, frame)
+
+    # 20 points a quarter cell south of the southern row
+    cols = np.linspace(60, 140, 20)
+    south_lon, south_lat = lambert(
+        mass_x[0, 0] + cols * spacing,
+        np.full(20, mass_y[0, 0] - 0.25 * spacing),
+        inverse=True,
+    )
+    x, y = frame.to_xy(south_lat, south_lon)
+    index_x, index_y = to_index(x[None], y[None])
+    assert np.isnan(index_x).all() and np.isnan(index_y).all()
+
+    # the mass points themselves, the edge rows and columns among them, are inside
+    edge = np.concatenate([np.arange(n), np.full(n, n - 1), np.zeros(n, int)])
+    rows = np.concatenate([np.zeros(n, int), np.arange(n), np.arange(n)])
+    edge_x, edge_y = frame.to_xy(lat[rows, edge], lon[rows, edge])
+    index_x, index_y = to_index(edge_x[None], edge_y[None])
+    np.testing.assert_allclose(index_x[0], edge, atol=1e-6)
+    np.testing.assert_allclose(index_y[0], rows, atol=1e-6)
+
+    # inside, the index is the projection's own
+    inner = np.linspace(-2e4, 2e4, 8)
+    query_x, query_y = np.meshgrid(inner, inner)
+    query_lat, query_lon = frame.to_latlon(query_x, query_y)
+    proj_x, proj_y = lambert(query_lon, query_lat)
+    index_x, index_y = to_index(query_x, query_y)
+    np.testing.assert_allclose(index_x, (proj_x - mass_x[0, 0]) / spacing, atol=1e-4)
+    np.testing.assert_allclose(index_y, (proj_y - mass_y[0, 0]) / spacing, atol=1e-4)

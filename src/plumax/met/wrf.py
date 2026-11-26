@@ -21,8 +21,8 @@ Passing a :class:`~plumax.met.LocalFrame` as ``origin`` places the
 analysis grid by lat/lon instead, so its axes are the frame's (UTM) axes
 rather than WRF's. Each analysis point is mapped to WRF fractional
 indices through the file's ``XLAT`` / ``XLONG``: the mass points are
-projected into the frame and a piecewise-linear interpolant (Delaunay)
-inverts them, so WRF's own projection is never rebuilt and any
+projected into the frame and the bilinear map of each cell of them is
+inverted, so WRF's own projection is never rebuilt and any
 ``MAP_PROJ`` works. The earth-relative wind (which needs ``COSALPHA`` /
 ``SINALPHA``) is projected onto the frame's axes at each point.
 
