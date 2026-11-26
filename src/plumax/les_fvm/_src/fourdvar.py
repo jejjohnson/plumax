@@ -955,6 +955,7 @@ class FourDVarProblem:
             ImportError: Without the ``assim`` extra.
         """
         vdx = require_vardax("FourDVarProblem.incremental_analysis")
+        amx = require_argminax("FourDVarProblem.incremental_analysis")
         # σ = √R
         obs_noise_std = jnp.sqrt(self.obs_variance)
         predict = self.forward.predict
@@ -978,13 +979,16 @@ class FourDVarProblem:
                 jax.ShapeDtypeStruct((obs_size,), dtype)
             ),
             prior_sqrt_op=prior_sqrt,
-            config=vdx.IncrementalConfig(
-                n_outer=outer_iters,
-                n_inner=inner_iters,
+            config=vdx.IncrementalConfig(covariance_tol=atol, jac="bwd"),
+            # exactly n_outer linearisations, each a CG of at most n_inner steps:
+            # zero tolerances never stop the outer loop early
+            n_outer=outer_iters,
+            solver=amx.solve.GaussNewtonCG(
+                rtol=0.0,
+                atol=0.0,
+                max_cg_steps=inner_iters,
                 cg_rtol=rtol,
                 cg_atol=atol,
-                covariance_tol=atol,
-                jac="bwd",
             ),
         )
         batch = vdx.Batch1D(
