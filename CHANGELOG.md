@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.5.0](https://github.com/jejjohnson/plumax/compare/v0.4.1...v0.5.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **gauss_puff:** release times count whole intervals exactly and keep the default float dtype ([#455](https://github.com/jejjohnson/plumax/issues/455))
+* **population:** phase_hours and peak_day put the peak where they say, in place of a quarter period later ([#453](https://github.com/jejjohnson/plumax/issues/453))
+* **les_fvm:** the periodic seam is advected like any other face, through gridax's bc= ([#438](https://github.com/jejjohnson/plumax/issues/438))
+* **lagrangian:** the particles, the gridded wind, the deposits and the footprint come from tracerax ([#412](https://github.com/jejjohnson/plumax/issues/412))
+
+### Bug Fixes
+
+* **coupled:** the prior-free bound finds its null space on F scaled to unit diagonal, so a block's units no longer hide the others ([#443](https://github.com/jejjohnson/plumax/issues/443)) ([f1f6fe9](https://github.com/jejjohnson/plumax/commit/f1f6fe9da0d90199934db8e29b2237b1e9a6128d)), closes [#416](https://github.com/jejjohnson/plumax/issues/416)
+* **gauss_plume:** the wind gradient is finite in calm air, and a NaN input gives a NaN plume rise, through pipekit-array's safe functions ([#450](https://github.com/jejjohnson/plumax/issues/450)) ([39f4c3f](https://github.com/jejjohnson/plumax/commit/39f4c3f11b1b99178b472ab658cfe6a14334df18)), closes [#420](https://github.com/jejjohnson/plumax/issues/420)
+* **gauss_puff:** release times count whole intervals exactly and keep the default float dtype ([#455](https://github.com/jejjohnson/plumax/issues/455)) ([ae9676d](https://github.com/jejjohnson/plumax/commit/ae9676d9175b1ce029093e9023a5a8a37f1cc328)), closes [#425](https://github.com/jejjohnson/plumax/issues/425)
+* **gauss_puff:** the puff wind integrals are exact on a piecewise-linear wind and differentiable, on integrix ([#454](https://github.com/jejjohnson/plumax/issues/454)) ([26d036f](https://github.com/jejjohnson/plumax/commit/26d036f0bd9e0ab9a78f29c7a7a385254f0cabc3)), closes [#419](https://github.com/jejjohnson/plumax/issues/419)
+* **les_fvm:** stable_step_bound is integrix's stable_step, so a negative speed counts by its size and a NaN or negative input is refused ([#440](https://github.com/jejjohnson/plumax/issues/440)) ([e5dcbfc](https://github.com/jejjohnson/plumax/commit/e5dcbfc2ec5ce3169436623b2341bf9079fda607)), closes [#422](https://github.com/jejjohnson/plumax/issues/422)
+* **les_fvm:** the periodic seam is advected like any other face, through gridax's bc= ([#438](https://github.com/jejjohnson/plumax/issues/438)) ([0a6f568](https://github.com/jejjohnson/plumax/commit/0a6f568020de87f237607431a19afd9eec7369ba)), closes [#415](https://github.com/jejjohnson/plumax/issues/415)
+* **met:** load_wrf with a LocalFrame refuses points outside the WRF mass points, through functax's locate_curvilinear ([#452](https://github.com/jejjohnson/plumax/issues/452)) ([e5eeafe](https://github.com/jejjohnson/plumax/commit/e5eeafe12d45219b09a29f932eb9058a9172d797)), closes [#423](https://github.com/jejjohnson/plumax/issues/423)
+* **population:** detection probabilities keep their lower tail, through ndtr and expm1, in place of one minus a tail ([#451](https://github.com/jejjohnson/plumax/issues/451)) ([58c31e8](https://github.com/jejjohnson/plumax/commit/58c31e8538b26c2f8902dd7bb3a23ad79c81e7d1)), closes [#421](https://github.com/jejjohnson/plumax/issues/421)
+* **population:** phase_hours and peak_day put the peak where they say, in place of a quarter period later ([#453](https://github.com/jejjohnson/plumax/issues/453)) ([f783852](https://github.com/jejjohnson/plumax/commit/f783852870fc3f2dc5e9d79150632a303840bda5)), closes [#437](https://github.com/jejjohnson/plumax/issues/437)
+* **priors:** load_inventory and load_era5 refuse an unevenly spaced latitude axis, a missing row among them, as they refuse longitudes ([#449](https://github.com/jejjohnson/plumax/issues/449)) ([5130e2e](https://github.com/jejjohnson/plumax/commit/5130e2ead3561d94db5191470778fbc4fbd250b8)), closes [#417](https://github.com/jejjohnson/plumax/issues/417)
+* **priors:** per_tile_background refuses a receptor without a finite position, which it used to put into tile (0, 0) ([#444](https://github.com/jejjohnson/plumax/issues/444)) ([b4e9980](https://github.com/jejjohnson/plumax/commit/b4e9980fb82620c531e98452f58fe1c4418acf8f)), closes [#418](https://github.com/jejjohnson/plumax/issues/418)
+* **shared:** require_positive skips a tuple, list or dict that holds a tracer, through pipekit_ops.is_traced ([#439](https://github.com/jejjohnson/plumax/issues/439)) ([419f9a7](https://github.com/jejjohnson/plumax/commit/419f9a77dc6e9e8ea4ea33ea174210b31d9f25d0)), closes [#424](https://github.com/jejjohnson/plumax/issues/424)
+
+
+### Code Refactoring
+
+* **lagrangian:** the particles, the gridded wind, the deposits and the footprint come from tracerax ([#412](https://github.com/jejjohnson/plumax/issues/412)) ([20c923b](https://github.com/jejjohnson/plumax/commit/20c923ba50630ed394d3638fde5b180e184d2322))
+
 ## [0.4.1](https://github.com/jejjohnson/plumax/compare/v0.4.0...v0.4.1) (2026-11-25)
 
 
