@@ -121,10 +121,11 @@ def test_periodic_wind_seam_conserves_with_nonuniform_wind():
     u = _edge_pad_interior(rng.uniform(0.5, 2.0, size=g.interior_shape))
     v = _edge_pad_interior(rng.uniform(-1.5, 1.5, size=g.interior_shape))
     w = jnp.zeros(g.shape)
-    wrapped = advection_tendency(c, u, v, w, g, method="upwind1", periodic=(True, True))
-    unwrapped = advection_tendency(
-        c, u, v, w, g, method="upwind1", periodic=(False, False)
+    periodic, _ = build_default_concentration_bc(bc_x="periodic", bc_y="periodic")
+    wrapped = advection_tendency(
+        c, u, v, w, g, method="upwind1", horizontal_bc=periodic
     )
+    unwrapped = advection_tendency(c, u, v, w, g, method="upwind1")
     # Fully periodic: matched seams => total interior tendency vanishes.
     np.testing.assert_allclose(
         float(jnp.sum(wrapped[1:-1, 1:-1, 1:-1])), 0.0, atol=1e-5
@@ -141,8 +142,13 @@ def test_periodic_wind_seam_wrap_only_flagged_axis():
     u = _edge_pad_interior(rng.uniform(0.5, 2.0, size=g.interior_shape))
     v = jnp.zeros(g.shape)
     w = jnp.zeros(g.shape)
-    only_x = advection_tendency(c, u, v, w, g, method="upwind1", periodic=(True, False))
-    none = advection_tendency(c, u, v, w, g, method="upwind1", periodic=(False, False))
+    x_periodic, _ = build_default_concentration_bc(
+        bc_x="periodic", bc_y=("outflow", "outflow")
+    )
+    only_x = advection_tendency(
+        c, u, v, w, g, method="upwind1", horizontal_bc=x_periodic
+    )
+    none = advection_tendency(c, u, v, w, g, method="upwind1")
     # The x-wrap changes the west/east wall fluxes, so the result differs.
     assert not np.allclose(np.asarray(only_x), np.asarray(none))
 
@@ -224,3 +230,36 @@ def test_periodic_axes_detection():
         bc_x=("outflow", "outflow"), bc_y="periodic"
     )
     assert periodic_axes(hbc2) == (False, True)
+
+
+@pytest.mark.parametrize("method", ["weno5", "van_leer", "upwind1"])
+def test_periodic_seam_is_a_face_like_any_other(method):
+    """On a periodic axis, moving the tracer moves its tendency with it.
+
+    A uniform wind on a y-periodic grid commutes with a shift along y. With the
+    seam read as an open wall it did not: the seam faces were first-order
+    upwind and the scheme narrowed next to them, so the tendency changed with
+    where the plume sat.
+    """
+    g = _build_grid()
+    hbc, vbc = build_default_concentration_bc(bc_y="periodic")
+    rhs = EulerianDispersionRHS(
+        plume_grid=g,
+        wind_field=uniform_wind_field(g, u=1.0, v=2.0, w=0.0),
+        eddy_diffusivity=EddyDiffusivity(horizontal=0.0, vertical=0.0),
+        source=_zero_source(g),
+        horizontal_bc=hbc,
+        vertical_bc=vbc,
+        advection_scheme=method,
+    )
+    rng = np.random.default_rng(4)
+    inside = rng.uniform(size=g.interior_shape)
+
+    def tendency(cells):
+        c = jnp.zeros(g.shape).at[1:-1, 1:-1, 1:-1].set(cells)
+        return np.asarray(rhs(jnp.asarray(0.0), c)[1:-1, 1:-1, 1:-1])
+
+    expected = np.roll(tendency(inside), 5, axis=1)
+    moved = tendency(np.roll(inside, 5, axis=1))
+    scale = np.abs(expected).max()
+    np.testing.assert_allclose(moved, expected, rtol=0, atol=1e-12 * scale)

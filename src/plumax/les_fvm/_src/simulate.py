@@ -16,6 +16,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
+from integrix.march import stable_step
 from jaxtyping import Array, Float
 
 from plumax._src.dataset import label_concentrations
@@ -416,7 +417,8 @@ def stable_step_bound(
     dx, dy, dz : float
         Grid spacing [m].
     max_u, max_v, max_w : float
-        Component-wise maximum wind speed |u|, |v|, |w| over the run [m/s].
+        Component-wise maximum wind speed |u|, |v|, |w| over the run [m/s];
+        the sign is ignored.
     k_h, k_z : float
         Maximum horizontal / vertical eddy diffusivity [m²/s].
     cfl_safety : float, default 1.0
@@ -429,9 +431,17 @@ def stable_step_bound(
     float
         The maximum stable ``dt0`` [s].
 
+    Raises
+    ------
+    integrix.exceptions.ValidationError
+        A ``ValueError``: a spacing or ``cfl_safety`` is not finite and
+        positive, a speed or diffusivity is not finite, or a diffusivity is
+        negative.
+
     Notes
     -----
-    This is a first-order (upwind / forward-Euler) sum-CFL estimate — a
+    This is :func:`integrix.march.stable_step` on the three axes: a
+    first-order (upwind / forward-Euler) sum-CFL estimate — a
     conservative safety net that catches gross step-size errors (the
     ``dt0``-orders-of-magnitude-too-large failure mode). It is **not** a
     rigorous stability certificate for the higher-order or low-dissipation
@@ -440,13 +450,14 @@ def stable_step_bound(
     RK step can amplify their weakly-damped modes even below this bound. Keep
     ``dt0`` comfortably under the reported value when using such schemes.
     """
-    adv_rate = max_u / dx + max_v / dy + max_w / dz
-    diff_rate = 2.0 * (k_h / dx**2 + k_h / dy**2 + k_z / dz**2)
-    # Advection + diffusion act in the same explicit step, so the stable-step
-    # limit is set by the summed rate — 1/(adv_rate + diff_rate) — not by the
-    # looser min(1/adv_rate, 1/diff_rate).
-    total_rate = adv_rate + diff_rate
-    return float("inf") if total_rate <= 0.0 else cfl_safety / total_rate
+    # h_max = CFL / (Σᵢ |uᵢ|/Δxᵢ + 2 Σᵢ Kᵢ/Δxᵢ²), with K_h on both horizontal axes
+    bound = stable_step(
+        (dx, dy, dz),
+        speed=(max_u, max_v, max_w),
+        diffusivity=(k_h, k_h, k_z),
+        cfl=cfl_safety,
+    )
+    return float(bound)
 
 
 def _max_wind_components(
