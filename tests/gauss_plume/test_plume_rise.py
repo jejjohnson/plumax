@@ -277,3 +277,24 @@ def test_simulate_plume_with_rise_lifts_the_plume():
     ].sum()
     assert float(risen_height) > float(flat_height)
     assert risen.attrs == flat.attrs
+
+
+STACK = {"exit_velocity": 10.0, "stack_diameter": 2.0, "ambient_temperature": 290.0}
+
+
+def test_a_nan_distance_gives_a_nan_rise():
+    # the guarded power mapped NaN to 0, so a missing distance gave no rise
+    rise = briggs_plume_rise(
+        jnp.array([jnp.nan, 100.0]), wind_speed=5.0, exit_temperature=400.0, **STACK
+    )
+    assert bool(jnp.isnan(rise[0])) and bool(jnp.isfinite(rise[1]))
+
+
+def test_a_nan_exit_temperature_gives_a_nan_rise_under_jit():
+    # traced, the eager check is skipped, and the rise used to be 12 m
+    hot = jax.jit(
+        lambda temperature: briggs_plume_rise(
+            jnp.array([100.0]), wind_speed=5.0, exit_temperature=temperature, **STACK
+        )
+    )
+    assert bool(jnp.isnan(hot(jnp.asarray(jnp.nan))).all())

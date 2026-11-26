@@ -40,6 +40,7 @@ from __future__ import annotations
 import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import Array, Float
+from pipekit_array.arrays import safe_power
 
 from plumax._src.constants import GRAVITY
 from plumax._src.errors import ParameterError
@@ -60,13 +61,9 @@ _BUOYANCY_FLUX_BREAK = 55.0
 def _safe_power(
     base: float | Float[Array, "*shape"], exponent: float
 ) -> Float[Array, "*shape"]:
-    # b^p with b ≤ 0 mapped to 0 and a finite gradient there: fractional
-    # powers have an infinite slope at 0, so take the power of 1 on that side
-    # (the double-where trick)
-    base = jnp.asarray(base)
-    is_positive = base > 0.0
-    safe_base = jnp.where(is_positive, base, 1.0)
-    return jnp.where(is_positive, safe_base**exponent, 0.0)
+    # b^p for b > 0, 0 with a zero gradient for b ≤ 0, and NaN for NaN: a
+    # missing input gives a missing rise, not none
+    return safe_power(jnp.asarray(base), exponent, jnp)
 
 
 class BriggsPlumeRise(eqx.Module):
