@@ -264,6 +264,12 @@ def _latlon(
     return lat.values, lon.values
 
 
+#: Index slack [cells] within which a target counts as on the edge of the WRF
+#: mass points: the inverse of an edge cell's bilinear map returns about −1e-14
+#: on its first row or column in float64, and −5e-6 in float32.
+_EDGE_SLACK: float = 1e-4
+
+
 def _wrf_index_map(
     lat: Float[np.ndarray, "src_y src_x"],
     lon: Float[np.ndarray, "src_y src_x"],
@@ -283,16 +289,25 @@ def _wrf_index_map(
     # (x, y) of every mass point in the frame
     mass_x, mass_y = frame.to_xy(lat, lon)
     grid = CurvilinearGrid(x=jnp.asarray(mass_x), y=jnp.asarray(mass_y))
+    # the largest row and column index of a mass point
+    last_index = np.array(lat.shape, dtype=float) - 1.0
 
     def to_index(
         frame_x: Float[np.ndarray, "y x"], frame_y: Float[np.ndarray, "y x"]
     ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
         targets = einx.id("y x, y x -> (y x) (1 + 1)", frame_x, frame_y)
         # u = (r + s, c + t), with x(s, t) = x_* in cell (r, c)
-        cell, offset, inside = locate_curvilinear(grid, jnp.asarray(targets))
-        # NaN where the target is outside the mass points
+        cell, offset, _ = locate_curvilinear(grid, jnp.asarray(targets))
+        position = np.asarray(cell + offset)
+        # inside the mass points, with a slack of _EDGE_SLACK cells: a target on
+        # the first row or column comes back at about −1e-14 (−5e-6 in float32)
+        inside = einx.all(
+            "t c -> t",
+            (position >= -_EDGE_SLACK) & (position <= last_index + _EDGE_SLACK),
+        )
+        # NaN where the target is outside, and the edge targets onto the edge
         position = einx.where(
-            "t, t c, -> t c", np.asarray(inside), np.asarray(cell + offset), np.nan
+            "t, t c, -> t c", inside, np.clip(position, 0.0, last_index), np.nan
         )
         num_y, num_x = frame_x.shape
         # j along the rows of mass points, i along the columns
