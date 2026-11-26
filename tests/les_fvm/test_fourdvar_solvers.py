@@ -79,6 +79,18 @@ def linear_lbfgs(linear_problem):
     return solve_4dvar(linear_problem, rtol=1e-10, atol=1e-12, max_steps=500)
 
 
+@pytest.mark.filterwarnings("error::DeprecationWarning")
+def test_gauss_newton_uses_no_deprecated_vardax_setting(linear_problem):
+    # vardax removes IncrementalConfig's n_outer, n_inner and CG tolerances in its
+    # next release; the budget goes to IncrementalFourDVar as argminax's solver
+    model, _ = linear_problem.incremental_analysis(
+        outer_iters=3, inner_iters=7, rtol=1e-10, atol=1e-12
+    )
+    assert model.n_outer == 3
+    cg = model.solver.descent.linear_solver.inner.inner_solver
+    assert (cg.max_steps, cg.rtol, cg.atol) == (7, 1e-10, 1e-12)
+
+
 @pytest.mark.slow
 def test_methods_agree_linear(linear_problem, linear_lbfgs):
     # the forward is affine, so the linearised cost is the cost itself: one outer
