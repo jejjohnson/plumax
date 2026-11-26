@@ -65,7 +65,8 @@ def per_tile_background(
             f"got {positions.shape}"
         )
     require_positive("tile_m", tile_m, caller="per_tile_background", error=PlumaxError)
-    placed = np.isfinite(positions).all(axis=1)
+    # a receptor is placed when both of its coordinates are finite
+    placed = einx.all("obs c -> obs", np.isfinite(positions))
     if not placed.all():
         unplaced = np.flatnonzero(~placed)
         raise GridMismatchError(
