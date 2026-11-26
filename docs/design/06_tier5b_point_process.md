@@ -23,7 +23,7 @@ $$
 $$
 
 $$
-\lambda(t) \;=\; \lambda_0 + A \sin\!\left(\frac{2\pi t}{T_\text{day}} + \varphi\right) \qquad \text{(solar-heated tank cycles)}
+\lambda(t) \;=\; \lambda_0 + A \cos\!\left(\frac{2\pi t}{T_\text{day}} - \varphi\right) \qquad \text{(solar-heated tank cycles, peaking at } t = \varphi T_\text{day} / 2\pi\text{)}
 $$
 
 $$

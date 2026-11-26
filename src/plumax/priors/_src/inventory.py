@@ -20,7 +20,8 @@ from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 
 
-#: Relative deviation of a longitude step from the median step taken as a gap.
+#: Relative deviation of a latitude or longitude step from the median step taken
+#: as a gap.
 GAP_TOLERANCE: float = 1e-2
 
 

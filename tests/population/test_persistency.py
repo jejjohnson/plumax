@@ -303,7 +303,7 @@ def test_mc_self_consistency(start):
 
 @pytest.mark.validation
 def test_posterior_coverage():
-    # conjugate in the mean: λ(t) = λ₀ + A sin(2πt − φ) over whole days integrates
+    # conjugate in the mean: λ(t) = λ₀ + A cos(2πt − φ) over whole days integrates
     # to λ₀ T, so N ~ Poisson(λ₀ T) and λ₀ | N ~ Gamma(α₀ + N, β₀ + T)
     true_rate = 1.5
     days = 20.0
