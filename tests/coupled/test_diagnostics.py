@@ -20,7 +20,9 @@ from plumax.coupled import (
     CoupledProblem,
     FitDiagnostics,
     Instrument,
+    PlumeSource,
     build_coupled_forward,
+    column_response,
     fit_diagnostics,
     solve_coupled,
 )
@@ -314,3 +316,49 @@ def test_reduced_chi2_is_one_on_scenes_with_the_right_noise():
     assert abs(mean - 1.0) < 3.0 * standard_error, (
         f"mean reduced χ² {mean:.4f} over {n_scenes} scenes, se {standard_error:.4f}"
     )
+
+
+def _mixed_unit_problem():
+    """A source position in metres beside a background in kg m⁻²."""
+    source = PlumeSource(
+        location=(0.0, 0.0, 10.0),
+        wind_speed=5.0,
+        wind_direction=270.0,
+        stability_class="D",
+        column_z=jnp.linspace(0.0, 200.0, 11),
+    )
+    x, y = np.meshgrid(
+        np.linspace(150.0, 900.0, 8), np.linspace(-100.0, 100.0, 9), indexing="ij"
+    )
+    receptors = np.column_stack([x.ravel(), y.ravel()])
+    scale = float(jnp.max(column_response(source, Instrument("A", receptors))))
+    instrument = Instrument("A", receptors, retrieval_variance=(0.002 * scale) ** 2)
+    prior = CoupledPrior.from_std(
+        {"emission_rate": 0.1, "location": jnp.zeros(2), "background": 0.0},
+        {
+            "emission_rate": 0.05,
+            "location": jnp.full(2, 50.0),
+            "background": 0.01 * scale,
+        },
+    )
+    return CoupledProblem(
+        forward=build_coupled_forward(source, [instrument]),
+        prior=prior,
+        observations={"A": 0.1 * column_response(source, instrument)},
+    )
+
+
+def test_cramer_rao_bound_does_not_depend_on_the_units_of_a_block():
+    """A background in kg m⁻² must not hide a position in metres.
+
+    The null space used to be cut at 1e-10 of F's largest eigenvalue, in mixed
+    units, so the background's 5e11 put every other eigenvalue under the cut.
+    """
+    problem = _mixed_unit_problem()
+    report = fit_diagnostics(problem, solve_coupled(problem))
+    dense = np.sqrt(np.diag(np.linalg.inv(np.asarray(report.fisher_information))))
+    flat = np.concatenate(
+        [np.ravel(report.cramer_rao_std[name]) for name, _ in problem.prior.layout]
+    )
+    assert np.all(np.isfinite(flat))
+    np.testing.assert_allclose(flat, dense, rtol=1e-8)
