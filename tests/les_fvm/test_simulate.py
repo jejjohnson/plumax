@@ -330,6 +330,30 @@ def test_stable_step_bound_formula():
     ) == float("inf")
 
 
+def test_stable_step_bound_ignores_the_sign_of_a_speed():
+    from plumax.les_fvm import stable_step_bound
+
+    common = dict(dx=1.0, dy=1.0, dz=1.0, max_v=0.0, max_w=0.0, k_h=0.1, k_z=0.0)
+    # 1 / (3/1 + 2·(0.1 + 0.1)) for either sign of u
+    expected = 1.0 / (3.0 + 0.4)
+    np.testing.assert_allclose(stable_step_bound(max_u=-3.0, **common), expected)
+    np.testing.assert_allclose(stable_step_bound(max_u=3.0, **common), expected)
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"dx": -1.0}, {"k_h": float("nan")}, {"k_z": -0.5}, {"max_u": float("inf")}],
+    ids=["negative spacing", "NaN diffusivity", "negative diffusivity", "inf speed"],
+)
+def test_stable_step_bound_refuses_what_has_no_bound(bad):
+    from plumax.les_fvm import stable_step_bound
+
+    kwargs = dict(dx=1.0, dy=1.0, dz=1.0, max_u=3.0, max_v=0.0, max_w=0.0)
+    kwargs |= dict(k_h=0.1, k_z=0.0) | bad
+    with pytest.raises(ValueError):
+        stable_step_bound(**kwargs)
+
+
 @pytest.mark.slow
 def test_fixed_step_solver_runs_within_stability_bound():
     # A bound-compliant dt0 on a fixed-step solver integrates normally.
