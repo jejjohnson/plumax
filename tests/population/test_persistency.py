@@ -31,8 +31,8 @@ from plumax.population.processes import make_process
 
 
 EPS = float(jnp.finfo(float).eps)
-# λ(t) = λ₀ + A sin(2πt − φ) peaks 6 h after phase_hours: 14:00 here, trough 02:00
-DIURNAL = {"lambda_0": 2.0, "amplitude": 1.6, "phase_hours": 8.0}
+# λ(t) = λ₀ + A cos(2πt − φ) peaks at phase_hours: 14:00 here, trough 02:00
+DIURNAL = {"lambda_0": 2.0, "amplitude": 1.6, "phase_hours": 14.0}
 
 
 def _dense_wait(kernel, t: float, *, days: float, per_day: int) -> float:
@@ -112,7 +112,7 @@ def test_counts_over_adjoining_horizons_add():
 @pytest.mark.slow
 def test_diurnal_sanity():
     # the 06c check: peak λ at 14:00 means a much shorter wait than at 02:00
-    kernel = DiurnalSinusoidalIntensity(lambda_0=8.0, amplitude=7.2, phase_hours=8.0)
+    kernel = DiurnalSinusoidalIntensity(lambda_0=8.0, amplitude=7.2, phase_hours=14.0)
     at_peak = float(expected_wait_time(kernel, 14.0 / 24.0))
     at_trough = float(expected_wait_time(kernel, 2.0 / 24.0))
     assert at_peak < 0.5 * at_trough

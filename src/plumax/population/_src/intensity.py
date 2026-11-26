@@ -163,7 +163,7 @@ class DiurnalSinusoidalIntensity(PriorTableMixin, eqx.Module):
         midstream gathering systems.
 
     Equation:
-            λ(t) = max(0, λ₀ + A · sin(2πt − φ))
+            λ(t) = max(0, λ₀ + A · cos(2πt − φ))
             φ = 2π · (φ_h / 24)
 
         Period = 1 day. Over one full cycle: Λ(1) = λ₀.
@@ -194,8 +194,8 @@ class DiurnalSinusoidalIntensity(PriorTableMixin, eqx.Module):
         """
         # φ = 2π (φ_h / 24)
         phase = _diurnal_phase(self.phase_hours)
-        # λ = λ₀ + A sin(2π t − φ)
-        raw = self.lambda_0 + self.amplitude * jnp.sin(2.0 * jnp.pi * t - phase)
+        # λ = λ₀ + A cos(2π t − φ), largest at t = φ_h / 24
+        raw = self.lambda_0 + self.amplitude * jnp.cos(2.0 * jnp.pi * t - phase)
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:
@@ -232,7 +232,7 @@ class SeasonalSinusoidalIntensity(PriorTableMixin, eqx.Module):
         permafrost thermokarst lakes, CAFOs.
 
     Equation:
-            λ(t) = max(0, λ₀ + A · sin(2π/365.25 · (t − t_peak)))
+            λ(t) = max(0, λ₀ + A · cos(2π/365.25 · (t − t_peak)))
 
         Over one full year: Λ(365.25) = λ₀ · 365.25.
 
@@ -260,7 +260,7 @@ class SeasonalSinusoidalIntensity(PriorTableMixin, eqx.Module):
         Returns:
             Intensity [events day⁻¹], clamped ≥ 0. Shape ``(N,)``.
         """
-        raw = self.lambda_0 + self.amplitude * jnp.sin(
+        raw = self.lambda_0 + self.amplitude * jnp.cos(
             _seasonal_phase(t, self.peak_day)
         )
         return jnp.clip(raw, min=0.0)
@@ -301,7 +301,7 @@ class DiurnalSeasonalIntensity(PriorTableMixin, eqx.Module):
         agricultural biodigesters, tropical rice paddies.
 
     Equation:
-            λ(t) = max(0, λ₀ + A_d·sin(2πt − φ_d) + A_s·sin(ω_s·(t − t_peak)))
+            λ(t) = max(0, λ₀ + A_d·cos(2πt − φ_d) + A_s·cos(ω_s·(t − t_peak)))
             ω_s = 2π/365.25,  φ_d = 2π·(φ_h/24)
 
     Attributes:
@@ -337,8 +337,8 @@ class DiurnalSeasonalIntensity(PriorTableMixin, eqx.Module):
         φ_d = _diurnal_phase(self.phase_hours)
         raw = (
             self.lambda_0
-            + self.amp_diurnal * jnp.sin(2.0 * jnp.pi * t - φ_d)
-            + self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
+            + self.amp_diurnal * jnp.cos(2.0 * jnp.pi * t - φ_d)
+            + self.amp_seasonal * jnp.cos(_seasonal_phase(t, self.peak_day))
         )
         return jnp.clip(raw, min=0.0)
 
@@ -379,8 +379,8 @@ class SeasonallyModulatedDiurnalIntensity(PriorTableMixin, eqx.Module):
         imagers (GHGSat 25 m, Tanager 30 m).
 
     Equation:
-            A_d(t) = (A_sum + A_win)/2 + (A_sum − A_win)/2 · sin(ω_s·(t − t_pk))
-            λ(t) = max(0, λ₀ + A_d(t) · sin(2πt − φ_d))
+            A_d(t) = (A_sum + A_win)/2 + (A_sum − A_win)/2 · cos(ω_s·(t − t_pk))
+            λ(t) = max(0, λ₀ + A_d(t) · cos(2πt − φ_d))
 
     Attributes:
         lambda_0: Grand mean intensity [events day⁻¹].
@@ -415,12 +415,12 @@ class SeasonallyModulatedDiurnalIntensity(PriorTableMixin, eqx.Module):
         φ_d = _diurnal_phase(self.phase_hours)
         amp_mean = (self.amp_summer + self.amp_winter) / 2.0
         amp_diff = (self.amp_summer - self.amp_winter) / 2.0
-        # A(t) = A_mean + A_diff sin(ω_s (t − t_peak))
-        seasonal_amplitude = amp_mean + amp_diff * jnp.sin(
+        # A(t) = A_mean + A_diff cos(ω_s (t − t_peak))
+        seasonal_amplitude = amp_mean + amp_diff * jnp.cos(
             _seasonal_phase(t, self.peak_day)
         )
-        # λ = λ₀ + A(t) sin(2π t − φ_d)
-        raw = self.lambda_0 + seasonal_amplitude * jnp.sin(2.0 * jnp.pi * t - φ_d)
+        # λ = λ₀ + A(t) cos(2π t − φ_d)
+        raw = self.lambda_0 + seasonal_amplitude * jnp.cos(2.0 * jnp.pi * t - φ_d)
         return jnp.clip(raw, min=0.0)
 
     def max_intensity(self) -> jnp.ndarray:
@@ -759,7 +759,7 @@ class LandfillIntensity(PriorTableMixin, eqx.Module):
         (complex-scale), GHGSat/Tanager (cell-level).
 
     Equation:
-            λ(t) = max(0, λ₀ + A_s·sin(ω_s(t−t_pk)) + A_d·sin(ω_d·t−φ_d) + A_b·sin(ω_b·t))
+            λ(t) = max(0, λ₀ + A_s·cos(ω_s(t−t_pk)) + A_d·cos(ω_d·t−φ_d) + A_b·sin(ω_b·t))
             ω_s=2π/365.25, ω_d=2π, ω_b=2π/P_baro
 
     Attributes:
@@ -803,8 +803,8 @@ class LandfillIntensity(PriorTableMixin, eqx.Module):
         φ_d = _diurnal_phase(self.phase_hours)
         raw = (
             self.lambda_0
-            + self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
-            + self.amp_diurnal * jnp.sin(ω_d * t - φ_d)
+            + self.amp_seasonal * jnp.cos(_seasonal_phase(t, self.peak_day))
+            + self.amp_diurnal * jnp.cos(ω_d * t - φ_d)
             + self.amp_barometric * jnp.sin(ω_b * t)
         )
         return jnp.clip(raw, min=0.0)
@@ -1022,7 +1022,7 @@ class LivestockFeedlotIntensity(PriorTableMixin, eqx.Module):
     Equation:
             G_am(t) = exp(−(h − h_am)² / (2w²))
             G_pm(t) = exp(−(h − h_pm)² / (2w²))
-            λ(t) = max(0, λ₀ + A_f·(G_am + G_pm) + A_s·sin(ω_s(t − t_peak)))
+            λ(t) = max(0, λ₀ + A_f·(G_am + G_pm) + A_s·cos(ω_s(t − t_peak)))
             h = (t mod 1)·24
 
     Attributes:
@@ -1071,7 +1071,7 @@ class LivestockFeedlotIntensity(PriorTableMixin, eqx.Module):
         evening_gate = jnp.exp(
             -0.5 * ((hour_of_day - self.evening_feed_hour) / width) ** 2
         )
-        seasonal = self.amp_seasonal * jnp.sin(_seasonal_phase(t, self.peak_day))
+        seasonal = self.amp_seasonal * jnp.cos(_seasonal_phase(t, self.peak_day))
         raw = (
             self.lambda_0 + self.amp_feeding * (morning_gate + evening_gate) + seasonal
         )

@@ -59,7 +59,9 @@ def _tmtpp_log_density(intensity, params):
         (
             "diurnal",
             {"lambda_0": 1.2, "amplitude": 0.5, "phase_hours": 14.0},
-            -28.39781776118004,
+            # re-recorded for #437: the kernel now peaks at phase_hours, not 6 h
+            # later (it was -28.39781776118004)
+            -27.984796619319567,
         ),
     ],
 )
