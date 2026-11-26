@@ -246,6 +246,14 @@ def test_regional_subset_gap_across_greenwich_is_not_coverage(tmp_path):
         )
 
 
+def test_a_missing_latitude_row_is_rejected(tmp_path, frame, grid):
+    # the index map divides by the first step, so a missing row was read from the
+    # wrong place (30.6° as 30.7°) where a missing column already raised
+    lat = np.delete(LAT, 1)
+    with pytest.raises(ValueError, match="latitudes are not evenly spaced"):
+        load_era5(*write_era5(tmp_path, lat=lat), plume_grid=grid, frame=frame)
+
+
 def test_single_levels_on_another_grid_are_rejected(tmp_path, frame, grid):
     pl, sl = write_era5(tmp_path, sl_lon=LON + 0.125)
     with pytest.raises(ValueError, match="different lat/lon grids"):
