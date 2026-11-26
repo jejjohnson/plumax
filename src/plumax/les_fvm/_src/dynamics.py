@@ -63,9 +63,10 @@ class EulerianDispersionRHS(eqx.Module):
         del args
         # Enforce BCs before reading neighbours in the advection/diffusion
         # stencils so ghost cells reflect the current physical BC state. The
-        # horizontal operators run in gridax ``wall="open"`` mode, so these
-        # ghost values drive the lateral wall fluxes; the vertical operators
-        # read the top/bottom ghost slices directly.
+        # horizontal diffusion runs in gridax ``wall="open"`` mode, so these
+        # ghost values drive its lateral wall fluxes; horizontal advection
+        # fills its own ghost layers from the conditions; the vertical
+        # operators read the top/bottom ghost slices directly.
         #
         # Advection and diffusion need *different* Dirichlet ghosts: advection
         # upwinds the ghost as an exterior cell value (ghost = value), while
@@ -86,9 +87,9 @@ class EulerianDispersionRHS(eqx.Module):
             plume_grid=self.plume_grid,
         )
         wind_east, wind_north, wind_up = self.wind_field(t)
-        # Wrap the normal wind / field-diffusivity halos on periodic axes so
-        # the paired seam faces stay conservative under a spatially-varying
-        # wind or K_h (see periodic_axes / the tendency `periodic=` argument).
+        # Advection takes the lateral conditions itself. Diffusion wraps a
+        # field K_h on the periodic axes, so the paired seam faces stay
+        # conservative (see periodic_axes).
         periodic = periodic_axes(self.horizontal_bc)
         adv = advection_tendency(
             advection_concentration,
@@ -97,7 +98,7 @@ class EulerianDispersionRHS(eqx.Module):
             wind_up,
             self.plume_grid,
             method=self.advection_scheme,
-            periodic=periodic,
+            horizontal_bc=self.horizontal_bc,
         )
         diff = diffusion_tendency(
             diffusion_concentration,
