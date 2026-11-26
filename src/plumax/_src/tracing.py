@@ -6,22 +6,23 @@ from typing import overload
 
 import equinox as eqx
 import jax
-import jax.core
 import numpy as np
 from jaxtyping import Array, ArrayLike, Bool
+from pipekit_ops import is_traced
 
 from plumax._src.errors import ParameterError
 
 
 def _is_traced(*values: object) -> bool:
-    """Return ``True`` if any value is a JAX tracer (i.e. we're inside a transform).
+    """Return ``True`` if any value is, or holds, a JAX tracer.
 
     Used to skip the eager value-validation ``if`` checks under ``jit`` / ``grad``
     / ``vmap``, where converting a traced scalar to a Python ``bool`` would raise
-    ``TracerBoolConversionError``. Validation still runs for concrete inputs, so
-    ordinary callers keep the helpful error messages.
+    ``TracerBoolConversionError``. A tuple, list or dict counts as traced when
+    any of its leaves is (:func:`pipekit_ops.is_traced`). Validation still runs
+    for concrete inputs, so ordinary callers keep the helpful error messages.
     """
-    return any(isinstance(value, jax.core.Tracer) for value in values)
+    return any(is_traced(value) for value in values)
 
 
 def require_positive(
