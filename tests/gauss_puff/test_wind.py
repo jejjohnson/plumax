@@ -1,7 +1,8 @@
-"""Tests for the wind schedule and diffrax cumulative integrals."""
+"""Tests for the wind schedule and its cumulative integrals."""
 
 from __future__ import annotations
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -86,3 +87,117 @@ def test_wind_at_interpolates_linearly():
     u, v = sched.wind_at(jnp.asarray(5.0))
     np.testing.assert_allclose(float(u), 7.5, atol=1e-5)
     np.testing.assert_allclose(float(v), 0.0, atol=1e-5)
+
+
+def _hourly_day() -> WindSchedule:
+    """A 24 h hourly wind near 5 m/s whose direction drifts (#419), in float64."""
+    rng = np.random.default_rng(0)
+    speed = np.clip(5.0 + np.cumsum(rng.normal(0.0, 0.6, 25)), 1.0, 10.0)
+    heading = 240.0 + np.cumsum(rng.normal(0.0, 8.0, 25))
+    low = WindSchedule.from_speed_direction(np.arange(25) * 3600.0, speed, heading)
+    times, u_wind, v_wind = (
+        jnp.asarray(array, dtype=jnp.float64)
+        for array in (low.times, low.u_wind, low.v_wind)
+    )
+    return WindSchedule(times=times, u_wind=u_wind, v_wind=v_wind)
+
+
+def _gauss_legendre_reference(schedule: WindSchedule, save_at: np.ndarray):
+    """(I_u, I_v, S) by 400-point Gauss–Legendre on every node interval, in NumPy."""
+    times = np.asarray(schedule.times)
+    u_wind, v_wind = np.asarray(schedule.u_wind), np.asarray(schedule.v_wind)
+    nodes = np.unique(np.concatenate([times, save_at]))
+    unit_nodes, unit_weights = np.polynomial.legendre.leggauss(400)
+    middle = 0.5 * (nodes[1:] + nodes[:-1])
+    half = 0.5 * np.diff(nodes)
+    # τ_{n,q} = m_n + h_n ξ_q
+    points = middle[:, None] + half[:, None] * unit_nodes
+    u_at = np.interp(points, times, u_wind)
+    v_at = np.interp(points, times, v_wind)
+
+    def running(values):
+        # ∫ over each interval, h_n Σ_q w_q f(τ_{n,q}), summed from t_0
+        pieces = (values @ unit_weights) * half
+        return np.interp(save_at, nodes, np.concatenate([[0.0], np.cumsum(pieces)]))
+
+    return running(u_at), running(v_at), running(np.hypot(u_at, v_at))
+
+
+@pytest.mark.slow
+def test_day_of_hourly_wind_matches_quadrature_reference():
+    # #419: the diffrax solve was 13–30 m off over this day
+    schedule = _hourly_day()
+    save_at = np.linspace(0.0, 24 * 3600.0, 601)
+    integrals = cumulative_wind_integrals(schedule, jnp.asarray(save_at))
+    reference = _gauss_legendre_reference(schedule, save_at)
+    for value, expected in zip(integrals, reference, strict=True):
+        np.testing.assert_allclose(np.asarray(value), expected, rtol=0.0, atol=1e-6)
+
+
+@pytest.mark.slow
+def test_travel_gradient_matches_central_difference():
+    # #419: reverse mode raised, because the solve had max_steps=None
+    schedule = _hourly_day()
+    times, v_wind = schedule.times[:7], schedule.v_wind[:7]
+    save_at = jnp.linspace(0.0, 6 * 3600.0, 13)
+
+    def final_travel(u_wind):
+        integrals = cumulative_wind_integrals(
+            WindSchedule(times=times, u_wind=u_wind, v_wind=v_wind), save_at
+        )
+        return integrals[2][-1]
+
+    u_wind = schedule.u_wind[:7]
+    gradient = jax.grad(final_travel)(u_wind)
+    step = 1e-4
+    basis = jnp.eye(7)
+    central = jnp.stack(
+        [
+            (final_travel(u_wind + step * row) - final_travel(u_wind - step * row))
+            / (2.0 * step)
+            for row in basis
+        ]
+    )
+    assert bool(jnp.isfinite(gradient).all())
+    np.testing.assert_allclose(gradient, central, rtol=1e-6)
+
+
+def test_speed_at_has_a_zero_gradient_in_calm_air():
+    # #419: √(u² + v²) at zero gave a NaN gradient
+    times = jnp.array([0.0, 10.0, 20.0])
+
+    def speed(u_wind):
+        schedule = WindSchedule(times=times, u_wind=u_wind, v_wind=jnp.zeros(3))
+        return schedule.speed_at(jnp.asarray(0.0))
+
+    gradient = jax.grad(speed)(jnp.zeros(3))
+    np.testing.assert_array_equal(gradient, jnp.zeros(3))
+
+
+def test_save_time_before_first_knot_is_refused():
+    schedule = WindSchedule(
+        times=jnp.array([10.0, 20.0]), u_wind=jnp.ones(2), v_wind=jnp.zeros(2)
+    )
+    with pytest.raises(ValueError, match="before the wind schedule's first knot"):
+        cumulative_wind_integrals(schedule, jnp.array([5.0, 15.0]))
+
+
+def test_wind_at_extrapolates_past_both_ends():
+    times = jnp.array([0.0, 10.0, 30.0])
+    schedule = WindSchedule(
+        times=times, u_wind=jnp.array([1.0, -2.0, 4.0]), v_wind=jnp.zeros(3)
+    )
+    # u(−10) continues the first segment, u(40) the last
+    before, _ = schedule.wind_at(jnp.asarray(-10.0))
+    after, _ = schedule.wind_at(jnp.asarray(40.0))
+    np.testing.assert_allclose([float(before), float(after)], [4.0, 7.0], atol=1e-12)
+
+
+def test_one_knot_is_a_constant_wind():
+    schedule = WindSchedule(
+        times=jnp.array([0.0]), u_wind=jnp.array([2.0]), v_wind=jnp.array([0.0])
+    )
+    east, north, travel = cumulative_wind_integrals(schedule, jnp.array([0.0, 5.0]))
+    np.testing.assert_allclose(east, [0.0, 10.0], atol=1e-12)
+    np.testing.assert_allclose(north, [0.0, 0.0], atol=1e-12)
+    np.testing.assert_allclose(travel, [0.0, 10.0], atol=1e-12)

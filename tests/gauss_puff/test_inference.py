@@ -273,10 +273,10 @@ def test_infer_emission_rate_rejects_bad_prior_mean():
 
 @pytest.mark.slow
 def test_predict_observations_matches_per_obs_evolve_puffs():
-    # The forward model solves the cumulative wind integrals ONCE over
-    # release ∪ observation times and gathers per observation. This must be
-    # numerically identical to the naive path that calls `evolve_puffs`
-    # (one ODE solve) per observation and evaluates the field there.
+    # The forward model computes the cumulative wind integrals ONCE over
+    # release ∪ observation times and gathers per observation. This must equal
+    # the naive path that calls `evolve_puffs` per observation and evaluates
+    # the field there.
     schedule = WindSchedule.from_speed_direction(
         jnp.linspace(0.0, 60.0, 13),
         jnp.linspace(4.0, 6.0, 13),  # non-constant speed exercises the integral
@@ -330,10 +330,9 @@ def test_predict_observations_matches_per_obs_evolve_puffs():
         ref.append(float(field[0]))
     ref_arr = np.asarray(ref)
 
-    # Both paths integrate the same wind schedule but over different SaveAt
-    # grids, so float32 diffrax picks slightly different adaptive steps: agree
-    # to solver tolerance, not bit-for-bit.
-    np.testing.assert_allclose(np.asarray(shared), ref_arr, rtol=3e-3, atol=1e-12)
+    # Both paths sum the same exact integrals over different node sets, so the
+    # float32 schedule agrees to rounding (#419; the diffrax solve needed 3e-3).
+    np.testing.assert_allclose(np.asarray(shared), ref_arr, rtol=1e-5, atol=1e-12)
 
 
 # ── #32: per-puff mass uses interval durations, conserving emitted mass ────────

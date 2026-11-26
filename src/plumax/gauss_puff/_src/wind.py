@@ -1,4 +1,4 @@
-"""Time-varying wind schedules with diffrax-based cumulative integrals.
+"""Time-varying wind schedules and their cumulative integrals.
 
 A Gaussian puff released at time ``t_r`` under a time-varying wind field
 ``V(t) = (u(t), v(t))`` satisfies the trivial ODE ``dX/dt = V(t)``, whose
@@ -14,26 +14,35 @@ current simulation time:
     I_v(t) = ∫_{t_0}^{t} v(τ) dτ                          [m]
     S(t)   = ∫_{t_0}^{t} √(u(τ)² + v(τ)²) dτ              [m]   (travel distance)
 
-We compute these with :func:`diffrax.diffeqsolve` driven by a piecewise
--linear wind interpolation, so the result is exact for piecewise-linear
-winds up to the solver tolerance, and handles arbitrary continuous winds
-with adaptive stepping.
+The wind is linear between its knots, so on the knots and the save times
+together the trapezoid rule gives I_u and I_v exactly (integrix's running
+trapezoid). The speed |V| is smooth between those nodes except where the wind
+passes through zero, so S is integrated per interval by adaptive
+Gauss–Kronrod (integrix). Both are differentiable in reverse mode.
 
 Public surface
 --------------
 - ``WindSchedule``              : equinox.Module wrapping (t, u, v) arrays
-- ``cumulative_wind_integrals`` : diffrax solve returning ``(I_u, I_v, S)``
+- ``cumulative_wind_integrals`` : running integrals ``(I_u, I_v, S)``
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import diffrax
+import einx
 import equinox as eqx
+import jax
 import jax.numpy as jnp
+from functax import quad as functax_quad
+from functax.interp import Linear, Policies
+from geophysix.wind import wind_speed as speed_of
+from integrix import adapt as integrix_adapt, scan as integrix_scan
+from integrix.march import SampledPath
 from jaxtyping import Array, Float
 
+from plumax._src.errors import ParameterError
+from plumax._src.tracing import require
 from plumax._src.wind import wind_components
 
 
@@ -57,7 +66,8 @@ class WindSchedule(eqx.Module):
     -----
     The schedule behaves as a piecewise-linear interpolant between knots.
     Queries outside ``[times[0], times[-1]]`` linearly extrapolate — consumers
-    that need strict clamping should range-check times before calling.
+    that need strict clamping should range-check times before calling. A
+    single knot is a constant wind.
     """
 
     times: Float[Array, " T"]
@@ -98,82 +108,143 @@ class WindSchedule(eqx.Module):
         )
         return cls(times=times_j, u_wind=wind_east, v_wind=wind_north)
 
-    def _interp_u(self) -> diffrax.LinearInterpolation:
-        return diffrax.LinearInterpolation(ts=self.times, ys=self.u_wind)
+    def _path(self) -> SampledPath:
+        """û(t) = (u(t), v(t)): linear between knots, continued linearly past them.
 
-    def _interp_v(self) -> diffrax.LinearInterpolation:
-        return diffrax.LinearInterpolation(ts=self.times, ys=self.v_wind)
+        A single knot is a constant wind, read through a second knot 1 s later.
+        """
+        times, u_wind, v_wind = self.times, self.u_wind, self.v_wind
+        if times.shape[0] == 1:
+            # one knot: û(t) = û₀ for every t
+            times = einx.id("one, one -> (one + one)", times, times + 1.0)
+            u_wind = einx.id("one, one -> (one + one)", u_wind, u_wind)
+            v_wind = einx.id("one, one -> (one + one)", v_wind, v_wind)
+        # û_k = (u_k, v_k)
+        samples = einx.id("knot, knot -> knot (1 + 1)", u_wind, v_wind)
+        return SampledPath.fit(
+            Linear(), times, samples, policies=Policies(outside="extrapolate")
+        )
 
     def wind_at(self, t: Float[Array, ""]) -> tuple[Float[Array, ""], Float[Array, ""]]:
-        """Interpolate the wind velocity components at time ``t``."""
-        return self._interp_u().evaluate(t), self._interp_v().evaluate(t)
+        """The wind (u(t), v(t)) at time ``t``, linear between knots.
+
+        u(t) = (1 − λ) u_k + λ u_{k+1},  λ = (t − t_k) / (t_{k+1} − t_k),
+        continued along the first or last segment outside the knots.
+        """
+        wind_east, wind_north = self._path().evaluate(t)
+        return wind_east, wind_north
 
     def speed_at(self, t: Float[Array, ""]) -> Float[Array, ""]:
-        """Interpolate the wind speed |V(t)| at time ``t``."""
+        """The wind speed |V(t)| = √(u(t)² + v(t)²), with a zero gradient in calm air."""
         wind_east, wind_north = self.wind_at(t)
-        # |V| = √(u² + v²)
-        return jnp.sqrt(wind_east**2 + wind_north**2)
+        # |V| = √(u² + v²), by geophysix's double where
+        return speed_of(wind_east, wind_north)
 
 
-@eqx.filter_jit
 def cumulative_wind_integrals(
     schedule: WindSchedule,
     save_at: Float[Array, " M"],
-    rtol: float = 1e-6,
-    atol: float = 1e-8,
+    rtol: float = 1e-8,
+    atol: float = 1e-6,
 ) -> tuple[Float[Array, " M"], Float[Array, " M"], Float[Array, " M"]]:
-    """Compute cumulative wind integrals via a single diffrax ODE solve.
+    """Running integrals of the wind and of its speed from the first knot.
 
-    Integrates ``d(I_u, I_v, S)/dt = (u(t), v(t), √(u² + v²))`` from
-    ``schedule.times[0]`` to ``max(save_at[-1], schedule.times[-1])`` with
-    initial condition ``(0, 0, 0)`` using :class:`diffrax.Tsit5` with an
-    adaptive :class:`diffrax.PIDController`, saving at the requested times.
+    I_u(s) = ∫_{t_0}^{s} u dτ,  I_v(s) = ∫_{t_0}^{s} v dτ,  S(s) = ∫_{t_0}^{s} |V| dτ.
+
+    Algorithm:
+        1. Put the knots and the save times together and sort them: the nodes
+           t_n, between which the wind is linear.
+        2. I_u and I_v: the running trapezoid sum on the nodes,
+           I(t_n) = Σ_{m ≤ n} ½ (t_m − t_{m−1}) (û_{m−1} + û_m), exact for a
+           linear wind (``integrix.scan.cumulative``).
+        3. S: each interval [t_{n−1}, t_n] by adaptive Gauss–Kronrod, summed
+           (``integrix.adapt.cumulative_adaptive``); |V| has a kink where the
+           wind passes through zero, which the bisection resolves.
+        4. Read each save time at its node.
+
+    The save times may come in any order and may repeat. Times past the last
+    knot read the wind continued along the last segment. Every output has a
+    finite reverse-mode gradient, in calm air too.
 
     Parameters
     ----------
     schedule : WindSchedule
         Time-varying wind field.
     save_at : Float[Array, "M"]
-        **Monotone non-decreasing** times [s] at which to return the integrals.
-        Save times outside ``[schedule.times[0], schedule.times[-1]]`` are
-        evaluated using the linear extrapolation supported by
-        :attr:`WindSchedule` — use the schedule knots to bound the physically
-        meaningful range when that matters.
+        Times [s] at which to return the integrals, none before
+        ``schedule.times[0]``.
     rtol, atol : float
-        Relative and absolute tolerances for the adaptive step controller.
+        Relative and absolute tolerance [m] of the Gauss–Kronrod rule on each
+        interval of S; ``rtol`` is held at 10 ε of the wind's dtype or above
+        (1.2e-6 in float32), which the rule can still meet.
 
     Returns
     -------
     I_u, I_v, S : Float[Array, "M"]
-        Cumulative integrals of u, v, and wind speed, each evaluated at
-        ``save_at``.
+        Cumulative integrals of u, v, and wind speed [m], each at ``save_at``.
+
+    Raises
+    ------
+    ParameterError
+        If a save time is before the first knot (when ``save_at`` is traced,
+        when the compiled function runs).
+
+    Examples
+    --------
+    A wind from 5 to 3 m/s over 10 s, read halfway: I_u = 5·5 − ½·0.2·5² = 22.5 m.
+
+    >>> import jax.numpy as jnp
+    >>> schedule = WindSchedule(
+    ...     times=jnp.array([0.0, 10.0]),
+    ...     u_wind=jnp.array([5.0, 3.0]),
+    ...     v_wind=jnp.zeros(2),
+    ... )
+    >>> east, north, travel = cumulative_wind_integrals(schedule, jnp.array([5.0, 10.0]))
+    >>> [round(float(value), 6) for value in east]
+    [22.5, 40.0]
+    >>> bool(jnp.allclose(travel, east))
+    True
     """
-    interp_u = schedule._interp_u()
-    interp_v = schedule._interp_v()
-
-    def rhs(
-        time: Float[Array, ""], state: Float[Array, " 3"], args
-    ) -> Float[Array, " 3"]:
-        wind_east = interp_u.evaluate(time)
-        wind_north = interp_v.evaluate(time)
-        # |V| = √(u² + v²)
-        speed = jnp.sqrt(wind_east**2 + wind_north**2)
-        return jnp.stack([wind_east, wind_north, speed])
-
-    start_time = schedule.times[0]
-    # t₁ = max(t_save,last, t_knot,last)
-    end_time = jnp.maximum(save_at[-1], schedule.times[-1])
-
-    sol = diffrax.diffeqsolve(
-        diffrax.ODETerm(rhs),
-        diffrax.Tsit5(),
-        t0=start_time,
-        t1=end_time,
-        dt0=None,
-        y0=jnp.zeros(3, dtype=schedule.u_wind.dtype),
-        saveat=diffrax.SaveAt(ts=save_at),
-        stepsize_controller=diffrax.PIDController(rtol=rtol, atol=atol),
-        max_steps=None,
+    save_at = jnp.asarray(save_at)
+    first_knot = schedule.times[0]
+    save_at = require(
+        save_at >= first_knot,
+        "cumulative_wind_integrals: a save time is before the wind schedule's "
+        "first knot; the integrals start there",
+        value=save_at,
+        error=ParameterError,
     )
-    integrals = sol.ys
-    return integrals[:, 0], integrals[:, 1], integrals[:, 2]
+    return _integrals(schedule, save_at, rtol, atol)
+
+
+@eqx.filter_jit
+def _integrals(
+    schedule: WindSchedule,
+    save_at: Float[Array, " M"],
+    rtol: float,
+    atol: float,
+) -> tuple[Float[Array, " M"], Float[Array, " M"], Float[Array, " M"]]:
+    """The integrals of :func:`cumulative_wind_integrals`, compiled once per shape."""
+    path = schedule._path()
+    # t_n = sort(knots ∪ save times); a repeat is an interval of zero width
+    nodes = jnp.sort(einx.id("knot, save -> (knot + save)", schedule.times, save_at))
+    # û(t_n), one row per component
+    wind = einx.id("node component -> component node", jax.vmap(path.evaluate)(nodes))
+    # I(t_n) = Σ_{m ≤ n} ½ (t_m − t_{m−1}) (û_{m−1} + û_m)
+    drift = integrix_scan.cumulative(functax_quad.trapezoid(nodes), wind)
+    # a tolerance below the dtype's rounding can never be met, and the rule
+    # would bisect to its buffer's end: hold rtol at 10 ε of the wind's dtype
+    resolution = 10.0 * float(jnp.finfo(schedule.u_wind.dtype).eps)
+    rule = integrix_adapt.GaussKronrod(rtol=max(rtol, resolution), atol=atol)
+
+    def speed(time: Float[Array, ""]) -> Float[Array, ""]:
+        # |V(t)| = √(u² + v²), by geophysix's double where
+        wind_east, wind_north = path.evaluate(time)
+        return speed_of(wind_east, wind_north)
+
+    # S(t_n) = Σ_{m ≤ n} ∫_{t_{m−1}}^{t_m} |û(τ)| dτ
+    travel = integrix_adapt.cumulative_adaptive(rule, speed, nodes).value
+    # n(s): the last node at or before the save time s
+    where = jnp.searchsorted(nodes, save_at, side="right") - 1
+    east, north = drift[0], drift[1]
+    return east[where], north[where], travel[where]

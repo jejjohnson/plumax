@@ -45,7 +45,7 @@ dependencies = [
     # real engine xarray falls back to scipy, which rejects zlib/complevel.
     "netcdf4",
     "scipy>=1.11",
-    # diffrax + equinox drive the gauss_puff time-varying wind solves.
+    # diffrax + equinox drive the les_fvm time stepping.
     "diffrax>=0.6",
     "equinox>=0.11",
     # gridax holds the Arakawa C-grid, the ghost fills and the finite-volume

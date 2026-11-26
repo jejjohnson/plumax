@@ -1,8 +1,8 @@
-"""Gaussian puff model (JAX + diffrax + NumPyro).
+"""Gaussian puff model (JAX + integrix + NumPyro).
 
 Submodules:
   - dispersion  — Pasquill-Gifford σ(s) coefficients + shared Briggs dispatch
-  - wind        — piecewise-linear WindSchedule + diffrax cumulative integrals
+  - wind        — piecewise-linear WindSchedule + exact cumulative integrals
   - turbulence  — Ornstein-Uhlenbeck sub-grid position disturbances on puff centres
   - puff        — single-puff kernel, evolve_puffs, simulate_puff (xarray)
   - inference   — NumPyro Bayesian inference for Q (constant) and Q_i (random walk)
