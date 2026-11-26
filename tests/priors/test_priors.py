@@ -204,3 +204,12 @@ def test_per_tile_background_properties(positions, level, seed):
     np.testing.assert_array_equal(
         shuffled, per_tile_background(columns, positions)[order]
     )
+
+
+def test_per_tile_background_refuses_a_receptor_without_a_position():
+    # NaN cast to int64 is -2**63, whose key wraps to tile (0, 0): the stray
+    # column used to move that tile's median from 1890 to 1900
+    columns = np.array([1880.0, 1900.0, 2500.0])
+    receptors = np.array([[1e3, 0.0], [2e3, 0.0], [np.nan, 0.0]])
+    with pytest.raises(GridMismatchError, match="index 2"):
+        per_tile_background(columns, receptors)
