@@ -51,7 +51,10 @@ def _on_plume_grid(
     w: Float[Array, "time z y x"],
 ) -> GriddedVelocity:
     """The velocity of interior arrays on the C-grid of an analysis grid."""
-    grids = cgrid_grids(times, plume_grid.x, plume_grid.y, plume_grid.z)
+    x, y, z = plume_grid.x, plume_grid.y, plume_grid.z
+    # u half a cell along x, v half a cell along y, w on the T levels
+    x_u, y_v = x + 0.5 * plume_grid.dx, y + 0.5 * plume_grid.dy
+    grids = cgrid_grids(times, (x_u, y, z), (x, y_v, z), (x, y, z))
     return GriddedVelocity.fit(grids, (u, v, w))
 
 

@@ -37,7 +37,10 @@ FOOTPRINT_KWARGS = {
 def _gridded(u: float, v: float) -> GriddedVelocity:
     nz, ny, nx = GRID.interior_shape
     shape = (2, nz, ny, nx)
-    grids = cgrid_grids(jnp.array([-3600.0, 0.0]), GRID.x, GRID.y, GRID.z)
+    x, y, z = GRID.x, GRID.y, GRID.z
+    # u half a cell along x, v along y, w on the levels
+    x_u, y_v = x + 0.5 * GRID.dx, y + 0.5 * GRID.dy
+    grids = cgrid_grids(jnp.array([-3600.0, 0.0]), (x_u, y, z), (x, y_v, z), (x, y, z))
     return GriddedVelocity.fit(
         grids, (jnp.full(shape, u), jnp.full(shape, v), jnp.zeros(shape))
     )

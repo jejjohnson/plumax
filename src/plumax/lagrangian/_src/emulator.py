@@ -550,7 +550,7 @@ def train_footprint_emulator(
         ImportError: Without the ``emulate`` extra.
     """
     pipekit_train = _require_pipekit_train("train_footprint_emulator")
-    from pipekit_train.adapters.equinox import EquinoxModelOp
+    from pipekit_train.backends.equinox import EquinoxModelOp
 
     model = EmulatedFootprint(emulator, jnp.asarray(receptors))
     callbacks = ()

@@ -18,10 +18,10 @@ resolution-markers = [
 
 [manifest]
 overrides = [
-    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.13" },
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
+    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.15" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=v0.6.12" },
     { name = "geonnax", git = "https://github.com/jejjohnson/geonnax?tag=v0.0.10" },
-    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.11" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.13" },
 ]
 
 [[package]]
@@ -230,7 +230,7 @@ wheels = [
 [[package]]
 name = "argminax"
 version = "0.0.4"
-source = { git = "https://github.com/jejjohnson/argminax?tag=v0.0.4#5992322c0c8ed06744254e7d331a83549fb69b21" }
+source = { git = "https://github.com/jejjohnson/argminax?rev=v0.0.4#5992322c0c8ed06744254e7d331a83549fb69b21" }
 dependencies = [
     { name = "equinox" },
     { name = "gaussx" },
@@ -845,8 +845,8 @@ wheels = [
 
 [[package]]
 name = "diagnostix"
-version = "0.0.7"
-source = { git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.7#d3b9ebd8b23de9cee1322654a274df089b6f60e5" }
+version = "0.0.8"
+source = { git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.8#479c4791e6809c80be8b58e98f8237394be677bb" }
 dependencies = [
     { name = "geophysix" },
     { name = "gridax" },
@@ -1144,8 +1144,8 @@ wheels = [
 
 [[package]]
 name = "functax"
-version = "0.0.13"
-source = { git = "https://github.com/jejjohnson/functax?tag=v0.0.13#718ba0648383eab298e9b11bf281be76ff3a374a" }
+version = "0.0.15"
+source = { git = "https://github.com/jejjohnson/functax?tag=v0.0.15#b1086f4ad4596669b9be4bb4335976c43511bfa7" }
 dependencies = [
     { name = "numpy" },
 ]
@@ -1153,7 +1153,7 @@ dependencies = [
 [[package]]
 name = "gaussx"
 version = "0.6.12"
-source = { git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12#1adbf077f6fdf8b19a3f8484c9dc8781b515ee1d" }
+source = { git = "https://github.com/jejjohnson/gaussx?rev=v0.6.12#1adbf077f6fdf8b19a3f8484c9dc8781b515ee1d" }
 dependencies = [
     { name = "einx" },
     { name = "equinox" },
@@ -1215,8 +1215,8 @@ wheels = [
 
 [[package]]
 name = "geophysix"
-version = "0.0.9"
-source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.9#c268a991aad9abf6bed2a0f4e4d0b5d324b93de5" }
+version = "0.0.10"
+source = { git = "https://github.com/jejjohnson/geophysix?tag=v0.0.10#3f3fd0774e40d2582df936d5f6cb2686cfa458af" }
 dependencies = [
     { name = "numpy" },
     { name = "pipekit-array", extra = ["compat", "numpy"] },
@@ -1241,7 +1241,7 @@ wheels = [
 [[package]]
 name = "geotoolz-array"
 version = "0.6.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-array&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688#14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-array&rev=543ad577824dc28e2997c450e413cc7018c7f7cc#543ad577824dc28e2997c450e413cc7018c7f7cc" }
 dependencies = [
     { name = "affine" },
     { name = "functax" },
@@ -1253,8 +1253,8 @@ dependencies = [
 
 [[package]]
 name = "geotoolz-ops"
-version = "0.20.0"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688#14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
+version = "0.20.1"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc#543ad577824dc28e2997c450e413cc7018c7f7cc" }
 dependencies = [
     { name = "affine" },
     { name = "einx" },
@@ -1470,8 +1470,8 @@ wheels = [
 
 [[package]]
 name = "gridax"
-version = "0.3.3"
-source = { git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.3#f86bfc537b8d927e063321c42e4513a1152ad5a7" }
+version = "0.3.4"
+source = { git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.4#17ec4b5cb178828edeb7c57b5c3689238a9df315" }
 dependencies = [
     { name = "geophysix" },
     { name = "jaxtyping" },
@@ -1713,8 +1713,8 @@ wheels = [
 
 [[package]]
 name = "integrix"
-version = "0.0.11"
-source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.11#a3a354351d2d01184cbadc7ca4d6d39711eecd1c" }
+version = "0.0.13"
+source = { git = "https://github.com/jejjohnson/integrix?tag=v0.0.13#dc3279f1d6f6ebd977da40a9d1b0d2bd52388335" }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
@@ -3278,8 +3278,8 @@ wheels = [
 
 [[package]]
 name = "pipekit-array"
-version = "0.2.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.2.0#94c766d8b3cebbed07dafba43de32e0680d5d0f6" }
+version = "0.3.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.3.0#8213f3a766d41c1e8afd907e8134b82479a215d0" }
 dependencies = [
     { name = "pipekit-ops" },
 ]
@@ -3297,21 +3297,21 @@ xarray = [
 
 [[package]]
 name = "pipekit-cycle"
-version = "0.2.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.2.0#94c766d8b3cebbed07dafba43de32e0680d5d0f6" }
+version = "0.3.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.3.0#8213f3a766d41c1e8afd907e8134b82479a215d0" }
 dependencies = [
     { name = "pipekit-ops" },
 ]
 
 [[package]]
 name = "pipekit-ops"
-version = "0.3.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.2.0#94c766d8b3cebbed07dafba43de32e0680d5d0f6" }
+version = "0.4.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.3.0#8213f3a766d41c1e8afd907e8134b82479a215d0" }
 
 [[package]]
 name = "pipekit-train"
-version = "0.2.0"
-source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.2.0#94c766d8b3cebbed07dafba43de32e0680d5d0f6" }
+version = "0.3.0"
+source = { git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.3.0#8213f3a766d41c1e8afd907e8134b82479a215d0" }
 dependencies = [
     { name = "pipekit-ops" },
 ]
@@ -3349,7 +3349,7 @@ wheels = [
 
 [[package]]
 name = "plumax"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "." }
 dependencies = [
     { name = "diagnostix" },
@@ -3450,19 +3450,19 @@ typecheck = [
 
 [package.metadata]
 requires-dist = [
-    { name = "argminax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
-    { name = "diagnostix", git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.7" },
+    { name = "argminax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/argminax?rev=v0.0.4" },
+    { name = "diagnostix", git = "https://github.com/jejjohnson/diagnostix?tag=v0.0.8" },
     { name = "diffrax", specifier = ">=0.6" },
     { name = "einx", specifier = ">=0.4" },
     { name = "equinox", specifier = ">=0.11" },
-    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.13" },
-    { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.13" },
-    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?tag=v0.6.12" },
-    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.9" },
+    { name = "functax", git = "https://github.com/jejjohnson/functax?tag=v0.0.15" },
+    { name = "functax", marker = "extra == 'geo'", git = "https://github.com/jejjohnson/functax?tag=v0.0.15" },
+    { name = "gaussx", git = "https://github.com/jejjohnson/gaussx?rev=v0.6.12" },
+    { name = "geophysix", git = "https://github.com/jejjohnson/geophysix?tag=v0.0.10" },
     { name = "georeader-spaceml", marker = "extra == 'geo'", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
-    { name = "gridax", git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.3" },
-    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.11" },
+    { name = "geotoolz-ops", extras = ["morph"], marker = "extra == 'geo'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
+    { name = "gridax", git = "https://github.com/jejjohnson/gridax?subdirectory=packages%2Fgridax&tag=gridax-v0.3.4" },
+    { name = "integrix", git = "https://github.com/jejjohnson/integrix?tag=v0.0.13" },
     { name = "ipython", marker = "extra == 'notebooks'" },
     { name = "jax", specifier = ">=0.10" },
     { name = "jaxlib", specifier = ">=0.10" },
@@ -3473,35 +3473,35 @@ requires-dist = [
     { name = "numpyro", marker = "extra == 'inference'", specifier = ">=0.21" },
     { name = "numpyro", marker = "extra == 'population'", specifier = ">=0.21" },
     { name = "optimistix", specifier = ">=0.0.10" },
-    { name = "pipekit-array", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.2.0" },
-    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.2.0" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.2.0" },
+    { name = "pipekit-array", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-array&tag=pipekit-array-v0.3.0" },
+    { name = "pipekit-ops", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-ops&tag=pipekit-array-v0.3.0" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], marker = "extra == 'emulate'", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.3.0" },
     { name = "pyproj", marker = "extra == 'io'" },
     { name = "pyrox-xtreme", marker = "extra == 'population'", git = "https://github.com/jejjohnson/pyrox?subdirectory=packages%2Fpyrox-xtreme&rev=05e38f84305374a68700c06c834b99546bddc64c" },
     { name = "pyyaml", marker = "extra == 'population'", specifier = ">=6" },
-    { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0" },
+    { name = "radtrax", git = "https://github.com/jejjohnson/radtrax?tag=v0.2.1" },
     { name = "scikit-learn", marker = "extra == 'geo'", specifier = ">=1.4" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "tqdm", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "tracerax", git = "https://github.com/jejjohnson/tracerax?tag=v0.0.6" },
+    { name = "tracerax", git = "https://github.com/jejjohnson/tracerax?tag=v0.2.0" },
     { name = "typing-extensions", marker = "extra == 'geo'", specifier = ">=4" },
-    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.9" },
+    { name = "vardax", marker = "extra == 'assim'", git = "https://github.com/jejjohnson/vardax?tag=v0.3.10" },
     { name = "xarray" },
-    { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
-    { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
+    { name = "xrtoolz-ops", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
+    { name = "xrtoolz-products", marker = "extra == 'io'", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
 ]
 provides-extras = ["inference", "io", "notebooks", "assim", "emulate", "population", "geo"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "argminax", git = "https://github.com/jejjohnson/argminax?tag=v0.0.4" },
+    { name = "argminax", git = "https://github.com/jejjohnson/argminax?rev=v0.0.4" },
     { name = "beartype", specifier = ">=0.22" },
     { name = "georeader-spaceml", specifier = ">=2.4.1" },
-    { name = "geotoolz-ops", extras = ["morph"], git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
+    { name = "geotoolz-ops", extras = ["morph"], git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fgeotoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
     { name = "hypothesis", specifier = ">=6.100" },
     { name = "numpyro", specifier = ">=0.21" },
-    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.2.0" },
-    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.2.0" },
+    { name = "pipekit-cycle", git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-cycle&tag=pipekit-array-v0.3.0" },
+    { name = "pipekit-train", extras = ["equinox", "cache"], git = "https://github.com/jejjohnson/pipekit?subdirectory=packages%2Fpipekit-train&tag=pipekit-array-v0.3.0" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pyrox-xtreme", git = "https://github.com/jejjohnson/pyrox?subdirectory=packages%2Fpyrox-xtreme&rev=05e38f84305374a68700c06c834b99546bddc64c" },
     { name = "pytest", specifier = ">=9.0.3" },
@@ -3509,9 +3509,9 @@ dev = [
     { name = "pytest-xdist", specifier = ">=3.5" },
     { name = "scikit-learn", specifier = ">=1.4" },
     { name = "tqdm", specifier = ">=4" },
-    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.9" },
-    { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
-    { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688" },
+    { name = "vardax", git = "https://github.com/jejjohnson/vardax?tag=v0.3.10" },
+    { name = "xrtoolz-ops", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
+    { name = "xrtoolz-products", git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=543ad577824dc28e2997c450e413cc7018c7f7cc" },
 ]
 docs = [
     { name = "ipykernel", specifier = ">=7.2.0" },
@@ -4113,8 +4113,8 @@ wheels = [
 
 [[package]]
 name = "radiomax"
-version = "0.0.12"
-source = { git = "https://github.com/jejjohnson/radiomax?tag=v0.0.12#6bfecef193bc3c0a54f425b154503129f030f11b" }
+version = "0.0.13"
+source = { git = "https://github.com/jejjohnson/radiomax?tag=v0.0.13#eab84bda9abdd0920845a8a4709d9de3e103d869" }
 dependencies = [
     { name = "geophysix" },
     { name = "numpy" },
@@ -4123,12 +4123,15 @@ dependencies = [
 
 [[package]]
 name = "radtrax"
-version = "0.1.0"
-source = { git = "https://github.com/jejjohnson/radtrax?tag=v0.1.0#43a7b0163cb6787d91a872ccb49929c52fdaca6f" }
+version = "0.2.1"
+source = { git = "https://github.com/jejjohnson/radtrax?tag=v0.2.1#f460144ebfb916e498db439020a2c31491ce7b26" }
 dependencies = [
+    { name = "argminax" },
+    { name = "einx" },
     { name = "equinox" },
     { name = "gaussx" },
     { name = "geonnax" },
+    { name = "geophysix" },
     { name = "jax" },
     { name = "jaxlib" },
     { name = "jaxtyping" },
@@ -4136,6 +4139,7 @@ dependencies = [
     { name = "netcdf4" },
     { name = "numpy" },
     { name = "optimistix" },
+    { name = "radiomax" },
     { name = "scikit-learn" },
     { name = "scipy" },
     { name = "xarray" },
@@ -4892,8 +4896,8 @@ wheels = [
 
 [[package]]
 name = "tracerax"
-version = "0.0.6"
-source = { git = "https://github.com/jejjohnson/tracerax?tag=v0.0.6#de86d4def90e0fdec8ea098db330109b154b974f" }
+version = "0.2.0"
+source = { git = "https://github.com/jejjohnson/tracerax?tag=v0.2.0#102c6ded6f72d2dcd3cab9b6313ace710c1743dd" }
 dependencies = [
     { name = "diffrax" },
     { name = "einx" },
@@ -4903,6 +4907,7 @@ dependencies = [
     { name = "integrix" },
     { name = "jax" },
     { name = "jaxtyping" },
+    { name = "pipekit-array", extra = ["compat", "numpy"] },
 ]
 
 [[package]]
@@ -5012,8 +5017,8 @@ wheels = [
 
 [[package]]
 name = "vardax"
-version = "0.3.9"
-source = { git = "https://github.com/jejjohnson/vardax?tag=v0.3.9#cf64cac128216207811dc25fdc9d58204e664c29" }
+version = "0.3.10"
+source = { git = "https://github.com/jejjohnson/vardax?tag=v0.3.10#2dbd4476b4fbd9bda23f76625b2a6ee9a3e8dffc" }
 dependencies = [
     { name = "argminax" },
     { name = "diffrax" },
@@ -5129,8 +5134,8 @@ wheels = [
 
 [[package]]
 name = "xrtoolz-ops"
-version = "0.7.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688#14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
+version = "0.7.2"
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-ops&rev=543ad577824dc28e2997c450e413cc7018c7f7cc#543ad577824dc28e2997c450e413cc7018c7f7cc" }
 dependencies = [
     { name = "dask", extra = ["array"] },
     { name = "diagnostix" },
@@ -5157,7 +5162,7 @@ dependencies = [
 [[package]]
 name = "xrtoolz-products"
 version = "0.5.1"
-source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=14fc443eadbc27c60dd57eb086324ef9e3d2b688#14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
+source = { git = "https://github.com/jejjohnson/geotoolz?subdirectory=packages%2Fxrtoolz-products&rev=543ad577824dc28e2997c450e413cc7018c7f7cc#543ad577824dc28e2997c450e413cc7018c7f7cc" }
 dependencies = [
     { name = "geophysix" },
     { name = "numpy" },

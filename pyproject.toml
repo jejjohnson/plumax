@@ -51,7 +51,7 @@ dependencies = [
     # gridax holds the Arakawa C-grid, the ghost fills and the finite-volume
     # operators of les_fvm. Its base install is enough: the `jax` extra (gaussx
     # >= 0.8.1, spectraldiffx) is for its elliptic solvers.
-    "gridax>=0.3.3",
+    "gridax>=0.3.4",
     # gaussx supplies the structured linear-algebra primitives (LowRankUpdate +
     # Woodbury solve) used by the radtran matched-filter retrieval. >= 0.0.25
     # for `symmetrize`, a reverse-mode-differentiable `safe_cholesky`,
@@ -63,22 +63,22 @@ dependencies = [
     # pipekit-ops (import pipekit_ops) supplies the carrier-agnostic Operator
     # primitives, and pipekit_cycle the ForwardModel / ObservationOperator
     # protocols that the plumax operator + adapter layer plug into.
-    "pipekit-ops>=0.3.0",
+    "pipekit-ops>=0.4.0",
     # pipekit-array supplies the safe square root, power and angle that keep
     # calm-wind gradients finite and NaN inputs NaN (gauss_plume, met).
-    "pipekit-array>=0.2.0",
+    "pipekit-array>=0.3.0",
     # radtrax owns the radiative transfer (the single-slab forward model, the
     # SRF and the instrument) that the plume-to-radiance coupling in `coupled`
     # and the radiance adapter compose with the plume models (package
     # boundaries rule 2: plumax imports radtrax, never the reverse). 0.1.0 is
     # the first release with `radtrax.retrieval.absorption` (plumax.vetting).
-    "radtrax>=0.1.0",
+    "radtrax>=0.2.1",
     # geophysix owns the physical constants and the closed-form gas maths
     # (ideal-gas number density, column-unit conversions) plumax used to copy.
-    "geophysix>=0.0.9",
+    "geophysix>=0.0.10",
     # diagnostix finds the boundary-layer height of a column (plumax.met.pbl).
     # 0.0.7 is on the pipekit tag of the sources below.
-    "diagnostix>=0.0.7",
+    "diagnostix>=0.0.8",
     # einx writes reductions, gathers and rearranges with named axes (the
     # house style's replacement for axis= / reshape / indexing tricks).
     "einx>=0.4",
@@ -86,16 +86,17 @@ dependencies = [
     # the log-space quadrature and the importance diagnostics (plumax#253).
     # 0.0.5 is the first release with rule.log_integrate,
     # expect.log_gauss_hermite / log_simpson, expect.effective_sample_size and
-    # expect.pareto_smoothed_log_weights; 0.0.11 pins functax 0.0.13 and gaussx
-    # 0.6.12.
-    "integrix>=0.0.11",
+    # expect.pareto_smoothed_log_weights; 0.0.13 pins functax 0.0.15, the
+    # release tracerax 0.2.0 bins with.
+    "integrix>=0.0.13",
     # functax supplies the trapezoid rules that the column, POD and survival
-    # integrals sum with on integrix (plumax#247); 0.0.13 is the release
-    # integrix 0.0.11 pins.
-    "functax>=0.0.13",
+    # integrals sum with on integrix (plumax#247); 0.0.15 is the release
+    # integrix 0.0.13 pins.
+    "functax>=0.0.15",
     # tracerax owns the particles of Tier II: the state, the loop and its steps,
-    # the gridded wind, the deposits and the footprint (plumax#410).
-    "tracerax>=0.0.6",
+    # the gridded wind and the deposits (plumax#410); plumax builds the
+    # footprint from them. 0.2.0 takes the staggered positions in cgrid_grids.
+    "tracerax>=0.2.0",
     # kernellib supplies the Matérn-3/2 kernel of the Tier II and Tier III
     # spatial priors and of the centreline prior (plumax#350). 0.0.22 is the
     # release with kernellib.functional.matern_kernel at nu = 1.5.
@@ -155,65 +156,67 @@ override-dependencies = [
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
-    # vardax sources its own integrix; hold the graph on plumax's v0.0.11.
-    "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.11",
-    # radtrax sources functax v0.0.6; hold the graph on integrix's v0.0.13.
-    "functax @ git+https://github.com/jejjohnson/functax@v0.0.13",
+    # vardax sources its own integrix; hold the graph on plumax's v0.0.13.
+    "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.13",
+    # radtrax sources functax v0.0.6; hold the graph on integrix's v0.0.15.
+    "functax @ git+https://github.com/jejjohnson/functax@v0.0.15",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
 # Every source is pinned to a tag or rev so `uv lock --upgrade` cannot pull
 # unreviewed upstream changes: pipekit has no tags yet (rev = its 0.0.2
 # release commit); gaussx is pinned to the v0.6.12 tag (the one argminax
-# v0.0.4 requires); radtrax to its v0.1.0
-# tag (the first release, with `radtrax.retrieval.absorption`, which
-# `plumax.vetting` needs; radtrax is not on PyPI).
+# v0.0.4 requires); radtrax to its v0.2.1
+# tag (the release on the pipekit tag below; `radtrax.retrieval.absorption`,
+# which `plumax.vetting` needs, came in v0.1.0; radtrax is not on PyPI).
 # geonnax is radtrax's own git dependency, which uv does not read from
 # radtrax's sources.
 # pyrox-xtreme (the `population` extra) is not on PyPI and has no release tag
 # in the pyrox workspace yet; it is pinned to the pyrox main commit that holds
 # it (xtremax, its archived predecessor, moved there in jejjohnson/pyrox#463).
 [tool.uv.sources]
-# Every pipekit package is pinned to the one tag pipekit-array-v0.2.0 (94c766d),
+# Every pipekit package is pinned to the one tag pipekit-array-v0.3.0 (8213f3a),
 # which carries each package's current release; per-package tags make uv
 # report conflicting URLs for pipekit-ops, which they all reference. geophysix
 # and geotoolz pin that tag too, and geotoolz this geophysix tag, so the three
 # move together.
-pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.2.0" }
-pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.2.0" }
-pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.2.0" }
-pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-array-v0.2.0" }
-gridax = { git = "https://github.com/jejjohnson/gridax", subdirectory = "packages/gridax", tag = "gridax-v0.3.3" }
-pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.2.0" }
+pipekit-ops = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-ops", tag = "pipekit-array-v0.3.0" }
+pipekit-array = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-array", tag = "pipekit-array-v0.3.0" }
+pipekit-jax = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-jax", tag = "pipekit-array-v0.3.0" }
+pipekit-experiment = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-experiment", tag = "pipekit-array-v0.3.0" }
+gridax = { git = "https://github.com/jejjohnson/gridax", subdirectory = "packages/gridax", tag = "gridax-v0.3.4" }
+pipekit-cycle = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-cycle", tag = "pipekit-array-v0.3.0" }
 # pipekit-train (the `emulate` extra) is not on PyPI.
-pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-array-v0.2.0" }
-gaussx = { git = "https://github.com/jejjohnson/gaussx", tag = "v0.6.12" }
-radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.1.0" }
-diagnostix = { git = "https://github.com/jejjohnson/diagnostix", tag = "v0.0.7" }
-geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.9" }
-integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.11" }
-tracerax = { git = "https://github.com/jejjohnson/tracerax", tag = "v0.0.6" }
+pipekit-train = { git = "https://github.com/jejjohnson/pipekit", subdirectory = "packages/pipekit-train", tag = "pipekit-array-v0.3.0" }
+gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "v0.6.12" }
+radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.2.1" }
+diagnostix = { git = "https://github.com/jejjohnson/diagnostix", tag = "v0.0.8" }
+geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.10" }
+integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.13" }
+tracerax = { git = "https://github.com/jejjohnson/tracerax", tag = "v0.2.0" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
-# vardax v0.3.9 pins pipekit at the tag above. It keeps
+# vardax v0.3.10 pins pipekit at the tag above. It keeps
 # MinimiseResult.converged (FourDVarResult.converged reports it) and the
 # state-space form of OptimalInterpolation (coupled.fuse_observations solves
 # with it).
-vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.9" }
+vardax = { git = "https://github.com/jejjohnson/vardax", tag = "v0.3.10" }
 # argminax v0.0.4 (the `assim` extra): the first release with
 # argminax.curvature.Laplace, which the 4D-Var Laplace posterior is built as.
-argminax = { git = "https://github.com/jejjohnson/argminax", tag = "v0.0.4" }
+# It and gaussx are pinned by `rev =`, as radtrax v0.2.1 pins them: uv reads
+# `tag =` and `rev =` of one tag as two URLs.
+argminax = { git = "https://github.com/jejjohnson/argminax", rev = "v0.0.4" }
 # The geotoolz packages (the `geo` and `io` extras) are pinned to one geotoolz
-# commit, 14fc443 on main, the releases geotoolz-ops 0.20.0, geotoolz-array
-# 0.6.1, xrtoolz-ops 0.7.1 and xrtoolz-products 0.5.1, which are on the pipekit
+# commit, 543ad57 on main, the releases geotoolz-ops 0.20.1, geotoolz-array
+# 0.6.1, xrtoolz-ops 0.7.2 and xrtoolz-products 0.5.1, which are on the pipekit
 # tag above. functax is geoarray's own git dependency; plumax holds it on
-# v0.0.13, the tag integrix v0.0.11 pins.
-geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
-geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
-xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
-xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "14fc443eadbc27c60dd57eb086324ef9e3d2b688" }
-functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.13" }
+# v0.0.15, the tag integrix v0.0.13 pins.
+geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
+geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
+xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
+xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
+functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.15" }
 
 [dependency-groups]
 dev = [
