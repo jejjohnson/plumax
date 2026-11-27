@@ -34,10 +34,10 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, ArrayLike, Float, PRNGKeyArray, UInt32
-from tracerax.advect import Walls
-from tracerax.bin import Cells
-from tracerax.footprint import surface
+from jaxtyping import Array, ArrayLike, Bool, Float, PRNGKeyArray, UInt32
+from tracerax.advect import Langevin, Walls, integrate
+from tracerax.bin import Cells, Residence
+from tracerax.particles import ParticleState, at_point, with_turbulent_velocity
 
 from plumax._src.domain import cell_centres, edge_axis
 from plumax._src.errors import DomainError
@@ -65,6 +65,15 @@ class _ReceptorClock(eqx.Module):
         position: Float[Array, "particle 3"],
     ) -> Float[Array, "particle 3"]:
         return self.wind(self.offset + t, position)
+
+
+class _BelowHeight(eqx.Module):
+    """1[z < z_s]: the particles inside the surface layer, below its top z_s."""
+
+    top: Float[Array, ""]
+
+    def __call__(self, state: ParticleState) -> Bool[Array, " particle"]:
+        return state.position[:, 2] < self.top
 
 
 def require_inside_layer(heights: ArrayLike, pbl_height: float, *, caller: str) -> None:
@@ -106,23 +115,37 @@ def _surface_sensitivity(
     :class:`~plumax.lagrangian.FootprintSimulator` does. The arguments are those of
     :func:`compute_footprint`, with the key of the receptor's particles.
     """
-    cells = Cells((edge_axis(domain_x), edge_axis(domain_y)))
-    # F = H / (N ρ_air f_pbl·h), H(s) = Σ_particles Σ_steps 1[in s, z < f_pbl·h] Δt
-    footprint = surface(
-        receptor,
-        _ReceptorClock(wind, receptor_time),
-        turbulence,
-        cells,
-        n_particles=n_particles,
-        receptor_time=0.0,
-        duration=float(t_back),
+    # --- release ---
+    key_run, key_velocity = jax.random.split(key)
+    state = at_point(receptor, n_particles, release_time=0.0)
+    # u' = σ(z) ξ
+    state = with_turbulent_velocity(state, turbulence, key=key_velocity)
+    dtype = state.position.dtype
+
+    # --- run back ---
+    # the residence is summed in the dtype of the edges
+    edges_x = jnp.asarray(edge_axis(domain_x), dtype=dtype)
+    edges_y = jnp.asarray(edge_axis(domain_y), dtype=dtype)
+    cells = Cells((edges_x, edges_y))
+    # h_s = f_pbl h, the depth of the surface layer above the ground at z = 0
+    surface_depth = jnp.asarray(pbl_fraction * pbl_height, dtype=dtype)
+    walls = Walls(bottom=0.0, top=pbl_height)
+    # H(s) = Σ_particles Σ_steps 1[in s, z < h_s] Δt
+    result = integrate(
+        state,
+        Langevin(_ReceptorClock(wind, receptor_time), turbulence, walls),
+        t0=0.0,
+        duration=-float(t_back),
         step_size=float(dt),
-        surface_depth=pbl_fraction * pbl_height,
-        air_density=air_density,
-        key=key,
-        walls=Walls(bottom=0.0, top=pbl_height),
+        key=key_run,
+        accumulate=Residence(cells, "nearest", _BelowHeight(surface_depth)),
     )
-    return footprint.sensitivity
+
+    # --- normalise ---
+    # ρ_air h_s, the air under one square metre
+    layer_mass = jnp.asarray(air_density, dtype=dtype) * surface_depth
+    # F = H / (N ρ_air h_s)
+    return result.accumulated / (n_particles * layer_mass)
 
 
 def compute_footprint(
