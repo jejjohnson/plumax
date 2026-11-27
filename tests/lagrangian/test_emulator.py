@@ -230,7 +230,11 @@ def test_simulator_matches_the_particle_model_on_a_gridded_wind():
         v_field = context[1] * jnp.ones((2, 4, 4, 4))
         w_field = jnp.zeros((2, 4, 4, 4))
         times = jnp.array([-300.0, 0.0])
-        grids = cgrid_grids(times, axis, axis, axis)
+        # u half a cell along x, v along y, w on the levels
+        shifted = axis + 100.0
+        grids = cgrid_grids(
+            times, (shifted, axis, axis), (axis, shifted, axis), (axis, axis, axis)
+        )
         return GriddedVelocity.fit(grids, (u_field, v_field, w_field))
 
     domain_x, domain_y = (-600.0, 0.0, 3), (-200.0, 200.0, 2)

@@ -86,16 +86,17 @@ dependencies = [
     # the log-space quadrature and the importance diagnostics (plumax#253).
     # 0.0.5 is the first release with rule.log_integrate,
     # expect.log_gauss_hermite / log_simpson, expect.effective_sample_size and
-    # expect.pareto_smoothed_log_weights; 0.0.11 pins functax 0.0.13 and gaussx
-    # 0.6.12.
-    "integrix>=0.0.11",
+    # expect.pareto_smoothed_log_weights; 0.0.13 pins functax 0.0.15, the
+    # release tracerax 0.2.0 bins with.
+    "integrix>=0.0.13",
     # functax supplies the trapezoid rules that the column, POD and survival
-    # integrals sum with on integrix (plumax#247); 0.0.13 is the release
-    # integrix 0.0.11 pins.
-    "functax>=0.0.13",
+    # integrals sum with on integrix (plumax#247); 0.0.15 is the release
+    # integrix 0.0.13 pins.
+    "functax>=0.0.15",
     # tracerax owns the particles of Tier II: the state, the loop and its steps,
-    # the gridded wind, the deposits and the footprint (plumax#410).
-    "tracerax>=0.0.6",
+    # the gridded wind and the deposits (plumax#410); plumax builds the
+    # footprint from them. 0.2.0 takes the staggered positions in cgrid_grids.
+    "tracerax>=0.2.0",
     # kernellib supplies the Matérn-3/2 kernel of the Tier II and Tier III
     # spatial priors and of the centreline prior (plumax#350). 0.0.22 is the
     # release with kernellib.functional.matern_kernel at nu = 1.5.
@@ -155,10 +156,10 @@ override-dependencies = [
     # radtrax sources geonnax v0.0.9 and vardax (the `assim` extra) v0.0.10;
     # hold the graph on v0.0.10, which radtrax's geonnax imports still match.
     "geonnax @ git+https://github.com/jejjohnson/geonnax@v0.0.10",
-    # vardax sources its own integrix; hold the graph on plumax's v0.0.11.
-    "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.11",
-    # radtrax sources functax v0.0.6; hold the graph on integrix's v0.0.13.
-    "functax @ git+https://github.com/jejjohnson/functax@v0.0.13",
+    # vardax sources its own integrix; hold the graph on plumax's v0.0.13.
+    "integrix @ git+https://github.com/jejjohnson/integrix@v0.0.13",
+    # radtrax sources functax v0.0.6; hold the graph on integrix's v0.0.15.
+    "functax @ git+https://github.com/jejjohnson/functax@v0.0.15",
 ]
 
 # Unpublished sibling packages resolve from git; everything else from PyPI.
@@ -191,8 +192,8 @@ gaussx = { git = "https://github.com/jejjohnson/gaussx", rev = "v0.6.12" }
 radtrax = { git = "https://github.com/jejjohnson/radtrax", tag = "v0.2.1" }
 diagnostix = { git = "https://github.com/jejjohnson/diagnostix", tag = "v0.0.8" }
 geophysix = { git = "https://github.com/jejjohnson/geophysix", tag = "v0.0.10" }
-integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.11" }
-tracerax = { git = "https://github.com/jejjohnson/tracerax", tag = "v0.0.6" }
+integrix = { git = "https://github.com/jejjohnson/integrix", tag = "v0.0.13" }
+tracerax = { git = "https://github.com/jejjohnson/tracerax", tag = "v0.2.0" }
 kernellib = { git = "https://github.com/jejjohnson/kernellib", tag = "v0.0.22" }
 pyrox-xtreme = { git = "https://github.com/jejjohnson/pyrox", subdirectory = "packages/pyrox-xtreme", rev = "05e38f84305374a68700c06c834b99546bddc64c" }
 geonnax = { git = "https://github.com/jejjohnson/geonnax", tag = "v0.0.10" }
@@ -210,12 +211,12 @@ argminax = { git = "https://github.com/jejjohnson/argminax", rev = "v0.0.4" }
 # commit, 543ad57 on main, the releases geotoolz-ops 0.20.1, geotoolz-array
 # 0.6.1, xrtoolz-ops 0.7.2 and xrtoolz-products 0.5.1, which are on the pipekit
 # tag above. functax is geoarray's own git dependency; plumax holds it on
-# v0.0.13, the tag integrix v0.0.11 pins.
+# v0.0.15, the tag integrix v0.0.13 pins.
 geotoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-ops", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
 geotoolz-array = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/geotoolz-array", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
 xrtoolz-ops = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-ops", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
 xrtoolz-products = { git = "https://github.com/jejjohnson/geotoolz", subdirectory = "packages/xrtoolz-products", rev = "543ad577824dc28e2997c450e413cc7018c7f7cc" }
-functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.13" }
+functax = { git = "https://github.com/jejjohnson/functax", tag = "v0.0.15" }
 
 [dependency-groups]
 dev = [
