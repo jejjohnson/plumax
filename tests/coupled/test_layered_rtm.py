@@ -14,12 +14,12 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 import xarray as xr
+from radiomax.geometry import air_mass_factor
 from radtrax import ForwardModel
 from radtrax.atmosphere import (
     ATM_TO_PA,
     AtmosphericState,
     ViewingGeometry,
-    air_mass_factor,
     layers_from_levels,
 )
 from radtrax.instrument import BandInstrument

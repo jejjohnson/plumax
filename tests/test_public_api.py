@@ -34,8 +34,13 @@ def _public_modules() -> list[ModuleType]:
 
 
 def _type_checking_namespace(module: ModuleType) -> dict[str, object]:
-    """Run the module's ``if TYPE_CHECKING:`` imports into a namespace."""
-    namespace: dict[str, object] = {}
+    """Run the module's ``if TYPE_CHECKING:`` imports into a namespace.
+
+    It holds ``ClassVar`` too: pipekit-ops records its classes under the package
+    (``Operator.__module__ == "pipekit_ops"``), whose namespace does not have the
+    ``ClassVar`` that the inherited annotations of every operator name.
+    """
+    namespace: dict[str, object] = {"ClassVar": typing.ClassVar}
     source = inspect.getsource(module)
     for node in ast.walk(ast.parse(source)):
         if (
