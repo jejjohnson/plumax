@@ -142,18 +142,10 @@ class CoupledPrior:
             The prior.
 
         Raises:
-            ValueError: If the keys differ or a deviation is not positive.
+            ControlBlockError: If the keys differ or a deviation is not positive.
         """
-        if set(mean) != set(std):
-            raise ValueError("CoupledPrior.from_std: `mean` and `std` keys differ.")
-        means = {name: jnp.asarray(value, dtype=float) for name, value in mean.items()}
-        stds = {
-            name: jnp.broadcast_to(jnp.asarray(std[name], dtype=float), value.shape)
-            for name, value in means.items()
-        }
-        flat_std, _ = ravel_pytree(stds)
-        require_positive("std", flat_std, caller="CoupledPrior.from_std")
-        return cls(mean=means, covariance=flat_std**2)
+        # the all-deviations case of from_blocks
+        return cls.from_blocks(mean, std)
 
     @classmethod
     def from_blocks(
