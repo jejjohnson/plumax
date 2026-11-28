@@ -13,7 +13,7 @@ one of three regimes (06a):
 
 * ``FULL``: the posterior draws, ℓₛ = −log π_i(qₛ) − log S;
 * ``GAUSSIAN``: Gauss–Hermite nodes of the event's lognormal summary,
-  ℓₖ = log(wₖ/√π) − log π_i(qₖ), exact for integrands smooth in log Q;
+  ℓₖ = log(wₖ/√(2π)) − log π_i(qₖ), exact for integrands smooth in log Q;
 * ``POINT``: the posterior mean alone, ℓ = −log π_i(Q̂), for tight posteriors.
 
 Design validation checklist (06a / 06b), each a test in
@@ -41,6 +41,7 @@ from typing import TYPE_CHECKING, Literal
 
 import einx
 import equinox as eqx
+import gaussx
 import jax.numpy as jnp
 import numpy as np
 from integrix import expect as integrix_expect
@@ -209,23 +210,25 @@ def event_evidence(
     if regime is Regime.POINT:
         nodes = jnp.asarray([event.emission_rate], dtype=float)
         return EventEvidence(log_weights=-prior_logpdf(nodes), q_samples=nodes)
-    hermite, weights = np.polynomial.hermite.hermgauss(n_nodes)
+    # zₖ, wₖ with Σₖ wₖ g(zₖ) ≈ ∫ g(z) e^(−z²/2) dz
+    points, weights = gaussx.gauss_hermite_points(n_nodes, 1, dtype=float)
+    standard = einx.id("node 1 -> node", points)
     if measure == "lognormal":
         # lognormal summary moment-matched to (mean, sd), as catalog.log_moments
         summary = LognormalEmission.from_moments(
             event.emission_rate, event.emission_std
         )
-        # qₖ = exp(μ + √2 σ xₖ)
-        nodes = jnp.exp(summary.loc + math.sqrt(2.0) * summary.scale * hermite)
+        # qₖ = exp(μ + σ zₖ)
+        nodes = jnp.exp(summary.loc + summary.scale * standard)
     elif measure == "normal":
         summary = GaussianEmission(event.emission_rate, event.emission_std)
-        # qₖ = m + √2 s xₖ
-        nodes = summary.mean + math.sqrt(2.0) * summary.std * jnp.asarray(hermite)
+        # qₖ = m + s zₖ
+        nodes = summary.mean + summary.std * standard
     else:
         raise ValueError(f"event_evidence: unknown measure {measure!r}.")
     log_prior = prior_logpdf(nodes)
-    # ℓₖ = log(wₖ/√π) − log π(qₖ)
-    quadrature = jnp.log(jnp.asarray(weights)) - 0.5 * math.log(math.pi)
+    # ℓₖ = log(wₖ/√(2π)) − log π(qₖ)
+    quadrature = jnp.log(weights) - 0.5 * math.log(2.0 * math.pi)
     log_weights = _positive_only(quadrature - log_prior, nodes)
     # the summary's likelihood log p̃(q) − log π(q) must not climb towards
     # the outermost nodes, or they would dominate the corrected integral
