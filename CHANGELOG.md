@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0](https://github.com/jejjohnson/plumax/compare/v0.5.0...v0.6.0) (2026-11-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* **adapters:** plumax.adapters.EulerianForwardModel is removed; use integrix.march.DiffraxForwardModel(rhs, solver=diffrax.Euler(), dt0=..., dt=...).
+* **population:** log_gauss_hermite, log_simpson, pareto_smoothed_log_weights and effective_sample_size are no longer in plumax.population; import them from integrix.expect.
+* **population:** event_from_posterior no longer accepts an object with only mean and covariance; it needs emission_rate and emission_std.
+* **coupled:** AVOGADRO_PER_MOL and CM2_PER_M2 are removed; use geophysix.columns.convert. CoupledPrior.from_std raises ControlBlockError.
+
+### Bug Fixes
+
+* **deps:** the pipekit-array-v0.3.0 set and tracerax v0.2.0, with the staggered positions given to cgrid_grids ([#456](https://github.com/jejjohnson/plumax/issues/456)) ([b14cd8b](https://github.com/jejjohnson/plumax/commit/b14cd8b7ca7d07056c8fb2840563b4fbe9124abf))
+
+
+### Performance Improvements
+
+* **lagrangian:** ensemble_footprints runs one compiled footprint per member, as FootprintSimulator does ([#464](https://github.com/jejjohnson/plumax/issues/464)) ([d8de339](https://github.com/jejjohnson/plumax/commit/d8de339b255813f2691e6439b07878bb6496d86c)), closes [#431](https://github.com/jejjohnson/plumax/issues/431)
+
+
+### Code Refactoring
+
+* **adapters:** replace EulerianForwardModel with integrix.march.DiffraxForwardModel ([#467](https://github.com/jejjohnson/plumax/issues/467)) ([bcf29e3](https://github.com/jejjohnson/plumax/commit/bcf29e3a2fa6459845ba41f6900b6aeb463f071f)), closes [#231](https://github.com/jejjohnson/plumax/issues/231)
+* **coupled:** unit conversions from geophysix, one plume response, one plume length and one diagonal prior builder ([#462](https://github.com/jejjohnson/plumax/issues/462)) ([13e7c8e](https://github.com/jejjohnson/plumax/commit/13e7c8e1c75d0f834c8c01fd8a467bf6ac02c06f)), closes [#430](https://github.com/jejjohnson/plumax/issues/430)
+* **population:** remove the deprecated integrix.expect aliases ([#466](https://github.com/jejjohnson/plumax/issues/466)) ([6b7944f](https://github.com/jejjohnson/plumax/commit/6b7944f3ae3122f3913a1ca5b839577ab7131f71)), closes [#283](https://github.com/jejjohnson/plumax/issues/283)
+* **population:** the catalog reads each posterior's own summary, the marks share one lognormal tail block, and the Hermite nodes come from gaussx ([#465](https://github.com/jejjohnson/plumax/issues/465)) ([410477a](https://github.com/jejjohnson/plumax/commit/410477ab5f78b1212eab7b720462737b9cde564d)), closes [#432](https://github.com/jejjohnson/plumax/issues/432)
+
 ## [0.5.0](https://github.com/jejjohnson/plumax/compare/v0.4.1...v0.5.0) (2026-11-26)
 
 
