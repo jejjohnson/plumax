@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -93,6 +94,47 @@ def test_ensemble_footprints_differ_with_the_wind():
     assert not np.array_equal(footprints[0], footprints[1])
     with pytest.raises(ValueError, match="at least one"):
         ensemble_footprints([], RECEPTORS, TURBULENCE, (0.0, 1.0, 1), (0.0, 1.0, 1))
+
+
+_TRACED_CALLS: list = []
+
+
+class _CountingWind(eqx.Module):
+    """A uniform wind that records every call made while it is traced."""
+
+    velocity: jax.Array
+
+    def __call__(self, t, position):
+        if isinstance(self.velocity, jax.core.Tracer):
+            _TRACED_CALLS.append(t)
+        return uniform(self.velocity)(t, position)
+
+
+@pytest.mark.slow
+def test_ensemble_footprints_traces_once_per_wind_structure():
+    winds = [_CountingWind(jnp.array([u, 0.0, 0.0])) for u in (2.0, 3.0, 4.0)]
+    footprints = ensemble_footprints(
+        winds[:1],
+        RECEPTORS,
+        TURBULENCE,
+        (-400.0, 400.0, 8),
+        (-200.0, 200.0, 4),
+        **FOOTPRINT_KWARGS,
+    )
+    traced = len(_TRACED_CALLS)
+    assert traced > 0
+    footprints = ensemble_footprints(
+        winds,
+        RECEPTORS,
+        TURBULENCE,
+        (-400.0, 400.0, 8),
+        (-200.0, 200.0, 4),
+        **FOOTPRINT_KWARGS,
+    )
+    # the wind runs only while tracing, so no new call means no new compilation
+    assert len(_TRACED_CALLS) == traced
+    assert footprints.shape == (3, 2, 32)
+    assert not np.array_equal(footprints[0], footprints[2])
 
 
 @pytest.mark.slow

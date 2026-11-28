@@ -45,7 +45,10 @@ from pipekit_ops import import_optional
 
 from plumax._src.errors import MissingExtraError, ParameterError
 from plumax._src.vardax import require_vardax
-from plumax.lagrangian._src.footprint import _surface_sensitivity, require_inside_layer
+from plumax.lagrangian._src.footprint import (
+    _receptor_footprints,
+    require_inside_layer,
+)
 
 
 if TYPE_CHECKING:
@@ -157,31 +160,24 @@ class FootprintSimulator:
         receptors: Float[Array, "obs 3"],
         keys: UInt32[Array, "obs key"],
         dt: float,
-    ) -> Float[Array, "obs nx ny"]:
+    ) -> Float[Array, "obs cell"]:
         """The footprint of every receptor of one case, as a traceable map."""
-        wind = self.wind_from_context(context)
-
-        def receptor_footprint(
-            receptor: Float[Array, " 3"], key: PRNGKeyArray | UInt32[Array, " key"]
-        ) -> Float[Array, "nx ny"]:
-            # the wind clock ends at the receptor, receptor_time = 0, in every case
-            return _surface_sensitivity(
-                receptor,
-                wind,
-                self.turbulence,
-                self.domain_x,
-                self.domain_y,
-                n_particles=self.n_particles,
-                t_back=self.t_back,
-                dt=dt,
-                pbl_height=self.pbl_height,
-                pbl_fraction=self.pbl_fraction,
-                air_density=self.air_density,
-                receptor_time=0.0,
-                key=key,
-            )
-
-        return jax.vmap(receptor_footprint)(receptors, keys)
+        # the wind clock ends at the receptor, receptor_time = 0, in every case
+        return _receptor_footprints(
+            receptors,
+            self.wind_from_context(context),
+            self.turbulence,
+            self.domain_x,
+            self.domain_y,
+            n_particles=self.n_particles,
+            t_back=self.t_back,
+            dt=dt,
+            pbl_height=self.pbl_height,
+            pbl_fraction=self.pbl_fraction,
+            air_density=self.air_density,
+            receptor_time=0.0,
+            keys=keys,
+        )
 
     @property
     def state_signature(self) -> tuple[Any, ...]:
@@ -211,14 +207,13 @@ class FootprintSimulator:
         keys = jnp.stack(
             [jax.random.PRNGKey(seed + index) for index in range(len(receptors))]
         )
-        footprint = self._compiled_footprints(
+        # F[i, s]: cells flattened row-major over (x, y)
+        return self._compiled_footprints(
             jnp.asarray(context),
             jnp.asarray(receptors, dtype=float),
             keys,
             dt=float(dt),
         )
-        # F[i, s]: cells flattened row-major over (x, y)
-        return einx.id("obs x y -> obs (x y)", footprint)
 
 
 class MetContextPrior(pipekit_ops.Operator):
