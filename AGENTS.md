@@ -86,6 +86,15 @@ For multi-step tasks, state a brief plan:
 
 **IMPORTANT**: Always use `uv run` when running Python tools or scripts (e.g., `pytest`, `python`, `ruff`, `ty`, `mkdocs`, `pre-commit`) so they run in the project environment. You do **not** need `uv run` for non-Python shell commands (e.g., `git`, `ls`, `cat`). Do NOT use the system Python directly.
 
+## Compilation
+
+Library code is not jitted inside: a function or module stays un-jitted, and the caller jits once at the top, around a whole step, loss or solve. The exception is an entry point that no caller can trace through, because it reads NumPy arrays or loops over a Python sequence; it may compile its JAX core once. Each such jit is listed here:
+
+- `lagrangian.FootprintSimulator` compiles its case map (`_receptor_footprints` of the case's wind) with `jax.jit` at construction, since `step` hashes the NumPy context into the particle seed.
+- `lagrangian.ensemble_footprints` maps every member wind through one module-level `eqx.filter_jit` of `_receptor_footprints`, since it reads the receptors with NumPy and loops over a Python list of winds; members of one wind structure share one compilation.
+
+The `@jit` and `eqx.filter_jit` decorators in `gauss_plume`, `gauss_puff` and `les_fvm` predate this rule and are not a pattern to copy.
+
 ## Pull Request Descriptions
 
 **Never replace or remove an existing PR title or description.** When reporting progress on a PR that already has a title and description, only append new checklist items or update the status of existing ones. The original content must be preserved in full.
