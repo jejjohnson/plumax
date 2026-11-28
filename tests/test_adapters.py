@@ -3,17 +3,20 @@
 These assert *structural* conformance: the adapters expose exactly the methods
 and properties the runtime-checkable protocols require, so ``isinstance``
 against ``pipekit_cycle.protocols`` succeeds even though plumax never imports
-that package at runtime.
+that package at runtime. The forward model of an Eulerian RHS is integrix's
+``DiffraxForwardModel``, tested here as plumax builds it.
 """
 
 from __future__ import annotations
 
+import diffrax as dfx
 import jax.numpy as jnp
 import numpy as np
 import xarray as xr
+from integrix.march import DiffraxForwardModel
 from pipekit_cycle.protocols import ForwardModel, ObservationOperator
 
-from plumax.adapters import EulerianForwardModel, RadtranObservationOperator
+from plumax.adapters import RadtranObservationOperator
 
 
 class _ConstRHS:
@@ -43,14 +46,14 @@ def _toy_lut() -> xr.Dataset:
 
 
 def test_eulerian_forward_model_satisfies_protocol():
-    fm = EulerianForwardModel(_ConstRHS(), dt=0.5)
+    fm = DiffraxForwardModel(_ConstRHS(), solver=dfx.Euler(), dt0=0.5, dt=0.5)
     assert isinstance(fm, ForwardModel)
     assert fm.dt == 0.5
     assert fm.state_signature is None
 
 
 def test_eulerian_forward_model_step():
-    fm = EulerianForwardModel(_ConstRHS(), dt=0.5)
+    fm = DiffraxForwardModel(_ConstRHS(), solver=dfx.Euler(), dt0=0.5, dt=0.5)
     state = jnp.zeros((3, 3, 3))
     advanced = fm.step(state, 0.5)
     # c <- c + dt * 1 = 0.5 everywhere.

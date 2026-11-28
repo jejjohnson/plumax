@@ -75,14 +75,15 @@ public API is re-exported through `src/plumax/__init__.py`.
 | `obs`              | L2 methane products (TROPOMI, EMIT, GHGSat) → `coupled.Instrument` + observed column-mass enhancement, via xrproducts. **Tier 0.** |
 | `priors`           | Inventory prior mean (area-mean flux on the analysis T-cells, via xrproducts) and the per-tile observation background. **Tier 0.** |
 | `operators`        | `pipekit_ops.Operator` wrappers over the forward models. |
-| `adapters`         | `pipekit_cycle` `ForwardModel` / `ObservationOperator` adapters. |
+| `adapters`         | `pipekit_cycle` `ObservationOperator` adapter; the forward model is `integrix.march.DiffraxForwardModel`. |
 
 ### pipekit integration
 
 - Forward models are pure JAX functions; `plumax.operators` wraps them as
   `pipekit_ops.Operator` subclasses (config round-trip via `ConfigMixin`).
-- `plumax.adapters` provides classes that **structurally** satisfy
-  `pipekit_cycle.protocols.ForwardModel` / `ObservationOperator` —
+- `plumax.adapters` provides a class that **structurally** satisfies
+  `pipekit_cycle.protocols.ObservationOperator` (the `ForwardModel` is
+  integrix's `DiffraxForwardModel`) —
   `plumax` does not import `pipekit_cycle` at runtime.
 
 ### Optional / lazy dependencies
