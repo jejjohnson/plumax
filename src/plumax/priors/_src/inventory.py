@@ -15,7 +15,7 @@ import numpy as np
 from jaxtyping import Array, Float
 from pipekit_ops import import_optional
 
-from plumax._src.domain import containing_cell
+from plumax._src.domain import containing_cell, unwrap_longitudes
 from plumax._src.errors import DomainError, MissingExtraError
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
@@ -130,24 +130,14 @@ def _unwrap_longitudes(
 
     The reader sorts longitudes in [-180, 180), which splits a regional raster
     crossing the antimeridian (centres 179, 180, 181 become -180, -179, 179)
-    and leaves a false gap that edges built from the centres would cover. The
-    widest cyclic gap is where the raster really ends.
+    and leaves a false gap that edges built from the centres would cover
+    (:func:`~plumax._src.domain.unwrap_longitudes`); a global raster is left
+    as is.
 
     Raises:
         DomainError: If the unwrapped axis is not evenly spaced.
     """
-    num_lon = centres.size
-    if num_lon < 2:
-        return centres, values
-    # g_k = c_{k+1} − c_k, cyclically: the last gap closes through +360°
-    closed = einx.id("n, one -> (n + one)", centres, centres[:1] + 360.0)
-    gaps = np.diff(closed)
-    # the raster starts after its widest gap
-    start = (int(np.argmax(gaps)) + 1) % num_lon
-    order = (np.arange(num_lon) + start) % num_lon
-    rotated = centres[order]
-    # c'_k = c'_0 + ((c'_k − c'_0) mod 360°), increasing
-    unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
+    unwrapped, order = unwrap_longitudes(centres)
     _require_even(np.diff(unwrapped), "longitudes")
     reordered = einx.get_at("lat [lon], k -> lat k", values, order)
     return unwrapped, reordered
