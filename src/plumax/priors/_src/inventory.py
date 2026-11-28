@@ -13,9 +13,9 @@ import einx
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
+from pipekit_ops import import_optional
 
-from plumax._src.errors import DomainError
-from plumax._src.extras import require_extra
+from plumax._src.errors import DomainError, MissingExtraError
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 
@@ -72,11 +72,11 @@ def load_inventory(
             or the raster's latitudes or longitudes are unevenly spaced (a
             missing row or column among them).
     """
-    xrproducts = require_extra(
+    xrproducts = import_optional(
         "xrproducts",
-        extra="io",
-        caller="load_inventory",
-        purpose="reads through xrproducts",
+        install="plumax[io]",
+        needed_by="load_inventory",
+        error=MissingExtraError,
     )
 
     # --- read ---

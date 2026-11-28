@@ -48,6 +48,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import einx
+import gaussx as gx
 import jax
 import jax.core
 import jax.numpy as jnp
@@ -64,7 +65,7 @@ from plumax._src.scalar_emission import (
     sample_lognormal_total,
 )
 from plumax._src.tracing import require_positive
-from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax, row_operator
+from plumax._src.vardax import PSD_TAGS, require_vardax, row_operator
 
 
 if TYPE_CHECKING:
@@ -281,7 +282,7 @@ def _blue_update(
     # badly when the observations are much more precise than the prior
     posterior = analysis.posterior(batch, vdx.LaplaceCovariance(solver=lx.Cholesky()))
 
-    covariance = dense_covariance(posterior.cov, num_grid, prior_cov.dtype)
+    covariance = gx.symmetrize(posterior.cov.as_matrix())
     return posterior.mean[0], covariance
 
 

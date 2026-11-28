@@ -44,9 +44,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
+from pipekit_ops import import_optional
 
 from plumax._src.constants import P_STANDARD, T_STANDARD
-from plumax._src.extras import require_extra
 from plumax._src.tracing import require_positive
 from plumax.errors import MissingExtraError
 from plumax.geo._src.plume_array import transect_line, wind_frame
@@ -1263,11 +1263,11 @@ def _dbscan_clump_count(
     DBSCAN cluster into multiple "clumps" whenever its members are within
     ``eps`` but not 4-adjacent.
     """
-    DBSCAN = require_extra(
+    DBSCAN = import_optional(
         "sklearn.cluster",
-        extra="geo",
-        caller="PlumeQNDFeatures",
-        purpose="counts clumps with scikit-learn's DBSCAN",
+        install="plumax[geo]",
+        needed_by="PlumeQNDFeatures",
+        error=MissingExtraError,
     ).DBSCAN
 
     in_mask = values[mask]

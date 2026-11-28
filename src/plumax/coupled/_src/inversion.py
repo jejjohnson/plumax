@@ -54,7 +54,7 @@ from plumax._src.scalar_emission import (
     require_scalar,
 )
 from plumax._src.tracing import require_positive
-from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax
+from plumax._src.vardax import PSD_TAGS, require_vardax
 from plumax.coupled._src.forward import (
     CoupledForward,
     _scale_response,
@@ -869,7 +869,7 @@ def solve_coupled(
             params_row, affine_model, batch
         )
 
-        covariance = dense_covariance(posterior.cov, param_size, params.dtype)
+        covariance = gx.symmetrize(posterior.cov.as_matrix())
         marginal_std = jnp.sqrt(jnp.clip(jnp.diagonal(covariance), 0.0, None))
         std = unflatten(marginal_std)
 

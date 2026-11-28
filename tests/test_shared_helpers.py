@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pathlib
+import sys
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -9,37 +12,46 @@ import pytest
 
 from plumax._src.checks import check_observations
 from plumax._src.errors import MissingExtraError
-from plumax._src.extras import require_extra
+from plumax._src.vardax import require_argminax, require_vardax
 
 
-def test_require_extra_returns_the_module() -> None:
-    module = require_extra("json", extra="io", caller="f", purpose="reads JSON")
-    assert module.__name__ == "json"
+def test_require_vardax_names_the_extra_when_vardax_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(sys.modules, "vardax", None)
+    with pytest.raises(
+        MissingExtraError,
+        match=(
+            r"solve_x needs 'vardax', which is not installed; "
+            r"install it with: pip install 'plumax\[assim\]'"
+        ),
+    ):
+        require_vardax("solve_x")
 
 
-def test_require_extra_names_the_extra_and_is_an_import_error() -> None:
-    with pytest.raises(ImportError, match=r"pip install 'plumax\[assim\]'"):
-        require_extra(
-            "not_a_module", extra="assim", caller="solve_x", purpose="solves X"
-        )
-    with pytest.raises(MissingExtraError, match="solve_x solves X"):
-        require_extra(
-            "not_a_module", extra="assim", caller="solve_x", purpose="solves X"
-        )
+def test_require_vardax_lets_a_broken_install_raise_its_own_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    # an installed vardax whose own import fails is not a missing extra
+    (tmp_path / "vardax.py").write_text("from math import no_such_name\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "vardax", raising=False)
+    with pytest.raises(ImportError, match="no_such_name") as caught:
+        require_vardax("solve_x")
+    assert not isinstance(caught.value, MissingExtraError)
 
 
-def test_require_extra_imports_submodules() -> None:
-    import sys
-
-    module = require_extra(
-        "xml", extra="io", caller="f", purpose="parses XML", submodules=("dom",)
-    )
-    assert module.__name__ == "xml"
-    assert "xml.dom" in sys.modules
-    with pytest.raises(MissingExtraError):
-        require_extra(
-            "xml", extra="io", caller="f", purpose="parses XML", submodules=("nope",)
-        )
+def test_require_argminax_imports_its_submodules(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("argminax")
+    module = require_argminax("solve_x")
+    assert module.__name__ == "argminax"
+    assert "argminax.curvature" in sys.modules
+    assert "argminax.solve" in sys.modules
+    monkeypatch.setitem(sys.modules, "argminax.solve", None)
+    with pytest.raises(MissingExtraError, match=r"'argminax\.solve'"):
+        require_argminax("solve_x")
 
 
 def test_check_observations_rejects_empty_and_mismatched_inputs() -> None:
