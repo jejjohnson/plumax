@@ -60,6 +60,8 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
+from functax.interp import Linear
+from integrix.march import SampledPath
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total, require_prior
@@ -264,15 +266,13 @@ class SpatialControl:
 
             return flux
 
-        basis = einx.id(
-            "time basis -> basis time", jnp.asarray(self.time_basis, dtype=flat.dtype)
+        # φ(t), linear between the save times and held past the ends
+        basis_path = SampledPath.fit(
+            Linear(), save_times, jnp.asarray(self.time_basis, dtype=flat.dtype)
         )
 
         def flux(time: jax.Array) -> jax.Array:
-            # φ_k(t), linear between the save times
-            basis_at_t = jax.vmap(
-                lambda basis_function: jnp.interp(time, save_times, basis_function)
-            )(basis)
+            basis_at_t = basis_path.evaluate(time)
             # q(s, t) = Σ_k φ_k(t) q_k(s)
             return einx.dot("basis, basis y x -> y x", basis_at_t, fields)
 
@@ -597,17 +597,6 @@ class EulerianForward4DVar:
         return jax.vmap(self.observation_op)(history)
 
 
-def _interpolated_emission(
-    q_series: jax.Array, save_times: jax.Array
-) -> Callable[[jax.Array], jax.Array]:
-    """Build ``t -> q(t)`` by linear interpolation of ``q_series`` at save times."""
-
-    def emission_fn(time: jax.Array) -> jax.Array:
-        return jnp.interp(time, save_times, q_series)
-
-    return emission_fn
-
-
 def build_forward(
     *,
     domain_x: tuple[float, float, int],
@@ -658,7 +647,7 @@ def build_forward(
     Returns:
         A configured :class:`EulerianForward4DVar`.
     """
-    # Validate the time grid up front: t0/t1, SaveAt(ts=...) and jnp.interp all
+    # Validate the time grid up front: t0/t1, SaveAt(ts=...) and SampledPath all
     # assume ≥ 2 strictly-increasing save times. Catching it here gives a clear
     # error instead of an opaque diffrax / interpolation failure later.
     if (source_location is None) == (control is None):
@@ -764,8 +753,12 @@ def build_forward(
         )
 
         def source_factory(q_series: jax.Array) -> GaussianSource:
+            # q(t), linear between the save times and held past the ends
+            emission_path = SampledPath.fit(
+                Linear(), save_times, einx.id("time -> time 1", q_series)
+            )
             return GaussianSource(
-                emission_fn=_interpolated_emission(q_series, save_times),
+                emission_fn=lambda time: emission_path.evaluate(time)[0],
                 density=base_source.density,
             )
 
