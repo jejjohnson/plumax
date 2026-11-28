@@ -67,6 +67,10 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
         1,
         "`integrix.rule.integrate` takes the axis as its own API",
     ),
+    ("les_fvm/_src/fourdvar.py", "dual_analysis", ".T"): (
+        1,
+        "`.T` of a lineax operator, which keeps its own methods",
+    ),
     ("les_fvm/_src/fourdvar.py", "incremental_analysis", ".T"): (
         1,
         "`.T` of a lineax operator, which keeps its own methods",

@@ -26,7 +26,8 @@ model. The diffrax solve defines only a VJP, so the operator is linearised in
 reverse mode (``CallableObs(jac="bwd", materialise=True)``). The incremental
 variant (design §incremental), Gauss–Newton outer and CG inner iterations, is
 ``vardax.IncrementalFourDVar`` over the same map
-(:meth:`FourDVarProblem.incremental_analysis`).
+(:meth:`FourDVarProblem.incremental_analysis`), and its observation-space dual
+(PSAS) is ``vardax.DualThreeDVar`` (:meth:`FourDVarProblem.dual_analysis`).
 
 The control vector is either the **time-resolved scalar emission rate** ``S = q``
 at a known source location (:class:`TemporalControl`, or the ``prior_mean`` and
@@ -61,6 +62,7 @@ import jax.numpy as jnp
 import lineax as lx
 import numpy as np
 from functax.interp import Linear
+from gridax.schemes import Centred, Upwind
 from integrix.march import SampledPath
 
 from plumax._src.errors import PayloadError
@@ -69,6 +71,7 @@ from plumax._src.tracing import _is_traced, require_positive
 from plumax._src.vardax import PSD_TAGS, require_argminax, require_vardax, row_operator
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.inversion import matern32_covariance
+from plumax.les_fvm._src.advection import _scheme
 from plumax.les_fvm.boundary import (
     LATERAL_FACES,
     build_default_concentration_bc,
@@ -1004,6 +1007,83 @@ class FourDVarProblem:
         )
         return model, batch
 
+    def dual_analysis(
+        self,
+        *,
+        max_steps: int = 50,
+        rtol: float = 1e-6,
+        atol: float = 1e-8,
+    ) -> tuple[vardax.DualThreeDVar, vardax.Batch1D]:
+        """The observation-space (PSAS) analysis of this problem, and its batch.
+
+        ``vardax.DualThreeDVar`` over the whitened source–receptor map with
+        ``R = I``: CG solves (J B Jᵀ + I) λ = d over the ``n_t·n_obs``
+        observations and the MAP is S* = S_b + B Jᵀ λ. ``DualThreeDVar``
+        linearises its operator in forward mode, which the diffrax solve does
+        not define, so the map is materialised at the prior mean, with J formed
+        by one VJP per observation as in :meth:`incremental_analysis`. That map
+        is the forward itself when the forward is affine in the control, which
+        a linear advection scheme (``"upwind1"`` or ``"naive"``) makes it, so
+        one linearisation reaches the MAP.
+
+        Args:
+            max_steps: CG iterations of the dual solve.
+            rtol: Relative tolerance of the dual CG solve.
+            atol: Absolute tolerance of the dual CG solve.
+
+        Returns:
+            ``(model, batch)``: ``model(batch)`` is the MAP flat control, shape
+            ``(1, n_state)``, and ``model.analyse(batch)`` adds argminax's
+            ``DualSolution`` with the multiplier λ and the CG result.
+
+        Raises:
+            ValueError: For a WENO or TVD advection scheme, whose forward is not
+                affine in the control.
+            ImportError: Without the ``assim`` extra.
+        """
+        scheme_name = self.forward.rhs_factory(
+            self.prior_mean[: self.n_source]
+        ).advection_scheme
+        if not isinstance(_scheme(scheme_name), (Upwind, Centred)):
+            raise ValueError(
+                "FourDVarProblem.dual_analysis linearises the forward once, which is "
+                "exact only for a linear advection scheme ('upwind1' or 'naive'); "
+                f"got {scheme_name!r}. Use method='gauss_newton'."
+            )
+        vdx = require_vardax("FourDVarProblem.dual_analysis")
+        observations = self.whitened_observations()
+        obs_size = observations.size
+        dtype = self.prior_mean.dtype
+        prior_mean = self.prior_mean
+        # 𝒢(S_b) / σ
+        at_prior = self.whitened_prediction(prior_mean)
+        # J = ∂(𝒢 / σ)/∂S at S_b, one VJP per observation
+        jacobian = jax.jacrev(self.whitened_prediction)(prior_mean)
+
+        def affine_prediction(source: jax.Array) -> jax.Array:
+            # 𝒢(S) / σ = 𝒢(S_b) / σ + J (S − S_b)
+            increment = einx.dot(
+                "obs state, state -> obs", jacobian, source - prior_mean
+            )
+            return at_prior + increment
+
+        prior_sqrt = self.prior_sqrt_operator()
+        model = vdx.DualThreeDVar(
+            obs_op=affine_prediction,
+            prior_mean=prior_mean,
+            # B = L Lᵀ
+            prior_cov_op=prior_sqrt @ prior_sqrt.T,
+            obs_cov_op=lx.IdentityLinearOperator(
+                jax.ShapeDtypeStruct((obs_size,), dtype)
+            ),
+            solver=lx.CG(rtol=rtol, atol=atol, max_steps=max_steps),
+        )
+        batch = vdx.Batch1D(
+            input=einx.id("obs -> 1 obs", observations),
+            mask=jnp.ones((1, obs_size), dtype=dtype),
+        )
+        return model, batch
+
     def analysis(
         self,
         *,
@@ -1445,7 +1525,7 @@ class FourDVarResult:
 def solve_4dvar(
     problem: FourDVarProblem,
     *,
-    method: Literal["lbfgs", "gauss_newton"] = "lbfgs",
+    method: Literal["lbfgs", "gauss_newton", "psas"] = "lbfgs",
     initial_source: jax.Array | None = None,
     rtol: float = 1e-6,
     atol: float = 1e-8,
@@ -1470,15 +1550,20 @@ def solve_4dvar(
     whole Jacobian, one VJP per observation, so it costs more than L-BFGS when
     the observations are many and the problem is well conditioned.
 
-    The observation-space dual (PSAS) is not offered: it belongs to vardax
-    (jejjohnson/vardax#72).
+    ``method="psas"`` runs :meth:`FourDVarProblem.dual_analysis`:
+    ``vardax.DualThreeDVar``, the same Gauss–Newton step solved by CG over the
+    observations instead of the control, on the source–receptor map
+    materialised at the prior mean. That map is exact for a linear advection
+    scheme only, so WENO and TVD schemes are refused. It pays when there are
+    fewer observations than control entries.
 
     Args:
         problem: The assembled 4D-Var problem.
         method: The minimiser.
         initial_source: Optional first-guess emission signal ``S₀`` (defaults to
             the prior mean, i.e. ``χ₀ = 0``), for L-BFGS only:
-            ``IncrementalFourDVar`` always starts from the prior mean.
+            ``IncrementalFourDVar`` and ``DualThreeDVar`` start from the prior
+            mean.
         rtol: Relative tolerance of the optimiser, or of the CG solves.
         atol: Absolute tolerance of the optimiser, or of the CG solves.
         max_steps: Maximum L-BFGS iterations.
@@ -1486,28 +1571,33 @@ def solve_4dvar(
             L-BFGS only.
         compute_posterior: When ``True``, also evaluate the Gauss-Newton Laplace
             :func:`posterior_covariance` at the MAP and attach it to the result.
-        outer_iters: Gauss–Newton outer iterations.
-        inner_iters: CG iterations per Gauss–Newton outer iteration.
+        outer_iters: Gauss–Newton outer iterations; PSAS runs one.
+        inner_iters: CG iterations per Gauss–Newton outer iteration, or of the
+            PSAS dual solve.
 
     Returns:
         The :class:`FourDVarResult` with the MAP source and diagnostics.
-        ``n_steps`` counts L-BFGS iterations or Gauss–Newton outer iterations.
-        ``converged`` is optimistix's verdict for L-BFGS, and for Gauss–Newton
-        whether ‖∇𝒥(χ*)‖ ≤ atol + rtol ‖∇𝒥(0)‖, because vardax reports none.
+        ``n_steps`` counts L-BFGS iterations, Gauss–Newton outer iterations or
+        the CG iterations of the PSAS dual solve. ``converged`` is optimistix's
+        verdict for L-BFGS, for Gauss–Newton whether
+        ‖∇𝒥(χ*)‖ ≤ atol + rtol ‖∇𝒥(0)‖, because vardax reports none, and for
+        PSAS whether the dual CG solve succeeded.
 
     Raises:
-        ValueError: For an unknown ``method``, ``"psas"`` included, or an option
-            the method cannot honour.
+        ValueError: For an unknown ``method``, an option the method cannot
+            honour, or ``"psas"`` with a WENO or TVD advection scheme.
         ImportError: Without the ``assim`` extra (``pip install
             'plumax[assim]'``).
     """
+    if method in ("gauss_newton", "psas") and (
+        initial_source is not None or solver is not None
+    ):
+        raise ValueError(
+            "solve_4dvar: `initial_source` and `solver` apply to L-BFGS only; "
+            "vardax.IncrementalFourDVar and vardax.DualThreeDVar start from the "
+            "prior mean and solve with CG."
+        )
     if method == "gauss_newton":
-        if initial_source is not None or solver is not None:
-            raise ValueError(
-                "solve_4dvar: `initial_source` and `solver` apply to L-BFGS only; "
-                "vardax.IncrementalFourDVar starts from the prior mean and solves "
-                "with CG."
-            )
         flat_map, whitened_map, cost, num_steps, converged = _solve_gauss_newton(
             problem, outer_iters, inner_iters, rtol, atol
         )
@@ -1516,9 +1606,8 @@ def solve_4dvar(
             problem, initial_source, rtol, atol, max_steps, solver
         )
     elif method == "psas":
-        raise ValueError(
-            "solve_4dvar: dual PSAS belongs to vardax and is not available yet "
-            "(https://github.com/jejjohnson/vardax/issues/72)."
+        flat_map, whitened_map, cost, num_steps, converged = _solve_psas(
+            problem, inner_iters, rtol, atol
         )
     else:
         raise ValueError(f"solve_4dvar: unknown method {method!r}.")
@@ -1632,6 +1721,27 @@ def _solve_gauss_newton(
     threshold = atol + rtol * jnp.linalg.norm(initial_gradient)
     converged = bool(jnp.linalg.norm(gradient) <= threshold)
     return flat_map, whitened_map, float(cost), outer_iters, converged
+
+
+def _solve_psas(
+    problem: FourDVarProblem, inner_iters: int, rtol: float, atol: float
+) -> tuple[jax.Array, jax.Array, float, int, bool]:
+    """PSAS through ``DualThreeDVar``: (q*, χ*, cost, CG steps, converged)."""
+    model, batch = problem.dual_analysis(max_steps=inner_iters, rtol=rtol, atol=atol)
+    analysis, solution = model.analyse(batch)
+    flat_map = analysis[0]
+    # χ* = L⁻¹ (q* − μ_q): vardax returns the state, not its control
+    whitened_map = jax.scipy.linalg.solve_triangular(
+        problem.prior_chol, flat_map - problem.prior_mean, lower=True
+    )
+    converged = bool(jnp.all(solution.result == lx.RESULTS.successful))
+    return (
+        flat_map,
+        whitened_map,
+        float(problem.cost(whitened_map)),
+        int(solution.num_steps[0]),
+        converged,
+    )
 
 
 @functools.cache
