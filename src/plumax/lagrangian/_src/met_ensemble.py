@@ -19,19 +19,28 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import einx
+import equinox as eqx
 import gaussx
+import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
 
+from plumax._src.tracing import require_positive
+from plumax.lagrangian._src.footprint import _receptor_footprints, require_inside_layer
 from plumax.lagrangian._src.inversion import _blue_update, _check_inversion_shapes
-from plumax.lagrangian.footprint import compute_footprint
 from plumax.lagrangian.inversion import GaussianPosterior
 
 
 if TYPE_CHECKING:
     from tracerax.advect import TurbulenceModel
     from tracerax.velocity import Velocity
+
+
+# ensemble_footprints reads NumPy receptors and loops over a Python list of
+# winds, so no caller can trace it: it compiles the receptor map here, once per
+# wind structure and settings (AGENTS.md, "Compilation")
+_compiled_receptor_footprints = eqx.filter_jit(_receptor_footprints)
 
 
 def ensemble_footprints(
@@ -61,6 +70,10 @@ def ensemble_footprints(
     would add particle-sampling noise that :func:`ensemble_inversion` would count
     as transport error.
 
+    The receptor map is compiled once and ``jax.vmap``-ped over the receptors, so
+    members of one wind structure (all uniform, or all gridded on one grid) share
+    one compilation; a member of another structure compiles again.
+
     Args:
         winds: One mean wind per member, a tracerax velocity: gridded (e.g.
             ``gridded_wind_from_met`` of each member's ``MetField``) or uniform.
@@ -83,31 +96,46 @@ def ensemble_footprints(
     Raises:
         ValueError: If ``winds`` is empty.
         DomainError: If a receptor is below the ground or above the lid.
+        ParameterError: A count, a time, a depth or the density is not positive.
     """
     if len(winds) == 0:
         raise ValueError("ensemble_footprints: need at least one member wind.")
+    caller = "ensemble_footprints"
+    for name, value in (
+        ("n_particles", n_particles),
+        ("t_back", t_back),
+        ("dt", dt),
+        ("pbl_height", pbl_height),
+        ("pbl_fraction", pbl_fraction),
+        ("air_density", air_density),
+    ):
+        require_positive(name, value, caller=caller)
     receptor_points = np.asarray(receptors, dtype=float)
-    members = []
-    for wind in winds:
-        rows = []
-        for index, receptor in enumerate(receptor_points):
-            footprint, _, _ = compute_footprint(
-                tuple(receptor),
-                turbulence,
-                domain_x,
-                domain_y,
-                wind=wind,
-                n_particles=n_particles,
-                t_back=t_back,
-                dt=dt,
-                pbl_height=pbl_height,
-                pbl_fraction=pbl_fraction,
-                air_density=air_density,
-                receptor_time=receptor_time,
-                seed=seed + index,
-            )
-            rows.append(einx.id("x y -> (x y)", jnp.asarray(footprint)))
-        members.append(jnp.stack(rows))
+    require_inside_layer(receptor_points[:, 2], pbl_height, caller=caller)
+    # receptor i draws its particles from seed + i in every member
+    keys = jnp.stack(
+        [jax.random.PRNGKey(seed + index) for index in range(len(receptor_points))]
+    )
+    points = jnp.asarray(receptor_points, dtype=float)
+    # F_e[i, s], one compiled map for every member of one wind structure
+    members = [
+        _compiled_receptor_footprints(
+            points,
+            wind,
+            turbulence,
+            domain_x,
+            domain_y,
+            n_particles=int(n_particles),
+            t_back=float(t_back),
+            dt=float(dt),
+            pbl_height=pbl_height,
+            pbl_fraction=pbl_fraction,
+            air_density=air_density,
+            receptor_time=receptor_time,
+            keys=keys,
+        )
+        for wind in winds
+    ]
     return jnp.stack(members)
 
 
