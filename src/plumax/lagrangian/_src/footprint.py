@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
@@ -146,6 +147,54 @@ def _surface_sensitivity(
     layer_mass = jnp.asarray(air_density, dtype=dtype) * surface_depth
     # F = H / (N ρ_air h_s)
     return result.accumulated / (n_particles * layer_mass)
+
+
+def _receptor_footprints(
+    receptors: Float[Array, "obs 3"],
+    wind: Velocity,
+    turbulence: TurbulenceModel,
+    domain_x: tuple[float, float, int],
+    domain_y: tuple[float, float, int],
+    *,
+    n_particles: int,
+    t_back: float,
+    dt: float,
+    pbl_height: float,
+    pbl_fraction: float,
+    air_density: float,
+    receptor_time: float,
+    keys: UInt32[Array, "obs key"],
+) -> Float[Array, "obs cell"]:
+    """The footprint rows of every receptor in one wind, a pure function of arrays.
+
+    F[i, s] = the footprint of receptor i drawn on key i, cells flattened row-major
+    over ``(x, y)``. The arguments are those of :func:`_surface_sensitivity`, with
+    one key per receptor. :class:`~plumax.lagrangian.FootprintSimulator` and
+    :func:`~plumax.lagrangian.ensemble_footprints` compile it.
+    """
+
+    def row(
+        receptor: Float[Array, " 3"], key: UInt32[Array, " key"]
+    ) -> Float[Array, "nx ny"]:
+        return _surface_sensitivity(
+            receptor,
+            wind,
+            turbulence,
+            domain_x,
+            domain_y,
+            n_particles=n_particles,
+            t_back=t_back,
+            dt=dt,
+            pbl_height=pbl_height,
+            pbl_fraction=pbl_fraction,
+            air_density=air_density,
+            receptor_time=receptor_time,
+            key=key,
+        )
+
+    # F_i(x, y) for every receptor i
+    footprints = jax.vmap(row)(receptors, keys)
+    return einx.id("obs x y -> obs (x y)", footprints)
 
 
 def compute_footprint(
