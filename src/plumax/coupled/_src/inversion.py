@@ -811,7 +811,6 @@ def solve_coupled(
     # --- prior and whitened control ---
     prior = problem.prior
     prior_mean, unflatten = prior.flatten()
-    param_size = prior_mean.shape[0]
     # Σ_θ = L Lᵀ
     cholesky = prior.cholesky()
     # θ = μ_θ + L χ, ½ ‖χ‖²
