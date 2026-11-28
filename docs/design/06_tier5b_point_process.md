@@ -208,7 +208,7 @@ Both have library support; the choice is driven by the scientific question, not 
 | Inhomogeneous log-linear intensity (NUTS) | `plumax.population.point_process.fit_inhomogeneous_intensity` | 🚧: `log λ = β₀ + β·covariates` fit landed; LGCP still v1.5 |
 | TMTPP likelihood: point regime | `plumax.population.fitting.pod_powerlaw_model` | ✓ in tree (mark-only, λ profiled out); the temporal ground process and the POD-thinned marked process are pyrox-xtreme's through `plumax.population.processes` ([#106](https://github.com/jejjohnson/plumax/issues/106)) |
 | TMTPP likelihood: full importance-corrected regime | `plumax.population.fitting.tmtpp_iw_model` | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108); consumes [`population.importance`](#va-modules); ground process on pyrox-xtreme, thinned rate in log space |
-| Numerical integration helpers (log-space Gauss-Hermite and Simpson, Pareto-smoothed weights, ESS) | `integrix.expect` (from integrix 0.0.5); `plumax.population.integrate` keeps deprecated aliases for one release | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108), moved to integrix in [#253](https://github.com/jejjohnson/plumax/issues/253) |
+| Numerical integration helpers (log-space Gauss-Hermite and Simpson, Pareto-smoothed weights, ESS) | `integrix.expect` (from integrix 0.0.5) | ✓ [#108](https://github.com/jejjohnson/plumax/issues/108), moved to integrix in [#253](https://github.com/jejjohnson/plumax/issues/253) |
 | Hawkes / self-exciting kernel | `plumax.population.point_process.fit_hawkes` | ☐ [#115](https://github.com/jejjohnson/plumax/issues/115); beyond the existing kernels |
 | Spatial extension (Cox process) | `plumax.population.spatial` | ☐: v2; ties to Tier III's $S(\mathbf{x},t)$ |
 

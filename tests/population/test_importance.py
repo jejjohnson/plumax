@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from integrix.expect import effective_sample_size
 from numpyro import handlers
 
 from plumax._src.scalar_emission import LognormalEmission
@@ -22,7 +23,6 @@ from plumax.population.catalog import EmissionCatalog, EmissionEvent
 from plumax.population.importance import (
     Regime,
     catalog_evidence,
-    effective_sample_size,
     ess_report,
     event_evidence,
 )
