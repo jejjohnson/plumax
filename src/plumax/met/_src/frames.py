@@ -89,8 +89,9 @@ class LocalFrame:
             containing the origin.
 
     Raises:
-        MissingExtraError: When a transform runs without ``pyproj``
-            (``pip install 'plumax[io]'``).
+        MissingExtraError: Without the ``io`` extra (xrops,
+            ``pip install 'plumax[io]'``), which holds the transform.
+        DomainError: If ``epsg`` is not a projected CRS in metres.
 
     Examples:
         The origin maps to zero, and a round trip is exact to well under 1 mm:
@@ -126,21 +127,29 @@ class LocalFrame:
         epsg = utm_epsg(lat, lon)
         return cls(origin_lat=float(lat), origin_lon=float(lon), epsg=epsg)
 
+    def __post_init__(self) -> None:
+        # build the transform now, so a CRS that is not metric fails here
+        _ = self._projected
+
     @cached_property
-    def _transformers(self) -> tuple[Any, Any, float, float]:
-        pyproj = import_optional(
-            "pyproj",
+    def _projected(self) -> Any:
+        """The ``xrops.geom.LocalFrame`` holding the UTM transform."""
+        geom = import_optional(
+            "xrops.geom",
             install="plumax[io]",
             needed_by="LocalFrame",
             error=MissingExtraError,
         )
-        forward = pyproj.Transformer.from_crs(4326, self.epsg, always_xy=True)
-        inverse = pyproj.Transformer.from_crs(self.epsg, 4326, always_xy=True)
-        # (E₀, N₀) = UTM(φ₀, λ₀)
-        origin_easting, origin_northing = forward.transform(
-            self.origin_lon, self.origin_lat
-        )
-        return forward, inverse, float(origin_easting), float(origin_northing)
+        try:
+            return geom.local_frame(
+                self.origin_lon, self.origin_lat, crs=f"EPSG:{self.epsg}"
+            )
+        except ValueError as error:
+            raise DomainError(
+                f"LocalFrame: EPSG:{self.epsg} is not a projected CRS in metres, "
+                "so its offsets would not be metres; pass a UTM zone "
+                "(`LocalFrame.at` picks one)"
+            ) from error
 
     def to_xy(
         self,
@@ -148,17 +157,14 @@ class LocalFrame:
         lon: Float[np.ndarray, "*#points"] | float,
     ) -> tuple[Float[np.ndarray, "*shape"], Float[np.ndarray, "*shape"]]:
         """Frame metres ``(x, y)`` of points given by latitude φ and longitude λ."""
-        forward, _, origin_easting, origin_northing = self._transformers
+        # xrops does not broadcast inputs of unequal shapes
         lat_array, lon_array = np.broadcast_arrays(
             np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
         )
-        # (E, N) = UTM(φ, λ)
-        easting, northing = forward.transform(lon_array, lat_array)
-        # x = E − E₀
-        frame_x = np.asarray(np.asarray(easting) - origin_easting)
-        # y = N − N₀
-        frame_y = np.asarray(np.asarray(northing) - origin_northing)
-        return frame_x, frame_y
+        # (x, y) = (E(φ, λ) − E₀, N(φ, λ) − N₀)
+        frame_x, frame_y = self._projected.to_xy(lon_array, lat_array)
+        # xrops returns a NumPy scalar for a scalar point
+        return np.asarray(frame_x), np.asarray(frame_y)
 
     def to_latlon(
         self,
@@ -166,17 +172,12 @@ class LocalFrame:
         y: Float[np.ndarray, "*#points"] | float,
     ) -> tuple[Float[np.ndarray, "*shape"], Float[np.ndarray, "*shape"]]:
         """Latitude φ and longitude λ of points given in frame metres."""
-        _, inverse, origin_easting, origin_northing = self._transformers
         x_array, y_array = np.broadcast_arrays(
             np.asarray(x, dtype=float), np.asarray(y, dtype=float)
         )
-        # E = x + E₀
-        easting = x_array + origin_easting
-        # N = y + N₀
-        northing = y_array + origin_northing
-        # (φ, λ) = UTM⁻¹(E, N)
-        lon, lat = inverse.transform(easting, northing)
-        return np.asarray(lat, dtype=float), np.asarray(lon, dtype=float)
+        # (φ, λ) = UTM⁻¹(x + E₀, y + N₀)
+        lon, lat = self._projected.to_lonlat(x_array, y_array)
+        return np.asarray(lat), np.asarray(lon)
 
     def east_north_axes(
         self,
