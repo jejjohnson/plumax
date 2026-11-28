@@ -142,8 +142,18 @@ class CoupledPrior:
             The prior.
 
         Raises:
-            ControlBlockError: If the keys differ or a deviation is not positive.
+            ControlBlockError: If the keys differ, a deviation does not broadcast
+                to its block's shape, or a deviation is not positive.
         """
+        # a (n, n) entry is a dense covariance to from_blocks, never a deviation
+        for name in sorted(set(mean) & set(std)):
+            shape = np.shape(mean[name])
+            if not _broadcasts(np.shape(std[name]), shape):
+                raise ControlBlockError(
+                    f"CoupledPrior.from_std: `{name}` has mean shape {shape}, so "
+                    f"its standard deviation must broadcast to it; got "
+                    f"{np.shape(std[name])}. Pass a covariance to from_blocks."
+                )
         # the all-deviations case of from_blocks
         return cls.from_blocks(mean, std)
 
