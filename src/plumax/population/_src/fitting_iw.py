@@ -34,9 +34,11 @@ import jax.numpy as jnp
 import numpy as np
 from integrix import expect as integrix_expect
 from jaxtyping import Array, Bool, Float
+from pipekit_array.arrays import check_values
+from pipekit_ops import is_concrete
 
+from plumax._src.errors import ParameterError
 from plumax._src.nuts import run_nuts
-from plumax._src.tracing import require
 from plumax.population._src._pyrox_xtreme import require_pyrox_xtreme
 from plumax.population._src.importance import (
     EventEvidence,
@@ -240,10 +242,14 @@ def tmtpp_iw_model(
             else:
                 # cₑ = ∨ₖ cₑₖ
                 covered = einx.any("event [instrument]", coverage)
-                event_mask = require(
-                    ~(event_mask & ~covered),
+                xp = np if is_concrete(event_mask, covered) else jnp
+                # bad = ∃ e: mₑ ∧ ¬cₑ
+                bad = xp.any(xp.asarray(event_mask) & ~xp.asarray(covered))
+                event_mask = check_values(
+                    event_mask,
+                    bad,
                     "tmtpp_iw_model: a detection has no covering instrument",
-                    value=event_mask,
+                    error=ParameterError,
                 )
                 # a padding row needs some instrument for a finite log P_d^∪
                 padded_coverage = einx.where(

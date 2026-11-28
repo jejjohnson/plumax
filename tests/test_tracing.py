@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
 from plumax._src.errors import ParameterError, PlumaxError
-from plumax._src.tracing import require, require_positive
+from plumax._src.tracing import require_positive
 
 
 def test_require_positive_names_the_caller_and_the_argument() -> None:
@@ -68,33 +67,3 @@ def test_require_positive_skips_a_container_that_holds_a_tracer(pack) -> None:
 def test_require_positive_still_checks_a_concrete_container() -> None:
     with pytest.raises(ParameterError):
         require_positive("pair", (1.0, -2.0))
-
-
-def test_require_raises_eagerly_on_a_concrete_condition() -> None:
-    with pytest.raises(ParameterError, match="z0 must be > 0"):
-        require(jnp.asarray(-1.0) > 0.0, "z0 must be > 0")
-
-
-def test_require_returns_the_value_when_the_condition_holds() -> None:
-    value = jnp.asarray([1.0, 2.0])
-    assert require(value > 0.0, "positive", value=value) is value
-
-
-def test_require_attaches_the_check_under_jit() -> None:
-    @eqx.filter_jit
-    def checked(value: jax.Array) -> jax.Array:
-        return require(value > 0.0, "value must be > 0", value=value)
-
-    assert float(checked(jnp.asarray(1.0))) == 1.0
-    with pytest.raises(eqx.EquinoxRuntimeError, match="value must be > 0"):
-        checked(jnp.asarray(-1.0))
-
-
-def test_require_needs_a_value_for_a_traced_condition() -> None:
-    @jax.jit
-    def unchecked(value: jax.Array) -> jax.Array:
-        require(value > 0.0, "value must be > 0")
-        return value
-
-    with pytest.raises(TypeError, match="needs `value`"):
-        unchecked(jnp.asarray(1.0))

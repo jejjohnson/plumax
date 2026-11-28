@@ -15,10 +15,13 @@ from __future__ import annotations
 import einx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Array, ArrayLike, Bool, Float
+from pipekit_array.arrays import check_values
+from pipekit_ops import is_concrete
 from radtrax import DegenerateInputError, ParameterError, ShapeError
 
-from plumax._src.tracing import require, require_positive
+from plumax._src.tracing import require_positive
 from plumax.vetting._src.morphology import dilate, union_masks
 
 
@@ -236,16 +239,21 @@ def _check_percentile(percentile: Float[ArrayLike, ""]) -> Float[Array, ""]:
     It fails eagerly, or under ``jit``.
     """
     percentile = jnp.asarray(percentile, dtype=float)
-    # ok = 0 < q ≤ 100
-    ok = (percentile > 0.0) & (percentile <= 100.0)
-    return require(
-        ok,
+    xp = np if is_concrete(percentile) else jnp
+    q = xp.asarray(percentile)
+    # bad = ¬(0 < q ≤ 100), so NaN fails
+    bad = ~xp.all((q > 0.0) & (q <= 100.0))
+    return check_values(
+        percentile,
+        bad,
         "select_seeds: cap_percentile must be in (0, 100]",
-        value=percentile,
         error=ParameterError,
     )
 
 
 def _require_any(mask: Bool[Array, "H W"], message: str) -> Bool[Array, "H W"]:
     """``mask``, after failing on an empty one: eagerly, or under ``jit``."""
-    return require(jnp.any(mask), message, value=mask, error=DegenerateInputError)
+    xp = np if is_concrete(mask) else jnp
+    # bad = no pixel of the mask is set
+    bad = ~xp.any(xp.asarray(mask))
+    return check_values(mask, bad, message, error=DegenerateInputError)

@@ -40,9 +40,11 @@ from integrix import adapt as integrix_adapt, scan as integrix_scan
 from integrix.march import SampledPath
 from jaxtyping import Array, Float
 from numpy.typing import DTypeLike
+from pipekit_array.arrays import check_values
+from pipekit_ops import is_concrete
 
 from plumax._src.errors import ParameterError
-from plumax._src.tracing import _is_traced, require
+from plumax._src.tracing import _is_traced
 from plumax._src.wind import wind_components
 
 
@@ -264,11 +266,14 @@ def cumulative_wind_integrals(
     """
     save_at = jnp.asarray(save_at)
     first_knot = schedule.times[0]
-    save_at = require(
-        save_at >= first_knot,
+    xp = np if is_concrete(save_at, first_knot) else jnp
+    # bad = some t < t₀ (or NaN)
+    bad = ~xp.all(xp.asarray(save_at) >= xp.asarray(first_knot))
+    save_at = check_values(
+        save_at,
+        bad,
         "cumulative_wind_integrals: a save time is before the wind schedule's "
         "first knot; the integrals start there",
-        value=save_at,
         error=ParameterError,
     )
     return _integrals(schedule, save_at, rtol, atol)

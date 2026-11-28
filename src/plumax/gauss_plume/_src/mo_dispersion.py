@@ -35,9 +35,13 @@ import einx
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jaxtyping import Array, Float, Int
+from pipekit_array.arrays import check_values
+from pipekit_ops import is_concrete
 
-from plumax._src.tracing import require, require_positive
+from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 from plumax.gauss_plume._src.dispersion import stacked_params
 from plumax.gauss_plume.dispersion import (
     BRIGGS_DISPERSION_PARAMS,
@@ -92,7 +96,12 @@ def golder_class_boundaries(z0: float) -> Float[Array, " boundary"]:
         True
     """
     roughness = jnp.asarray(z0)
-    roughness = require(roughness > 0.0, "z0 must be positive", value=roughness)
+    xp = np if is_concrete(roughness) else jnp
+    # bad = ¬(z₀ > 0), so NaN fails
+    bad = ~xp.all(xp.asarray(roughness) > 0.0)
+    roughness = check_values(
+        roughness, bad, "z0 must be positive", error=ParameterError
+    )
     clamped = jnp.clip(roughness, *GOLDER_Z0_RANGE)
     log_z0 = jnp.log(clamped)
     scale = jnp.asarray(GOLDER_BOUNDARY_SCALE, dtype=log_z0.dtype)
