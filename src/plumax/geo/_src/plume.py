@@ -41,7 +41,6 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-import einx
 import jax.numpy as jnp
 import numpy as np
 from integrix import rule as integrix_rule
@@ -881,17 +880,16 @@ class CrossSectionalFlux(Operator):
         area = pixel_area(affine_of(geo_array))
         width = float(np.sqrt(area))
         easting, northing = pixel_centers(mask.shape, affine_of(geo_array))
-        # Δ = (x − x_source, y − y_source)
-        offset = einx.id(
-            "h w, h w -> h w (1 + 1)",
-            easting - self.source[0],
-            northing - self.source[1],
-        )
-        # a = Δ · (u, v) / ‖w‖, divided last so that a pixel centre on a strip
-        # edge stays where it was; Δ · e_∥ rounds differently
-        along = offset @ np.array([self.wind_u, self.wind_v]) / wind_norm
-        # c = Δ · (−v, u) / ‖w‖
-        across = offset @ np.array([-self.wind_v, self.wind_u]) / wind_norm
+        # Δx = x − x_source
+        offset_x = easting - self.source[0]
+        # Δy = y − y_source
+        offset_y = northing - self.source[1]
+        # a = (Δx u + Δy v) / ‖w‖, written out and divided last: a matmul, or a
+        # dot with the unit axes e_∥, rounds differently and moves a pixel centre
+        # on a strip edge into the next strip
+        along = (offset_x * self.wind_u + offset_y * self.wind_v) / wind_norm
+        # c = (−Δx v + Δy u) / ‖w‖
+        across = (-offset_x * self.wind_v + offset_y * self.wind_u) / wind_norm
         rows: list[dict[str, Any]] = []
         for idx in range(self.n_transects):
             distance = (idx + 1) * self.transect_spacing_m
