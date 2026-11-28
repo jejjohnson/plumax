@@ -200,7 +200,10 @@ def _containing_cell(
 ) -> Int[np.ndarray, " obs"]:
     """Index of the uniform cell (centres ``centres``) holding each coordinate."""
     spacing = (centres[-1] - centres[0]) / max(centres.size - 1, 1)
+    # e₀ = c₀ − Δ/2
     lower = centres[0] - 0.5 * spacing
+    # k = ⌊(x − e₀) / Δ⌋, the floor rule of a uniform axis: searching edges built
+    # from e₀ and Δ rounds differently at an edge point
     index = np.floor((coordinate - lower) / spacing).astype(int)
     outside = (index < 0) | (index >= centres.size)
     if outside.any():

@@ -42,6 +42,7 @@ import numpy as np
 from jaxtyping import Array, Float
 
 from plumax._src.controlled import AbstractControlledSource
+from plumax._src.domain import containing_cell, edge_axis
 from plumax._src.errors import DomainError, GridMismatchError
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.met_ensemble import ensemble_footprints
@@ -174,12 +175,10 @@ class LagrangianSource:
         Raises:
             DomainError: If the location lies outside the footprint grid.
         """
-        x_edges = np.linspace(domain_x[0], domain_x[1], int(domain_x[2]) + 1)
-        y_edges = np.linspace(domain_y[0], domain_y[1], int(domain_y[2]) + 1)
-        col_index = int(np.searchsorted(x_edges, location[0], side="right")) - 1
-        row_index = int(np.searchsorted(y_edges, location[1], side="right")) - 1
-        in_x = 0 <= col_index < x_edges.size - 1
-        in_y = 0 <= row_index < y_edges.size - 1
+        x_edges = edge_axis(domain_x)
+        y_edges = edge_axis(domain_y)
+        col_index, in_x = containing_cell(np.asarray(location[0], dtype=float), x_edges)
+        row_index, in_y = containing_cell(np.asarray(location[1], dtype=float), y_edges)
         if not (in_x and in_y):
             raise DomainError(
                 f"LagrangianSource.point: {location} lies outside the footprint grid."

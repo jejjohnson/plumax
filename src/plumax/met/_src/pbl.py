@@ -11,6 +11,7 @@ import einx
 import jax.numpy as jnp
 from diagnostix.columns import boundary_layer_height
 from geophysix.thermo import potential_temperature as theta_of
+from gridax import avg_x_bwd_2d, avg_y_bwd_2d
 from jaxtyping import Array, Float
 
 from plumax._src.constants import P_REFERENCE
@@ -73,22 +74,13 @@ def pbl_height_bulk_richardson(
     # h_k = z_k − z_surface
     heights = grid.z - grid_surface
     wind_x, wind_y = jnp.asarray(field.u), jnp.asarray(field.v)
-    # each U-point's western neighbour, the edge column repeating itself
-    wind_x_west = einx.id(
-        "t z y first, t z y rest -> t z y (first + rest)",
-        wind_x[..., :1],
-        wind_x[..., :-1],
-    )
-    # each V-point's southern neighbour
-    wind_y_south = einx.id(
-        "t z first x, t z rest x -> t z (first + rest) x",
-        wind_y[..., :1, :],
-        wind_y[..., :-1, :],
-    )
+    # U-points sit at x + Δx/2 and V-points at y + Δy/2. The ghost ring
+    # repeats the edge, so the first column and row keep their own value
+    ring = ((0, 0), (0, 0), (1, 1), (1, 1))
     # u_T = (u_{i−1/2} + u_{i+1/2}) / 2
-    wind_x_centre = 0.5 * (wind_x + wind_x_west)
+    wind_x_centre = avg_x_bwd_2d(jnp.pad(wind_x, ring, mode="edge"))
     # v_T = (v_{j−1/2} + v_{j+1/2}) / 2
-    wind_y_centre = 0.5 * (wind_y + wind_y_south)
+    wind_y_centre = avg_y_bwd_2d(jnp.pad(wind_y, ring, mode="edge"))
     # θ = T (p_ref / p)^{R_d / c_p}
     potential_temperature = theta_of(
         jnp.asarray(field.temperature),

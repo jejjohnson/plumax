@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import einx
 import numpy as np
+from jaxtyping import Bool, Float, Int
 
 from plumax._src.tracing import require_positive
 
@@ -90,6 +91,95 @@ def edge_axis(domain: Domain) -> np.ndarray:
     """
     start, stop, num_cells = domain
     return np.linspace(start, stop, int(num_cells) + 1)
+
+
+def containing_cell(
+    coordinate: Float[np.ndarray, "*shape"] | float, edges: Float[np.ndarray, " edge"]
+) -> tuple[Int[np.ndarray, "*shape"], Bool[np.ndarray, "*shape"]]:
+    """Index of the cell holding each coordinate, and whether it is inside.
+
+    k = #{m : e_m ≤ x} − 1, inside when 0 ≤ k < n_cells,
+
+    so cell k is the half-open [e_k, e_{k+1}): a coordinate on an inner edge
+    belongs to the cell above it, and one on the last edge is outside. Each
+    caller applies its own rule to the coordinates outside.
+
+    Args:
+        coordinate: Coordinates x.
+        edges: The ``n_cells + 1`` ascending cell edges e.
+
+    Returns:
+        ``(index, inside)``; ``index`` is −1 or ``n_cells`` where outside.
+
+    Examples:
+        >>> edges = np.array([0.0, 25.0, 50.0])
+        >>> index, inside = containing_cell(np.array([-1.0, 0.0, 25.0, 50.0]), edges)
+        >>> index.tolist(), inside.tolist()
+        ([-1, 0, 1, 2], [False, True, True, False])
+    """
+    # k = #{m : e_m ≤ x} − 1
+    index = np.asarray(np.searchsorted(edges, coordinate, side="right") - 1)
+    inside = (index >= 0) & (index < edges.size - 1)
+    return index, np.asarray(inside)
+
+
+def is_global_longitudes(lon: Float[np.ndarray, " lon"]) -> bool:
+    """Whether a regular longitude axis wraps the globe: n · Δλ = 360°.
+
+    Examples:
+        >>> is_global_longitudes(np.arange(0.0, 360.0, 1.0))
+        True
+        >>> is_global_longitudes(np.arange(0.0, 10.0, 1.0))
+        False
+    """
+    if lon.size < 2:
+        return False
+    # Δλ
+    step = float(lon[1] - lon[0])
+    # |n Δλ − 360| < ε
+    return abs(lon.size * step - 360.0) < 1e-6 * 360.0
+
+
+def unwrap_longitudes(
+    lon: Float[np.ndarray, " lon"],
+) -> tuple[Float[np.ndarray, " lon"], Int[np.ndarray, " lon"]]:
+    """Increasing longitudes starting after the axis's widest gap, and the order.
+
+    λ'_k = λ'_0 + ((λ'_k − λ'_0) mod 360°),  λ' = λ[order],
+
+    with ``order`` starting after the widest cyclic gap. Sorting splits a
+    regional axis across the seam of its convention (359.5, 359.75, 0, 0.25
+    sorts to 0, 0.25, 359.5, 359.75, and 179, 180, 181 °E in [-180, 180) to
+    -180, -179, 179) and leaves a false gap; the widest gap is where the axis
+    really ends. A global axis is left as is. The caller reorders its values
+    by ``order`` and checks that the result is evenly spaced.
+
+    Args:
+        lon: Longitudes λ [degrees east], sorted.
+
+    Returns:
+        ``(unwrapped, order)``: the increasing longitudes, and the indices of
+        ``lon`` they come from.
+
+    Examples:
+        >>> lon, order = unwrap_longitudes(np.array([0.0, 0.25, 359.5, 359.75]))
+        >>> lon.tolist(), order.tolist()
+        ([359.5, 359.75, 360.0, 360.25], [2, 3, 0, 1])
+    """
+    num_lon = lon.size
+    identity = np.arange(num_lon)
+    if num_lon < 2 or is_global_longitudes(lon):
+        return lon, identity
+    # g_k = λ_{k+1} − λ_k, cyclically: the last gap closes through +360°
+    closed = einx.id("n, one -> (n + one)", lon, lon[:1] + 360.0)
+    gaps = np.diff(closed)
+    # the axis starts after its widest gap
+    start = (int(np.argmax(gaps)) + 1) % num_lon
+    order = (identity + start) % num_lon
+    rotated = lon[order]
+    # λ'_k = λ'_0 + ((λ'_k − λ'_0) mod 360°), increasing
+    unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
+    return unwrapped, order
 
 
 def cell_centres(edges: np.ndarray) -> np.ndarray:

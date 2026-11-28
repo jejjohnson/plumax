@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from hypothesis import given, settings, strategies as st
 
+from plumax.errors import DomainError
 from plumax.les_fvm.grid import make_grid
 from plumax.met import LocalFrame
 
@@ -50,6 +51,24 @@ def test_grid_indices_inside_and_outside():
     i, j = frame.grid_indices(lat, lon, grid)
     np.testing.assert_array_equal(i, [0, 3, -1])
     np.testing.assert_array_equal(j, [1, 0, -1])
+
+
+def test_grid_indices_on_the_grid_edges():
+    # the frame origin maps to exactly (0, 0): the lower edge of a grid that
+    # starts there (cell 0), and the upper edge of one that ends there (-1)
+    frame = LocalFrame.at(LAT0, LON0)
+    above = make_grid((0.0, 400.0, 4), (0.0, 300.0, 4), (0.0, 50.0, 4))
+    below = make_grid((-400.0, 0.0, 4), (-300.0, 0.0, 4), (0.0, 50.0, 4))
+    i, j = frame.grid_indices(LAT0, LON0, above)
+    assert (int(i), int(j)) == (0, 0)
+    i, j = frame.grid_indices(LAT0, LON0, below)
+    assert (int(i), int(j)) == (-1, -1)
+
+
+def test_a_crs_not_in_metres_is_refused_at_construction():
+    # EPSG:4326 is geographic: its offsets were degrees labelled as metres
+    with pytest.raises(DomainError, match="not a projected CRS in metres"):
+        LocalFrame(LAT0, LON0, 4326)
 
 
 # ---- properties -------------------------------------------------------------

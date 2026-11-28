@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -114,6 +115,43 @@ def test_grid_beyond_the_raster_raises(tmp_path, frame):
     )
     with pytest.raises(ValueError, match="beyond the inventory raster"):
         load_inventory(write_inventory(tmp_path / "e.nc"), frame=frame, grid=huge)
+
+
+@dataclasses.dataclass(frozen=True)
+class _PinnedFrame(LocalFrame):
+    """A frame that maps every analysis point to one lat/lon."""
+
+    pinned_lat: float = 0.0
+    pinned_lon: float = 0.0
+
+    def to_latlon(self, x, y):
+        return np.full(np.shape(x), self.pinned_lat), np.full(
+            np.shape(x), self.pinned_lon
+        )
+
+
+def test_a_point_on_an_inventory_edge_takes_the_cell_above(tmp_path):
+    # a global 1° raster: edges on whole degrees of latitude and on half degrees
+    # of longitude, all exact in binary
+    lat = np.arange(-89.5, 90.0, 1.0)
+    lon = np.arange(-180.0, 180.0, 1.0)
+    flux = np.arange(lat.size * lon.size, dtype=float).reshape(lat.size, lon.size)
+    path = tmp_path / "global.nc"
+    xr.Dataset(
+        {"fluxes": (("lat", "lon"), flux * 1e-12, {"units": "kg m-2 s-1"})},
+        coords={"lat": lat, "lon": lon},
+    ).to_netcdf(path)
+    small = make_grid((0.0, 4.0, 4), (0.0, 4.0, 4), (0.0, 1.0, 4), dtype=jnp.float64)
+    # (0°, 10.5°) is a corner of four cells; it belongs to the one centred
+    # at (0.5°, 11°)
+    corner = _PinnedFrame(*SITE, 32613, pinned_lat=0.0, pinned_lon=10.5)
+    prior = load_inventory(path, frame=corner, grid=small, supersample=1)
+    expected = flux[np.searchsorted(lat, 0.5), np.searchsorted(lon, 11.0)] * 1e-12
+    np.testing.assert_allclose(prior, expected, rtol=1e-12)
+    # the raster's last latitude edge, 90°, is outside
+    pole = _PinnedFrame(*SITE, 32613, pinned_lat=90.0, pinned_lon=10.5)
+    with pytest.raises(ValueError, match="beyond the inventory raster"):
+        load_inventory(path, frame=pole, grid=small, supersample=1)
 
 
 @pytest.mark.parametrize(

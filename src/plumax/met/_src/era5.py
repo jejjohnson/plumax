@@ -53,6 +53,7 @@ from jaxtyping import Float, Int
 from pipekit_ops import import_optional
 
 from plumax._src.constants import GRAVITY as GRAVITY, R_DRY as R_DRY
+from plumax._src.domain import is_global_longitudes, unwrap_longitudes
 from plumax._src.errors import (
     GridMismatchError,
     MissingExtraError,
@@ -199,7 +200,7 @@ def load_era5(
     wind_up = vertical_velocity(pressure_velocity, pressure_pa, temperature)
 
     # --- longitude seam ---
-    if _is_periodic(lon):
+    if is_global_longitudes(lon):
         # append the first column after the last, so points between it and 360°
         # interpolate across the seam
         fields = (u_east, v_north, temperature, pressure_pa, wind_up, height_agl)
@@ -253,45 +254,22 @@ def _require(dataset: xr.Dataset, names: tuple[str, ...], path: str | Path) -> N
         raise MissingVariableError(f"load_era5: {path!s} lacks {missing}")
 
 
-def _is_periodic(lon: Float[np.ndarray, " lon"]) -> bool:
-    """Whether a regular longitude axis wraps the globe: n · Δλ = 360°."""
-    if lon.size < 2:
-        return False
-    # Δλ
-    step = float(lon[1] - lon[0])
-    # |n Δλ − 360| < ε
-    return abs(lon.size * step - 360.0) < 1e-6 * 360.0
-
-
 def _unwrap_longitudes(
     lon: Float[np.ndarray, " lon"],
 ) -> tuple[Float[np.ndarray, " lon"], Int[np.ndarray, " lon"]]:
     """Increasing longitudes starting after the axis's widest gap, and the order.
 
-    Sorting puts a regional subset across Greenwich in [0, 360), e.g. 359.5,
-    359.75, 0, 0.25, as 0, 0.25, 359.5, 359.75: no longer evenly spaced. The
-    widest cyclic gap is where the subset really ends, so the axis restarts
-    after it and runs 359.5, 359.75, 360, 360.25. A global axis is left as is.
+    A regional subset across Greenwich in [0, 360) restarts after its widest
+    gap (:func:`~plumax._src.domain.unwrap_longitudes`); a global axis is left
+    as is.
 
     Raises:
         GridMismatchError: If the unwrapped axis is not evenly spaced.
     """
-    num_lon = lon.size
-    identity = np.arange(num_lon)
-    if num_lon < 2 or _is_periodic(lon):
-        return lon, identity
-    # g_k = λ_{k+1} − λ_k, cyclically: the last gap closes through +360°
-    closed = einx.id("n, one -> (n + one)", lon, lon[:1] + 360.0)
-    gaps = np.diff(closed)
-    # the subset starts after its widest gap
-    start = (int(np.argmax(gaps)) + 1) % num_lon
-    order = (identity + start) % num_lon
-    rotated = lon[order]
-    # λ'_k = λ'_0 + ((λ'_k − λ'_0) mod 360°), increasing
-    unwrapped = rotated[0] + np.mod(rotated - rotated[0], 360.0)
+    unwrapped, order = unwrap_longitudes(lon)
     steps = np.diff(unwrapped)
     # a missing column doubles a step; 1 % absorbs float32 coordinate roundoff
-    if not np.allclose(steps, np.median(steps), rtol=1e-2, atol=0.0):
+    if steps.size and not np.allclose(steps, np.median(steps), rtol=1e-2, atol=0.0):
         raise GridMismatchError(
             "load_era5: the longitudes are not evenly spaced (a gap in the subset)"
         )
@@ -338,7 +316,7 @@ def _regular_index_map(
     # Δλ, Δφ
     lon_step = float(lon[1] - lon[0])
     lat_step = float(lat[1] - lat[0])
-    periodic = _is_periodic(lon)
+    periodic = is_global_longitudes(lon)
     last_i = lon.size if periodic else lon.size - 1
 
     def to_index(

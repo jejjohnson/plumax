@@ -77,7 +77,6 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
         1,
         "coerces a scalar or a sequence of timestamps on the host",
     ),
-    ("met/_src/wrf.py", "_bilinear", "None-index"): (4, _PLAN_245),
     ("met/_src/wrf.py", "_grid_relative_wind", "transpose"): (2, _XARRAY),
     ("met/_src/regrid.py", "interpolate_vertical", "None-index"): (1, _PLAN_245),
     ("met/_src/regrid.py", "interpolate_vertical", "axis="): (5, _PLAN_245),
