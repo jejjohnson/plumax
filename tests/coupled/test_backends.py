@@ -207,6 +207,19 @@ def test_point_source_cells_are_half_open_on_their_edges():
         column_z=COLUMN_Z,
     )
     assert int(np.argmax(np.asarray(corner.emission_pattern))) == 0
+    # (0, 0) is on inner edges in x and y, so in the upper cell (2, 2)
+    inner = LagrangianSource.point(
+        (0.0, 0.0),
+        winds=[uniform(jnp.array([4.0, 0.0, 0.0]))],
+        turbulence=TURBULENCE,
+        domain_x=DOMAIN_X,
+        domain_y=DOMAIN_Y,
+        column_z=COLUMN_Z,
+    )
+    # q_s = 1 / A_cell at s = 2 · 4 + 2, zero elsewhere
+    expected = np.zeros(8 * 4)
+    expected[2 * 4 + 2] = 1.0 / (100.0 * 100.0)
+    np.testing.assert_allclose(inner.emission_pattern, expected, rtol=1e-14)
     with pytest.raises(DomainError, match="outside the footprint grid"):
         LagrangianSource.point(
             (600.0, 0.0),

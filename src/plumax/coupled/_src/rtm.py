@@ -51,16 +51,16 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from geophysix.thermo import number_density
+from geophysix.columns import convert
+from geophysix.constants import CH4
 from jax.typing import ArrayLike
 from jaxtyping import Float
 from radtrax.slab import (
     ATM_TO_PA,
-    CM3_PER_M3,
     forward_nonlinear_normalized,
 )
 
-from plumax._src.constants import AVOGADRO, M_CH4
+from plumax._src.constants import M_CH4
 from plumax._src.tracing import require_positive
 from plumax.coupled.forward import PlumeSource, column_response
 
@@ -76,11 +76,9 @@ if TYPE_CHECKING:
     from plumax.coupled.instrument import Instrument
 
 
-# Methane molar mass and Avogadro's number for the mass→molecule conversion,
-# kept under their rtm names (both are plumax._src.constants values).
+# Methane molar mass for the mass→mole conversion, kept under its rtm name (a
+# plumax._src.constants value).
 CH4_MOLAR_MASS_KG_PER_MOL: float = M_CH4  # [kg/mol]
-AVOGADRO_PER_MOL: float = AVOGADRO  # [molecules/mol]
-CM2_PER_M2: float = 1e4  # [cm²/m²]
 
 
 def column_mass_to_delta_vmr(
@@ -95,32 +93,18 @@ def column_mass_to_delta_vmr(
     The Tier I plume column integral gives a column **mass enhancement**
     ``m`` [kg/m²] of methane sitting above the pixel. The radtrax slab Beer–Lambert
     forward instead parameterises absorption by the *enhancement in volume
-    mixing ratio* ``ΔVMR`` over the absorbing path. The two are related by the
-    column number densities of the gas and of dry air:
+    mixing ratio* ``ΔVMR`` over the absorbing path. The column in ppm·m at the
+    layer's ``(p, T)``, :func:`geophysix.columns.convert` from kg/m², spread over
+    the path length ``L`` gives it::
 
-    1. **Gas column number density** [molecules/cm²]::
+        X = 10⁶ (m / M_CH₄) R T / p,   ΔVMR = 10⁻⁶ X / L
 
-           N_gas = m · (N_A / M_CH₄) / CM2_PER_M2
-
-       (``N_A`` = Avogadro, ``M_CH₄`` = methane molar mass; dividing by
-       ``CM2_PER_M2 = 1e4`` converts the per-m² areal density to per-cm².)
-
-    2. **Air column number density** [molecules/cm²]::
-
-           N_air = n(p, T) · L
-
-       where ``n(p, T)`` is the ideal-gas number density [molecules/cm³]
-       (:func:`radtrax.slab.number_density_cm3`) and ``L`` is the
-       vertical path length [cm] over which the enhancement is distributed.
-
-    3. **Volume mixing ratio enhancement** (dimensionless)::
-
-           ΔVMR = N_gas / N_air
-
-    This is the standard "slant/vertical column density divided by the air
-    column" relation used in trace-gas retrievals (cf. the partial-column-to-VMR
-    conversion in e.g. TROPOMI / matched-filter retrievals); keeping ``L`` and
-    ``(p, T)`` explicit makes the per-instrument geometry auditable.
+    which is the gas column number density divided by the air column,
+    ``N_gas / (n(p, T) L)``: the standard "slant/vertical column density divided
+    by the air column" relation used in trace-gas retrievals (cf. the
+    partial-column-to-VMR conversion in e.g. TROPOMI / matched-filter
+    retrievals); keeping ``L`` and ``(p, T)`` explicit makes the per-instrument
+    geometry auditable.
 
     Args:
         column_mass_kg_m2: Column mass enhancement [kg/m²] (scalar or array; the
@@ -147,25 +131,20 @@ def column_mass_to_delta_vmr(
         "path_length_cm", path_length_cm, caller="column_mass_to_delta_vmr"
     )
     column_mass = jnp.asarray(column_mass_kg_m2, dtype=float)
-    # Gas column number density [molecules/cm²].
-    # N_gas = m (N_A / M_CH₄) / 1e4
-    gas_column_cm2 = (
-        column_mass * (AVOGADRO_PER_MOL / CH4_MOLAR_MASS_KG_PER_MOL) / CM2_PER_M2
+    pressure = jnp.asarray(p_atm, dtype=float) * ATM_TO_PA
+    # X = 10⁶ (m / M) R T / p  [ppm·m]
+    column_ppm_m = convert(
+        column_mass,
+        "kg_m2",
+        "ppm_m",
+        gas=CH4,
+        pressure=pressure,
+        temperature=jnp.asarray(T_K, dtype=float),
     )
-    # Air number density [molecules/cm³] — the ideal-gas relation inlined with
-    # ``jnp`` arrays through ``geophysix.thermo.number_density`` (rather than
-    # the NumPy ``radtrax.slab.number_density_cm3``) so a traced ``p_atm`` /
-    # ``T_K`` flows through differentiably, honouring the pure-JAX contract;
-    # identical formula and constants.
-    p_atm_j = jnp.asarray(p_atm, dtype=float)
-    T_K_j = jnp.asarray(T_K, dtype=float)
-    # n_air = p / (k_B T) / 1e6
-    air_density_cm3 = number_density(p_atm_j * ATM_TO_PA, T_K_j) / CM3_PER_M3
-    # Air column number density [molecules/cm²].
-    # N_air = n_air L
-    air_column_cm2 = air_density_cm3 * jnp.asarray(path_length_cm, dtype=float)
-    # ΔVMR = N_gas / N_air
-    return gas_column_cm2 / air_column_cm2
+    # L [m]
+    path_length_m = jnp.asarray(path_length_cm, dtype=float) / 100.0
+    # ΔVMR = 10⁻⁶ X / L
+    return column_ppm_m * 1e-6 / path_length_m
 
 
 @dataclass(frozen=True)
@@ -620,9 +599,7 @@ def radiance_response_linear(
 
 
 __all__ = [
-    "AVOGADRO_PER_MOL",
     "CH4_MOLAR_MASS_KG_PER_MOL",
-    "CM2_PER_M2",
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "RadianceObservationOperator",

@@ -142,18 +142,20 @@ class CoupledPrior:
             The prior.
 
         Raises:
-            ValueError: If the keys differ or a deviation is not positive.
+            ControlBlockError: If the keys differ, a deviation does not broadcast
+                to its block's shape, or a deviation is not positive.
         """
-        if set(mean) != set(std):
-            raise ValueError("CoupledPrior.from_std: `mean` and `std` keys differ.")
-        means = {name: jnp.asarray(value, dtype=float) for name, value in mean.items()}
-        stds = {
-            name: jnp.broadcast_to(jnp.asarray(std[name], dtype=float), value.shape)
-            for name, value in means.items()
-        }
-        flat_std, _ = ravel_pytree(stds)
-        require_positive("std", flat_std, caller="CoupledPrior.from_std")
-        return cls(mean=means, covariance=flat_std**2)
+        # a (n, n) entry is a dense covariance to from_blocks, never a deviation
+        for name in sorted(set(mean) & set(std)):
+            shape = np.shape(mean[name])
+            if not _broadcasts(np.shape(std[name]), shape):
+                raise ControlBlockError(
+                    f"CoupledPrior.from_std: `{name}` has mean shape {shape}, so "
+                    f"its standard deviation must broadcast to it; got "
+                    f"{np.shape(std[name])}. Pass a covariance to from_blocks."
+                )
+        # the all-deviations case of from_blocks
+        return cls.from_blocks(mean, std)
 
     @classmethod
     def from_blocks(
@@ -974,12 +976,9 @@ def _emission_moments(
     if std is None:
         # no posterior: report the MAP, Q* = exp(log Q*)
         return jnp.exp(log_mean), jnp.full_like(log_mean, jnp.nan)
-    log_variance = std[block] ** 2
-    # E[Q] = exp(μ + σ²/2)
-    mean = jnp.exp(log_mean + 0.5 * log_variance)
-    # sd[Q] = E[Q] √(exp(σ²) − 1)
-    deviation = mean * jnp.sqrt(jnp.expm1(log_variance))
-    return mean, deviation
+    # log Q ~ N(μ, σ²) gives E[Q] and sd[Q]
+    law = LognormalEmission(log_mean, std[block])
+    return law.mean, law.std
 
 
 __all__ = [

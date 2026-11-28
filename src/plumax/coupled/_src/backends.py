@@ -175,6 +175,9 @@ class LagrangianSource:
         Raises:
             DomainError: If the location lies outside the footprint grid.
         """
+        # The cell is found in NumPy float64: a tracerax deposit would decide it in
+        # the array dtype, and in float32 a source just below an inner edge would
+        # land in the cell above.
         x_edges = edge_axis(domain_x)
         y_edges = edge_axis(domain_y)
         col_index, in_x = containing_cell(np.asarray(location[0], dtype=float), x_edges)

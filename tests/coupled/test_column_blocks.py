@@ -706,6 +706,25 @@ def test_from_blocks_validation():
         CoupledPrior.from_blocks({"background": 0.0}, {"background": 0.0})
 
 
+def test_from_std_is_from_blocks_with_deviations():
+    mean = {"emission_rate": 0.1, "location": jnp.zeros(2), "background": 0.0}
+    std = {
+        "emission_rate": 0.05,
+        "location": jnp.array([50.0, 20.0]),
+        "background": 1e-4,
+    }
+    np.testing.assert_array_equal(
+        CoupledPrior.from_std(mean, std).covariance,
+        CoupledPrior.from_blocks(mean, std).covariance,
+    )
+    with pytest.raises(ControlBlockError, match="keys differ"):
+        CoupledPrior.from_std({"background": 0.0}, {"biases": 1.0})
+    # a matrix is a covariance, which from_std must not read as one; the type
+    # hook of the suite refuses it first, and the check does without the hook
+    with pytest.raises((ControlBlockError, TypeError)):
+        CoupledPrior.from_std({"location": jnp.zeros(2)}, {"location": jnp.eye(2)})
+
+
 def _bent_prior(source, n_knots, centreline_mean=None):
     geometry = source.geometry
     mean = {

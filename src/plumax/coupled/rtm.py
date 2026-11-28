@@ -44,9 +44,7 @@ background estimators in :mod:`radtrax.retrieval.matched_filter.background` and
 from __future__ import annotations
 
 from plumax.coupled._src.rtm import (
-    AVOGADRO_PER_MOL,
     CH4_MOLAR_MASS_KG_PER_MOL,
-    CM2_PER_M2,
     LayeredRadianceOperator,
     LinearisedRadianceOperator,
     RadianceObservationOperator,
@@ -58,9 +56,7 @@ from plumax.coupled._src.rtm import (
 
 
 __all__ = [
-    "AVOGADRO_PER_MOL",
     "CH4_MOLAR_MASS_KG_PER_MOL",
-    "CM2_PER_M2",
     "LayeredRadianceOperator",
     "LinearisedRadianceOperator",
     "RadianceObservationOperator",

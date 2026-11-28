@@ -884,7 +884,9 @@ class CrossSectionalFlux(Operator):
         offset_x = easting - self.source[0]
         # Δy = y − y_source
         offset_y = northing - self.source[1]
-        # a = (Δx u + Δy v) / ‖w‖
+        # a = (Δx u + Δy v) / ‖w‖, written out and divided last: a matmul, or a
+        # dot with the unit axes e_∥, rounds differently and moves a pixel centre
+        # on a strip edge into the next strip
         along = (offset_x * self.wind_u + offset_y * self.wind_v) / wind_norm
         # c = (−Δx v + Δy u) / ‖w‖
         across = (-offset_x * self.wind_v + offset_y * self.wind_u) / wind_norm

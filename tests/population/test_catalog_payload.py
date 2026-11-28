@@ -65,6 +65,11 @@ def test_lognormal_from_moments_round_trip():
     assert float(law.log_prob(0.0)) == -np.inf
 
 
+def test_lognormal_mean_and_std_invert_from_moments():
+    law = LognormalEmission.from_moments(2.0, 0.5)
+    np.testing.assert_allclose([law.mean, law.std], [2.0, 0.5], rtol=1e-12)
+
+
 @pytest.mark.slow
 def test_lognormal_total_is_exact_for_one_entry_and_matches_moments():
     single = lognormal_total(jnp.array([0.3]), jnp.array([[0.04]]), jnp.array([2.0]))

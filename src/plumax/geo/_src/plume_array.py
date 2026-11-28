@@ -20,12 +20,13 @@ from typing import Any, Literal
 
 import einx
 import numpy as np
+from geophysix.columns import convert
+from geophysix.constants import CH4, CO2
 from jaxtyping import Bool, Float, Num, Shaped
 from scipy.spatial import ConvexHull, QhullError
 
-from plumax._src.constants import M_CH4, M_CO2, P_STANDARD, T_STANDARD
+from plumax._src.constants import P_STANDARD, T_STANDARD
 from plumax._src.tracing import require_positive
-from plumax._src.units import ppm_m_to_column_moles
 from plumax.errors import MissingExtraError
 
 
@@ -33,7 +34,7 @@ try:
     from geoops.carrier import pixel_xy, single_band
     from geoops.measure import Connectivity, label_components, skeleton_length
     from geoops.segment import ThresholdMode, threshold_mask
-    from shapely.geometry import LineString, MultiPoint
+    from shapely.geometry import LineString
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.plume_array needs the [geo] extra: pip install 'plumax[geo]'"
@@ -57,11 +58,11 @@ __all__ = [
 
 ColumnUnit = Literal["ppm_m", "mol_m2", "kg_m2"]
 
+# The supported trace gases, by name.
+_GASES = {"CH4": CH4, "CO2": CO2}
+
 # Molar masses (kg/mol) for supported trace gases.
-MOLAR_MASS_KG_PER_MOL = {
-    "CH4": M_CH4,
-    "CO2": M_CO2,
-}
+MOLAR_MASS_KG_PER_MOL = {name: gas.molar_mass for name, gas in _GASES.items()}
 
 
 def squeeze_single_band(
@@ -255,34 +256,25 @@ def convert_column_units(
 
     Returns:
         The enhancement in ``units_out``.
+
+    Raises:
+        ValueError: If ``gas`` is not supported.
+        geophysix.exceptions.UnitError: If a unit is unknown; a ``ValueError``.
     """
     gas_key = gas.upper()
-    if gas_key not in MOLAR_MASS_KG_PER_MOL:
-        supported = ", ".join(sorted(MOLAR_MASS_KG_PER_MOL))
+    if gas_key not in _GASES:
+        supported = ", ".join(sorted(_GASES))
         raise ValueError(f"unsupported gas {gas!r}; expected one of {supported}")
-    molar_mass = MOLAR_MASS_KG_PER_MOL[gas_key]
-    # mol m⁻² per ppm m at (p, T)
-    moles_per_ppm_m = float(
-        ppm_m_to_column_moles(1.0, pressure_pa=pressure_pa, temperature_k=temperature_k)
-    )
-
+    # float64, since convert keeps a float32 input as float32
     arr = np.asarray(values, dtype=float)
-    if units_in == "ppm_m":
-        mol_m2 = arr * moles_per_ppm_m
-    elif units_in == "mol_m2":
-        mol_m2 = arr
-    elif units_in == "kg_m2":
-        mol_m2 = arr / molar_mass
-    else:
-        raise ValueError("units_in must be 'ppm_m', 'mol_m2', or 'kg_m2'")
-
-    if units_out == "ppm_m":
-        return mol_m2 / moles_per_ppm_m
-    if units_out == "mol_m2":
-        return mol_m2
-    if units_out == "kg_m2":
-        return mol_m2 * molar_mass
-    raise ValueError("units_out must be 'ppm_m', 'mol_m2', or 'kg_m2'")
+    return convert(
+        arr,
+        units_in,
+        units_out,
+        gas=_GASES[gas_key],
+        pressure=pressure_pa,
+        temperature=temperature_k,
+    )
 
 
 def wind_frame(
@@ -392,9 +384,9 @@ def plume_length(
       every pair, in memory that does not grow with ``N²``). Fast and robust; matches the original Varon 2018 definition for
       reasonably linear plumes.
     - ``"convex_hull"``: max diameter of the convex hull of the active
-      pixels. For degenerate hulls (single point, collinear points) we
-      fall back to the point-set diameter so the result is always well
-      defined.
+      pixels, which is the ``"max_axis"`` value, since that already runs
+      over the hull's vertices. Collinear points, which have no 2-D hull,
+      give the point-set diameter.
     - ``"skeleton"``: length of the plume centreline, via
       :func:`geoops.measure.skeleton_length` with the transform as the
       pixel step. The mask is skeletonised and ``L`` is the longest
@@ -441,17 +433,8 @@ def plume_length(
     if method == "max_axis":
         return _diameter(points)
     if method == "convex_hull":
-        hull = MultiPoint(points).convex_hull
-        # For polygonal hulls use the exterior ring; for degenerate
-        # hulls (Point, LineString) shapely exposes ``.coords`` instead.
-        exterior = getattr(hull, "exterior", None)
-        if exterior is not None:
-            coords = np.asarray(exterior.coords)
-        elif hasattr(hull, "coords"):
-            coords = np.asarray(hull.coords)
-        else:
-            coords = points
-        return _max_pairwise(coords)
+        # the diameter of the hull is that of its vertices, as for max_axis
+        return _diameter(points)
     if method == "skeleton":
         length = skeleton_length(active, step=transform)
         if length <= 0.0:
