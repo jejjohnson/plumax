@@ -118,6 +118,16 @@ class LognormalEmission(eqx.Module):
         loc = jnp.log(mean) - 0.5 * log_variance
         return cls(loc, jnp.sqrt(log_variance))
 
+    @property
+    def mean(self) -> Float[Array, ""]:
+        """E[Q] = exp(μ + σ²/2)."""
+        return jnp.exp(self.loc + 0.5 * self.scale**2)
+
+    @property
+    def std(self) -> Float[Array, ""]:
+        """sd[Q] = E[Q] √(exp(σ²) − 1)."""
+        return self.mean * jnp.sqrt(jnp.expm1(self.scale**2))
+
     def sample(self, key: Array, n: int) -> Float[Array, " member"]:
         """n draws of Q."""
         noise = jax.random.normal(key, (n,), dtype=self.loc.dtype)

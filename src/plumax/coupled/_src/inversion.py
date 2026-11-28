@@ -974,12 +974,9 @@ def _emission_moments(
     if std is None:
         # no posterior: report the MAP, Q* = exp(log Q*)
         return jnp.exp(log_mean), jnp.full_like(log_mean, jnp.nan)
-    log_variance = std[block] ** 2
-    # E[Q] = exp(μ + σ²/2)
-    mean = jnp.exp(log_mean + 0.5 * log_variance)
-    # sd[Q] = E[Q] √(exp(σ²) − 1)
-    deviation = mean * jnp.sqrt(jnp.expm1(log_variance))
-    return mean, deviation
+    # log Q ~ N(μ, σ²) gives E[Q] and sd[Q]
+    law = LognormalEmission(log_mean, std[block])
+    return law.mean, law.std
 
 
 __all__ = [
