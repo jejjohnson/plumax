@@ -67,6 +67,8 @@ project:
     - title: Design
       children:
         - file: design/roadmap.md
+        - file: design/applications.md
+        - file: design/source_geometry.md
         - file: design/00_prerequisites.md
         - file: design/01_tier1_gaussian.md
           children:
