@@ -66,7 +66,6 @@ def test_radtran_obs_operator_satisfies_protocol():
         np.linspace(4100.0, 4400.0, 25),
         T_K=300.0,
         p_atm=1.0,
-        vmr_background=1.9e-6,
         path_length_cm=1.0e5,
         amf=2.0,
     )
@@ -80,7 +79,6 @@ def test_radtran_obs_operator_zero_enhancement_is_unit_radiance():
         nu_obs,
         T_K=300.0,
         p_atm=1.0,
-        vmr_background=1.9e-6,
         path_length_cm=1.0e5,
         amf=2.0,
     )

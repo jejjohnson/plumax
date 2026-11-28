@@ -26,6 +26,7 @@ from plumax.coupled import (
     radiance_response,
     radiance_response_linear,
 )
+from plumax.errors import DomainError
 
 
 # ── fixtures (mirror tests/radtran/conftest.py — no HAPI / network) ────────────
@@ -76,16 +77,29 @@ def nu_obs() -> np.ndarray:
 
 
 def _operator(ds, nu, *, srf=None) -> RadianceObservationOperator:
+    # with an SRF its wavelength grid is the spectral grid, and nu_obs goes
+    spectral = {"nu_obs": nu} if srf is None else {"srf": srf}
     return RadianceObservationOperator(
-        ds=ds,
-        nu_obs=nu,
+        ds, T_K=290.0, p_atm=1.0, path_length_cm=8.4e5, amf=2.0, **spectral
+    )
+
+
+def _old_band_radiance(ds, nu, srf, delta_vmr) -> np.ndarray:
+    """The operator before #433: slab spectrum on ``nu``, interpolated onto the SRF."""
+    spectrum = forward_nonlinear_normalized(
+        ds,
+        nu,
         T_K=290.0,
         p_atm=1.0,
         vmr_background=1.8e-6,
+        delta_vmr=delta_vmr,
         path_length_cm=8.4e5,
         amf=2.0,
-        srf=srf,
-    )
+    ).radiance
+    wavelength = 1e7 / np.asarray(nu, dtype=float)
+    order = np.argsort(wavelength)
+    on_srf = np.interp(srf.wavelengths_hr_nm, wavelength[order], spectrum[order])
+    return srf.apply(on_srf)
 
 
 def _band_srf(nu: np.ndarray) -> SpectralResponseFunction:
@@ -185,8 +199,8 @@ def test_jacobian_sign_and_shape(synthetic_lut, nu_obs):
     # tolerance would flag spuriously.
     dvmr0 = float(op.delta_vmr(2e-3))
     eps = dvmr0 * 1e-4
-    f0 = op._forward_hr(dvmr0).radiance
-    f1 = op._forward_hr(dvmr0 + eps).radiance
+    f0 = np.asarray(op.predict_delta_vmr(dvmr0))
+    f1 = np.asarray(op.predict_delta_vmr(dvmr0 + eps))
     fd = (f1 - f0) / eps
     np.testing.assert_allclose(jac, fd, rtol=1e-3, atol=1e-3 * np.abs(jac).max())
 
@@ -206,7 +220,9 @@ def test_srf_band_integration_aligns_spectrum_to_wavelength_grid(synthetic_lut, 
     # Regression: the spectrum is on nu_obs (decreasing wavelength) while the
     # SRF grid is increasing wavelength. The band radiance must match a manual
     # wavelength-aligned integral; a reversed contraction (the bug) would differ
-    # for an ASYMMETRIC SRF, so use an edge-weighted (non-symmetric) band.
+    # for an ASYMMETRIC SRF, so use an edge-weighted (non-symmetric) band. On an
+    # SRF grid of 10⁷ / nu_obs the operator equals the one before #433, where
+    # it interpolated the nu_obs spectrum, to rounding (2.2e-16 measured).
     wl = np.sort(1e7 / nu_obs)  # ascending nm
     # Triangular SRF centred near the short-wavelength edge → asymmetric over the
     # observed window, so sample order matters.
@@ -223,32 +239,69 @@ def test_srf_band_integration_aligns_spectrum_to_wavelength_grid(synthetic_lut, 
 
     # Manual reference: HR spectrum interpolated onto the SRF wavelength grid,
     # then SRF-applied — i.e. the correct (forward) ordering.
-    dvmr = float(op.delta_vmr(3e-3))
-    spec = np.asarray(op._forward_hr(dvmr).radiance)
-    wl_obs = 1e7 / np.asarray(nu_obs, dtype=float)
-    order = np.argsort(wl_obs)
-    spec_on_grid = np.interp(wl, wl_obs[order], spec[order])
-    ref = srf.apply(spec_on_grid)
+    ref = _old_band_radiance(synthetic_lut, nu_obs, srf, float(op.delta_vmr(3e-3)))
     np.testing.assert_allclose(band, ref, rtol=1e-12)
 
 
-def test_srf_grid_wider_than_nu_obs_is_rejected(synthetic_lut, nu_obs):
-    # An SRF grid reaching outside the modelled nu_obs window would make
-    # np.interp repeat the edge spectrum (extrapolation), biasing the band —
-    # so it must be rejected rather than silently extrapolated.
-    wl = np.sort(1e7 / nu_obs)
-    pad = 0.2 * (wl[-1] - wl[0])
-    wide = np.linspace(wl[0] - pad, wl[-1] + pad, wl.size)  # extends both edges
+def test_srf_on_its_own_grid_moves_within_the_interpolation_gap(synthetic_lut):
+    # On an SRF grid of its own the operator interpolates σ onto it, in ν,
+    # where the operator before #433 interpolated exp(−τ) from nu_obs, in λ.
+    # With nu_obs on the table's nodes (step h) both read the same nodes, with
+    # optical depths τ₀, τ₁ around each SRF sample, and differ by two gaps:
+    # linear interpolation of the convex exp(−τ), at most (τ₁ − τ₀)² / 8, and
+    # the weight in λ against the weight in ν, t_λ − t_ν = t (1 − t) h / ν, at
+    # most h / (4 ν), times |τ₁ − τ₀|. Band weights sum to 1, so the band
+    # values keep the bound. The issue measured 3.8e-6 on its own toy table.
+    nu_table = synthetic_lut["wavenumber"].values
+    nodes = nu_table[(nu_table >= 4150.0) & (nu_table <= 4350.0)]
+    grid = np.linspace(1e7 / 4349.0, 1e7 / 4151.0, 300)  # nm, off the nodes
     srf = SpectralResponseFunction(
-        wavelengths_hr_nm=wide,
-        band_centers_nm=np.array([float(np.mean(wide))]),
-        band_widths_nm=np.array([0.5 * (wide[-1] - wide[0])]),
-        band_names=("wide",),
-        srf_type="gaussian",
+        wavelengths_hr_nm=grid,
+        band_centers_nm=np.array([2325.0, 2350.0, 2385.0]),
+        band_widths_nm=np.array([8.0, 8.0, 10.0]),
+        band_names=("a", "b", "c"),
     )
-    op = _operator(synthetic_lut, nu_obs, srf=srf)
-    with pytest.raises(ValueError, match="extends beyond the modelled nu_obs"):
-        op.predict_single(1e-3)
+    op = _operator(synthetic_lut, None, srf=srf)
+    for mass in (1e-3, 4e-3):
+        delta_vmr = float(op.delta_vmr(mass))
+        old = _old_band_radiance(synthetic_lut, nodes, srf, delta_vmr)
+        tau = -np.log(_operator(synthetic_lut, nodes).predict_delta_vmr(delta_vmr))
+        step = float(np.max(np.abs(np.diff(np.asarray(tau)))))
+        h = float(nodes[1] - nodes[0])
+        gap = step**2 / 8 + step * h / (4 * float(nodes[0]))
+        moved = np.abs(np.asarray(op.predict_single(mass)) - old)
+        assert np.all(moved <= gap), (moved, gap)
+        assert float(moved.max()) > 0.0
+
+
+def test_srf_grid_past_the_table_is_rejected(synthetic_lut):
+    # The table lookup returns NaN past the table's wavenumbers, so the grid
+    # is rejected when the operator is built.
+    srf = SpectralResponseFunction(
+        wavelengths_hr_nm=np.linspace(2150.0, 2550.0, 400),  # 3922–4651 cm⁻¹
+        band_centers_nm=np.array([2320.0]),
+        band_widths_nm=np.array([8.0]),
+    )
+    with pytest.raises(DomainError, match="wavenumber range"):
+        _operator(synthetic_lut, None, srf=srf)
+    with pytest.raises(DomainError, match="wavenumber range"):
+        _operator(synthetic_lut, np.linspace(3900.0, 4100.0, 11))
+
+
+def test_layer_past_the_table_and_grid_arguments_are_rejected(synthetic_lut, nu_obs):
+    with pytest.raises(DomainError, match="temperature range"):
+        RadianceObservationOperator(
+            synthetic_lut,
+            nu_obs=nu_obs,
+            T_K=320.0,
+            p_atm=1.0,
+            path_length_cm=1.0,
+            amf=1.0,
+        )
+    with pytest.raises(ValueError, match="exactly one"):
+        RadianceObservationOperator(
+            synthetic_lut, T_K=290.0, p_atm=1.0, path_length_cm=1.0, amf=1.0
+        )
 
 
 # ── (4) composition with the coupled forward → per-receptor radiances ──────────
@@ -418,3 +471,38 @@ def test_radiance_response_linear_is_linear_in_Q(synthetic_lut, nu_obs):
     d1 = np.asarray(r1) - np.asarray(base)
     d2 = np.asarray(r2) - np.asarray(base)
     np.testing.assert_allclose(d2, 2.0 * d1, rtol=1e-6, atol=1e-9 * np.abs(d1).max())
+
+
+# ── JAX: jit, vmap and gradients through the slab operator ────────────────────
+
+
+def test_predict_under_jit_equals_eager(synthetic_lut, nu_obs):
+    import jax
+
+    op = _operator(synthetic_lut, nu_obs, srf=_band_srf(nu_obs))
+    masses = jnp.array([0.0, 1e-3, 4e-3])
+    jitted = jax.jit(lambda m: op.predict(m))(masses)
+    np.testing.assert_allclose(jitted, op.predict(masses), rtol=1e-14)
+    rows = np.stack([np.asarray(op.predict_single(m)) for m in masses])
+    np.testing.assert_allclose(op.predict(masses), rows, rtol=1e-14)
+
+
+@pytest.mark.slow
+def test_grad_of_misfit_in_emission_rate_matches_central_differences(
+    synthetic_lut, nu_obs
+):
+    import jax
+
+    source = _source()
+    inst = Instrument("EMIT", _grid(5, 4, 100.0, 1500.0, -200.0, 200.0))
+    op = _operator(synthetic_lut, nu_obs, srf=_band_srf(nu_obs))
+    observed = radiance_response(source, inst, op, 40.0)
+
+    def misfit(emission_rate):
+        residual = radiance_response(source, inst, op, emission_rate) - observed
+        return jnp.sum(residual**2)
+
+    q, h = 55.0, 1e-3  # kg/s
+    central = (misfit(q + h) - misfit(q - h)) / (2 * h)
+    # the central difference's truncation error is h² f‴ / 6, far below 1e-6
+    np.testing.assert_allclose(jax.grad(misfit)(q), central, rtol=1e-6)

@@ -11,6 +11,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+import xarray as xr
+from radtrax.instrument import SpectralResponseFunction
 
 from plumax.coupled import (
     CoupledPrior,
@@ -68,6 +70,35 @@ class _BeerLambert(eqx.Module):
     def predict(self, column_enhancement):
         optical_depth = column_enhancement[:, None] * self.absorption[None, :]
         return jnp.exp(-optical_depth)
+
+
+def _slab_operator():
+    """The slab operator on a toy table: one line at 4300 cm⁻¹, two 8 nm bands."""
+    nu = np.linspace(4200.0, 4400.0, 401)
+    line = 3e-21 * np.exp(-0.5 * ((nu - 4300.0) / 5.0) ** 2)
+    sigma = np.stack([np.stack([line, line], axis=-1)] * 2, axis=1)
+    table = xr.Dataset(
+        {
+            "absorption_cross_section": (
+                ["wavenumber", "temperature", "pressure"],
+                sigma,
+            )
+        },
+        coords={
+            "wavenumber": nu,
+            "temperature": [260.0, 300.0],
+            "pressure": [0.5, 1.0],
+        },
+    )
+    srf = SpectralResponseFunction(
+        wavelengths_hr_nm=np.linspace(1e7 / 4390.0, 1e7 / 4210.0, 300),
+        band_centers_nm=np.array([2325.0, 2340.0]),
+        band_widths_nm=np.array([8.0, 8.0]),
+        band_names=("line", "wing"),
+    )
+    return RadianceObservationOperator(
+        table, srf=srf, T_K=290.0, p_atm=1.0, path_length_cm=8.4e5, amf=2.0
+    )
 
 
 def _scale():
@@ -194,6 +225,38 @@ def test_linear_radiance_laplace_equals_closed_form_gaussian():
 
 
 # ── nonlinear recovery ───────────────────────────────────────────────────────
+
+
+@pytest.mark.slow
+def test_slab_radiance_operator_recovers_q():
+    # #433: the slab operator is JAX now, so CoupledProblem takes it (it raised
+    # TypeError while the operator ran in NumPy). At Q = 3 kg/s the line's
+    # band drops to about 0.94 on the receptors nearest the source.
+    operator = _slab_operator()
+    forward = build_coupled_forward(SOURCE, [_radiance_instrument()])
+    prior = CoupledPrior.from_std(
+        {"log_emission_rate": 0.0}, {"log_emission_rate": 1.5}
+    )
+    truth = {"log_emission_rate": jnp.log(3.0)}
+
+    def problem(observed):
+        return CoupledProblem(
+            forward=forward,
+            prior=prior,
+            observations={"EMIT": observed},
+            radiance_ops={"EMIT": operator},
+            radiance_variance={"EMIT": 1e-6},
+        )
+
+    clean = problem(jnp.zeros((6, 2))).predict(truth)["EMIT"]
+    assert float(clean.min()) < 0.97  # the plume absorbs
+    noise = 1e-3 * jax.random.normal(jax.random.PRNGKey(4), clean.shape)
+    result = solve_coupled(problem(clean + noise))
+    assert bool(result.converged)
+    assert result.std is not None
+    z = jnp.abs(result.map_estimate["log_emission_rate"] - truth["log_emission_rate"])
+    assert float(z / result.std["log_emission_rate"]) < 3.0
+    assert float(result.std["log_emission_rate"]) < 0.1
 
 
 def _nonlinear_problem(instrument_names, *, seed=1):
@@ -354,23 +417,6 @@ def test_problem_validation():
         solve_coupled(
             CoupledProblem(forward=forward, prior=prior, observations=observations),
             method="gauss_newton",
-        )
-    numpy_operator = RadianceObservationOperator(
-        ds=None,
-        nu_obs=np.ones(2),
-        T_K=1.0,
-        p_atm=1.0,
-        vmr_background=1.0,
-        path_length_cm=1.0,
-        amf=1.0,
-    )
-    with pytest.raises(TypeError, match="NumPy"):
-        CoupledProblem(
-            forward=forward,
-            prior=prior,
-            observations=observations,
-            radiance_ops={"TROPOMI": numpy_operator},
-            radiance_variance={"TROPOMI": 1.0},
         )
     with pytest.raises(ValueError, match="observations for"):
         CoupledProblem(forward=forward, prior=prior, observations={})

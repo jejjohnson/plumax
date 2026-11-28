@@ -61,7 +61,6 @@ KEPT: dict[tuple[str, str, str], tuple[int, str]] = {
     ("coupled/_src/fusion.py", "_stack_design", "axis="): (2, _VARIADIC),
     ("coupled/_src/inversion.py", "size", "flatten"): (1, _PYTREE),
     ("coupled/_src/inversion.py", "solve_coupled", "flatten"): (1, _PYTREE),
-    ("coupled/_src/rtm.py", "predict", "axis="): (1, _VARIADIC),
     ("gauss_plume/_src/plume.py", "simulate_plume", "axis="): (1, _TRAPEZOID),
     ("gauss_puff/_src/puff.py", "simulate_puff", "axis="): (1, _TRAPEZOID),
     ("geo/_src/plume.py", "_masked_mass", "axis="): (

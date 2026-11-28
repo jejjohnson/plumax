@@ -11,8 +11,8 @@ reverse.
 
 - :class:`RadtranObservationOperator` — wraps the normalised Beer–Lambert
   forward model as an ``ObservationOperator`` mapping a scalar plume
-  enhancement (ΔVMR) to a normalised radiance spectrum, with the analytic
-  Jacobian as its tangent-linear.
+  enhancement (ΔVMR) to a normalised radiance spectrum, with its ``jax.jacfwd``
+  as the tangent-linear.
 
 A ``ForwardModel`` over an :class:`~plumax.les_fvm.EulerianDispersionRHS` is
 ``integrix.march.DiffraxForwardModel``, which takes any diffrax solver; with
