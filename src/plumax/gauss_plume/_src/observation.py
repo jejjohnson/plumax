@@ -32,7 +32,6 @@ import numpy as np
 from functax import quad as functax_quad
 from jaxtyping import Array, Float, Int
 
-from plumax._src.domain import containing_cell, edge_axis
 from plumax._src.errors import DomainError
 
 
@@ -203,11 +202,13 @@ def _containing_cell(
     spacing = (centres[-1] - centres[0]) / max(centres.size - 1, 1)
     # e₀ = c₀ − Δ/2
     lower = centres[0] - 0.5 * spacing
-    edges = edge_axis((lower, lower + centres.size * spacing, centres.size))
-    index, inside = containing_cell(coordinate, edges)
-    if not inside.all():
+    # k = ⌊(x − e₀) / Δ⌋, the floor rule of a uniform axis: searching edges built
+    # from e₀ and Δ rounds differently at an edge point
+    index = np.floor((coordinate - lower) / spacing).astype(int)
+    outside = (index < 0) | (index >= centres.size)
+    if outside.any():
         raise DomainError(
-            f"ColumnObservation.for_grid: {int((~inside).sum())} receptor(s) lie "
+            f"ColumnObservation.for_grid: {int(outside.sum())} receptor(s) lie "
             f"outside the grid in {axis}."
         )
     return index
