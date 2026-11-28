@@ -679,7 +679,10 @@ def build_forward(
 
     import diffrax
 
-    from plumax.les_fvm._src.simulate import _max_diffusivity
+    from plumax.les_fvm._src.simulate import (
+        _check_fixed_step_stability,
+        _max_diffusivity,
+    )
     from plumax.les_fvm.simulate import stable_step_bound
 
     # Reject an invalid diffusivity regardless of the solver / controller: a
@@ -697,7 +700,6 @@ def build_forward(
     # explicit. Adaptive controllers are error-controlled and implicit solvers
     # are stable at these steps, so both are skipped.
     _kw = dict(solver_kwargs or {})
-    _solver = _kw.get("solver", diffrax.Heun())
     _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
     _max_step: float | None = None
     if isinstance(_controller, diffrax.ConstantStepSize):
@@ -705,26 +707,26 @@ def build_forward(
     elif isinstance(_controller, diffrax.StepTo):
         _ts = np.asarray(_controller.ts, dtype=float)
         _max_step = float(np.max(np.diff(_ts))) if _ts.size >= 2 else 0.0
-    if _max_step is not None and not isinstance(
-        _solver, diffrax.AbstractImplicitSolver
-    ):
-        _bound = stable_step_bound(
-            dx=plume_grid.dx,
-            dy=plume_grid.dy,
-            dz=plume_grid.dz,
-            max_u=abs(float(uniform_wind[0])),
-            max_v=abs(float(uniform_wind[1])),
-            max_w=abs(float(uniform_wind[2])),
-            k_h=_k_h,
-            k_z=_k_z,
-        )
-        if _max_step > _bound:
-            raise ValueError(
-                f"build_forward: fixed step {_max_step:g} s exceeds the stable "
-                f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
-                f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
-                f"'ts'), soften K, or pass an adaptive stepsize_controller."
-            )
+    _bound = stable_step_bound(
+        dx=plume_grid.dx,
+        dy=plume_grid.dy,
+        dz=plume_grid.dz,
+        max_u=abs(float(uniform_wind[0])),
+        max_v=abs(float(uniform_wind[1])),
+        max_w=abs(float(uniform_wind[2])),
+        k_h=_k_h,
+        k_z=_k_z,
+    )
+    _check_fixed_step_stability(
+        _max_step,
+        _kw.get("solver", diffrax.Heun()),
+        _bound,
+        caller="build_forward",
+        remedy=(
+            "Reduce the step (solver_kwargs 'dt0' or StepTo 'ts'), soften K, or "
+            "pass an adaptive stepsize_controller."
+        ),
+    )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=bc_x, bc_y=bc_y, bc_z=("neumann", "neumann")
