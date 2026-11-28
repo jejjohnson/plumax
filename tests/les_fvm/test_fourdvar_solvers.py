@@ -1,4 +1,4 @@
-"""Gauss–Newton 4D-Var on vardax's IncrementalFourDVar (#93)."""
+"""Gauss–Newton (#93) and PSAS (#246) 4D-Var on vardax's CG analyses."""
 
 from __future__ import annotations
 
@@ -79,6 +79,19 @@ def linear_lbfgs(linear_problem):
     return solve_4dvar(linear_problem, rtol=1e-10, atol=1e-12, max_steps=500)
 
 
+@pytest.fixture(scope="module")
+def linear_newton(linear_problem):
+    # one outer iteration with a converged CG solve is the MAP of an affine forward
+    return solve_4dvar(
+        linear_problem,
+        method="gauss_newton",
+        rtol=1e-10,
+        atol=1e-12,
+        outer_iters=1,
+        compute_posterior=True,
+    )
+
+
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_gauss_newton_uses_no_deprecated_vardax_setting(linear_problem):
     # vardax removes IncrementalConfig's n_outer, n_inner and CG tolerances in its
@@ -92,20 +105,13 @@ def test_gauss_newton_uses_no_deprecated_vardax_setting(linear_problem):
 
 
 @pytest.mark.slow
-def test_methods_agree_linear(linear_problem, linear_lbfgs):
+def test_methods_agree_linear(linear_problem, linear_lbfgs, linear_newton):
     # the forward is affine, so the linearised cost is the cost itself: one outer
     # iteration of Gauss–Newton must reach the dense linear Gaussian MAP
     problem = linear_problem
     lbfgs = linear_lbfgs
     dense_map, dense_covariance = _dense_solution(problem)
-    newton = solve_4dvar(
-        problem,
-        method="gauss_newton",
-        rtol=1e-10,
-        atol=1e-12,
-        outer_iters=1,
-        compute_posterior=True,
-    )
+    newton = linear_newton
     assert _relative(newton.source, lbfgs.source) < 1e-6
     assert _relative(newton.source, dense_map) < 1e-6
     assert newton.n_steps == 1
@@ -182,8 +188,41 @@ def test_gauss_newton_outer_iters():
 
 
 @pytest.mark.slow
-def test_gauss_newton_on_a_kronecker_prior_with_a_block_diagonal_background():
-    # gaussx.Kronecker inside gaussx.BlockDiag as the vardax square root
+def test_psas_agrees_with_gauss_newton_and_the_dense_map(
+    linear_problem, linear_lbfgs, linear_newton
+):
+    # the dual solve of the materialised affine map is the same Gauss–Newton step;
+    # measured on this problem in float64 (#246): 5e-15 from Gauss–Newton and 2e-15
+    # from the dense MAP, so 1e-6 is the issue's bound with room for the CG
+    # tolerance
+    problem = linear_problem
+    dense_map, dense_covariance = _dense_solution(problem)
+    newton = linear_newton
+    psas = solve_4dvar(
+        problem, method="psas", rtol=1e-10, atol=1e-12, compute_posterior=True
+    )
+    assert _relative(psas.source, newton.source) < 1e-6
+    assert _relative(psas.source, dense_map) < 1e-6
+    assert _relative(psas.source, linear_lbfgs.source) < 1e-6
+    assert psas.converged
+    # CG on J B Jᵀ + I, whose spectrum is 1 plus n_state other values
+    assert 0 < psas.n_steps <= problem.prior_mean.shape[0] + 1
+    np.testing.assert_allclose(
+        problem.source_from_whitened(psas.whitened), psas.source, rtol=1e-12
+    )
+    np.testing.assert_allclose(psas.cost, float(problem.cost(psas.whitened)))
+    assert psas.posterior is not None
+    np.testing.assert_allclose(
+        psas.posterior.source_covariance, dense_covariance, rtol=1e-6, atol=1e-12
+    )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("method", ["gauss_newton", "psas"])
+def test_cg_methods_on_a_kronecker_prior_with_a_block_diagonal_background(method):
+    # gaussx.Kronecker inside gaussx.BlockDiag as the vardax square root; PSAS
+    # measured 4e-12 from Gauss–Newton on a SpatialControl and 2e-15 on a
+    # BackgroundControl problem in float64 (#246), inside the 1e-6 bound below
     ny, nx, nz = 4, 5, 4
     control = SpatialControl(
         mask=jnp.ones((ny, nx), dtype=bool),
@@ -224,7 +263,7 @@ def test_gauss_newton_on_a_kronecker_prior_with_a_block_diagonal_background():
     dense_map, _ = _dense_solution(problem)
     result = solve_4dvar(
         problem,
-        method="gauss_newton",
+        method=method,
         rtol=1e-10,
         atol=1e-12,
         outer_iters=1,
@@ -255,11 +294,28 @@ def _unsolved_problem():
     )
 
 
-@pytest.mark.slow
-def test_psas_names_the_vardax_issue_it_waits_on():
-    # "psas" is not a method the Literal allows, so the hook may reject it first
-    with raises_checked(ValueError, "vardax/issues/72", parameter="method"):
-        solve_4dvar(_unsolved_problem(), method="psas")
+def test_psas_refuses_a_nonlinear_advection_scheme():
+    # WENO's reconstruction is nonlinear, so one materialised linearisation is not
+    # the forward; the refusal comes before any VJP
+    save_times = jnp.linspace(0.0, 20.0, 2)
+    forward = build_forward(
+        domain_x=(0.0, 120.0, 6),
+        domain_y=(0.0, 80.0, 4),
+        domain_z=(0.0, 80.0, 4),
+        save_times=save_times,
+        source_location=(40.0, 40.0, 20.0),
+        uniform_wind=(1.0, 0.0, 0.0),
+        advection_scheme="weno5",
+    )
+    problem = build_problem(
+        forward=forward,
+        observations=jnp.zeros((2, 24)),
+        prior_mean=jnp.zeros(2),
+        prior_covariance=jnp.eye(2),
+        obs_variance=1.0,
+    )
+    with pytest.raises(ValueError, match="'weno5'"):
+        solve_4dvar(problem, method="psas")
 
 
 @pytest.mark.slow
@@ -269,9 +325,10 @@ def test_unknown_method_is_rejected():
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("method", ["gauss_newton", "psas"])
 @pytest.mark.parametrize(
     "options", [{"initial_source": jnp.zeros(2)}, {"solver": object()}]
 )
-def test_gauss_newton_rejects_options_it_cannot_honour(options):
+def test_cg_methods_reject_options_they_cannot_honour(method, options):
     with pytest.raises(ValueError, match="L-BFGS only"):
-        solve_4dvar(_unsolved_problem(), method="gauss_newton", **options)
+        solve_4dvar(_unsolved_problem(), method=method, **options)
