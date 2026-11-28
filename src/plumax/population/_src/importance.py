@@ -126,25 +126,6 @@ class EventEvidence(eqx.Module):
         return integrix_expect.effective_sample_size(self.log_terms(log_integrand))
 
 
-def effective_sample_size(log_weights: Float[Array, "*event member"]) -> Array:
-    """Deprecated alias of `integrix.expect.effective_sample_size` (plumax#253).
-
-    ESS = (Σₛ wₛ)² / Σₛ wₛ² from log-weights, along the last axis.
-
-    Examples:
-        >>> import jax.numpy as jnp
-        >>> bool(jnp.allclose(effective_sample_size(jnp.zeros(8)), 8.0))
-        True
-    """
-    warnings.warn(
-        "plumax.population.importance.effective_sample_size is deprecated; use "
-        "integrix.expect.effective_sample_size (plumax#253).",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return integrix_expect.effective_sample_size(log_weights)
-
-
 def _prior_logpdf(event: EmissionEvent) -> Callable[[Array], Array]:
     if event.prior_logpdf is None:
         raise PayloadError(

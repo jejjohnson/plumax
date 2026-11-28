@@ -6,10 +6,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from integrix.expect import log_simpson
 
-from plumax.population.integrate import (
-    log_simpson,
-)
 from plumax.population.marks import LognormalParetoMark
 
 

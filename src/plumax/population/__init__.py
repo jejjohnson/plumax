@@ -26,8 +26,6 @@ products:
   missing-mass correction, from a TMTPP posterior.
 * :mod:`~plumax.population.importance` — importance-corrected per-event
   evidence (POINT / GAUSSIAN / FULL regimes) and the ESS diagnostic.
-* :mod:`~plumax.population.integrate` — log-space Gauss–Hermite and Simpson
-  quadrature, Pareto-smoothed importance weights.
 * :mod:`~plumax.population.fitting` — POD-modified power-law NUTS fitter and
   the importance-corrected mark and TMTPP models.
 
@@ -51,14 +49,8 @@ from plumax.population.importance import (
     EventEvidence,
     Regime,
     catalog_evidence,
-    effective_sample_size,
     ess_report,
     event_evidence,
-)
-from plumax.population.integrate import (
-    log_gauss_hermite,
-    log_simpson,
-    pareto_smoothed_log_weights,
 )
 from plumax.population.intensity import (
     INTENSITY_REGISTRY,
@@ -212,7 +204,6 @@ __all__ = [
     "catalog_evidence",
     "compute_E_Pd",
     "detection_process",
-    "effective_sample_size",
     "ess_report",
     "event_evidence",
     "event_from_posterior",
@@ -223,9 +214,7 @@ __all__ = [
     "fit_poisson_rate",
     "fit_size_distribution_iw",
     "load_pod_calibrations",
-    "log_gauss_hermite",
     "log_pod_union",
-    "log_simpson",
     "logistic_pod",
     "lognorm_cdf",
     "lognormal_pdf",
@@ -234,7 +223,6 @@ __all__ = [
     "mark_iw_model",
     "occurrence_probability",
     "padded_event_buffer",
-    "pareto_smoothed_log_weights",
     "pod_powerlaw_model",
     "pod_union",
     "posterior_metric",
