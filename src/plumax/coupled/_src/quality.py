@@ -13,9 +13,8 @@ rejected pixel:
 and ``variance_inflation``), :func:`contribution_report` counts the pixels
 each instrument contributes at full weight, and :func:`stack_observations`
 hands every instrument's observations, mask and variance to vardax as one
-``Batch1D`` and one diagonal R. Masked observations are filled with zeros:
-vardax multiplies the residual by the mask, and a NaN there would still
-poison the cost (jejjohnson/vardax#147).
+``Batch1D`` and one diagonal R. Masked observations are filled with zeros,
+so a sum over the stacked residuals needs no mask.
 """
 
 from __future__ import annotations
@@ -221,24 +220,20 @@ class StackedObservations(eqx.Module):
     variance: Float[Array, " obs"]
 
     def batch(self) -> vardax.Batch1D:
-        """One-window ``vardax.Batch1D`` of shape ``(1, 1, D_y)``.
+        """One-sample ``vardax.Batch1D`` of shape ``(1, D_y)``.
 
         Raises:
             ImportError: Without the ``assim`` extra.
         """
         vdx = require_vardax("StackedObservations.batch")
         return vdx.Batch1D(
-            input=einx.id("obs -> 1 1 obs", self.values),
-            mask=einx.id("obs -> 1 1 obs", self.mask),
+            input=einx.id("obs -> 1 obs", self.values),
+            mask=einx.id("obs -> 1 obs", self.mask),
         )
 
     def obs_cov_op(self) -> lx.DiagonalLinearOperator:
-        """R as a diagonal operator on a ``(1, D_y)`` observation row.
-
-        A diagonal operator rather than a scaled identity, which vardax
-        mis-solves (jejjohnson/vardax#146).
-        """
-        return lx.DiagonalLinearOperator(einx.id("obs -> 1 obs", self.variance))
+        """R as a diagonal operator on the ``(D_y,)`` observations."""
+        return lx.DiagonalLinearOperator(self.variance)
 
 
 def stack_observations(

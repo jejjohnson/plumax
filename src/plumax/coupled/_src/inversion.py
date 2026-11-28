@@ -20,19 +20,21 @@ m_i is the quality mask of ``coupled.quality``.
 
 plumax builds the forward, the prior and the masks; vardax does the rest.
 :func:`solve_coupled` hands ``vardax.ThreeDVar`` the stacked forward as a
-``vardax.CallableObs``, runs L-BFGS in the whitened control θ = μ_θ + L χ
-(Σ_θ = L Lᵀ, through ``vardax.LinearParameterization``), and takes the
-Gauss–Newton Laplace covariance from ``vardax.LaplaceCovariance``,
+``vardax.CallableObs`` over the flat ``(D_θ,)`` control. It runs L-BFGS in the
+whitened control θ = μ_θ + L χ (Σ_θ = L Lᵀ, through
+``vardax.LinearParameterization``), or Gauss–Newton on the whitened residuals
+(``argminax.solve.GaussNewtonCG``), and takes the Gauss–Newton Laplace
+covariance from ``vardax.LaplaceCovariance``,
 
     Σ_θ|y = (Σ_θ⁻¹ + J_hᵀ Σ_ε⁻¹ J_h)⁻¹,   J_h = ∂h/∂θ at θ*.
 
-Σ_θ is dense or diagonal and Σ_ε diagonal; block-structured operators wait on
-jejjohnson/vardax#141, and the Gauss–Newton minimiser on jejjohnson/vardax#72.
+Σ_θ is dense or diagonal and Σ_ε diagonal.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import functools
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
@@ -54,7 +56,7 @@ from plumax._src.scalar_emission import (
     require_scalar,
 )
 from plumax._src.tracing import require_positive
-from plumax._src.vardax import PSD_TAGS, require_vardax
+from plumax._src.vardax import PSD_TAGS, require_argminax, require_vardax
 from plumax.coupled._src.forward import (
     CoupledForward,
     _scale_response,
@@ -280,16 +282,12 @@ class CoupledPrior:
             return jnp.diag(jnp.sqrt(covariance))
         return gx.safe_cholesky(lx.MatrixLinearOperator(covariance, PSD_TAGS))
 
-    def row_operator(self) -> lx.AbstractLinearOperator:
-        """Σ_θ on a ``(1, D_θ)`` control row, the shape vardax applies it to."""
+    def covariance_operator(self) -> lx.AbstractLinearOperator:
+        """Σ_θ as an operator on the flat ``(D_θ,)`` control."""
         covariance = jnp.asarray(self.covariance, dtype=float)
         if covariance.ndim == 1:
-            return lx.DiagonalLinearOperator(einx.id("p -> 1 p", covariance))
-        return lx.FunctionLinearOperator(
-            lambda row: einx.dot("row p, p q -> row q", row, covariance),
-            jax.ShapeDtypeStruct((1, covariance.shape[0]), covariance.dtype),
-            PSD_TAGS,
-        )
+            return lx.DiagonalLinearOperator(covariance)
+        return lx.MatrixLinearOperator(covariance, PSD_TAGS)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -460,7 +458,8 @@ class CoupledProblem:
         """Observations, masks and Σ_ε stacked like :meth:`predict_stacked`.
 
         A radiance pixel's mask and variance inflation apply to all its
-        channels. Masked values are zero (jejjohnson/vardax#147).
+        channels. Masked values are zero, so a sum over the stacked residuals
+        (``fit_diagnostics``) needs no mask.
         """
         observations, masks, variances = [], [], []
         for instrument in self.forward.instruments:
@@ -766,102 +765,114 @@ def solve_coupled(
         1. Flatten the prior to μ_θ, factor Σ_θ = L Lᵀ.
         2. Stack observations, masks and Σ_ε over the instruments.
         3. ``vardax.ThreeDVar`` with the stacked forward as a ``CallableObs``
-           and the whitened control θ = μ_θ + L χ; minimise with L-BFGS from
-           χ₀ = L⁻¹ (θ₀ − μ_θ), where θ₀ is ``initial`` (μ_θ by default).
+           on the flat ``(D_θ,)`` control. ``"lbfgs"`` minimises 𝒥 in the
+           whitened control θ = μ_θ + L χ from χ₀ = L⁻¹ (θ₀ − μ_θ), where θ₀
+           is ``initial`` (μ_θ by default); ``"gauss_newton"`` solves the
+           whitened residuals with ``argminax.solve.GaussNewtonCG`` from μ_θ.
         4. ``vardax.LaplaceCovariance`` at θ*, materialised.
 
     Args:
         problem: The coupled problem.
         initial: Control the minimiser starts from, by block; blocks left
             out start at the prior mean. The prior is not changed, so the
-            cost is the same from every start.
-        method: ``"lbfgs"``. ``"gauss_newton"`` waits on vardax's
-            Gauss–Newton minimiser (jejjohnson/vardax#72).
+            cost is the same from every start. L-BFGS only.
+        method: ``"lbfgs"`` or ``"gauss_newton"``. Gauss–Newton starts at the
+            prior mean and reaches the same MAP in fewer steps. It is
+            undamped, so from a prior mean far from the MAP it can overshoot
+            and stop unconverged; ``CoupledResult.converged`` reports that.
         laplace: Also compute the Laplace posterior.
-        rtol: L-BFGS relative tolerance.
-        atol: L-BFGS absolute tolerance.
+        rtol: Relative tolerance of the minimiser.
+        atol: Absolute tolerance of the minimiser.
         max_steps: Iteration cap.
 
     Returns:
         The :class:`CoupledResult`.
 
     Raises:
-        NotImplementedError: For ``method="gauss_newton"``.
+        NotImplementedError: For ``method="gauss_newton"`` with ``initial``:
+            vardax starts a least-squares solve only at the prior mean
+            (jejjohnson/vardax#315).
+        ValueError: For an unknown ``method``.
         ControlBlockError: If ``initial`` names a block the prior lacks, or
             one of the wrong shape.
         ImportError: Without the ``assim`` extra.
     """
-    if method == "gauss_newton":
-        raise NotImplementedError(
-            "solve_coupled: the Gauss–Newton minimiser waits on vardax "
-            "(jejjohnson/vardax#72); use method='lbfgs'."
-        )
-    if method != "lbfgs":
+    if method not in ("lbfgs", "gauss_newton"):
         raise ValueError(f"solve_coupled: unknown method {method!r}.")
+    if method == "gauss_newton" and initial is not None:
+        raise NotImplementedError(
+            "solve_coupled: Gauss–Newton starts at the prior mean until vardax "
+            "can start it elsewhere (jejjohnson/vardax#315); use method='lbfgs' "
+            "with `initial`."
+        )
     import optimistix as optx
 
     vdx = require_vardax("solve_coupled")
 
-    # --- prior and whitened control ---
+    # --- observations ---
     prior = problem.prior
     prior_mean, unflatten = prior.flatten()
-    # Σ_θ = L Lᵀ
-    cholesky = prior.cholesky()
-    # θ = μ_θ + L χ, ½ ‖χ‖²
-    basis = vdx.linear_basis(cholesky, variance=1.0)
-    # μ_θ on a (1, D_θ) row
-    prior_row = einx.id("param -> 1 param", prior_mean)
-    linear_control = vdx.LinearParameterization(basis, background=prior_row)
-    control = linear_control
-    if initial is not None:
-        # χ₀ = L⁻¹ (θ₀ − μ_θ)
-        start = _initial_control(prior, initial)
-        whitened_start = jax.scipy.linalg.solve_triangular(
-            cholesky, start - prior_mean, lower=True
-        )
-        control = _StartedParameterization(linear_control, whitened_start)
-
-    # --- observations ---
     stacked = problem.stacked_observations()
 
     def stacked_prediction(state: jax.Array) -> jax.Array:
-        # h(θ) on a (1, D_θ) row
-        return einx.id("obs -> 1 obs", problem.predict_stacked(unflatten(state[0])))
+        # h(θ)
+        return problem.predict_stacked(unflatten(state))
 
-    model = vdx.ThreeDVar(
+    # 𝒥(θ) on the flat (D_θ,) control; the minimiser is chosen below
+    three_dvar = functools.partial(
+        vdx.ThreeDVar,
         obs_op=vdx.CallableObs(fn=stacked_prediction, materialise=True),
-        prior_mean=prior_row,
-        prior_cov_op=prior.row_operator(),
+        prior_mean=prior_mean,
+        prior_cov_op=prior.covariance_operator(),
         obs_cov_op=stacked.obs_cov_op(),
-        minimiser=vdx.OptimistixMinimiser(
-            optx.LBFGS(rtol=rtol, atol=atol), max_steps=max_steps
-        ),
-        parameterization=control,
+        max_steps=max_steps,
         cov_solver=lx.AutoLinearSolver(well_posed=True),
     )
     batch = stacked.batch()
 
+    # --- minimiser ---
+    if method == "gauss_newton":
+        argminax = require_argminax("solve_coupled")
+        model = three_dvar(minimiser=argminax.solve.GaussNewtonCG(rtol=rtol, atol=atol))
+        posterior_model = model
+    else:
+        # Σ_θ = L Lᵀ
+        cholesky = prior.cholesky()
+        # θ = μ_θ + L χ, ½ ‖χ‖²
+        basis = vdx.linear_basis(cholesky, variance=1.0)
+        linear_control = vdx.LinearParameterization(basis, background=prior_mean)
+        control = linear_control
+        if initial is not None:
+            # χ₀ = L⁻¹ (θ₀ − μ_θ)
+            start = _initial_control(prior, initial)
+            whitened_start = jax.scipy.linalg.solve_triangular(
+                cholesky, start - prior_mean, lower=True
+            )
+            control = _StartedParameterization(linear_control, whitened_start)
+        lbfgs = vdx.OptimistixMinimiser(
+            optx.LBFGS(rtol=rtol, atol=atol), max_steps=max_steps
+        )
+        model = three_dvar(minimiser=lbfgs, parameterization=control)
+        # the posterior at θ* does not depend on the start, and vardax takes it
+        # from the affine parameterization
+        posterior_model = eqx.tree_at(
+            lambda module: module.parameterization, model, linear_control
+        )
+
     # --- MAP ---
     # θ* = argmin 𝒥(θ)
     analysis, outcome = model.analyse(batch)
-    params = analysis[0, 0]
+    params = analysis[0]
     map_estimate = unflatten(params)
 
     # --- Laplace posterior ---
     covariance = None
     std = None
     if laplace:
-        # the posterior at θ* does not depend on the start, and vardax takes it
-        # from the affine parameterization
-        affine_model = eqx.tree_at(
-            lambda module: module.parameterization, model, linear_control
-        )
         # Σ_θ|y = (Σ_θ⁻¹ + J_hᵀ Σ_ε⁻¹ J_h)⁻¹
-        params_row = einx.id("param -> 1 param", params)
         posterior = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-            params_row, affine_model, batch
+            params, posterior_model, batch
         )
-
         covariance = gx.symmetrize(posterior.cov.as_matrix())
         marginal_std = jnp.sqrt(jnp.clip(jnp.diagonal(covariance), 0.0, None))
         std = unflatten(marginal_std)
@@ -934,6 +945,9 @@ def _initial_control(
 
 class _StartedParameterization(eqx.Module):
     """A vardax parameterization that starts the minimiser at χ₀, not at 0.
+
+    vardax starts a solve elsewhere only through a parameterization's
+    ``init_control`` (jejjohnson/vardax#315).
 
     ``decode`` and ``penalty`` are the wrapped parameterization's, so the cost
     is unchanged; only ``init_control`` differs.
