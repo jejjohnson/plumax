@@ -73,13 +73,7 @@ from plumax._src.errors import (
 )
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
-from plumax.met._src.regrid import (
-    IndexMap,
-    analysis_heights,
-    interpolate_vertical,
-    onto_analysis_grid,
-    stagger_points,
-)
+from plumax.met._src.regrid import IndexMap, onto_analysis_grid, stagger_points
 from plumax.met._src.time import TimeAxis
 from plumax.met.field import MetField
 
@@ -116,12 +110,11 @@ def load_wrf(
         MissingVariableError: With a ``LocalFrame``, if the file lacks
             ``XLAT`` / ``XLONG`` or the ``COSALPHA`` / ``SINALPHA`` its
             earth-relative wind needs.
-        DomainError: With a ``LocalFrame``, if an analysis point falls outside
-            the WRF domain.
-        ValueError: With metre offsets, if an analysis point falls outside
-            the WRF mass-point domain (the loader never extrapolates
-            horizontally); or if the file has no usable time axis (``Times``,
-            or ``XTIME`` with the ``SIMULATION_START_DATE`` attribute).
+        DomainError: If an analysis point (a U- and V-point half-cell offset
+            included) falls outside the WRF mass points; the loader never
+            extrapolates horizontally.
+        ValueError: If the file has no usable time axis (``Times``, or
+            ``XTIME`` with the ``SIMULATION_START_DATE`` attribute).
     """
     in_frame = isinstance(origin, LocalFrame)
     open_wrfout = _require_open_wrfout()
@@ -152,70 +145,28 @@ def load_wrf(
         pbl_height = dataset["pbl_height"].values
         clock = TimeAxis.from_datetimes(dataset["time"].values)
 
-    # --- vertical targets ---
-    # The analysis grid's lower boundary is its surface (``make_grid``
-    # semantics), and WRF heights are above ground.
-    target_heights = analysis_heights(plume_grid)
-    dtype = plume_grid.x.dtype
-    as_jax = lambda array: jnp.asarray(array, dtype=dtype)
-
     if in_frame:
         # --- horizontal, by lat/lon ---
         to_index = _wrf_index_map(lat_mass, lon_mass, origin)
         points = stagger_points(plume_grid, origin, to_index, loader="load_wrf")
-        return onto_analysis_grid(
-            plume_grid,
-            points,
-            height_agl,
-            clock,
-            u_east=u_mass,
-            v_north=v_mass,
-            wind_up=w_mass,
-            temperature=temperature,
-            pressure=pressure,
-            pbl_height=pbl_height,
+    else:
+        # --- horizontal, by WRF metres, on WRF's own axes ---
+        to_index = _metre_index_map(
+            origin, spacing=(spacing_x, spacing_y), shape=u_mass.shape[-2:]
         )
-
-    # --- horizontal, by WRF metres ---
-    num_y_wrf, num_x_wrf = u_mass.shape[-2:]
-    x_t = np.asarray(plume_grid.x, dtype=np.float64) + origin[0]
-    y_t = np.asarray(plume_grid.y, dtype=np.float64) + origin[1]
-    # x_U = x_T + Δx/2
-    x_u = x_t + 0.5 * plume_grid.dx
-    # y_V = y_T + Δy/2
-    y_v = y_t + 0.5 * plume_grid.dy
-    _check_inside(
-        x_u,
-        y_v,
-        spacing_x=spacing_x,
-        spacing_y=spacing_y,
-        num_x=num_x_wrf,
-        num_y=num_y_wrf,
-    )
-    _check_inside(
-        x_t,
-        y_t,
-        spacing_x=spacing_x,
-        spacing_y=spacing_y,
-        num_x=num_x_wrf,
-        num_y=num_y_wrf,
-    )
-
-    def onto(field: np.ndarray, easting: np.ndarray, northing: np.ndarray):
-        column = interpolate_vertical(height_agl, field, target_heights)
-        # (fx, fy) = (x / DX, y / DY)
-        return _bilinear(column, easting / spacing_x, northing / spacing_y)
-
-    return MetField(
-        plume_grid=plume_grid,
-        times=as_jax(clock.seconds),
-        u=as_jax(onto(u_mass, x_u, y_t)),
-        v=as_jax(onto(v_mass, x_t, y_v)),
-        w=as_jax(onto(w_mass, x_t, y_t)),
-        temperature=as_jax(onto(temperature, x_t, y_t)),
-        pressure=as_jax(onto(pressure, x_t, y_t)),
-        pbl_height=as_jax(_bilinear(pbl_height, x_t / spacing_x, y_t / spacing_y)),
-        t0=clock.t0_iso,
+        # the axes are WRF's, so the grid-relative wind passes through as is
+        points = stagger_points(plume_grid, None, to_index, loader="load_wrf")
+    return onto_analysis_grid(
+        plume_grid,
+        points,
+        height_agl,
+        clock,
+        u_east=u_mass,
+        v_north=v_mass,
+        wind_up=w_mass,
+        temperature=temperature,
+        pressure=pressure,
+        pbl_height=pbl_height,
     )
 
 
@@ -318,6 +269,37 @@ def _wrf_index_map(
     return to_index
 
 
+def _metre_index_map(
+    origin: tuple[float, float],
+    *,
+    spacing: tuple[float, float],
+    shape: tuple[int, ...],
+) -> IndexMap:
+    """Analysis metres → WRF fractional mass-point indices, on WRF's axes.
+
+    (i, j) = ((x + x_o) / DX, (y + y_o) / DY),
+
+    with ``(x_o, y_o)`` the WRF metres of the analysis grid's origin and the
+    south-west mass point at index ``(0, 0)``; NaN outside the mass points.
+    """
+    spacing_x, spacing_y = spacing
+    num_y, num_x = shape
+
+    def to_index(
+        frame_x: Float[np.ndarray, "y x"], frame_y: Float[np.ndarray, "y x"]
+    ) -> tuple[Float[np.ndarray, "y x"], Float[np.ndarray, "y x"]]:
+        # i = (x + x_o) / DX
+        index_x = (frame_x + origin[0]) / spacing_x
+        # j = (y + y_o) / DY
+        index_y = (frame_y + origin[1]) / spacing_y
+        inside_x = (index_x >= 0.0) & (index_x <= num_x - 1)
+        inside_y = (index_y >= 0.0) & (index_y <= num_y - 1)
+        inside = inside_x & inside_y
+        return np.where(inside, index_x, np.nan), np.where(inside, index_y, np.nan)
+
+    return to_index
+
+
 def _grid_relative_wind(
     dataset: xr.Dataset,
 ) -> tuple[Float[np.ndarray, "time level y x"], Float[np.ndarray, "time level y x"]]:
@@ -341,51 +323,4 @@ def _grid_relative_wind(
     return (
         u_grid.transpose(*wind_east.dims).values,
         v_grid.transpose(*wind_north.dims).values,
-    )
-
-
-def _check_inside(
-    x: np.ndarray,
-    y: np.ndarray,
-    *,
-    spacing_x: float,
-    spacing_y: float,
-    num_x: int,
-    num_y: int,
-) -> None:
-    # x_max = (n_x − 1) DX
-    x_max = (num_x - 1) * spacing_x
-    # y_max = (n_y − 1) DY
-    y_max = (num_y - 1) * spacing_y
-    if x.min() < 0.0 or x.max() > x_max or y.min() < 0.0 or y.max() > y_max:
-        raise ValueError(
-            "load_wrf: the analysis grid (including its U-/V-point half-cell "
-            f"offsets) spans x ∈ [{x.min():g}, {x.max():g}] m, y ∈ [{y.min():g}, "
-            f"{y.max():g}] m in the WRF frame, but the WRF mass points cover "
-            f"x ∈ [0, {x_max:g}] m, y ∈ [0, {y_max:g}] m. Shrink the grid or "
-            "move `origin`; the loader does not extrapolate horizontally."
-        )
-
-
-def _bilinear(field: np.ndarray, fx: np.ndarray, fy: np.ndarray) -> np.ndarray:
-    """Bilinear sample of ``field[..., j, i]`` at fractional indices.
-
-    ``fx`` (``(nx,)``) and ``fy`` (``(ny,)``) are index-space coordinates
-    (WRF metres divided by ``DX`` / ``DY``); returns ``field`` resampled to
-    ``(..., ny, nx)``.
-    """
-    num_y, num_x = field.shape[-2:]
-    col_low = np.clip(np.floor(fx).astype(int), 0, num_x - 2)
-    row_low = np.clip(np.floor(fy).astype(int), 0, num_y - 2)
-    # a = fx − ⌊fx⌋
-    weight_x = (fx - col_low)[None, :]
-    # b = fy − ⌊fy⌋
-    weight_y = (fy - row_low)[:, None]
-    rows, cols = row_low[:, None], col_low[None, :]
-    # (1−b)(1−a) f₀₀ + (1−b) a f₀₁ + b (1−a) f₁₀ + b a f₁₁
-    return (
-        (1.0 - weight_y) * (1.0 - weight_x) * field[..., rows, cols]
-        + (1.0 - weight_y) * weight_x * field[..., rows, cols + 1]
-        + weight_y * (1.0 - weight_x) * field[..., rows + 1, cols]
-        + weight_y * weight_x * field[..., rows + 1, cols + 1]
     )

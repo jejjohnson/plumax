@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from plumax.errors import MissingVariableError
+from plumax.errors import DomainError, MissingVariableError
 from plumax.les_fvm import simulate_eulerian_dispersion, wind_field_from_callable
 from plumax.les_fvm.grid import make_grid
 from plumax.met import MetField, load_wrf, to_prescribed_wind
@@ -143,7 +143,7 @@ def test_vertical_targets_are_relative_to_grid_surface(loaded, synthetic_wrf):
 def test_grid_outside_wrf_domain_raises(synthetic_wrf):
     grid = make_grid(DOMAIN_X, DOMAIN_Y, DOMAIN_Z, dtype=jnp.float64)
     too_far = (synthetic_wrf.x_max - 100.0, 100.0)
-    with pytest.raises(ValueError, match="does not extrapolate horizontally"):
+    with pytest.raises(DomainError, match="does not extrapolate horizontally"):
         load_wrf(synthetic_wrf.path, plume_grid=grid, origin=too_far)
 
 

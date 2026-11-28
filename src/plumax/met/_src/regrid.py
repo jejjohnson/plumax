@@ -48,7 +48,7 @@ class StaggerPoints:
 
 
 def stagger_points(
-    grid: PlumeGrid3D, frame: LocalFrame, to_index: IndexMap, *, loader: str
+    grid: PlumeGrid3D, frame: LocalFrame | None, to_index: IndexMap, *, loader: str
 ) -> dict[str, StaggerPoints]:
     """Source indices and axes of the analysis T-, U- and V-points.
 
@@ -57,7 +57,9 @@ def stagger_points(
 
     Args:
         grid: Analysis grid, in ``frame`` metres.
-        frame: The analysis grid's frame.
+        frame: The analysis grid's frame, or ``None`` for a grid laid out on
+            the source's own axes: east and north are then ``(1, 0)`` and
+            ``(0, 1)``, so :func:`frame_wind` passes the wind through.
         to_index: Frame metres → source fractional indices; NaN outside the
             source domain.
         loader: Loader name for the error message.
@@ -99,8 +101,14 @@ def stagger_points(
                 "source domain; shrink the grid or move the frame origin (the "
                 "loader does not extrapolate horizontally)"
             )
-        lat, lon = frame.to_latlon(point_x, point_y)
-        east, north = frame.east_north_axes(lat, lon)
+        if frame is None:
+            # ê = (1, 0), n̂ = (0, 1) at every point
+            num_y, num_x = point_x.shape
+            east = einx.id("c -> y x c", np.array([1.0, 0.0]), y=num_y, x=num_x)
+            north = einx.id("c -> y x c", np.array([0.0, 1.0]), y=num_y, x=num_x)
+        else:
+            lat, lon = frame.to_latlon(point_x, point_y)
+            east, north = frame.east_north_axes(lat, lon)
         stagger[name] = StaggerPoints(i=index_x, j=index_y, east=east, north=north)
     return stagger
 
