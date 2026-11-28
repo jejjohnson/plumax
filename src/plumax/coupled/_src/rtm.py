@@ -157,6 +157,11 @@ def _require_inside_table(
         ("pressure", np.asarray(p_atm, dtype=float), "`p_atm`", "atm"),
     )
     for coord, values, name, unit in queries:
+        # a NaN compares False with both ends, and an empty grid has no range
+        if values.size == 0 or not np.isfinite(values).all():
+            raise DomainError(
+                f"RadianceObservationOperator: {name} must be non-empty and finite."
+            )
         grid = np.asarray(ds[coord], dtype=float)
         low, high = float(grid.min()), float(grid.max())
         if float(values.min()) < low or float(values.max()) > high:

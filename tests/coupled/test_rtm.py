@@ -286,6 +286,13 @@ def test_srf_grid_past_the_table_is_rejected(synthetic_lut):
         _operator(synthetic_lut, None, srf=srf)
     with pytest.raises(DomainError, match="wavenumber range"):
         _operator(synthetic_lut, np.linspace(3900.0, 4100.0, 11))
+    # a NaN compares False with both ends of the range, so it is refused apart
+    grid = np.linspace(4200.0, 4300.0, 11)
+    grid[3] = np.nan
+    with pytest.raises(DomainError, match="non-empty and finite"):
+        _operator(synthetic_lut, grid)
+    with pytest.raises(DomainError, match="non-empty and finite"):
+        _operator(synthetic_lut, np.array([]))
 
 
 def test_layer_past_the_table_and_grid_arguments_are_rejected(synthetic_lut, nu_obs):
