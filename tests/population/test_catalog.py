@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -79,8 +80,8 @@ def test_log_moments_rejects_nonpositive_mean() -> None:
 
 
 def test_event_from_gaussian_posterior() -> None:
-    # GaussianPosterior is a grid-vector source-field posterior; the adapter
-    # reduces it to the field total Q = 1ᵀmean with std = sqrt(1ᵀ Σ 1).
+    # GaussianPosterior is a grid-vector source-field posterior; it reports
+    # the field total Q = 1ᵀmean with std = sqrt(1ᵀ Σ 1).
     mean = jnp.asarray([2.0, 1.5])
     cov = jnp.asarray([[0.04, 0.0], [0.0, 0.09]])
     post = GaussianPosterior(mean=mean, covariance=cov)
@@ -94,8 +95,8 @@ def test_event_from_gaussian_posterior() -> None:
 
 
 def test_event_from_lognormal_posterior() -> None:
-    # LognormalPosterior carries mean (grid) + log_covariance; the adapter
-    # totals the field and propagates std via the delta method.
+    # LognormalPosterior carries mean (grid) + log_covariance; it totals the
+    # field and propagates std via the delta method.
     mean = jnp.asarray([3.0, 1.0])
     log_cov = jnp.asarray([[0.04, 0.0], [0.0, 0.09]])
     post = LognormalPosterior(
@@ -116,6 +117,19 @@ def test_event_from_unknown_posterior_raises() -> None:
 
     with pytest.raises(TypeError, match="must expose"):
         event_from_posterior(_Bogus(), x=0.0, y=0.0, time=0.0, tier="II")
+
+
+def test_event_from_grid_layout_without_summary_raises() -> None:
+    # A bare (mean, covariance) object is no longer totalled by the adapter;
+    # the posterior must report its own emission_rate and emission_std.
+    @dataclasses.dataclass
+    class _GridOnly:
+        mean: jax.Array
+        covariance: jax.Array
+
+    grid = _GridOnly(mean=jnp.ones(2), covariance=jnp.eye(2))
+    with pytest.raises(TypeError, match="must expose"):
+        event_from_posterior(grid, x=0.0, y=0.0, time=0.0, tier="II")
 
 
 def _build_fusion_posterior(rate: float, std: float) -> FusionPosterior:
