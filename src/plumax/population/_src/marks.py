@@ -44,6 +44,8 @@ from jax.scipy.special import ndtri
 from jax.scipy.stats import norm
 from jaxtyping import Array, ArrayLike, Float
 
+from plumax._src.scalar_emission import lognormal_log_prob
+
 
 @runtime_checkable
 class Mark(Protocol):
@@ -70,18 +72,6 @@ class Mark(Protocol):
         ...
 
 
-def _lognormal_log_prob(
-    emission_rate: Float[Array, "*emission_rate"],
-    log_mean: Float[Array, "*log_mean"],
-    log_std: Float[Array, "*log_std"],
-) -> Float[Array, "*out"]:
-    # log LN(q; μ, σ²) = log N(log q; μ, σ²) − log q, −∞ for q ≤ 0
-    positive = emission_rate > 0.0
-    log_q = jnp.log(jnp.where(positive, emission_rate, 1.0))
-    density = norm.logpdf(log_q, log_mean, log_std) - log_q
-    return jnp.where(positive, density, -jnp.inf)
-
-
 def _log_lognormal_partial_mean(
     lower: Float[Array, "*lower"],
     upper: Float[Array, "*upper"],
@@ -99,23 +89,18 @@ def _log_lognormal_partial_mean(
     safe_lower = jnp.where(open_lower | empty, 0.5, lower)
     upper_z = (jnp.log(safe_upper) - shift) / log_std
     lower_z = (jnp.log(safe_lower) - shift) / log_std
-    # log Φ and log(1 − Φ) at each end, with the limits at open ends
-    log_cdf_upper = jnp.where(open_upper, 0.0, norm.logcdf(upper_z))
-    log_cdf_lower = jnp.where(open_lower, -jnp.inf, norm.logcdf(lower_z))
-    log_survival_upper = jnp.where(open_upper, -jnp.inf, norm.logcdf(-upper_z))
-    log_survival_lower = jnp.where(open_lower, 0.0, norm.logcdf(-lower_z))
-    # log[Φ(z_b) − Φ(z_a)] from the CDFs left of the centre and from the
-    # survivals right of it, so neither difference cancels to zero; the
-    # unused one gets a safe log-ratio, since its log1p(−1) would put a NaN
-    # into the reverse-mode gradient through jnp.where
-    right_of_centre = (~open_lower) & (lower_z > 0.0)
-    cdf_ratio = jnp.where(right_of_centre, -1.0, log_cdf_lower - log_cdf_upper)
-    survival_ratio = jnp.where(
-        right_of_centre, log_survival_upper - log_survival_lower, -1.0
+    # log[Φ(z_b) − Φ(z_a)] for two finite ends, on the stand-in interval
+    # (−1, 1) elsewhere so the unused branch passes no NaN into the gradient
+    finite = ~(open_lower | open_upper | empty)
+    log_interval = _log_normal_interval(
+        jnp.where(finite, lower_z, -1.0), jnp.where(finite, upper_z, 1.0)
     )
-    from_cdf = log_cdf_upper + jnp.log1p(-jnp.exp(cdf_ratio))
-    from_survival = log_survival_lower + jnp.log1p(-jnp.exp(survival_ratio))
-    log_mass = jnp.where(right_of_centre, from_survival, from_cdf)
+    # an open end leaves log Φ(z_b), log(1 − Φ(z_a)) or, with both open, 0
+    log_mass = jnp.where(
+        open_lower,
+        jnp.where(open_upper, 0.0, norm.logcdf(upper_z)),
+        jnp.where(open_upper, norm.logcdf(-lower_z), log_interval),
+    )
     return jnp.where(empty, -jnp.inf, log_mean + 0.5 * log_std**2 + log_mass)
 
 
@@ -307,7 +292,7 @@ class LognormalMark(eqx.Module):
         self, q: ArrayLike, *, mu: ArrayLike, sigma: ArrayLike
     ) -> Float[Array, "*q"]:
         emission_rate = jnp.asarray(q, dtype=float)
-        return _lognormal_log_prob(emission_rate, jnp.asarray(mu), jnp.asarray(sigma))
+        return lognormal_log_prob(emission_rate, jnp.asarray(mu), jnp.asarray(sigma))
 
     def sample(
         self, key: Array, n: int, *, mu: ArrayLike, sigma: ArrayLike
@@ -362,7 +347,7 @@ def _splice_log_weights(
     # log F_LN(Q_b), the body's normaliser below the break
     log_body_mass = norm.logcdf((jnp.log(q_break) - log_mean) / log_std)
     # densities at the break of the normalised body and of the Pareto tail
-    log_body_at_break = _lognormal_log_prob(q_break, log_mean, log_std) - log_body_mass
+    log_body_at_break = lognormal_log_prob(q_break, log_mean, log_std) - log_body_mass
     log_tail_at_break = jnp.log(tail_index) - jnp.log(q_break)
     # continuity w b(Q_b) = (1 − w) t(Q_b) ⇒ w = t / (t + b), 1 − w = b / (t + b)
     log_total = jnp.logaddexp(log_body_at_break, log_tail_at_break)
@@ -425,7 +410,7 @@ class LognormalParetoMark(eqx.Module):
         # log w + log LN(q) − log F_LN(Q_b)
         body = (
             log_body_weight
-            + _lognormal_log_prob(emission_rate, log_mean, log_std)
+            + lognormal_log_prob(emission_rate, log_mean, log_std)
             - log_body_mass
         )
         # log(1 − w) + log α + α log Q_b − (α + 1) log q
@@ -592,7 +577,7 @@ class MixtureLognormalMark(eqx.Module):
             jnp.asarray(value, dtype=float) for value in (weights, locs, scales)
         )
         # log LN(q; μₖ, σₖ²) for every component
-        component = _lognormal_log_prob(
+        component = lognormal_log_prob(
             einx.id("... -> ... 1", emission_rate), locs, scales
         )
         # log Σₖ wₖ LNₖ(q)

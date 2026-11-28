@@ -59,6 +59,30 @@ def require_prior(owner: str, /, *, built_with: str, **fields: object) -> None:
         raise PayloadError(f"{owner}: no prior is carried; build it with {built_with}.")
 
 
+def lognormal_log_prob(
+    q: Float[Array, "*q"],
+    loc: Float[ArrayLike, "*loc"],
+    scale: Float[ArrayLike, "*scale"],
+) -> Float[Array, "*out"]:
+    """log LN(q; μ, σ²), −∞ for q ≤ 0, broadcast over q, μ and σ.
+
+    Args:
+        q: The emission rates.
+        loc: μ, the mean of log Q.
+        scale: σ > 0, the standard deviation of log Q.
+
+    Returns:
+        The log-density, of the broadcast shape of the three inputs.
+    """
+    positive = q > 0.0
+    # guard the log; the value is masked to −∞ below
+    log_q = jnp.log(jnp.where(positive, q, 1.0))
+    standardised = (log_q - loc) / scale
+    # log LN = −½ z² − log σ − ½ log 2π − log q
+    density = -0.5 * standardised**2 - jnp.log(scale) - 0.5 * _LOG_2PI - log_q
+    return jnp.where(positive, density, -jnp.inf)
+
+
 class GaussianEmission(eqx.Module):
     """Q ~ N(μ, σ²).
 
@@ -137,13 +161,7 @@ class LognormalEmission(eqx.Module):
     def log_prob(self, q: ArrayLike) -> Float[Array, "*q"]:
         """log LN(q; μ, σ²), −∞ for q ≤ 0."""
         q = jnp.asarray(q, dtype=self.loc.dtype)
-        positive = q > 0.0
-        # guard the log; the value is masked to −∞ below
-        log_q = jnp.log(jnp.where(positive, q, 1.0))
-        standardised = (log_q - self.loc) / self.scale
-        # log LN = −½ z² − log σ − ½ log 2π − log q
-        density = -0.5 * standardised**2 - jnp.log(self.scale) - 0.5 * _LOG_2PI - log_q
-        return jnp.where(positive, density, -jnp.inf)
+        return lognormal_log_prob(q, self.loc, self.scale)
 
 
 class EmpiricalEmission(eqx.Module):
