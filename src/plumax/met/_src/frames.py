@@ -17,6 +17,7 @@ import numpy as np
 from jaxtyping import Float, Int
 from pipekit_ops import import_optional
 
+from plumax._src.domain import containing_cell, edge_axis
 from plumax._src.errors import DomainError, MissingExtraError
 from plumax.les_fvm.grid import PlumeGrid3D
 
@@ -243,9 +244,10 @@ class LocalFrame:
     ) -> tuple[Int[np.ndarray, "*shape"], Int[np.ndarray, "*shape"]]:
         """Indices ``(i, j)`` of the analysis T-cells containing lat/lon points.
 
-        i = ⌊(x − x₀ + Δx/2) / Δx⌋,  j = ⌊(y − y₀ + Δy/2) / Δy⌋,
+        i: e_i ≤ x < e_{i+1},  e_i = x₀ + (i − 1/2) Δx,
 
-        with ``x₀ = grid.x[0]``; points outside the grid get ``-1``.
+        with ``x₀ = grid.x[0]``, and likewise for ``j``; points outside the
+        grid get ``-1``.
 
         Args:
             lat: Latitudes φ [degrees north].
@@ -272,14 +274,15 @@ class LocalFrame:
         frame_x, frame_y = self.to_xy(lat, lon)
         grid_x = np.asarray(grid.x, dtype=float)
         grid_y = np.asarray(grid.y, dtype=float)
-        # i = ⌊(x − x₀ + Δx/2) / Δx⌋
-        index_x = np.floor((frame_x - grid_x[0] + 0.5 * grid.dx) / grid.dx).astype(int)
-        # j = ⌊(y − y₀ + Δy/2) / Δy⌋
-        index_y = np.floor((frame_y - grid_y[0] + 0.5 * grid.dy) / grid.dy).astype(int)
-        outside_x = (index_x < 0) | (index_x >= grid_x.size)
-        outside_y = (index_y < 0) | (index_y >= grid_y.size)
-        outside = outside_x | outside_y
-        return np.where(outside, -1, index_x), np.where(outside, -1, index_y)
+        # e₀ = x₀ − Δx/2, the grid's lower edge
+        lower_x = grid_x[0] - 0.5 * grid.dx
+        lower_y = grid_y[0] - 0.5 * grid.dy
+        edges_x = edge_axis((lower_x, lower_x + grid_x.size * grid.dx, grid_x.size))
+        edges_y = edge_axis((lower_y, lower_y + grid_y.size * grid.dy, grid_y.size))
+        index_x, inside_x = containing_cell(frame_x, edges_x)
+        index_y, inside_y = containing_cell(frame_y, edges_y)
+        inside = inside_x & inside_y
+        return np.where(inside, index_x, -1), np.where(inside, index_y, -1)
 
     def get_config(self) -> dict[str, Any]:
         """The frame's fields, for ``from_config``."""

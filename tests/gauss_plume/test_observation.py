@@ -95,6 +95,21 @@ def test_for_grid_rejects_bad_receptors():
         )
 
 
+def test_for_grid_cells_are_half_open_on_their_edges():
+    grid = make_grid((0.0, 400.0, 8), (0.0, 200.0, 4), (0.0, 100.0, 5))
+    # an inner edge belongs to the cell above it, the lower edge to cell 0
+    on_edges = Instrument("toy", jnp.array([[50.0, 0.0], [0.0, 150.0]]))
+    observation = ColumnObservation.for_grid(grid, instrument=on_edges)
+    np.testing.assert_array_equal(
+        np.asarray(observation.receptor_index), [[0, 1], [3, 0]]
+    )
+    # the last edge is outside, and outside raises
+    with pytest.raises(DomainError, match="outside the grid in x"):
+        ColumnObservation.for_grid(
+            grid, instrument=Instrument("toy", jnp.array([[400.0, 10.0]]))
+        )
+
+
 def test_gradient_is_the_layer_weights_times_the_kernel():
     # y is linear in c: ∂y_i / ∂c_{k,i} = A_i h_k.
     layer_weights = jnp.array([1.0, 2.0, 3.0])

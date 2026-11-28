@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import einx
 import numpy as np
+from jaxtyping import Bool, Float, Int
 
 from plumax._src.tracing import require_positive
 
@@ -90,6 +91,36 @@ def edge_axis(domain: Domain) -> np.ndarray:
     """
     start, stop, num_cells = domain
     return np.linspace(start, stop, int(num_cells) + 1)
+
+
+def containing_cell(
+    coordinate: Float[np.ndarray, "*shape"] | float, edges: Float[np.ndarray, " edge"]
+) -> tuple[Int[np.ndarray, "*shape"], Bool[np.ndarray, "*shape"]]:
+    """Index of the cell holding each coordinate, and whether it is inside.
+
+    k = #{m : e_m ≤ x} − 1, inside when 0 ≤ k < n_cells,
+
+    so cell k is the half-open [e_k, e_{k+1}): a coordinate on an inner edge
+    belongs to the cell above it, and one on the last edge is outside. Each
+    caller applies its own rule to the coordinates outside.
+
+    Args:
+        coordinate: Coordinates x.
+        edges: The ``n_cells + 1`` ascending cell edges e.
+
+    Returns:
+        ``(index, inside)``; ``index`` is −1 or ``n_cells`` where outside.
+
+    Examples:
+        >>> edges = np.array([0.0, 25.0, 50.0])
+        >>> index, inside = containing_cell(np.array([-1.0, 0.0, 25.0, 50.0]), edges)
+        >>> index.tolist(), inside.tolist()
+        ([-1, 0, 1, 2], [False, True, True, False])
+    """
+    # k = #{m : e_m ≤ x} − 1
+    index = np.asarray(np.searchsorted(edges, coordinate, side="right") - 1)
+    inside = (index >= 0) & (index < edges.size - 1)
+    return index, np.asarray(inside)
 
 
 def cell_centres(edges: np.ndarray) -> np.ndarray:

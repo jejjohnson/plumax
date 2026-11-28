@@ -15,6 +15,7 @@ import numpy as np
 from jaxtyping import Array, Float
 from pipekit_ops import import_optional
 
+from plumax._src.domain import containing_cell
 from plumax._src.errors import DomainError, MissingExtraError
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
@@ -107,11 +108,9 @@ def load_inventory(
     # λ ← λ₀ + ((λ − λ₀) mod 360°): sample longitudes on the raster's
     # unwrapped axis; a global raster then covers every point
     lon = lon_edges[0] + np.mod(lon - lon_edges[0], 360.0)
-    row = np.searchsorted(lat_edges, lat, side="right") - 1
-    col = np.searchsorted(lon_edges, lon, side="right") - 1
-    outside_rows = (row < 0) | (row >= lat_edges.size - 1)
-    outside_cols = (col < 0) | (col >= lon_edges.size - 1)
-    if np.any(outside_rows | outside_cols):
+    row, inside_rows = containing_cell(lat, lat_edges)
+    col, inside_cols = containing_cell(lon, lon_edges)
+    if not np.all(inside_rows & inside_cols):
         raise DomainError(
             "load_inventory: the analysis grid extends beyond the inventory raster"
         )

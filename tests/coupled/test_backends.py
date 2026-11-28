@@ -196,6 +196,28 @@ def test_lagrangian_patterns_give_a_design_matrix():
     )
 
 
+def test_point_source_cells_are_half_open_on_their_edges():
+    # (−200, −200) is the lower corner, so cell (0, 0); 600 is the last x edge
+    corner = LagrangianSource.point(
+        (-200.0, -200.0),
+        winds=[uniform(jnp.array([4.0, 0.0, 0.0]))],
+        turbulence=TURBULENCE,
+        domain_x=DOMAIN_X,
+        domain_y=DOMAIN_Y,
+        column_z=COLUMN_Z,
+    )
+    assert int(np.argmax(np.asarray(corner.emission_pattern))) == 0
+    with pytest.raises(DomainError, match="outside the footprint grid"):
+        LagrangianSource.point(
+            (600.0, 0.0),
+            winds=[uniform(jnp.array([4.0, 0.0, 0.0]))],
+            turbulence=TURBULENCE,
+            domain_x=DOMAIN_X,
+            domain_y=DOMAIN_Y,
+            column_z=COLUMN_Z,
+        )
+
+
 # ── errors ───────────────────────────────────────────────────────────────────
 
 
