@@ -559,16 +559,35 @@ def _stable_step(
 
 
 def _check_fixed_step_stability(
-    initial_time_step: float, bound: float, solver_name: str
+    max_step: float | None,
+    solver: diffrax.AbstractSolver,
+    bound: float,
+    *,
+    caller: str,
+    remedy: str,
 ) -> None:
-    """Raise if ``initial_time_step`` exceeds the stable step ``bound``."""
-    if initial_time_step > bound:
+    """Raise if an explicit solver's largest fixed step exceeds the stable step.
+
+    Args:
+        max_step: The largest step of a fixed-step solve [s], or ``None`` when
+            the step is error-controlled, which skips the check.
+        solver: The diffrax solver; an implicit one is stable at these steps,
+            which skips the check.
+        bound: The stable step of :func:`stable_step_bound` [s].
+        caller: The public function named in the error.
+        remedy: What the error tells the caller to change.
+
+    Raises:
+        ValueError: If ``max_step`` exceeds ``bound`` for an explicit solver.
+    """
+    if max_step is None or isinstance(solver, diffrax.AbstractImplicitSolver):
+        return
+    if max_step > bound:
         raise ValueError(
-            f"simulate_eulerian_dispersion: dt0={initial_time_step:g} s exceeds the stable "
-            f"step ~{bound:g} s for fixed-step solver {solver_name!r} "
+            f"{caller}: fixed step {max_step:g} s exceeds the stable step "
+            f"~{bound:g} s for the explicit solver {type(solver).__name__} "
             f"(advective CFL / explicit-diffusion limit on this grid+wind+K). "
-            f"Reduce dt0, soften K / coarsen the grid, or use an adaptive "
-            f"solver ('tsit5'/'dopri5')."
+            f"{remedy}"
         )
 
 
@@ -648,7 +667,16 @@ def _solve(
         # Fixed-step solvers integrate at exactly the initial step with no error control,
         # so guard the CFL / explicit-diffusion stability limit up front —
         # otherwise an over-large step silently blows up mid-solve.
-        _check_fixed_step_stability(initial_time_step, bound, solver_name)
+        _check_fixed_step_stability(
+            initial_time_step,
+            solver,
+            bound,
+            caller="simulate_eulerian_dispersion",
+            remedy=(
+                "Reduce dt0, soften K / coarsen the grid, or use an adaptive "
+                "solver ('tsit5'/'dopri5')."
+            ),
+        )
         stepsize_controller = diffrax.ConstantStepSize()
     return _solve_jit(
         rhs=rhs,

@@ -60,6 +60,8 @@ import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
+from functax.interp import Linear
+from integrix.march import SampledPath
 
 from plumax._src.errors import PayloadError
 from plumax._src.scalar_emission import GaussianEmission, gaussian_total, require_prior
@@ -264,15 +266,13 @@ class SpatialControl:
 
             return flux
 
-        basis = einx.id(
-            "time basis -> basis time", jnp.asarray(self.time_basis, dtype=flat.dtype)
+        # φ(t), linear between the save times and held past the ends
+        basis_path = SampledPath.fit(
+            Linear(), save_times, jnp.asarray(self.time_basis, dtype=flat.dtype)
         )
 
         def flux(time: jax.Array) -> jax.Array:
-            # φ_k(t), linear between the save times
-            basis_at_t = jax.vmap(
-                lambda basis_function: jnp.interp(time, save_times, basis_function)
-            )(basis)
+            basis_at_t = basis_path.evaluate(time)
             # q(s, t) = Σ_k φ_k(t) q_k(s)
             return einx.dot("basis, basis y x -> y x", basis_at_t, fields)
 
@@ -597,17 +597,6 @@ class EulerianForward4DVar:
         return jax.vmap(self.observation_op)(history)
 
 
-def _interpolated_emission(
-    q_series: jax.Array, save_times: jax.Array
-) -> Callable[[jax.Array], jax.Array]:
-    """Build ``t -> q(t)`` by linear interpolation of ``q_series`` at save times."""
-
-    def emission_fn(time: jax.Array) -> jax.Array:
-        return jnp.interp(time, save_times, q_series)
-
-    return emission_fn
-
-
 def build_forward(
     *,
     domain_x: tuple[float, float, int],
@@ -658,7 +647,7 @@ def build_forward(
     Returns:
         A configured :class:`EulerianForward4DVar`.
     """
-    # Validate the time grid up front: t0/t1, SaveAt(ts=...) and jnp.interp all
+    # Validate the time grid up front: t0/t1, SaveAt(ts=...) and SampledPath all
     # assume ≥ 2 strictly-increasing save times. Catching it here gives a clear
     # error instead of an opaque diffrax / interpolation failure later.
     if (source_location is None) == (control is None):
@@ -690,7 +679,10 @@ def build_forward(
 
     import diffrax
 
-    from plumax.les_fvm._src.simulate import _max_diffusivity
+    from plumax.les_fvm._src.simulate import (
+        _check_fixed_step_stability,
+        _max_diffusivity,
+    )
     from plumax.les_fvm.simulate import stable_step_bound
 
     # Reject an invalid diffusivity regardless of the solver / controller: a
@@ -708,7 +700,6 @@ def build_forward(
     # explicit. Adaptive controllers are error-controlled and implicit solvers
     # are stable at these steps, so both are skipped.
     _kw = dict(solver_kwargs or {})
-    _solver = _kw.get("solver", diffrax.Heun())
     _controller = _kw.get("stepsize_controller", diffrax.ConstantStepSize())
     _max_step: float | None = None
     if isinstance(_controller, diffrax.ConstantStepSize):
@@ -716,26 +707,26 @@ def build_forward(
     elif isinstance(_controller, diffrax.StepTo):
         _ts = np.asarray(_controller.ts, dtype=float)
         _max_step = float(np.max(np.diff(_ts))) if _ts.size >= 2 else 0.0
-    if _max_step is not None and not isinstance(
-        _solver, diffrax.AbstractImplicitSolver
-    ):
-        _bound = stable_step_bound(
-            dx=plume_grid.dx,
-            dy=plume_grid.dy,
-            dz=plume_grid.dz,
-            max_u=abs(float(uniform_wind[0])),
-            max_v=abs(float(uniform_wind[1])),
-            max_w=abs(float(uniform_wind[2])),
-            k_h=_k_h,
-            k_z=_k_z,
-        )
-        if _max_step > _bound:
-            raise ValueError(
-                f"build_forward: fixed step {_max_step:g} s exceeds the stable "
-                f"step ~{_bound:g} s for the fixed-step 4D-Var solve on this "
-                f"grid+wind+K. Reduce the step (solver_kwargs 'dt0' or StepTo "
-                f"'ts'), soften K, or pass an adaptive stepsize_controller."
-            )
+    _bound = stable_step_bound(
+        dx=plume_grid.dx,
+        dy=plume_grid.dy,
+        dz=plume_grid.dz,
+        max_u=abs(float(uniform_wind[0])),
+        max_v=abs(float(uniform_wind[1])),
+        max_w=abs(float(uniform_wind[2])),
+        k_h=_k_h,
+        k_z=_k_z,
+    )
+    _check_fixed_step_stability(
+        _max_step,
+        _kw.get("solver", diffrax.Heun()),
+        _bound,
+        caller="build_forward",
+        remedy=(
+            "Reduce the step (solver_kwargs 'dt0' or StepTo 'ts'), soften K, or "
+            "pass an adaptive stepsize_controller."
+        ),
+    )
 
     horizontal_bc, vertical_bc = build_default_concentration_bc(
         bc_x=bc_x, bc_y=bc_y, bc_z=("neumann", "neumann")
@@ -764,8 +755,12 @@ def build_forward(
         )
 
         def source_factory(q_series: jax.Array) -> GaussianSource:
+            # q(t), linear between the save times and held past the ends
+            emission_path = SampledPath.fit(
+                Linear(), save_times, einx.id("time -> time 1", q_series)
+            )
             return GaussianSource(
-                emission_fn=_interpolated_emission(q_series, save_times),
+                emission_fn=lambda time: emission_path.evaluate(time)[0],
                 density=base_source.density,
             )
 
@@ -896,6 +891,32 @@ class FourDVarProblem:
         """``(J, ∂J/∂χ)`` — the gradient is the exact adjoint via reverse-mode AD."""
         return jax.value_and_grad(self.cost)(chi)
 
+    def whitened_prediction(self, source: jax.Array) -> jax.Array:
+        """The whitened source–receptor map ``𝒢(S) / σ`` at a flat control.
+
+        Args:
+            source: The flat control ``S``, shape ``(n_state,)``.
+
+        Returns:
+            ``vec(forward.predict(S)) / σ`` with ``σ = √R``, flattened over
+            (time, receptor), shape ``(n_t·n_obs,)``.
+        """
+        # σ = √R
+        obs_noise_std = jnp.sqrt(self.obs_variance)
+        # 𝒢(S) / σ, flattened over (time, receptor)
+        whitened = self.forward.predict(source) / obs_noise_std
+        return einx.id("time obs -> (time obs)", whitened)
+
+    def whitened_observations(self) -> jax.Array:
+        """The whitened observations ``y / σ``, shape ``(n_t·n_obs,)``.
+
+        Flattened over (time, receptor) like :meth:`whitened_prediction`, so
+        the observation-error covariance of the pair is the identity.
+        """
+        # y / σ, flattened over (time, receptor)
+        whitened = self.observations / jnp.sqrt(self.obs_variance)
+        return einx.id("time obs -> (time obs)", whitened)
+
     def source_receptor_operator(self) -> vardax.CallableObs:
         """The whitened source–receptor map as a vardax observation operator.
 
@@ -913,14 +934,10 @@ class FourDVarProblem:
             ImportError: Without the ``assim`` extra.
         """
         vdx = require_vardax("FourDVarProblem.source_receptor_operator")
-        # σ = √R
-        obs_noise_std = jnp.sqrt(self.obs_variance)
-        predict = self.forward.predict
 
         def whitened_prediction(source: jax.Array) -> jax.Array:
-            # 𝒢(S) / σ, flattened over (time, receptor)
-            whitened = predict(source[0]) / obs_noise_std
-            return einx.id("time obs -> 1 (time obs)", whitened)
+            # 𝒢(S) / σ on the one source row
+            return einx.id("obs -> 1 obs", self.whitened_prediction(source[0]))
 
         return vdx.CallableObs(fn=whitened_prediction, jac="bwd", materialise=True)
 
@@ -956,23 +973,13 @@ class FourDVarProblem:
         """
         vdx = require_vardax("FourDVarProblem.incremental_analysis")
         amx = require_argminax("FourDVarProblem.incremental_analysis")
-        # σ = √R
-        obs_noise_std = jnp.sqrt(self.obs_variance)
-        predict = self.forward.predict
-
-        def whitened_prediction(state: jax.Array) -> jax.Array:
-            # 𝒢(q) / σ, flattened over (time, receptor)
-            whitened = predict(state) / obs_noise_std
-            return einx.id("time obs -> (time obs)", whitened)
-
-        # y / σ
-        observations = self.observations / obs_noise_std
+        observations = self.whitened_observations()
         obs_size = observations.size
         dtype = self.prior_mean.dtype
         prior_sqrt = self.prior_sqrt_operator()
         model = vdx.IncrementalFourDVar(
             forward=_StaticForward(),
-            obs_op=whitened_prediction,
+            obs_op=self.whitened_prediction,
             prior_mean=self.prior_mean,
             prior_cov_op=prior_sqrt @ prior_sqrt.T,
             obs_cov_op=lx.IdentityLinearOperator(
@@ -992,7 +999,7 @@ class FourDVarProblem:
             ),
         )
         batch = vdx.Batch1D(
-            input=einx.id("time obs -> 1 1 (time obs)", observations),
+            input=einx.id("obs -> 1 1 obs", observations),
             mask=jnp.ones((1, 1, obs_size), dtype=dtype),
         )
         return model, batch
@@ -1042,7 +1049,7 @@ class FourDVarProblem:
                 background=prior_mean_row,
                 start=jnp.asarray(initial_whitened),
             )
-        observations = self.observations / jnp.sqrt(self.obs_variance)
+        observations = self.whitened_observations()
         obs_size = observations.size
 
         # B = L Lᵀ
@@ -1067,7 +1074,7 @@ class FourDVarProblem:
             cov_solver=lx.AutoLinearSolver(well_posed=True),
         )
         batch = vdx.Batch1D(
-            input=einx.id("time obs -> 1 1 (time obs)", observations),
+            input=einx.id("obs -> 1 1 obs", observations),
             mask=jnp.ones((1, 1, obs_size), dtype=dtype),
         )
         return model, batch
@@ -1182,18 +1189,13 @@ def _build_temporal_problem(
             f"build_problem: `prior_covariance` must be ({num_times}, {num_times}), "
             f"got {source_prior_covariance.shape}."
         )
-    if obs.ndim != 2 or obs.shape[0] != num_times:
-        raise ValueError(
-            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
-            f"got {obs.shape}."
-        )
+    _check_observations(obs, num_times)
     # Reject non-finite inputs: a NaN would flow through the cost / posterior as
     # a finite-`source` solve with a NaN objective and covariance (the source-
     # only divergence check in `solve_4dvar` cannot catch that).
     for _name, _arr in (
         ("prior_mean", source_prior_mean),
         ("prior_covariance", source_prior_covariance),
-        ("observations", obs),
     ):
         if not bool(jnp.all(jnp.isfinite(_arr))):
             raise ValueError(
@@ -1237,14 +1239,7 @@ def _build_spatial_problem(
             "build_problem: `forward` must be built with this same SpatialControl."
         )
     obs = jnp.asarray(observations, dtype=float)
-    num_times = forward.save_times.shape[0]
-    if obs.ndim != 2 or obs.shape[0] != num_times:
-        raise ValueError(
-            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
-            f"got {obs.shape}."
-        )
-    if not bool(jnp.all(jnp.isfinite(obs))):
-        raise ValueError("build_problem: `observations` must be finite (NaN/inf).")
+    _check_observations(obs, forward.save_times.shape[0])
     prior_sqrt = control.prior_sqrt(forward.plume_grid.y, forward.plume_grid.x)
     return FourDVarProblem(
         forward=forward,
@@ -1255,6 +1250,20 @@ def _build_spatial_problem(
         control=control,
         prior_sqrt_op=prior_sqrt,
     )
+
+
+def _check_observations(obs: jax.Array, num_times: int) -> None:
+    """Raise unless ``obs`` is a finite ``(num_times, n_obs)`` array."""
+    if obs.ndim != 2 or obs.shape[0] != num_times:
+        raise ValueError(
+            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
+            f"got {obs.shape}."
+        )
+    # a NaN would give a NaN cost and posterior behind a finite source
+    if not bool(jnp.all(jnp.isfinite(obs))):
+        raise ValueError(
+            "build_problem: `observations` must be finite (contains NaN/inf)."
+        )
 
 
 def _resolve_obs_variance(obs_variance: jax.Array | float, obs: jax.Array) -> jax.Array:
@@ -1720,15 +1729,10 @@ def _gauss_newton_laplace(
     would cost.
     """
     amx = require_argminax("posterior_covariance")
-    # σ = √R
-    obs_noise_std = jnp.sqrt(problem.obs_variance)
-    predict = problem.forward.predict
 
     def whitened_prediction(control: jax.Array) -> jax.Array:
-        # 𝒢(S_b + L χ) / σ, flattened over (time, receptor)
-        source = problem.source_from_whitened(control)
-        whitened = predict(source) / obs_noise_std
-        return einx.id("time obs -> (time obs)", whitened)
+        # 𝒢(S_b + L χ) / σ
+        return problem.whitened_prediction(problem.source_from_whitened(control))
 
     # J̃ = ∂(𝒢 / σ)/∂χ
     obs_jacobian = jax.jacrev(whitened_prediction)(whitened_control)
