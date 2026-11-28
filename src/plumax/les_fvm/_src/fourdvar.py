@@ -889,6 +889,32 @@ class FourDVarProblem:
         """``(J, ∂J/∂χ)`` — the gradient is the exact adjoint via reverse-mode AD."""
         return jax.value_and_grad(self.cost)(chi)
 
+    def whitened_prediction(self, source: jax.Array) -> jax.Array:
+        """The whitened source–receptor map ``𝒢(S) / σ`` at a flat control.
+
+        Args:
+            source: The flat control ``S``, shape ``(n_state,)``.
+
+        Returns:
+            ``vec(forward.predict(S)) / σ`` with ``σ = √R``, flattened over
+            (time, receptor), shape ``(n_t·n_obs,)``.
+        """
+        # σ = √R
+        obs_noise_std = jnp.sqrt(self.obs_variance)
+        # 𝒢(S) / σ, flattened over (time, receptor)
+        whitened = self.forward.predict(source) / obs_noise_std
+        return einx.id("time obs -> (time obs)", whitened)
+
+    def whitened_observations(self) -> jax.Array:
+        """The whitened observations ``y / σ``, shape ``(n_t·n_obs,)``.
+
+        Flattened over (time, receptor) like :meth:`whitened_prediction`, so
+        the observation-error covariance of the pair is the identity.
+        """
+        # y / σ, flattened over (time, receptor)
+        whitened = self.observations / jnp.sqrt(self.obs_variance)
+        return einx.id("time obs -> (time obs)", whitened)
+
     def source_receptor_operator(self) -> vardax.CallableObs:
         """The whitened source–receptor map as a vardax observation operator.
 
@@ -906,14 +932,10 @@ class FourDVarProblem:
             ImportError: Without the ``assim`` extra.
         """
         vdx = require_vardax("FourDVarProblem.source_receptor_operator")
-        # σ = √R
-        obs_noise_std = jnp.sqrt(self.obs_variance)
-        predict = self.forward.predict
 
         def whitened_prediction(source: jax.Array) -> jax.Array:
-            # 𝒢(S) / σ, flattened over (time, receptor)
-            whitened = predict(source[0]) / obs_noise_std
-            return einx.id("time obs -> 1 (time obs)", whitened)
+            # 𝒢(S) / σ on the one source row
+            return einx.id("obs -> 1 obs", self.whitened_prediction(source[0]))
 
         return vdx.CallableObs(fn=whitened_prediction, jac="bwd", materialise=True)
 
@@ -949,23 +971,13 @@ class FourDVarProblem:
         """
         vdx = require_vardax("FourDVarProblem.incremental_analysis")
         amx = require_argminax("FourDVarProblem.incremental_analysis")
-        # σ = √R
-        obs_noise_std = jnp.sqrt(self.obs_variance)
-        predict = self.forward.predict
-
-        def whitened_prediction(state: jax.Array) -> jax.Array:
-            # 𝒢(q) / σ, flattened over (time, receptor)
-            whitened = predict(state) / obs_noise_std
-            return einx.id("time obs -> (time obs)", whitened)
-
-        # y / σ
-        observations = self.observations / obs_noise_std
+        observations = self.whitened_observations()
         obs_size = observations.size
         dtype = self.prior_mean.dtype
         prior_sqrt = self.prior_sqrt_operator()
         model = vdx.IncrementalFourDVar(
             forward=_StaticForward(),
-            obs_op=whitened_prediction,
+            obs_op=self.whitened_prediction,
             prior_mean=self.prior_mean,
             prior_cov_op=prior_sqrt @ prior_sqrt.T,
             obs_cov_op=lx.IdentityLinearOperator(
@@ -985,7 +997,7 @@ class FourDVarProblem:
             ),
         )
         batch = vdx.Batch1D(
-            input=einx.id("time obs -> 1 1 (time obs)", observations),
+            input=einx.id("obs -> 1 1 obs", observations),
             mask=jnp.ones((1, 1, obs_size), dtype=dtype),
         )
         return model, batch
@@ -1035,7 +1047,7 @@ class FourDVarProblem:
                 background=prior_mean_row,
                 start=jnp.asarray(initial_whitened),
             )
-        observations = self.observations / jnp.sqrt(self.obs_variance)
+        observations = self.whitened_observations()
         obs_size = observations.size
 
         # B = L Lᵀ
@@ -1060,7 +1072,7 @@ class FourDVarProblem:
             cov_solver=lx.AutoLinearSolver(well_posed=True),
         )
         batch = vdx.Batch1D(
-            input=einx.id("time obs -> 1 1 (time obs)", observations),
+            input=einx.id("obs -> 1 1 obs", observations),
             mask=jnp.ones((1, 1, obs_size), dtype=dtype),
         )
         return model, batch
@@ -1175,18 +1187,13 @@ def _build_temporal_problem(
             f"build_problem: `prior_covariance` must be ({num_times}, {num_times}), "
             f"got {source_prior_covariance.shape}."
         )
-    if obs.ndim != 2 or obs.shape[0] != num_times:
-        raise ValueError(
-            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
-            f"got {obs.shape}."
-        )
+    _check_observations(obs, num_times)
     # Reject non-finite inputs: a NaN would flow through the cost / posterior as
     # a finite-`source` solve with a NaN objective and covariance (the source-
     # only divergence check in `solve_4dvar` cannot catch that).
     for _name, _arr in (
         ("prior_mean", source_prior_mean),
         ("prior_covariance", source_prior_covariance),
-        ("observations", obs),
     ):
         if not bool(jnp.all(jnp.isfinite(_arr))):
             raise ValueError(
@@ -1230,14 +1237,7 @@ def _build_spatial_problem(
             "build_problem: `forward` must be built with this same SpatialControl."
         )
     obs = jnp.asarray(observations, dtype=float)
-    num_times = forward.save_times.shape[0]
-    if obs.ndim != 2 or obs.shape[0] != num_times:
-        raise ValueError(
-            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
-            f"got {obs.shape}."
-        )
-    if not bool(jnp.all(jnp.isfinite(obs))):
-        raise ValueError("build_problem: `observations` must be finite (NaN/inf).")
+    _check_observations(obs, forward.save_times.shape[0])
     prior_sqrt = control.prior_sqrt(forward.plume_grid.y, forward.plume_grid.x)
     return FourDVarProblem(
         forward=forward,
@@ -1248,6 +1248,20 @@ def _build_spatial_problem(
         control=control,
         prior_sqrt_op=prior_sqrt,
     )
+
+
+def _check_observations(obs: jax.Array, num_times: int) -> None:
+    """Raise unless ``obs`` is a finite ``(num_times, n_obs)`` array."""
+    if obs.ndim != 2 or obs.shape[0] != num_times:
+        raise ValueError(
+            f"build_problem: `observations` must be (n_t={num_times}, n_obs), "
+            f"got {obs.shape}."
+        )
+    # a NaN would give a NaN cost and posterior behind a finite source
+    if not bool(jnp.all(jnp.isfinite(obs))):
+        raise ValueError(
+            "build_problem: `observations` must be finite (contains NaN/inf)."
+        )
 
 
 def _resolve_obs_variance(obs_variance: jax.Array | float, obs: jax.Array) -> jax.Array:
@@ -1713,15 +1727,10 @@ def _gauss_newton_laplace(
     would cost.
     """
     amx = require_argminax("posterior_covariance")
-    # σ = √R
-    obs_noise_std = jnp.sqrt(problem.obs_variance)
-    predict = problem.forward.predict
 
     def whitened_prediction(control: jax.Array) -> jax.Array:
-        # 𝒢(S_b + L χ) / σ, flattened over (time, receptor)
-        source = problem.source_from_whitened(control)
-        whitened = predict(source) / obs_noise_std
-        return einx.id("time obs -> (time obs)", whitened)
+        # 𝒢(S_b + L χ) / σ
+        return problem.whitened_prediction(problem.source_from_whitened(control))
 
     # J̃ = ∂(𝒢 / σ)/∂χ
     obs_jacobian = jax.jacrev(whitened_prediction)(whitened_control)
