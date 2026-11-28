@@ -135,11 +135,10 @@ def _receptors() -> np.ndarray:
 def test_one_layer_on_a_node_equals_the_slab(synthetic_lut):
     nu = synthetic_lut["wavenumber"].values
     slab = RadianceObservationOperator(
-        ds=synthetic_lut,
+        synthetic_lut,
         nu_obs=nu,
         T_K=T0,
         p_atm=P0,
-        vmr_background=X0,
         path_length_cm=DZ_CM,
         amf=float(air_mass_factor(SZA, VZA)),
     )

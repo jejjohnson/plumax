@@ -65,7 +65,6 @@ from plumax.coupled.quality import (
     contribution_report,
     stack_observations,
 )
-from plumax.coupled.rtm import RadianceObservationOperator
 
 
 if TYPE_CHECKING:
@@ -83,7 +82,8 @@ _LOG_EMISSION_CAP = 50.0
 class RadianceOperator(Protocol):
     """A JAX radiance operator: column enhancement → per-receptor channels.
 
-    ``LinearisedRadianceOperator`` and ``LayeredRadianceOperator`` qualify.
+    ``RadianceObservationOperator``, ``LinearisedRadianceOperator`` and
+    ``LayeredRadianceOperator`` qualify.
     """
 
     def predict(self, column_enhancement: jax.Array) -> jax.Array:
@@ -321,8 +321,6 @@ class CoupledProblem:
             wrong shape.
         ValueError: On missing or extra observations or a radiance operator
             without a variance.
-        TypeError: For a ``RadianceObservationOperator``, which runs in NumPy
-            and so cannot be differentiated.
     """
 
     forward: CoupledForward
@@ -350,13 +348,7 @@ class CoupledProblem:
                 f"CoupledProblem: radiance operators for unknown instruments "
                 f"{sorted(unknown)}."
             )
-        for name, operator in self.radiance_ops.items():
-            if isinstance(operator, RadianceObservationOperator):
-                raise TypeError(
-                    f"CoupledProblem: the radiance operator of {name!r} runs in "
-                    "NumPy and cannot be differentiated; pass its "
-                    "LayeredRadianceOperator, or `linearise(operator)`."
-                )
+        for name in self.radiance_ops:
             if name not in self.radiance_variance:
                 raise ValueError(
                     f"CoupledProblem: no `radiance_variance` for {name!r}."

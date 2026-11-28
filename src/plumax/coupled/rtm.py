@@ -6,29 +6,27 @@ enhancement to an observation through a **scalar averaging kernel**
 L1-radiance fusion ([Tier IV §per-instrument-forward](https://github.com/jejjohnson/plumax/blob/main/docs/design/05_tier4_coupled.md#tier4-per-instrument-forward),
 [RTM stack](https://github.com/jejjohnson/plumax/blob/main/docs/design/04_rtm_stack.md))
 replaces that scalar AK with a *physically real* radiative-transfer operator:
-the same column enhancement is mapped to a gas column ``ΔVMR`` and then, via the
-Beer–Lambert + spectral-response-function stack in :mod:`radtrax.slab`, to the
+the same column enhancement is mapped to a gas column ``ΔVMR`` and then, via
+radtrax's single-slab Beer–Lambert model and its band instrument, to the
 band-integrated normalised radiance each instrument would actually observe.
 
-This module provides :class:`RadianceObservationOperator` — the RTM analogue of
-:class:`plumax.adapters.RadtranObservationOperator`, but mapping a *per-receptor
-column-enhancement field* (what Tier I gives) to per-receptor band-integrated
-radiances, and :func:`radiance_response`, the drop-in parallel to
-:func:`plumax.coupled.forward.column_response` for the radiance forward. The
-existing scalar-AK path is untouched — the change is purely additive.
+This module provides :class:`RadianceObservationOperator`, which maps a
+*per-receptor column-enhancement field* (what Tier I gives) to per-receptor
+band-integrated radiances (:class:`plumax.adapters.RadtranObservationOperator`
+is its one-receptor case in ``ΔVMR``), and :func:`radiance_response`, the
+drop-in parallel to :func:`plumax.coupled.forward.column_response` for the
+radiance forward. The existing scalar-AK path is untouched.
 
 Differentiability
 -----------------
-The :mod:`radtrax.slab` Beer–Lambert forward and the
-:class:`~radtrax.instrument.SpectralResponseFunction` are **NumPy-side** (the
-LUT interpolation goes through ``xarray``), so :class:`RadianceObservationOperator`
-is *not* JAX-traceable end-to-end: it consumes concrete arrays and returns
-NumPy arrays, exactly like :class:`plumax.adapters.RadtranObservationOperator`.
-The analytic Jacobian ``d(L_norm)/d(ΔVMR)`` returned by the radtrax slab forward is
-the tangent-linear used in :meth:`RadianceObservationOperator.linearize`. The
-*Tier I plume* column response (:func:`plumax.coupled.forward.column_response`)
-that feeds it remains differentiable; the column→ΔVMR conversion
-(:func:`column_mass_to_delta_vmr`) is a pure JAX function and is differentiable.
+The table lookup ``a(ν) = σ(ν, T, p) n L AMF`` goes through ``xarray`` and
+happens once, when the operator is built
+(:meth:`radtrax.retrieval.var3d.RadianceObservationModel.from_lut`). Every
+step after it is JAX: the column→ΔVMR conversion
+(:func:`column_mass_to_delta_vmr`), ``exp(−a ΔVMR)`` and the band
+integration, so :class:`RadianceObservationOperator`,
+:class:`LayeredRadianceOperator` and :class:`LinearisedRadianceOperator` all
+run under ``jax.jit``, ``jax.vmap`` and ``jax.grad``.
 
 Covariance / gaussx
 -------------------

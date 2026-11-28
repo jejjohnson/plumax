@@ -6,29 +6,27 @@ enhancement to an observation through a **scalar averaging kernel**
 L1-radiance fusion ([Tier IV §per-instrument-forward](https://github.com/jejjohnson/plumax/blob/main/docs/design/05_tier4_coupled.md#tier4-per-instrument-forward),
 [RTM stack](https://github.com/jejjohnson/plumax/blob/main/docs/design/04_rtm_stack.md))
 replaces that scalar AK with a *physically real* radiative-transfer operator:
-the same column enhancement is mapped to a gas column ``ΔVMR`` and then, via the
-Beer–Lambert + spectral-response-function stack in :mod:`radtrax.slab`, to the
+the same column enhancement is mapped to a gas column ``ΔVMR`` and then, via
+radtrax's single-slab Beer–Lambert model and its band instrument, to the
 band-integrated normalised radiance each instrument would actually observe.
 
-This module provides :class:`RadianceObservationOperator` — the RTM analogue of
-:class:`plumax.adapters.RadtranObservationOperator`, but mapping a *per-receptor
-column-enhancement field* (what Tier I gives) to per-receptor band-integrated
-radiances, and :func:`radiance_response`, the drop-in parallel to
-:func:`plumax.coupled.forward.column_response` for the radiance forward. The
-existing scalar-AK path is untouched — the change is purely additive.
+This module provides :class:`RadianceObservationOperator`, which maps a
+*per-receptor column-enhancement field* (what Tier I gives) to per-receptor
+band-integrated radiances (:class:`plumax.adapters.RadtranObservationOperator`
+is its one-receptor case in ``ΔVMR``), and :func:`radiance_response`, the
+drop-in parallel to :func:`plumax.coupled.forward.column_response` for the
+radiance forward. The existing scalar-AK path is untouched.
 
 Differentiability
 -----------------
-The :mod:`radtrax.slab` Beer–Lambert forward and the
-:class:`~radtrax.instrument.SpectralResponseFunction` are **NumPy-side** (the
-LUT interpolation goes through ``xarray``), so :class:`RadianceObservationOperator`
-is *not* JAX-traceable end-to-end: it consumes concrete arrays and returns
-NumPy arrays, exactly like :class:`plumax.adapters.RadtranObservationOperator`.
-The analytic Jacobian ``d(L_norm)/d(ΔVMR)`` returned by the radtrax slab forward is
-the tangent-linear used in :meth:`RadianceObservationOperator.linearize`. The
-*Tier I plume* column response (:func:`plumax.coupled.forward.column_response`)
-that feeds it remains differentiable; the column→ΔVMR conversion
-(:func:`column_mass_to_delta_vmr`) is a pure JAX function and is differentiable.
+The table lookup ``a(ν) = σ(ν, T, p) n L AMF`` goes through ``xarray`` and
+happens once, when the operator is built
+(:meth:`radtrax.retrieval.var3d.RadianceObservationModel.from_lut`). Every
+step after it is JAX: the column→ΔVMR conversion
+(:func:`column_mass_to_delta_vmr`), ``exp(−a ΔVMR)`` and the band
+integration, so :class:`RadianceObservationOperator`,
+:class:`LayeredRadianceOperator` and :class:`LinearisedRadianceOperator` all
+run under ``jax.jit``, ``jax.vmap`` and ``jax.grad``.
 
 Covariance / gaussx
 -------------------
@@ -55,12 +53,14 @@ from geophysix.columns import convert
 from geophysix.constants import CH4
 from jax.typing import ArrayLike
 from jaxtyping import Float
+from radtrax.retrieval.var3d import RadianceObservationModel
 from radtrax.slab import (
     ATM_TO_PA,
     forward_nonlinear_normalized,
 )
 
 from plumax._src.constants import M_CH4
+from plumax._src.errors import DomainError
 from plumax._src.tracing import require_positive
 from plumax.coupled.forward import PlumeSource, column_response
 
@@ -147,55 +147,145 @@ def column_mass_to_delta_vmr(
     return column_ppm_m * 1e-6 / path_length_m
 
 
-@dataclass(frozen=True)
-class RadianceObservationOperator:
-    """Map a per-receptor column-enhancement field to band radiances via the RTM.
+def _require_inside_table(
+    ds: xr.Dataset, nu_cm: np.ndarray, T_K: float, p_atm: float
+) -> None:
+    """Fail where the table lookup would return NaN: outside its ν, T or p range."""
+    queries = (
+        ("wavenumber", np.asarray(nu_cm, dtype=float), "the spectral grid", "cm⁻¹"),
+        ("temperature", np.asarray(T_K, dtype=float), "`T_K`", "K"),
+        ("pressure", np.asarray(p_atm, dtype=float), "`p_atm`", "atm"),
+    )
+    for coord, values, name, unit in queries:
+        # a NaN compares False with both ends, and an empty grid has no range
+        if values.size == 0 or not np.isfinite(values).all():
+            raise DomainError(
+                f"RadianceObservationOperator: {name} must be non-empty and finite."
+            )
+        grid = np.asarray(ds[coord], dtype=float)
+        low, high = float(grid.min()), float(grid.max())
+        if float(values.min()) < low or float(values.max()) > high:
+            raise DomainError(
+                f"RadianceObservationOperator: {name} "
+                f"[{float(values.min()):.6g}, {float(values.max()):.6g}] {unit} "
+                f"leaves the table's {coord} range [{low:.6g}, {high:.6g}] {unit}, "
+                "where the lookup returns NaN; extend the table or narrow the grid."
+            )
+
+
+class RadianceObservationOperator(eqx.Module):
+    """Map a per-receptor column-enhancement field to normalised radiance via the slab.
 
     The RTM analogue of the scalar averaging kernel: instead of
     ``y = A · column``, this composes
 
-        column mass [kg/m²]  →  ΔVMR  →  L_norm(ν) = exp(-Δτ)  →  band radiance
+        column mass m [kg/m²]  →  ΔVMR  →  L_norm(ν) = exp(−a(ν) ΔVMR)  →  band radiance
 
-    using :func:`column_mass_to_delta_vmr` and the normalised Beer–Lambert
-    forward :func:`radtrax.slab.forward_nonlinear_normalized`. With ``srf``
-    supplied, the high-resolution normalised radiance ``exp(-Δτ(ν))`` is
-    band-integrated by the instrument :class:`~radtrax.instrument.SpectralResponseFunction`;
-    otherwise the full ``nu_obs`` spectrum is returned per receptor.
+    with :func:`column_mass_to_delta_vmr` and the single-slab Beer–Lambert
+    absorption ``a(ν) = σ(ν, T, p) n L AMF``, which the constructor looks up
+    from the table once. With ``srf`` the operator holds radtrax's
+    :class:`~radtrax.retrieval.var3d.RadianceObservationModel`, whose
+    spectral grid is the SRF's own (``ν = 10⁷ / λ``), and returns one value
+    per band, ``y_b = Σ_g f_bg exp(−a_g ΔVMR)``. Without it, it holds ``a(ν)``
+    on ``nu_obs`` and returns the high-resolution spectrum.
 
-    The forward is **NumPy-side** (the LUT interpolation is not JAX-traceable),
-    matching :class:`plumax.adapters.RadtranObservationOperator`; the analytic
-    ``d(L_norm)/d(ΔVMR)`` Jacobian is exposed through :meth:`linearize`.
+    Every step after the lookup is JAX: ``predict`` is a ``jax.vmap`` over
+    receptors, :meth:`linearize_single` is ``jax.jacfwd``, and
+    :class:`~plumax.coupled.CoupledProblem` takes the operator as it takes
+    :class:`LayeredRadianceOperator`.
 
-    Attributes:
-        ds: Absorption-cross-section LUT dataset (HAPI schema; see
+    Args:
+        ds: Absorption-cross-section table (HAPI schema; see
             :func:`radtrax.spectroscopy.hitran.build_lut_dataset`).
-        nu_obs: Observation wavenumbers [cm⁻¹], shape ``(n_nu,)``.
         T_K: Layer temperature [K].
         p_atm: Layer pressure [atm].
-        vmr_background: Background gas volume mixing ratio.
         path_length_cm: Optical / absorbing-path length [cm].
         amf: Air-mass factor.
-        srf: Optional band-integration operator. When ``None`` the operator
-            returns the per-receptor high-resolution normalised radiance.
-        var: LUT cross-section variable name.
+        srf: Band integration; its wavelength grid is the spectral grid.
+        nu_obs: Wavenumbers [cm⁻¹] of the spectrum returned without ``srf``,
+            ``(G,)``.
+        var: Table cross-section variable name.
+
+    Attributes:
+        model: The radtrax slab model with its band instrument, or ``None``
+            without an SRF.
+        absorption_coeff_hr: ``a(ν)`` on ``nu_obs``, ``(G,)``, or ``None``
+            with an SRF (the model holds it on the SRF's grid).
+        T_K: Layer temperature [K], for the mass → ΔVMR conversion.
+        p_atm: Layer pressure [atm], for the mass → ΔVMR conversion.
+        path_length_cm: Path length [cm], for the mass → ΔVMR conversion.
+
+    Raises:
+        ValueError: If not exactly one of ``srf`` and ``nu_obs`` is given.
+        DomainError: If the spectral grid, ``T_K`` or ``p_atm`` leaves the
+            table, where the lookup would return NaN.
     """
 
-    ds: xr.Dataset
-    nu_obs: np.ndarray
+    model: RadianceObservationModel | None
+    absorption_coeff_hr: Float[Array, " G"] | None
     T_K: float
     p_atm: float
-    vmr_background: float
     path_length_cm: float
-    amf: float
-    srf: SpectralResponseFunction | None = None
-    var: str = "absorption_cross_section"
+
+    def __init__(
+        self,
+        ds: xr.Dataset,
+        *,
+        T_K: float,
+        p_atm: float,
+        path_length_cm: float,
+        amf: float,
+        srf: SpectralResponseFunction | None = None,
+        nu_obs: Float[ArrayLike, " G"] | None = None,
+        var: str = "absorption_cross_section",
+    ) -> None:
+        if (srf is None) == (nu_obs is None):
+            raise ValueError(
+                "RadianceObservationOperator: give exactly one of `srf` (its "
+                "wavelength grid is the spectral grid) and `nu_obs` (the "
+                "spectrum without band integration)."
+            )
+        self.T_K, self.p_atm = float(T_K), float(p_atm)
+        self.path_length_cm = float(path_length_cm)
+        if srf is not None:
+            # ν = 10⁷ / λ on the SRF's grid
+            nu_hr = 1e7 / np.asarray(srf.wavelengths_hr_nm, dtype=float)
+            _require_inside_table(ds, nu_hr, self.T_K, self.p_atm)
+            # a(ν) = σ(ν, T, p) n L AMF, on the SRF's grid in ascending ν
+            self.model = RadianceObservationModel.from_lut(
+                ds,
+                srf=srf,
+                T_K=self.T_K,
+                p_atm=self.p_atm,
+                path_length_cm=self.path_length_cm,
+                amf=float(amf),
+                var=var,
+            )
+            self.absorption_coeff_hr = None
+            return
+        nu = np.asarray(nu_obs, dtype=float)
+        _require_inside_table(ds, nu, self.T_K, self.p_atm)
+        # a(ν) = −∂L_norm/∂ΔVMR at ΔVMR = 0, from radtrax's slab lookup
+        tangent = forward_nonlinear_normalized(
+            ds,
+            nu,
+            T_K=self.T_K,
+            p_atm=self.p_atm,
+            vmr_background=0.0,
+            delta_vmr=0.0,
+            path_length_cm=self.path_length_cm,
+            amf=float(amf),
+            var=var,
+        )
+        self.model = None
+        self.absorption_coeff_hr = -jnp.asarray(tangent.jacobian, dtype=float)
 
     @property
     def n_channels(self) -> int:
         """Number of output channels per receptor (bands if SRF, else n_nu)."""
-        if self.srf is not None:
-            return int(self.srf.n_bands)
-        return int(np.asarray(self.nu_obs).size)
+        if self.model is not None:
+            return self.model.n_bands
+        return int(jnp.asarray(self.absorption_coeff_hr).shape[0])
 
     def delta_vmr(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
         """Column mass [kg/m²] → ΔVMR via :func:`column_mass_to_delta_vmr`."""
@@ -206,95 +296,57 @@ class RadianceObservationOperator:
             path_length_cm=self.path_length_cm,
         )
 
-    def _forward_hr(self, vmr_enhancement: float):
-        """Single-receptor normalised Beer–Lambert forward (NumPy ForwardResult)."""
-        return forward_nonlinear_normalized(
-            self.ds,
-            np.asarray(self.nu_obs, dtype=float),
-            T_K=self.T_K,
-            p_atm=self.p_atm,
-            vmr_background=self.vmr_background,
-            delta_vmr=float(vmr_enhancement),
-            path_length_cm=self.path_length_cm,
-            amf=self.amf,
-            var=self.var,
-        )
+    def predict_delta_vmr(self, delta_vmr: jax.Array | float) -> jax.Array:
+        """Normalised radiance for one receptor's ``ΔVMR``, shape ``(n_channels,)``.
 
-    def _band_integrate(self, spectrum_hr: np.ndarray) -> np.ndarray:
-        """Apply the SRF if present, else return the HR spectrum unchanged.
+        Args:
+            delta_vmr: Scalar ``ΔVMR`` enhancement.
 
-        The spectrum is sampled on ``nu_obs`` (increasing wavenumber ⇒
-        *decreasing* wavelength), but the SRF weights are aligned to its
-        strictly-increasing ``wavelengths_hr_nm`` grid. Contracting the two
-        directly would apply each band weight to the wrong (reversed) sample.
-        Interpolate the spectrum onto the SRF wavelength axis first — this fixes
-        the ordering and tolerates a differing HR grid.
+        Returns:
+            ``exp(−a ΔVMR)``, band-integrated when an SRF is configured.
         """
-        spec = np.asarray(spectrum_hr, dtype=float)
-        if self.srf is None:
-            return spec
-        # λ = 1e7 / ν, in nm and decreasing
-        obs_wavelength = 1e7 / np.asarray(self.nu_obs, dtype=float)
-        # → ascending wavelength for np.interp
-        order = np.argsort(obs_wavelength)
-        wl_obs_sorted = obs_wavelength[order]
-        srf_wl = np.asarray(self.srf.wavelengths_hr_nm, dtype=float)
-        # Reject (rather than silently extrapolate) an SRF grid that reaches
-        # outside the modelled ``nu_obs`` window: ``np.interp`` would repeat the
-        # edge spectrum value there, letting out-of-band SRF weight contribute the
-        # edge absorption / Jacobian instead of a true response. Require the band
-        # to be spectrally supported by the computed high-resolution spectrum.
-        tol = 1e-6 * (wl_obs_sorted[-1] - wl_obs_sorted[0])
-        if srf_wl[0] < wl_obs_sorted[0] - tol or srf_wl[-1] > wl_obs_sorted[-1] + tol:
-            raise ValueError(
-                "RadianceObservationOperator: the SRF wavelength grid "
-                f"[{srf_wl[0]:.4g}, {srf_wl[-1]:.4g}] nm extends beyond the "
-                f"modelled nu_obs window [{wl_obs_sorted[0]:.4g}, "
-                f"{wl_obs_sorted[-1]:.4g}] nm; extend `nu_obs` to cover the band "
-                "or restrict the SRF grid (no out-of-band extrapolation)."
-            )
-        spec_on_srf = np.interp(srf_wl, wl_obs_sorted, spec[order])
-        return self.srf.apply(spec_on_srf)
+        delta_vmr = jnp.asarray(delta_vmr, dtype=float)
+        if self.model is not None:
+            # one pixel: () → (1, 1)
+            field = einx.id(" -> h w", delta_vmr, h=1, w=1)
+            # y_b = Σ_g f_bg exp(−a_g ΔVMR): (1, 1) → (1, 1, B) → (B,)
+            return self.model.forward(field)[0, 0]
+        # L_norm(ν) = exp(−a(ν) ΔVMR)                                        (G,)
+        return jnp.exp(-jnp.asarray(self.absorption_coeff_hr) * delta_vmr)
 
-    def predict_single(self, column_mass_kg_m2: float) -> np.ndarray:
-        """Band-integrated normalised radiance for one receptor.
+    def predict_single(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
+        """Normalised radiance for one receptor, shape ``(n_channels,)``.
 
         Args:
             column_mass_kg_m2: Scalar column mass enhancement [kg/m²].
 
         Returns:
-            Normalised radiance, shape ``(n_channels,)`` (``exp(-Δτ)``, band-
-            integrated when an SRF is configured).
+            ``exp(−a ΔVMR)``, band-integrated when an SRF is configured.
         """
-        dvmr = float(self.delta_vmr(column_mass_kg_m2))
-        return self._band_integrate(self._forward_hr(dvmr).radiance)
+        return self.predict_delta_vmr(self.delta_vmr(column_mass_kg_m2))
 
-    def predict(self, column_enhancement: jax.Array | np.ndarray) -> np.ndarray:
-        """Per-receptor band-integrated normalised radiance (vectorised).
+    def predict(self, column_enhancement: jax.Array | np.ndarray) -> jax.Array:
+        """Per-receptor normalised radiance, shape ``(n_obs, n_channels)``.
 
         Args:
             column_enhancement: Per-receptor column mass enhancement [kg/m²],
                 shape ``(n_obs,)`` (e.g. ``Q · column_response``).
-
-        Returns:
-            Per-receptor normalised radiance, shape ``(n_obs, n_channels)``.
         """
-        cols = np.asarray(column_enhancement, dtype=float)
-        if cols.ndim != 1:
+        column_mass = jnp.asarray(column_enhancement, dtype=float)
+        if column_mass.ndim != 1:
             raise ValueError(
                 "RadianceObservationOperator.predict: `column_enhancement` must "
-                f"be 1-D (n_obs,); got shape {cols.shape}."
+                f"be 1-D (n_obs,); got shape {column_mass.shape}."
             )
-        rows = [self.predict_single(float(column)) for column in cols]
-        return np.stack(rows, axis=0)
+        return jax.vmap(self.predict_single)(column_mass)
 
-    def linearize_single(self, column_mass_kg_m2: float) -> np.ndarray:
-        """Band-integrated ``d(L_norm)/d(ΔVMR)`` at one receptor.
+    def linearize_single(self, column_mass_kg_m2: jax.Array | float) -> jax.Array:
+        """``d(L_norm)/d(ΔVMR)`` at one receptor, by ``jax.jacfwd``.
 
-        Returns the radtrax slab analytic Jacobian, band-integrated through the SRF
-        when configured. This is the tangent-linear w.r.t. ``ΔVMR``; chain with
-        ``d(ΔVMR)/d(column mass)`` (the constant slope of
-        :func:`column_mass_to_delta_vmr`) for the column-space Jacobian.
+        The tangent-linear with respect to ``ΔVMR``, band-integrated when an
+        SRF is configured; chain with ``d(ΔVMR)/d(column mass)`` (the
+        constant slope of :func:`column_mass_to_delta_vmr`) for the
+        column-space Jacobian, which :func:`linearise` takes directly.
 
         Args:
             column_mass_kg_m2: Scalar column mass enhancement [kg/m²].
@@ -302,14 +354,13 @@ class RadianceObservationOperator:
         Returns:
             Jacobian, shape ``(n_channels,)`` (negative for an absorbing band).
         """
-        dvmr = float(self.delta_vmr(column_mass_kg_m2))
-        return self._band_integrate(self._forward_hr(dvmr).jacobian)
+        return jax.jacfwd(self.predict_delta_vmr)(self.delta_vmr(column_mass_kg_m2))
 
 
 class LayeredRadianceOperator(eqx.Module):
     """Map a column-mass enhancement to band radiance through radtrax's layered model.
 
-    The JAX counterpart of :class:`RadianceObservationOperator`, on
+    The layered counterpart of :class:`RadianceObservationOperator`, on
     :class:`radtrax.ForwardModel` instead of the single slab::
 
         column mass m [kg/m²]  →  ΔX = m / M_CH₄ [mol/m²]
@@ -425,7 +476,7 @@ def radiance_response(
     instrument: Instrument,
     operator: RadianceObservationOperator | LayeredRadianceOperator,
     emission_rate: jax.Array | float,
-) -> np.ndarray | jax.Array:
+) -> jax.Array:
     """Per-receptor band radiances for one instrument under the RTM operator.
 
     The radiance-forward parallel to :func:`plumax.coupled.forward.predict_observation`:
@@ -448,8 +499,8 @@ def radiance_response(
             leave the instrument's ``averaging_kernel`` at its identity default;
             a non-identity AK is still applied to the column before the RTM (it
             then acts as a per-receptor column-scaling factor).
-        operator: The configured :class:`RadianceObservationOperator`, or a
-            :class:`LayeredRadianceOperator`, with which the whole map from
+        operator: The configured :class:`RadianceObservationOperator` or
+            :class:`LayeredRadianceOperator`; with either the whole map from
             ``Q`` to radiance is JAX and differentiable in ``Q``.
         emission_rate: Emission rate ``Q`` [kg/s] (scalar).
 
@@ -457,14 +508,7 @@ def radiance_response(
         Per-receptor normalised radiance, shape ``(n_obs, n_channels)``.
     """
     response = column_response(source, instrument)
-    if isinstance(operator, LayeredRadianceOperator):
-        return operator.predict(jnp.asarray(emission_rate, dtype=float) * response)
-    # Unit-Q column response is differentiable JAX; scale to the column mass and
-    # hand concrete values to the NumPy-side RTM forward.
-    column_mass = np.asarray(emission_rate, dtype=float) * np.asarray(
-        response, dtype=float
-    )
-    return operator.predict(column_mass)
+    return operator.predict(jnp.asarray(emission_rate, dtype=float) * response)
 
 
 @dataclass(frozen=True)
@@ -518,8 +562,8 @@ class LinearisedRadianceOperator:
     def predict(self, column_enhancement: jax.Array) -> jax.Array:
         """Per-receptor linearised radiance, shape ``(n_obs, n_channels)``.
 
-        Fully differentiable / vectorised JAX (unlike the nonlinear operator's
-        NumPy LUT path): ``baseline[None, :] + mass[:, None] · gain[None, :]``.
+        Fully differentiable / vectorised JAX:
+        ``baseline[None, :] + mass[:, None] · gain[None, :]``.
         """
         column_mass = jnp.asarray(column_enhancement, dtype=float)
         if column_mass.ndim != 1:
@@ -542,13 +586,11 @@ def linearise(
 ) -> LinearisedRadianceOperator:
     """Build the :class:`LinearisedRadianceOperator` tangent to ``operator`` at 0.
 
-    Evaluates the background radiance ``L_norm(0)`` and the analytic Jacobian
-    ``J₀ = d(L_norm)/d(ΔVMR)|₀`` (both band-integrated through the operator's
-    SRF), and folds in the constant ``d(ΔVMR)/d(mass)`` slope of
-    :func:`column_mass_to_delta_vmr` to give the per-channel gain in column-mass
-    units. The result is exact to first order in the enhancement. For a
-    :class:`LayeredRadianceOperator` the gain is ``jax.jacfwd`` of its
-    ``predict_single`` at zero, already in column-mass units.
+    Evaluates the background radiance ``L_norm(0)`` and the gain
+    ``g = d(L_norm)/d(mass)|₀``, ``jax.jacfwd`` of the operator's
+    ``predict_single`` at zero, so the slope of
+    :func:`column_mass_to_delta_vmr` is already folded in and the gain is in
+    column-mass units. The result is exact to first order in the enhancement.
 
     Args:
         operator: The configured nonlinear RTM observation operator.
@@ -556,17 +598,12 @@ def linearise(
     Returns:
         The matching :class:`LinearisedRadianceOperator`.
     """
-    if isinstance(operator, LayeredRadianceOperator):
-        zero = jnp.asarray(0.0)
-        return LinearisedRadianceOperator(
-            baseline=operator.predict_single(zero),
-            gain=jax.jacfwd(operator.predict_single)(zero),
-        )
-    baseline = jnp.asarray(operator.predict_single(0.0), dtype=float)
-    jac_dvmr = jnp.asarray(operator.linearize_single(0.0), dtype=float)
-    # d(ΔVMR)/d(mass): the conversion is linear, so its slope is ΔVMR at unit mass.
-    slope = float(operator.delta_vmr(1.0))
-    return LinearisedRadianceOperator(baseline=baseline, gain=jac_dvmr * slope)
+    zero = jnp.asarray(0.0)
+    return LinearisedRadianceOperator(
+        baseline=operator.predict_single(zero),
+        # g = ∂L_norm/∂m at m = 0
+        gain=jax.jacfwd(operator.predict_single)(zero),
+    )
 
 
 def radiance_response_linear(
