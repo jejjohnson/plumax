@@ -79,6 +79,19 @@ def linear_lbfgs(linear_problem):
     return solve_4dvar(linear_problem, rtol=1e-10, atol=1e-12, max_steps=500)
 
 
+@pytest.fixture(scope="module")
+def linear_newton(linear_problem):
+    # one outer iteration with a converged CG solve is the MAP of an affine forward
+    return solve_4dvar(
+        linear_problem,
+        method="gauss_newton",
+        rtol=1e-10,
+        atol=1e-12,
+        outer_iters=1,
+        compute_posterior=True,
+    )
+
+
 @pytest.mark.filterwarnings("error::DeprecationWarning")
 def test_gauss_newton_uses_no_deprecated_vardax_setting(linear_problem):
     # vardax removes IncrementalConfig's n_outer, n_inner and CG tolerances in its
@@ -92,20 +105,13 @@ def test_gauss_newton_uses_no_deprecated_vardax_setting(linear_problem):
 
 
 @pytest.mark.slow
-def test_methods_agree_linear(linear_problem, linear_lbfgs):
+def test_methods_agree_linear(linear_problem, linear_lbfgs, linear_newton):
     # the forward is affine, so the linearised cost is the cost itself: one outer
     # iteration of Gauss–Newton must reach the dense linear Gaussian MAP
     problem = linear_problem
     lbfgs = linear_lbfgs
     dense_map, dense_covariance = _dense_solution(problem)
-    newton = solve_4dvar(
-        problem,
-        method="gauss_newton",
-        rtol=1e-10,
-        atol=1e-12,
-        outer_iters=1,
-        compute_posterior=True,
-    )
+    newton = linear_newton
     assert _relative(newton.source, lbfgs.source) < 1e-6
     assert _relative(newton.source, dense_map) < 1e-6
     assert newton.n_steps == 1
@@ -182,15 +188,16 @@ def test_gauss_newton_outer_iters():
 
 
 @pytest.mark.slow
-def test_psas_agrees_with_gauss_newton_and_the_dense_map(linear_problem, linear_lbfgs):
+def test_psas_agrees_with_gauss_newton_and_the_dense_map(
+    linear_problem, linear_lbfgs, linear_newton
+):
     # the dual solve of the materialised affine map is the same Gauss–Newton step;
-    # measured on this problem (#246): 1e-15 from Gauss–Newton and the dense MAP,
-    # so 1e-6 is the issue's bound with room for the CG tolerance
+    # measured on this problem in float64 (#246): 5e-15 from Gauss–Newton and 2e-15
+    # from the dense MAP, so 1e-6 is the issue's bound with room for the CG
+    # tolerance
     problem = linear_problem
     dense_map, dense_covariance = _dense_solution(problem)
-    newton = solve_4dvar(
-        problem, method="gauss_newton", rtol=1e-10, atol=1e-12, outer_iters=1
-    )
+    newton = linear_newton
     psas = solve_4dvar(
         problem, method="psas", rtol=1e-10, atol=1e-12, compute_posterior=True
     )
@@ -213,7 +220,9 @@ def test_psas_agrees_with_gauss_newton_and_the_dense_map(linear_problem, linear_
 @pytest.mark.slow
 @pytest.mark.parametrize("method", ["gauss_newton", "psas"])
 def test_cg_methods_on_a_kronecker_prior_with_a_block_diagonal_background(method):
-    # gaussx.Kronecker inside gaussx.BlockDiag as the vardax square root
+    # gaussx.Kronecker inside gaussx.BlockDiag as the vardax square root; PSAS
+    # measured 4e-12 from Gauss–Newton on a SpatialControl and 2e-15 on a
+    # BackgroundControl problem in float64 (#246), inside the 1e-6 bound below
     ny, nx, nz = 4, 5, 4
     control = SpatialControl(
         mask=jnp.ones((ny, nx), dtype=bool),
@@ -285,7 +294,6 @@ def _unsolved_problem():
     )
 
 
-@pytest.mark.slow
 def test_psas_refuses_a_nonlinear_advection_scheme():
     # WENO's reconstruction is nonlinear, so one materialised linearisation is not
     # the forward; the refusal comes before any VJP
