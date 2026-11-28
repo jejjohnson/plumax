@@ -7,11 +7,12 @@ construction + coordinate generation so the rest of ``les_fvm`` can treat
 the grid as a single pytree leaf with convenient ``x``, ``y``, ``z``
 coordinate arrays (interior cell centres only).
 
-Stagger convention (see :class:`gridax.CartesianCGrid3D`)
+Stagger convention (see :class:`gridax.CartesianCGrid3D`), with the origin
+(x₀, y₀, z₀) at the first interior cell centre, half a cell inside the domain
 -----------------------------------------------------------
-    T[k, j, i]  cell centre  at  ( i        * dx,  j        * dy,  k * dz )
-    U[k, j, i]  east face    at  ((i + 1/2) * dx,  j        * dy,  k * dz )
-    V[k, j, i]  north face   at  ( i        * dx, (j + 1/2) * dy,  k * dz )
+    T[k, j, i]  cell centre  at  (x₀ + (i − 1) dx,        y₀ + (j − 1) dy,        z₀ + (k − 1) dz)
+    U[k, j, i]  east face    at  (x₀ + (i − 1/2) dx,      y₀ + (j − 1) dy,        z₀ + (k − 1) dz)
+    V[k, j, i]  north face   at  (x₀ + (i − 1) dx,        y₀ + (j − 1/2) dy,      z₀ + (k − 1) dz)
 
 Within a C-grid stagger, velocities ``u`` and ``v`` live at U- and V-points
 respectively; the scalar tracer and vertical velocity ``w`` are treated as
