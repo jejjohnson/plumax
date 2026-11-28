@@ -887,10 +887,11 @@ class CrossSectionalFlux(Operator):
             easting - self.source[0],
             northing - self.source[1],
         )
-        # a = Δ · e_∥
-        along = offset @ e_par
-        # c = Δ · e_⊥
-        across = offset @ e_perp
+        # a = Δ · (u, v) / ‖w‖, divided last so that a pixel centre on a strip
+        # edge stays where it was; Δ · e_∥ rounds differently
+        along = offset @ np.array([self.wind_u, self.wind_v]) / wind_norm
+        # c = Δ · (−v, u) / ‖w‖
+        across = offset @ np.array([-self.wind_v, self.wind_u]) / wind_norm
         rows: list[dict[str, Any]] = []
         for idx in range(self.n_transects):
             distance = (idx + 1) * self.transect_spacing_m
