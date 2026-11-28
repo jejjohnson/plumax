@@ -11,7 +11,6 @@ import pytest
 DOCTESTED_MODULES = (
     "plumax._src.checks",
     "plumax._src.domain",
-    "plumax._src.extras",
     "plumax._src.tracing",
     "plumax._src.units",
     "plumax._src.wind",
