@@ -40,10 +40,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jaxtyping import Array, Float
-from tracerax.bin import Cells, deposit
 
 from plumax._src.controlled import AbstractControlledSource
-from plumax._src.domain import edge_axis
+from plumax._src.domain import containing_cell, edge_axis
 from plumax._src.errors import DomainError, GridMismatchError
 from plumax.gauss_plume.observation import ColumnObservation
 from plumax.lagrangian.met_ensemble import ensemble_footprints
@@ -176,19 +175,25 @@ class LagrangianSource:
         Raises:
             DomainError: If the location lies outside the footprint grid.
         """
-        # cells [e_i, e_{i+1}) along x and y
-        cells = Cells((edge_axis(domain_x), edge_axis(domain_y)))
-        # p = (x, y), one particle
-        position = einx.id("coord -> 1 coord", jnp.asarray(location, dtype=float))
-        if not bool(cells.contains(position)[0]):
+        # The cell is found in NumPy float64: a tracerax deposit would decide it in
+        # the array dtype, and in float32 a source just below an inner edge would
+        # land in the cell above.
+        x_edges = edge_axis(domain_x)
+        y_edges = edge_axis(domain_y)
+        col_index, in_x = containing_cell(np.asarray(location[0], dtype=float), x_edges)
+        row_index, in_y = containing_cell(np.asarray(location[1], dtype=float), y_edges)
+        if not (in_x and in_y):
             raise DomainError(
                 f"LagrangianSource.point: {location} lies outside the footprint grid."
             )
-        # q_s = 1 / A_cell in the cell that holds the source
-        pattern = deposit(cells, position, jnp.ones(1)) / cells.volumes()
+        # A_cell = Δx Δy
+        cell_area = (x_edges[1] - x_edges[0]) * (y_edges[1] - y_edges[0])
+        pattern = np.zeros((x_edges.size - 1, y_edges.size - 1))
+        # q_s = 1 / A_cell in the containing cell
+        pattern[col_index, row_index] = 1.0 / cell_area
         flat_pattern = einx.id("x y -> (x y)", pattern)
         return cls(
-            emission_pattern=flat_pattern,
+            emission_pattern=jnp.asarray(flat_pattern),
             winds=tuple(winds),
             turbulence=turbulence,
             domain_x=domain_x,
