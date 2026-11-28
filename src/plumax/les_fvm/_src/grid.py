@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import einx
 import equinox as eqx
 import jax.numpy as jnp
 from gridax import CartesianCGrid3D
@@ -135,34 +134,31 @@ def make_grid(
                 f"make_grid: {label}-extent must be positive (got {expr} = {extent})"
             )
 
-    grid = CartesianCGrid3D.from_interior(
-        nx_interior=int(num_cells_x),
-        ny_interior=int(num_cells_y),
-        nz_interior=int(num_cells_z),
+    step_x = extent_x / int(num_cells_x)
+    step_y = extent_y / int(num_cells_y)
+    step_z = extent_z / int(num_cells_z)
+    # The origin is the first interior T point, half a cell above the lower
+    # edge, so the grid's own coordinates are the physical cell centres.
+    grid = CartesianCGrid3D(
+        Nx=int(num_cells_x) + 2,
+        Ny=int(num_cells_y) + 2,
+        Nz=int(num_cells_z) + 2,
         Lx=extent_x,
         Ly=extent_y,
         Lz=extent_z,
+        x0=lower_x + 0.5 * step_x,
+        y0=lower_y + 0.5 * step_y,
+        z0=lower_z + 0.5 * step_z,
     )
-    # Interior cell centres — offset by half a cell from the lower edge,
-    # matching the gridax convention of co-locating T-points at
-    # cell centres and drop ghost cells at i = 0 and i = Nx - 1.
-    # x_c = x_min + (i + ½) Lx / nx
-    cell_index_x = jnp.arange(num_cells_x, dtype=dtype)
-    centres_x = jnp.asarray(lower_x + (cell_index_x + 0.5) * (extent_x / num_cells_x))
-    # y_c = y_min + (j + ½) Ly / ny
-    cell_index_y = jnp.arange(num_cells_y, dtype=dtype)
-    centres_y = jnp.asarray(lower_y + (cell_index_y + 0.5) * (extent_y / num_cells_y))
-    # z_c = z_min + (k + ½) Lz / nz
-    cell_index_z = jnp.arange(num_cells_z, dtype=dtype)
-    centres_z = jnp.asarray(lower_z + (cell_index_z + 0.5) * (extent_z / num_cells_z))
+    # the interior T points, without the ghost ring at i = 0 and i = N - 1
     return PlumeGrid3D(
         grid=grid,
-        x=centres_x,
-        y=centres_y,
-        z=centres_z,
-        dx=extent_x / int(num_cells_x),
-        dy=extent_y / int(num_cells_y),
-        dz=extent_z / int(num_cells_z),
+        x=jnp.asarray(grid.coords("x")[1:-1], dtype=dtype),
+        y=jnp.asarray(grid.coords("y")[1:-1], dtype=dtype),
+        z=jnp.asarray(grid.coords("z")[1:-1], dtype=dtype),
+        dx=step_x,
+        dy=step_y,
+        dz=step_z,
     )
 
 
@@ -174,12 +170,8 @@ def coord_arrays_from_grid(
     Float[Array, "nz_interior ny_interior nx_interior"],
 ]:
     """Return broadcast 3-D ``(X, Y, Z)`` interior-coordinate arrays."""
-    X, Y, Z = jnp.meshgrid(plume_grid.x, plume_grid.y, plume_grid.z, indexing="xy")
-    # meshgrid(indexing="xy") returns (Ny, Nx, Nz) — reorder to (Nz, Ny, Nx)
-    # to match field layout.
-    X = einx.id("y x z -> z y x", X)
-    Y = einx.id("y x z -> z y x", Y)
-    Z = einx.id("y x z -> z y x", Z)
+    # indexing="ij" over (z, y, x) gives the (Nz, Ny, Nx) field layout
+    Z, Y, X = jnp.meshgrid(plume_grid.z, plume_grid.y, plume_grid.x, indexing="ij")
     return X, Y, Z
 
 

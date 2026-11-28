@@ -43,6 +43,22 @@ def test_make_grid_coordinate_alignment():
     np.testing.assert_allclose(np.asarray(g.x), expected_x)
 
 
+def test_grid_coordinates_are_the_cell_centres_off_the_origin():
+    # The gridax grid carries the origin, so its interior T points are the
+    # physical cell centres even when the domain does not start at 0.
+    g = make_grid(
+        domain_x=(-100.0, 300.0, 8),
+        domain_y=(50.0, 90.0, 4),
+        domain_z=(0.0, 40.0, 4),
+        dtype=jnp.float64,
+    )
+    for axis in "xyz":
+        np.testing.assert_array_equal(
+            np.asarray(g.grid.coords(axis))[1:-1], np.asarray(getattr(g, axis))
+        )
+    np.testing.assert_array_equal(np.asarray(g.x)[:3], [-75.0, -25.0, 25.0])
+
+
 @pytest.mark.parametrize(
     ("domain_x", "domain_y", "domain_z", "match"),
     [
