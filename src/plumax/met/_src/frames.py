@@ -15,9 +15,9 @@ from typing import Any
 import einx
 import numpy as np
 from jaxtyping import Float, Int
+from pipekit_ops import import_optional
 
-from plumax._src.errors import DomainError
-from plumax._src.extras import require_extra
+from plumax._src.errors import DomainError, MissingExtraError
 from plumax.les_fvm.grid import PlumeGrid3D
 
 
@@ -128,11 +128,11 @@ class LocalFrame:
 
     @cached_property
     def _transformers(self) -> tuple[Any, Any, float, float]:
-        pyproj = require_extra(
+        pyproj = import_optional(
             "pyproj",
-            extra="io",
-            caller="LocalFrame",
-            purpose="transforms through pyproj",
+            install="plumax[io]",
+            needed_by="LocalFrame",
+            error=MissingExtraError,
         )
         forward = pyproj.Transformer.from_crs(4326, self.epsg, always_xy=True)
         inverse = pyproj.Transformer.from_crs(self.epsg, 4326, always_xy=True)

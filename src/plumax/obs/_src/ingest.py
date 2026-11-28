@@ -41,6 +41,7 @@ import numpy as np
 import xarray as xr
 from geophysix.columns import column_from_mixing_ratio
 from jaxtyping import Array, Float, Shaped
+from pipekit_ops import import_optional
 
 from plumax._src.constants import (
     AVOGADRO,
@@ -50,10 +51,10 @@ from plumax._src.constants import (
     T_STANDARD,
 )
 from plumax._src.errors import (
+    MissingExtraError,
     MissingVariableError,
     ScreeningError,
 )
-from plumax._src.extras import require_extra
 from plumax._src.units import ppm_m_to_column_mass
 from plumax.coupled import Instrument
 from plumax.met._src.frames import LocalFrame
@@ -83,17 +84,17 @@ class ColumnObservation(eqx.Module):
 
 
 def _readers():
-    xrops_ch4 = require_extra(
+    xrops_ch4 = import_optional(
         "xrops.atm.gas.ch4",
-        extra="io",
-        caller="the L2 loaders",
-        purpose="read through xrproducts / xrops",
+        install="plumax[io]",
+        needed_by="the L2 reader",
+        error=MissingExtraError,
     )
-    xrproducts = require_extra(
+    xrproducts = import_optional(
         "xrproducts",
-        extra="io",
-        caller="the L2 loaders",
-        purpose="read through xrproducts / xrops",
+        install="plumax[io]",
+        needed_by="the L2 reader",
+        error=MissingExtraError,
     )
     return xrproducts, xrops_ch4.dry_air_column
 

@@ -59,6 +59,7 @@ import xarray as xr
 from functax.geometry import CurvilinearGrid
 from functax.interp import locate_curvilinear
 from jaxtyping import Float
+from pipekit_ops import import_optional
 
 from plumax._src.constants import (
     KAPPA as KAPPA,
@@ -66,10 +67,10 @@ from plumax._src.constants import (
     WRF_GRAVITY,
 )
 from plumax._src.errors import (
+    MissingExtraError,
     MissingVariableError,
     TimeAxisError,
 )
-from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import (
@@ -220,8 +221,8 @@ def load_wrf(
 
 def _require_open_wrfout():
     """``xrops.atm.open_wrfout``, or an error naming the ``io`` extra."""
-    xrops_atm = require_extra(
-        "xrops.atm", extra="io", caller="load_wrf", purpose="reads through xrops"
+    xrops_atm = import_optional(
+        "xrops.atm", install="plumax[io]", needed_by="load_wrf", error=MissingExtraError
     )
     return xrops_atm.open_wrfout
 

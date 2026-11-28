@@ -17,10 +17,12 @@ from typing import Any
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from geophysix.thermo import dry_air_density
 from gridax import avg_x_bwd_2d, avg_y_bwd_2d
 from jaxtyping import Array, Float
-from pipekit_array.arrays import safe_sqrt
+from pipekit_array.arrays import check_values, safe_sqrt
+from pipekit_ops import is_concrete
 
 from plumax._src.constants import (
     CP_DRY as CP_DRY,
@@ -29,8 +31,7 @@ from plumax._src.constants import (
     P_REFERENCE as P_REFERENCE,
     R_DRY as R_DRY,
 )
-from plumax._src.errors import PlumaxError
-from plumax._src.tracing import require
+from plumax._src.errors import ParameterError, PlumaxError
 from plumax.met.field import MetField
 
 
@@ -325,7 +326,10 @@ class MoninObukhov(eqx.Module):
         sensible_heat_flux: float | Float[Array, "*#columns"],
     ) -> SurfaceLayer:
         z0 = jnp.asarray(z0, dtype=field.u.dtype)
-        z0 = require(z0 > 0.0, "z0 must be positive", value=z0)
+        xp = np if is_concrete(z0) else jnp
+        # bad = ¬(z₀ > 0), so NaN fails
+        bad = ~xp.all(xp.asarray(z0) > 0.0)
+        z0 = check_values(z0, bad, "z0 must be positive", error=ParameterError)
 
         # --- lowest level ---
         # z = Δz / 2 above the grid's surface

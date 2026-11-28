@@ -41,9 +41,9 @@ import jax.numpy as jnp
 import numpy as np
 import pipekit_ops
 from jaxtyping import Array, Float, PRNGKeyArray, UInt32
+from pipekit_ops import import_optional
 
-from plumax._src.errors import ParameterError
-from plumax._src.extras import require_extra
+from plumax._src.errors import MissingExtraError, ParameterError
 from plumax._src.vardax import require_vardax
 from plumax.lagrangian._src.footprint import _surface_sensitivity, require_inside_layer
 
@@ -55,11 +55,11 @@ if TYPE_CHECKING:
 
 def _require_pipekit_train(caller: str) -> ModuleType:
     """Import pipekit-train, or raise a ``MissingExtraError`` naming the extra."""
-    return require_extra(
+    return import_optional(
         "pipekit_train",
-        extra="emulate",
-        caller=caller,
-        purpose="trains the emulator with pipekit-train",
+        install="plumax[emulate]",
+        needed_by=caller,
+        error=MissingExtraError,
     )
 
 

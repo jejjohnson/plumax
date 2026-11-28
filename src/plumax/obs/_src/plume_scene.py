@@ -32,15 +32,16 @@ import jax.numpy as jnp
 import numpy as np
 import xarray as xr
 from jaxtyping import Array, Bool, Float, Int
+from pipekit_ops import import_optional
 
 from plumax._src.errors import (
     GridMismatchError,
+    MissingExtraError,
     MissingVariableError,
     ParameterError,
     ScreeningError,
     UnitsError,
 )
-from plumax._src.extras import require_extra
 from plumax._src.geometry import direction_from_centroid
 from plumax._src.tracing import require_positive
 from plumax.coupled import Instrument, QualityFlag
@@ -466,11 +467,11 @@ def _quality_flags(
     where ``EMITBandMask`` flags saturation; both decoded in swath geometry
     and then sent through the GLT when there is one.
     """
-    geoops_qa = require_extra(
+    geoops_qa = import_optional(
         "geoops.qa",
-        extra="geo",
-        caller="the quality raster",
-        purpose="is decoded by geoops.qa",
+        install="plumax[geo]",
+        needed_by="the quality raster",
+        error=MissingExtraError,
     )
     EMITBandMask, EMITL2AMask = geoops_qa.EMITBandMask, geoops_qa.EMITL2AMask
     quality = xr.open_dataset(quality_path)

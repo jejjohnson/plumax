@@ -12,12 +12,12 @@ from __future__ import annotations
 from types import ModuleType
 
 import einx
-import gaussx as gx
 import jax
 import jax.numpy as jnp
 import lineax as lx
+from pipekit_ops import import_optional
 
-from plumax._src.extras import require_extra
+from plumax._src.errors import MissingExtraError
 
 
 #: The tags of a covariance operator: symmetric and positive semi-definite.
@@ -36,11 +36,8 @@ def require_vardax(caller: str) -> ModuleType:
     Raises:
         MissingExtraError: If vardax is not installed.
     """
-    return require_extra(
-        "vardax",
-        extra="assim",
-        caller=caller,
-        purpose="solves the inversion with vardax",
+    return import_optional(
+        "vardax", install="plumax[assim]", needed_by=caller, error=MissingExtraError
     )
 
 
@@ -60,13 +57,17 @@ def require_argminax(caller: str) -> ModuleType:
     Raises:
         MissingExtraError: If argminax is not installed.
     """
-    return require_extra(
-        "argminax",
-        extra="assim",
-        caller=caller,
-        purpose="builds the Laplace posterior and the Gauss–Newton solver with argminax",
-        submodules=("curvature", "solve"),
+    argminax = import_optional(
+        "argminax", install="plumax[assim]", needed_by=caller, error=MissingExtraError
     )
+    for submodule in ("curvature", "solve"):
+        import_optional(
+            f"argminax.{submodule}",
+            install="plumax[assim]",
+            needed_by=caller,
+            error=MissingExtraError,
+        )
+    return argminax
 
 
 def row_operator(
@@ -95,37 +96,3 @@ def row_operator(
     return lx.FunctionLinearOperator(
         apply_to_row, jax.ShapeDtypeStruct((1, size), dtype), PSD_TAGS
     )
-
-
-def dense_covariance(
-    operator: lx.AbstractLinearOperator,
-    size: int,
-    dtype: jnp.dtype,
-    *,
-    rows: bool = True,
-) -> jax.Array:
-    """Materialise a covariance operator as a symmetrised ``(size, size)`` matrix.
-
-    Applies the operator to each basis vector with ``jax.vmap`` and
-    symmetrises the stacked columns with ``gaussx.symmetrize``.
-
-    Args:
-        operator: The covariance operator, such as a vardax posterior's ``cov``.
-        size: The state size D.
-        dtype: The dtype of the basis vectors.
-        rows: Whether the operator acts on ``(1, size)`` rows (vardax's
-            default) rather than on ``(size,)`` vectors.
-
-    Returns:
-        The symmetrised matrix, shape ``(size, size)``.
-    """
-
-    def column(basis_vector: jax.Array) -> jax.Array:
-        # C e_k, on a (1, size) row when the operator takes rows
-        if not rows:
-            return operator.mv(basis_vector)
-        basis_row = einx.id("param -> 1 param", basis_vector)
-        column_row = operator.mv(basis_row)
-        return einx.id("1 param -> param", column_row)
-
-    return gx.symmetrize(jax.vmap(column)(jnp.eye(size, dtype=dtype)))

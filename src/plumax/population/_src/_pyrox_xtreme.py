@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from types import ModuleType
 
-from plumax._src.extras import require_extra
+from pipekit_ops import import_optional
+
+from plumax._src.errors import MissingExtraError
 
 
 def require_pyrox_xtreme(caller: str) -> ModuleType:
@@ -25,9 +27,9 @@ def require_pyrox_xtreme(caller: str) -> ModuleType:
     Raises:
         MissingExtraError: If pyrox-xtreme is not installed.
     """
-    return require_extra(
+    return import_optional(
         "pyrox_xtreme.point_processes",
-        extra="population",
-        caller=caller,
-        purpose="builds on pyrox-xtreme point processes",
+        install="plumax[population]",
+        needed_by=caller,
+        error=MissingExtraError,
     )

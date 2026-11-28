@@ -37,6 +37,7 @@ from typing import TYPE_CHECKING
 import einx
 import equinox as eqx
 import jax.numpy as jnp
+import numpy as np
 from gridax import (
     avg_xbwd_ybwd_2d,
     diff_x_fwd_2d,
@@ -48,8 +49,11 @@ from gridax import (
 )
 from jax.typing import ArrayLike
 from jaxtyping import Array, Float
+from pipekit_array.arrays import check_values
+from pipekit_ops import is_concrete
 
-from plumax._src.tracing import require, require_positive
+from plumax._src.errors import ParameterError
+from plumax._src.tracing import require_positive
 from plumax.gauss_puff.dispersion import (
     calculate_pg_dispersion,
     get_pg_params,
@@ -285,7 +289,10 @@ def mo_eddy_diffusivity(
     u_star = surface_layer.u_star[it]
     inverse_length = surface_layer.inverse_obukhov_length[it]
     depth = jnp.asarray(pbl_height, dtype=height.dtype)
-    depth = require(depth >= 0.0, "pbl_height must be ≥ 0", value=depth)
+    xp = np if is_concrete(depth) else jnp
+    # bad = ¬(z_i ≥ 0), so NaN fails
+    bad = ~xp.all(xp.asarray(depth) >= 0.0)
+    depth = check_values(depth, bad, "pbl_height must be ≥ 0", error=ParameterError)
     if depth.ndim == 3:
         depth = depth[it]
     depth = jnp.broadcast_to(depth, u_star.shape)

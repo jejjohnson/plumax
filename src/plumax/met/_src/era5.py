@@ -50,14 +50,15 @@ import numpy as np
 import xarray as xr
 from geophysix.thermo import vertical_velocity
 from jaxtyping import Float, Int
+from pipekit_ops import import_optional
 
 from plumax._src.constants import GRAVITY as GRAVITY, R_DRY as R_DRY
 from plumax._src.errors import (
     GridMismatchError,
+    MissingExtraError,
     MissingVariableError,
     TimeAxisError,
 )
-from plumax._src.extras import require_extra
 from plumax.les_fvm.grid import PlumeGrid3D
 from plumax.met._src.frames import LocalFrame
 from plumax.met._src.regrid import IndexMap, onto_analysis_grid, stagger_points
@@ -225,11 +226,11 @@ def load_era5(
 
 
 def _require_hypsometric_height():
-    xrops_atm = require_extra(
+    xrops_atm = import_optional(
         "xrops.atm",
-        extra="io",
-        caller="load_era5",
-        purpose="integrates heights through xrops",
+        install="plumax[io]",
+        needed_by="load_era5",
+        error=MissingExtraError,
     )
     return xrops_atm.hypsometric_height
 

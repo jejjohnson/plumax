@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import einx
+import gaussx as gx
 import jax
 import jax.numpy as jnp
 import lineax as lx
@@ -41,7 +42,7 @@ import numpy as np
 
 from plumax._src.scalar_emission import GaussianEmission, require_prior, require_scalar
 from plumax._src.tracing import require_positive
-from plumax._src.vardax import PSD_TAGS, dense_covariance, require_vardax
+from plumax._src.vardax import PSD_TAGS, require_vardax
 from plumax.coupled.forward import CoupledForward
 from plumax.coupled.quality import (
     QualityPolicy,
@@ -224,11 +225,8 @@ def _information_form_analysis(
     batch_mask = einx.id("obs -> 1 obs", mask)
     batch = vdx.Batch1D(input=batch_input, mask=batch_mask)
     posterior = analysis.posterior(batch)
-    state_size = prior_mean.shape[0]
     # P* = (B⁻¹ + Gᵀ R⁻¹ G)⁻¹, one lazy mat-vec per basis vector
-    covariance = dense_covariance(
-        posterior.cov, state_size, prior_mean.dtype, rows=False
-    )
+    covariance = gx.symmetrize(posterior.cov.as_matrix())
     return posterior.mean, covariance
 
 
