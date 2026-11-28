@@ -34,7 +34,7 @@ try:
     from geoops.carrier import pixel_xy, single_band
     from geoops.measure import Connectivity, label_components, skeleton_length
     from geoops.segment import ThresholdMode, threshold_mask
-    from shapely.geometry import LineString, MultiPoint
+    from shapely.geometry import LineString
 except ModuleNotFoundError as err:  # pragma: no cover - the base-install gate
     raise MissingExtraError(
         "plumax.geo.plume_array needs the [geo] extra: pip install 'plumax[geo]'"
@@ -384,9 +384,9 @@ def plume_length(
       every pair, in memory that does not grow with ``N²``). Fast and robust; matches the original Varon 2018 definition for
       reasonably linear plumes.
     - ``"convex_hull"``: max diameter of the convex hull of the active
-      pixels. For degenerate hulls (single point, collinear points) we
-      fall back to the point-set diameter so the result is always well
-      defined.
+      pixels, which is the ``"max_axis"`` value, since that already runs
+      over the hull's vertices. Collinear points, which have no 2-D hull,
+      give the point-set diameter.
     - ``"skeleton"``: length of the plume centreline, via
       :func:`geoops.measure.skeleton_length` with the transform as the
       pixel step. The mask is skeletonised and ``L`` is the longest
@@ -433,17 +433,8 @@ def plume_length(
     if method == "max_axis":
         return _diameter(points)
     if method == "convex_hull":
-        hull = MultiPoint(points).convex_hull
-        # For polygonal hulls use the exterior ring; for degenerate
-        # hulls (Point, LineString) shapely exposes ``.coords`` instead.
-        exterior = getattr(hull, "exterior", None)
-        if exterior is not None:
-            coords = np.asarray(exterior.coords)
-        elif hasattr(hull, "coords"):
-            coords = np.asarray(hull.coords)
-        else:
-            coords = points
-        return _max_pairwise(coords)
+        # the diameter of the hull is that of its vertices, as for max_axis
+        return _diameter(points)
     if method == "skeleton":
         length = skeleton_length(active, step=transform)
         if length <= 0.0:
