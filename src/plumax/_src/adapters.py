@@ -4,48 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import jax.numpy as jnp
 import numpy as np
 from radtrax.slab import forward_nonlinear_normalized
 
 
 if TYPE_CHECKING:
     import xarray as xr
-
-    from plumax.les_fvm import EulerianDispersionRHS
-
-
-class EulerianForwardModel:
-    """Expose an Eulerian dispersion RHS as a ``pipekit_cycle.ForwardModel``.
-
-    The adapter advances a tracer field with a single explicit-Euler step,
-    ``c ← c + dt · RHS(t0, c)``. It is the minimal forward operator a cycling
-    driver needs; richer time integration (diffrax) is available through
-    :func:`~plumax.les_fvm.simulate_eulerian_dispersion`.
-
-    Args:
-        rhs: The tendency module ``RHS(t, concentration) -> dC/dt``.
-        dt: Default integration step [s].
-        t0: Time at which the (autonomous-in-practice) RHS is evaluated [s].
-    """
-
-    def __init__(self, rhs: EulerianDispersionRHS, dt: float, t0: float = 0.0) -> None:
-        self.rhs = rhs
-        self._dt = dt
-        self.t0 = t0
-
-    def step(self, state: Any, dt: float) -> Any:
-        """Advance ``state`` by ``dt`` with one explicit-Euler step."""
-        tendency = self.rhs(jnp.asarray(self.t0, dtype=jnp.asarray(state).dtype), state)
-        return state + dt * tendency
-
-    @property
-    def dt(self) -> float:
-        return self._dt
-
-    @property
-    def state_signature(self) -> None:
-        return None
 
 
 class RadtranObservationOperator:
@@ -110,4 +74,4 @@ class RadtranObservationOperator:
         return self._forward(state).jacobian
 
 
-__all__ = ["EulerianForwardModel", "RadtranObservationOperator"]
+__all__ = ["RadtranObservationOperator"]
