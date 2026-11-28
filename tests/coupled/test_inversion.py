@@ -27,6 +27,7 @@ from plumax.coupled import (
     column_response,
     fuse_observations,
     solve_coupled,
+    solve_coupled_multistart,
 )
 from plumax.coupled.inversion import plume_response
 from plumax.errors import ControlBlockError
@@ -110,7 +111,8 @@ def _scale():
 
 
 @pytest.mark.slow
-def test_linear_limit_equals_fusion():
+@pytest.mark.parametrize("method", ["lbfgs", "gauss_newton"])
+def test_linear_limit_equals_fusion(method):
     scale = _scale()
     variance = (0.1 * scale) ** 2
     instruments = [_column_instrument(variance), _column_instrument(4 * variance, "B")]
@@ -131,7 +133,8 @@ def test_linear_limit_equals_fusion():
             forward=forward,
             prior=prior,
             observations={"TROPOMI": observations[0], "B": observations[1]},
-        )
+        ),
+        method=method,
     )
     closed_form = fuse_observations(
         forward,
@@ -157,7 +160,8 @@ def test_linear_limit_equals_fusion():
 
 
 @pytest.mark.slow
-def test_linear_radiance_laplace_equals_closed_form_gaussian():
+@pytest.mark.parametrize("method", ["lbfgs", "gauss_newton"])
+def test_linear_radiance_laplace_equals_closed_form_gaussian(method):
     scale = _scale()
     gain = -jnp.array([0.2, 0.5]) / scale
     operator = LinearisedRadianceOperator(baseline=jnp.ones(2), gain=gain)
@@ -201,7 +205,7 @@ def test_linear_radiance_laplace_equals_closed_form_gaussian():
         radiance_ops={"EMIT": operator},
         radiance_variance={"EMIT": 1e-4},
     )
-    result = solve_coupled(problem)
+    result = solve_coupled(problem, method=method)
 
     # closed form: the forward is affine in θ, h(θ) = h(μ) + G (θ − μ)
     prior_mean, unflatten = prior.flatten()
@@ -348,6 +352,69 @@ def test_lognormal_q_feeds_tier_v():
     assert event.emission_std == pytest.approx(float(result.emission_std))
 
 
+def _five_parameter_problem():
+    # the 5-parameter problem of #186: log Q, the source position and the wind
+    x, y = np.meshgrid(
+        np.linspace(150.0, 900.0, 8), np.linspace(-100.0, 100.0, 9), indexing="ij"
+    )
+    receptors = np.column_stack([x.ravel(), y.ravel()])
+    source = PlumeSource(
+        location=(0.0, 0.0, 10.0),
+        wind_speed=5.0,
+        wind_direction=270.0,
+        stability_class="D",
+        column_z=jnp.linspace(0.0, 200.0, 11),
+    )
+    scale = float(jnp.max(column_response(source, Instrument("A", receptors))))
+    noise = 0.002 * scale
+    instrument = Instrument("A", receptors, retrieval_variance=noise**2)
+    forward = build_coupled_forward(source, [instrument])
+    prior = CoupledPrior.from_std(
+        {
+            "log_emission_rate": jnp.log(0.15),
+            "location": jnp.zeros(2),
+            "wind": jnp.array([5.0, 270.0]),
+        },
+        {
+            "log_emission_rate": 0.8,
+            "location": jnp.full(2, 50.0),
+            "wind": jnp.array([1.0, 10.0]),
+        },
+    )
+    truth = {
+        "log_emission_rate": jnp.log(0.1),
+        "location": jnp.array([20.0, -8.0]),
+        "wind": jnp.array([5.5, 274.0]),
+    }
+    blank = CoupledProblem(
+        forward=forward, prior=prior, observations={"A": jnp.zeros(len(receptors))}
+    )
+    observed = blank.predict(truth)["A"] + noise * jax.random.normal(
+        jax.random.key(0), (len(receptors),)
+    )
+    return CoupledProblem(forward=forward, prior=prior, observations={"A": observed})
+
+
+@pytest.mark.slow
+def test_gauss_newton_reaches_the_lbfgs_posterior():
+    problem = _five_parameter_problem()
+    lbfgs = solve_coupled(problem)
+    newton = solve_coupled(problem, method="gauss_newton")
+    assert lbfgs.converged
+    assert newton.converged
+    # #186 measured 11 Gauss–Newton steps against 58 of L-BFGS
+    assert newton.n_steps < lbfgs.n_steps
+    sd = jnp.sqrt(jnp.diag(lbfgs.covariance))
+    # the bound of #186's definition of done; measured 1.5e-9 posterior sd
+    map_move = jnp.max(jnp.abs(newton.mean - lbfgs.mean) / sd)
+    assert float(map_move) < 1e-6
+    # the same bound on the covariance, relative to sd_a sd_b; measured 3.1e-10
+    covariance_move = jnp.abs(newton.covariance - lbfgs.covariance)
+    assert float(jnp.max(covariance_move / jnp.outer(sd, sd))) < 1e-6
+    # both minimise the same cost; measured 3e-16 relative
+    np.testing.assert_allclose(newton.cost, lbfgs.cost, rtol=1e-10)
+
+
 # ── masks from coupled.quality ───────────────────────────────────────────────
 
 
@@ -413,10 +480,13 @@ def test_problem_validation():
     forward = build_coupled_forward(SOURCE, [_column_instrument(1.0)])
     prior = CoupledPrior.from_std({"emission_rate": 1.0}, {"emission_rate": 1.0})
     observations = {"TROPOMI": jnp.zeros(9)}
-    with pytest.raises(NotImplementedError, match="vardax#72"):
-        solve_coupled(
-            CoupledProblem(forward=forward, prior=prior, observations=observations),
-            method="gauss_newton",
+    problem = CoupledProblem(forward=forward, prior=prior, observations=observations)
+    # Gauss–Newton starts only at the prior mean until vardax#315
+    with pytest.raises(NotImplementedError, match="vardax#315"):
+        solve_coupled(problem, method="gauss_newton", initial={"emission_rate": 2.0})
+    with pytest.raises(NotImplementedError, match="vardax#315"):
+        solve_coupled_multistart(
+            problem, {"emission_rate": jnp.array([1.0, 2.0])}, method="gauss_newton"
         )
     with pytest.raises(ValueError, match="observations for"):
         CoupledProblem(forward=forward, prior=prior, observations={})

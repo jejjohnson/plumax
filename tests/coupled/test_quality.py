@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import jax
 import jax.numpy as jnp
 import lineax as lx
 import numpy as np
@@ -153,23 +152,22 @@ def test_vardax_consumes_the_mask_and_diagonal_r():
     )
     design = design.at[:4, 1].set(1.0).at[4:, 2].set(1.0)
     psd = frozenset({lx.symmetric_tag, lx.positive_semidefinite_tag})
-    # B on a (1, 3) control row
-    prior_cov_op = lx.FunctionLinearOperator(
-        lambda x: x @ PRIOR_COVARIANCE, jax.ShapeDtypeStruct((1, 3), float), psd
-    )
+    # B on the flat (3,) control
+    prior_cov_op = lx.MatrixLinearOperator(PRIOR_COVARIANCE, psd)
     model = vdx.ThreeDVar(
-        obs_op=vdx.CallableObs(fn=lambda theta: theta @ design.T),
-        prior_mean=PRIOR_MEAN[None],
+        obs_op=vdx.CallableObs(fn=lambda theta: design @ theta),
+        prior_mean=PRIOR_MEAN,
         prior_cov_op=prior_cov_op,
         obs_cov_op=stacked.obs_cov_op(),
         cov_solver=lx.AutoLinearSolver(well_posed=True),
     )
     batch = stacked.batch()
-    analysis = model(batch)[0, 0]
+    assert batch.input.shape == (1, 7)
+    analysis = model(batch)[0]
     laplace = vdx.LaplaceCovariance(solver=lx.AutoLinearSolver(well_posed=True))(
-        analysis[None], model, batch
+        analysis, model, batch
     )
-    covariance = jax.vmap(lambda e: laplace.cov.mv(e[None])[0])(jnp.eye(3))
+    covariance = laplace.cov.as_matrix()
     closed_form = fuse_observations(
         forward,
         observations,
