@@ -17,6 +17,7 @@ from plumax.coupled import (
     fuse_observations,
     predict_observation,
 )
+from plumax.coupled.forward import plume_response
 from plumax.gauss_plume.plume import simulate_plume
 
 
@@ -88,6 +89,20 @@ def test_column_response_is_unit_q_column():
     assert resp.shape == (inst.n_obs,)
     pred2 = predict_observation(src, inst, emission_rate=2.0)
     np.testing.assert_allclose(np.asarray(pred2), 2.0 * np.asarray(resp), rtol=1e-6)
+
+
+def test_column_response_is_plume_response_at_the_source():
+    # column_response is plume_response at the source's own position and wind
+    src = PlumeSource(
+        location=(3.0, -7.0, 10.0),
+        wind_speed=4.3,
+        wind_direction=251.0,
+        stability_class="D",
+        column_z=jnp.linspace(0.0, 200.0, 11),
+    )
+    inst = _instrument()
+    traced = plume_response(src, inst, jnp.array([3.0, -7.0]), jnp.array([4.3, 251.0]))
+    np.testing.assert_array_equal(column_response(src, inst), traced)
 
 
 def test_composition_matches_bare_plume_column():

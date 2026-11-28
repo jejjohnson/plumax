@@ -140,7 +140,8 @@ def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
     docstring states the units). The full observation at emission ``Q`` is then
     ``Q · column_response + bias`` (plus the background; see
     :func:`predict_observation`). Linearity in ``Q`` is what makes the coupled
-    inversion closed-form.
+    inversion closed-form. It is :func:`plume_response` at the source's own
+    position and wind.
 
     Args:
         source: The static source + met configuration.
@@ -149,38 +150,9 @@ def column_response(source: PlumeSource, instrument: Instrument) -> jax.Array:
     Returns:
         Unit-``Q`` AK-weighted column response, shape ``(n_obs,)``.
     """
-    z = jnp.asarray(source.column_z, dtype=float)
-    receptors = jnp.asarray(instrument.receptors, dtype=float)
-    obs_size = receptors.shape[0]
-    num_levels = z.shape[0]
-
-    # every receptor (x_i, y_i) at every level z_k, level fastest
-    easting = einx.id("receptor -> (receptor level)", receptors[:, 0], level=num_levels)
-    northing = einx.id(
-        "receptor -> (receptor level)", receptors[:, 1], level=num_levels
-    )
-    height = einx.id("level -> (receptor level)", z, receptor=obs_size)
-
-    source_x, source_y, source_z = source.location
-    wind_east, wind_north = source.wind_uv()
-    dispersion = get_dispersion_params(source.stability_class)
-
-    # c(x, y, z; Q = 1)
-    concentration = plume_concentration_vmap(
-        easting,
-        northing,
-        height,
-        source_x,
-        source_y,
-        source_z,
-        wind_east,
-        wind_north,
-        1.0,
-        dispersion,
-    )
-    profiles = einx.id("(obs level) -> obs level", concentration, level=num_levels)
-    observation = ColumnObservation.trapezoid(z, averaging_kernel=instrument.ak)
-    return observation.column(profiles)
+    location = jnp.asarray(source.location[:2], dtype=float)
+    wind = jnp.asarray([source.wind_speed, source.wind_direction], dtype=float)
+    return plume_response(source, instrument, location, wind)
 
 
 def plume_response(
